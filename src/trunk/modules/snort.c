@@ -50,7 +50,6 @@
 
 #define FLOWDESC        struct _snort
 
-#define TCPDUMP_MAGIC   0xa1b2c3d4
 
 __inline size_t
 offcopy(void *dst, const void *src, size_t n);
@@ -61,7 +60,6 @@ offcopy(void *dst, const void *src, size_t n);
 
 #define IP_ADDR_LEN     15    /* strlen("XXX.XXX.XXX.XXX") */
 #define IP_ADDR(x)      (inet_ntoa(*(struct in_addr*)&(N32(x))))
-#define ALERT_LEN       4096
 
 #define MAXPKTSIZE      65535         // max bytes we keep of a packet 
 #define RECSIZE         MAXPKTSIZE + 20 // Actual size of the record on disk
@@ -77,7 +75,7 @@ static pktdesc_t outdesc;
 #endif
 
 struct snort_hdr {
-    int alert;  /* Snort rule number that fired the alert 
+    int alert;  /* Snort rule that fired the alert 
                    (-1 if the packet was logged by a non-alert rule) */
     pkt_t pkt; 
 };
@@ -511,95 +509,91 @@ create_alert_str(struct timeval *t, pkt_t *pkt, int rule, char *s)
                 timestr, rule, proto, srcip, srcport, dstip, dstport);
 }
     
+
+#define ALERT_LEN       	4096
+#define SNORT_ALERT		0
+#define SNORT_LOG		1
+#define TCPDUMP_MAGIC  		0xa1b2c3d4
+
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
-    //static int first_time = 1;
-    //static struct pcap_file_header fhdr;
-    char *arg, *p1, *p2;
-    static char alert[ALERT_LEN];
+    static int task = SNORT_ALERT; 
+    static char s[ALERT_LEN];
     struct snort_hdr *shdr;
-    
     struct timeval t;
-    //int off;
-    pkt_t p;
+    
+    if (buf == NULL && args != NULL) { 
+	int n;
 
-    int arg_found = 0;
-    int n;
-    
-    /* Parse the optional arguments passed in the query string */
-    for (n = 0; args && args[n] && !arg_found; n++) {
-        if (!strcmp(args[n], "output=log") || 
-		!strcmp(args[n], "output=alert")) {
-            arg = strdup(args[n]);
-            arg_found = 1;
-        }
+	/* first call, parse the arguments */ 
+	for (n = 0; args[n]; n++) {
+	    if (!strcmp(args[n], "output=log")) 
+		task = SNORT_LOG; 
+	    else if (!strcmp(args[n], "output=alert")) 
+		task = SNORT_ALERT; 
+	} 
+
+#if 0 	// XXX this is to put the pcap header in front of the output
+	//     stream. right now we send just a stream made of CoMo pkts. 
+	//     this needs fixing... 
+	if (task == SNORT_LOG) { 
+	    /* 
+	     * send the pcap header out
+	     * 
+	     * XXX TODO: snaplen and linktype should vary depending on 
+	     * the sniffer we use (pass them as init parameters?) 
+	     */
+	    struct pcap_pkthdr fhdr; 
+
+	    fhdr.magic = TCPDUMP_MAGIC;
+	    fhdr.version_major = PCAP_VERSION_MAJOR;
+	    fhdr.version_minor = PCAP_VERSION_MINOR;
+	    fhdr.thiszone = 0;    // Time Zone Offset - gmt to local correction
+	    fhdr.snaplen = 65535; /* Maximum number of captured bytes per packet
+				   * We are capturing entire packets, so we put
+				   * here the max IPv4 MTU */
+	    fhdr.sigfigs = 0;     // Time Stamp Accuracy
+	    fhdr.linktype = 1;    // Ethernet
+	
+	    *len = sizeof(fhdr);
+	    return (char *)&fhdr;
+	}
+#endif
+
+	*len = 0; 
+	return s; 
     }
-    /* If no output argument has been specified in the query, 
-     * the default is to output alerts
-     */
-    if (!arg_found) {
-        logmsg(LOGQUERY, "SNORT: Missing query argument \"output=xxx\"\n");
-        arg = strdup("output=alert");
+    
+    if (buf == NULL && args == NULL) { 	/* done with the records */
+	*len = 0; 	
+	return s; 
     }
-    
-    p1 = strsep(&arg, "=");
-    p2 = strsep(&arg, "=");
-    
+
     /* get the snort packet header */
     shdr = (struct snort_hdr *)buf;
-    
     t.tv_sec = TS2SEC(shdr->pkt.ts); 
     t.tv_usec = TS2USEC(shdr->pkt.ts); 
     
-    if (!strcmp(p2, "alert")) {
+    if (task == SNORT_ALERT) { 
         /* if the packet did not match against an alert rule,
          * do not print it (return an empty string) */
         if (shdr->alert < 0) {
-            *len = 1;
-            sprintf(alert, "%s", ""); 
-            return alert;
-        }
-        else {
-            /* create the alert string and return it */        
-  	    bcopy(&shdr->pkt, &p, sizeof(pkt_t)); 
-            create_alert_str(&t, &p, shdr->alert, alert);
-            *len = strlen(alert);
-            return alert;
-        }
-    }
+            *len = 0;
+        } else {
+	    pkt_t pkt; 
 
-#if 0 	// XXX output log is not supported yet. 
-    else { /* output=log */
-        /* XXX There's an ugly hack in here (first_time variable) to be able
-         * to print the libpcap file header at the beginning of the file.
-         */
-        if (first_time) {
-        /* XXX TODO: snaplen and linktype should vary depending on 
-         * the sniffer we use (pass them as init parameters?) 
-         */
-            fhdr.magic = TCPDUMP_MAGIC;
-            fhdr.version_major = PCAP_VERSION_MAJOR;
-            fhdr.version_minor = PCAP_VERSION_MINOR;
-            fhdr.thiszone = 0;    // Time Zone Offset - gmt to local correction
-            fhdr.snaplen = 65535; /* Maximum number of captured bytes per packet
-                                   * We are capturing entire packets, so we put
-                                   * here the max IPv4 MTU */
-            fhdr.sigfigs = 0;     // Time Stamp Accuracy
-            fhdr.linktype = 1;    // Ethernet
-    
-            first_time = 0;
-     
-            *len = sizeof(fhdr);
-            return (char *)&fhdr;
+            /* create the alert string and return it */        
+  	    bcopy(&shdr->pkt, &pkt, sizeof(pkt_t)); 
+            create_alert_str(&t, &pkt, shdr->alert, s);
+            *len = strlen(s);
         }
-        else {
-            /* Return a como packet */
-            *len = STDPKT_LEN(&shdr->pkt); 
-            return buf + sizeof(int);
-        }
-    }
-#endif
+	return s;
+    } 
+
+    /* just send the entire packet */
+    *len = STDPKT_LEN(&shdr->pkt); 
+    return buf + sizeof(int);
 }
 
 
