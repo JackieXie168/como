@@ -1,0 +1,120 @@
+# $Id$
+#
+# gmake makefile for the como server program
+# see toplevel como.gmk for more information on the build system
+
+BASEDIR = ..
+
+PROGS = como	# list of program names
+
+# OBJS_como_DEPS = como.h comotypes.h
+DEPS_como := ../include/como.h
+
+SRCS_como := \
+	capture.c \
+	como.c \
+	config.c \
+	memory.c \
+	query-comms.c \
+	query-ondemand.c \
+	pippo.c \
+	supervisor.c \
+	util.c \
+	export.c \
+	storage.c \
+	storage-client.c \
+	heap.c \
+	os.c
+
+LIBS = $(LIBDL) m		
+LIBDIRS = /usr/local/lib
+
+# convention for sniffers:
+# filenames are sniffer-$(FOO).c
+# and a corresponding entry point 
+#
+SNIFFERS = como		
+ifneq ($(shell uname),CYGWIN_NT-5.1)
+	SNIFFERS += libpcap pcap
+	LIBS += pcap 
+endif
+# Linux does not have bpf
+ifeq ($(shell uname),FreeBSD)
+	SNIFFERS += bpf
+endif
+
+# sniffers that are still experimental or that 
+# require additional support in the system 
+# (e.g., external drivers or libraries). 
+
+# Endace DAG cards.
+#
+ifdef USE_DAG
+	SNIFFERS += dag erf
+	CFLAGS += -DUSE_DAG
+	LIBS += dag
+endif
+
+# SysKonnect cards with accurate timestamps
+#
+ifdef USE_SK98
+	SNIFFERS += sk98
+	EXTRAS += sk98_timers.c 
+	CFLAGS += -DUSE_SK98
+endif
+
+ifdef HAVE_FTLIB_AND_ZLIB 
+	SNIFFERS += flowtools
+	LIBS += ft z
+endif
+
+# add sniffers  
+x=$(SNIFFERS:%=sniffer-%.c)
+SRCS_como += $(x)
+
+# add extras 
+x=$(EXTRAS:%=$(BASEDIR)/extra/%)
+SRCS_como += $(x)
+
+capture.o:	build-sniffer-list
+
+TEMPORARY += sniffer-list.h pippo.c pippo.o 
+
+build-sniffer-list:
+	@( \
+	echo "/* generated file, do not edit */" ;		\
+	for i in $(SNIFFERS); do  				\
+		echo "extern sniffer_t $${i}_sniffer;" ;	\
+	done  ;							\
+	echo "sniffer_t *__sniffers[] = {" ;			\
+	for i in $(SNIFFERS); do  				\
+		echo "	&$${i}_sniffer," ;			\
+	done  ;							\
+	echo "	NULL };" ;					\
+	) > sniffer-list.h
+
+pippo.o:
+	@( \
+	f="$(BASEDIR)/include/stdpkt.h" ;			\
+	echo "stdpkt.h is $${f}" ;				\
+	sz_f=`cat $$f | wc -c`;					\
+	g="$(BASEDIR)/base/template" ;				\
+	echo "template is $${g}" ;				\
+	sz_g=`cat $$g | wc -c`;					\
+	(							\
+	echo "char stdpkt[$$sz_f +32 ] = \"replace_stdpkt\";";	\
+	echo "char template[$$sz_g +32 ] = \"replace_template\";" ; \
+	) > pippo.c; \
+	cc -c pippo.c ; \
+	set `strings -at d pippo.o | grep "replace_stdpkt"` ; pos_f=$$1 ; \
+	set `strings -at d pippo.o | grep "replace_template"` ; pos_g=$$1 ; \
+	dd if=$$f of=pippo.o obs=$$pos_f seek=1 conv=notrunc  ; \
+	dd if=$$g of=pippo.o obs=$$pos_g seek=1 conv=notrunc ; \
+	) 2> /dev/null
+	rm pippo.c
+
+CFLAGS_como := -Dfoo
+
+INCDIRS = /usr/local/include 
+
+include ../como.gmk	# the top level makefile defs
