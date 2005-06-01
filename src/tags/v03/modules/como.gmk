@@ -1,0 +1,32 @@
+# $Id$
+#
+# gmake makefile for modules
+# see toplevel como.gmk for more information on the build system
+
+BASEDIR = ..
+
+MODULES= \
+	counter.so \
+	utilization.so \
+	topdest.so \
+	tuple.so \
+	protocol.so \
+	connx.so \
+	trace.so \
+	application.so \
+#	netflow.so \
+
+ifdef HAVE_FLEX_AND_BISON
+        MODULES += snort.so
+        OTHER = \
+            snort-lexic.c \
+            snort-syntax.c
+        SRCS_snort.so = \
+            snort-syntax.c
+        DEPS_snort.so = \
+            snort-lexic.c
+endif
+
+INCDIRS = ../base
+
+include ../como.gmk

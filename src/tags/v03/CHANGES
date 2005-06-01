@@ -1,0 +1,101 @@
+$Id$
+
+--------------------------------
+---- CoMo v0.3 (May 30th, 2005)
+--
+
+. Sniffers 
+
+  Consistent use of pkt_t in the sniffers implemented so far. 
+  Added a new flag (SNIFF_FILE) to indicate that the sniffer is
+  operating from a trace file. This allows CAPTURE to slow down (i.e., 
+  stop reading packets) when the memory is scarce. 
+
+. Implemented sniffer-flowtools
+
+  CoMo can now read a directory that contains flow-tools files. 
+  The sniffer supports only NetFlow v5 and regenerates a packet stream
+  that "resembles" the original stream. 
+
+. HTTP-like query interface 
+
+  This allows to query a como machine from any browser with something 
+  like: http://<hostname>:44444?module=counter&format=gnuplot&start...
+  We also use the HTTP error codes to send error messages or other 
+  information. 
+
+. Full packet capture 
+
+  CAPTURE deals with sniffers that provide full packet payloads. 
+
+. Snort module 
+
+  Understand Snort rules' syntax and runs them on the packet stream 
+  within CoMo. 
+
+. Implemented sniffer-sk98
+
+  Support Syskonnect cards. It runs only under Linux and requires a 
+  dedicated driver that can be found at 
+  http://www.cl.cam.ac.uk/Research/SRG/netos/nprobe/downloads/sk98lin.tar.bz2
+
+. Module data re-use
+
+  A new callback (replay()) is now defined that allows a module to generate
+  a packet stream from its own data base.
+
+. Implemented sniffer-como
+
+  A CoMo system can now receive a packet stream from another CoMo system. 
+  The sniffer goes through the usual query interface and requests one 
+  module to generate a packet stream from its own database. 
+
+. Command line interface
+
+  It is possible to run CoMo from the command link in the absence of a 
+  configuration file. 
+
+. Support for Cisco HDLC and Cisco ISL
+
+  CoMo can monitor links using Cisco HDLC and Cisco ISL (ISL is only 
+  supported for Endace DAG cards and the information is discarded). 
+  
+. Improved user interface
+
+  The use interface now prints the amount of shared memory used, the 
+  number of packets processed and the active modules. 
+
+. Removed query process. 
+
+  SUPERVISOR is now in charge of receiving queries and to fork a 
+  query-ondemand process for each incoming query. 
+
+. Configurable CAPTURE flush intervals
+
+  Each module can now configure the min-flush and max-flush intervals 
+  that indicate how often (or how rarely) CAPTURE should flush the module
+  state and send it to EXPORT. 
+
+  CAPTURE will choose any value between min-flush and max-flush according 
+  to its needs (right now just memory).
+
+. Speeding up STORAGE operations
+
+  Reduced the amount of coordination between storage-client and storage-server
+  to speed up disk access. Storage-server is not informed of read operations 
+  that do not require a new mmap operation. The minimum size of an mmap is 
+  also defined within storage and has no relationship with the block size 
+  required by the client process. 
+  
+. Cleaned up modules' code
+
+  The FLOWDESC now contains only information that the module can modify. 
+  The rec_t structure used to link it to the hash tables is not visible 
+  anymore. 
+
+. Modified behavior of print() to allow writing header and footer
+
+  The print() callback gets called once before the records and after the
+  all records are processed. This allows a module to add a header or a 
+  footer to the print out. Useful to embed data in other scripts (e.g., 
+  gnuplot, html, etc.). 
