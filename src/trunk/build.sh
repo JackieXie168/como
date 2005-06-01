@@ -20,7 +20,7 @@ esac
 
 mk=como.gmk	# The Makefile name
 # We need to compile the libs first
-for file in `find base test modules apps -name ${mk}`
+for file in `find base modules -name ${mk}`
 do
 	olddir=`pwd`
 	cd `dirname $file`
