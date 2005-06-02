@@ -585,7 +585,7 @@ capture_mainloop(int export_fd)
      * allocate memory used to pass flow tables
      * between CAPTURE and EXPORT
      */
-    flush_map = new_memlist(16);
+    flush_map = new_memlist(32);
 
     logmsg(LOGUI, "--- Capture configuration: %d MB, %d sniffers ---\n",
 		map.mem_size, sniffers_left);
