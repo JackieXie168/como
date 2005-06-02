@@ -30,6 +30,10 @@
 #include <net/ethernet.h> 
 #include "stdpkt.h" 
 
+#ifdef linux
+#define ETHERTYPE_VLAN  0x8100
+#endif 
+
 /* 
  * this file includes some inline helper functions to be 
  * shared among all sniffers. 
