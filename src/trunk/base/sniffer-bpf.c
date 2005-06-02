@@ -167,7 +167,7 @@ static int
 sniffer_next(source_t *src, void *out_buf, size_t out_buf_size)
 {
     static char buf[BUFSIZE];   /* base of the capture buffer */
-    char *base;                 /* where to copy from */
+    char * wh;                  /* where to copy from */
     uint npkts;                 /* processed pkts */
     uint out_buf_used;          /* bytes in output buffer */
     int nbytes;			/* bytes in input buffer */
@@ -177,23 +177,20 @@ sniffer_next(source_t *src, void *out_buf, size_t out_buf_size)
     if (nbytes < 0)   
         return nbytes;
 
-    base = buf;
+    wh = buf;
     npkts = out_buf_used = 0;
-    while (nbytes - (base - buf) > (int) sizeof(struct bpf_hdr)) { 
+    while (nbytes - (wh - buf) > (int) sizeof(struct bpf_hdr)) { 
         struct bpf_hdr * bh;        /* BPF record structure */
         pkt_t *pkt;                 /* CoMo record structure */
-        int len;                    /* total record length */
-        int pktofs;                 /* offset in current record */
  
-        bh = (struct bpf_hdr *) base; 
-        len = (int) bh->bh_caplen + (int) bh->bh_hdrlen; 
-
-        /* check if we have enough space in output buffer */
-        if (sizeof(pkt_t) + len > out_buf_size - out_buf_used)
-            break;
+        bh = (struct bpf_hdr *) wh; 
 
         /* check if entire record is available */
-        if (len > nbytes - (int) (base - buf))
+        if ((int) (bh->bh_hdrlen + bh->bh_caplen) > nbytes - (int) (wh - buf))
+            break;
+
+        /* check if we have enough space in output buffer */
+        if (sizeof(pkt_t) + bh->bh_caplen > out_buf_size - out_buf_used)
             break;
 
         /*
@@ -203,61 +200,24 @@ sniffer_next(source_t *src, void *out_buf, size_t out_buf_size)
         pkt = (pkt_t *) ((char *)out_buf + out_buf_used);
         pkt->ts = TIME2TS(bh->bh_tstamp.tv_sec, bh->bh_tstamp.tv_usec);
         pkt->len = bh->bh_datalen; 
-	pkt->type = COMO_L2_ETH; 
-	pkt->flags = 0; 
-        pkt->caplen = 0;        /* NOTE: we update caplen as we go given
-                                 * that we may not store all fields that
-                                 * exists in the actual bpf packet (e.g.,
-                                 * IP options)
-                                 */
+        pkt->caplen = bh->bh_caplen; 
 
-        /* skip BPF header, move the base pointer in the batch of 
-	 * packets and the offset within this packet  
+        /* 
+	 * copy the packet payload 
 	 */
-        pktofs = bh->bh_hdrlen; 
-        base += bh->bh_hdrlen;
-
-        /* copy MAC information
-         * XXX we do this only for ethernet frames.
-         *     should look into how many pcap format exists and are
-         *     actually used.
-         */
-        bcopy(base, &pkt->layer2.eth, 14);
-        if (H16(pkt->layer2.eth.type) != 0x0800) {
-            /*
-             * this is not an IP packet. move the base pointer to next
-             * packet and restart.
-             */
-            logmsg(LOGSNIFFER, "non-IP packet received (%04x)\n",
-                H16(pkt->layer2.eth.type));
-            base = (char*)bh + BPF_WORDALIGN(bh->bh_hdrlen + bh->bh_caplen);
-            continue;
-        }
-        pktofs += 14;
-        base += 14;
-
-        /* copy IP header */
-        pkt->ih = *(struct _como_iphdr *) base;
-        pkt->caplen += sizeof(struct _como_iphdr);
-
-        /* skip the IP header
-         *
-         * XXX we are losing IP options if any in the packets.
-         *     need to find a place to put them in the como packet
-         *     data structure...
-         */
-        pktofs += (IP(vhl) & 0x0f) << 2;
-        base += (IP(vhl) & 0x0f) << 2;
-
-        /* copy layer 4 header and payload */
-        bcopy(base, &pkt->layer4, len - pktofs);
-        pkt->caplen += (len - pktofs);
+	bcopy(wh + bh->bh_hdrlen, pkt->payload, bh->bh_caplen); 
+	
+	/* 
+	 * update layer2 information and offsets of layer 3 and above. 
+	 * this sniffer only runs on ethernet frames. 
+	 */
+	updateofs(pkt, COMO_L2_ETH); 
 
         /* increment the number of processed packets */
         npkts++;
 
 	/* bpf aligns packets to long word */
-	base = (char *)bh + BPF_WORDALIGN(bh->bh_caplen + bh->bh_hdrlen); 
+	wh += BPF_WORDALIGN(bh->bh_caplen + bh->bh_hdrlen); 
         out_buf_used += STDPKT_LEN(pkt); 
     }
 

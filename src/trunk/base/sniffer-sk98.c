@@ -181,6 +181,7 @@ calibrate(struct _snifferinfo * info)
     } while (calibrated != num);
 
     info->retimer_size = size; 
+    info->clock_retimers = cr;
     logmsg(V_LOGSNIFFER, "Calibrated %d interfaces\n", calibrated);
 }
 
@@ -217,7 +218,7 @@ sniffer_start(source_t * src)
         return -1;
     } 
 
-    src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
+    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
 
     /* 
@@ -288,7 +289,7 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	uint token;
 	ushort iface;
 	struct timeval tv;
-	int len, pktofs; 
+	int len; 
 	pkt_t *pkt;
 	char * base; 
 
@@ -327,43 +328,18 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
         pkt = (pkt_t *) ((char *)out_buf + out_buf_used);
         pkt->ts = TIME2TS(tv.tv_sec, tv.tv_usec); 
         pkt->len = len; 
-        pkt->type = COMO_L2_ETH; 
-        pkt->flags = 0; 
-        pkt->caplen = 0;        /* NOTE: we update caplen as we go given
-                                 * that we may not store all fields that
-                                 * exists in the actual bpf packet (e.g.,
-                                 * IP options)
-                                 */
+        pkt->caplen = len;
 
-        bcopy(base, &pkt->layer2.eth, 14);
-        if (H16(pkt->layer2.eth.type) != 0x0800) {
-            /*
-             * this is not an IP packet. discard and 
-	     * go to next packet. 
-	     */
-            logmsg(LOGSNIFFER, "non-IP packet received (%04x)\n",
-                H16(pkt->layer2.eth.type));
-            continue;
-        }
-  	pktofs = 14; 
-        base += 14;
-
-        /* copy IP header */
-        pkt->ih = *(struct _como_iphdr *) base;
-        pkt->caplen += sizeof(struct _como_iphdr);
-
-        /* skip the IP header
-         *
-         * XXX we are losing IP options if any in the packets.
-         *     need to find a place to put them in the como packet
-         *     data structure...
+        /* 
+         * copy the packet payload 
          */
-        base += (IP(vhl) & 0x0f) << 2;
-        pktofs += (IP(vhl) & 0x0f) << 2;
+        bcopy(base, pkt->payload, len); 
 
-        /* copy layer 4 header and payload */
-        bcopy(base, &pkt->layer4, len - pktofs); 
-        pkt->caplen += (len - pktofs); 
+        /* 
+         * update layer2 information and offsets of layer 3 and above. 
+         * this sniffer only runs on ethernet frames. 
+         */
+        updateofs(pkt, COMO_L2_ETH); 
 
 	/* done with this packet. return the token */
 	info->m->k2u_cons++;

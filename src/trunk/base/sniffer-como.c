@@ -123,8 +123,8 @@ sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
 
     base = buf;
     npkts = out_buf_used = 0;
-    while (nbytes - (base - buf) > COMO_HDR_SIZE) {
-        pkt_t *pkt;                 /* CoMo record structure */ 
+    while (nbytes - (base - buf) > (int) sizeof(pkt_t)) {
+        pkt_t * pkt;                 /* CoMo record structure */ 
 
 	pkt = (pkt_t *) base; 
 	
@@ -143,7 +143,7 @@ sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
 	pkt = (pkt_t *) (out_buf + out_buf_used);
 	pkt->ts = NTOHLL(pkt->ts); 
 	pkt->len = ntohl(pkt->len); 
-	pkt->caplen = ntohs(pkt->caplen);
+	pkt->caplen = ntohl(pkt->caplen);
 	out_buf_used += STDPKT_LEN(pkt); 
 	npkts++; 
     }

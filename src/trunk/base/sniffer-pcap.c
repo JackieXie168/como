@@ -125,18 +125,15 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
     while (nbytes - (base - buf) > (int) sizeof(pcap_hdr_t)) {
         pcap_hdr_t * ph;            /* PCAP record structure */
         pkt_t *pkt;                 /* CoMo record structure */
-        int len;                    /* total record length */
-        int pktofs;                 /* offset in current record */
 
         ph = (pcap_hdr_t *) base; 
-	len = ph->caplen + sizeof(pcap_hdr_t);
 
         /* check if we have enough space in output buffer */
-        if (sizeof(pkt_t) + len > out_buf_size - out_buf_used)
+        if (sizeof(pkt_t) + ph->caplen > out_buf_size - out_buf_used)
             break;
 
         /* check if entire record is available */
-        if (len > nbytes - (int) (base - buf))
+        if ((int) sizeof(pcap_hdr_t) + ph->caplen > nbytes - (int) (base - buf))
             break;
 
         /*      
@@ -146,57 +143,22 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
         pkt = (pkt_t *) ((char *)out_buf + out_buf_used); 
         pkt->ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
         pkt->len = ph->len;
- 	pkt->type = COMO_L2_ETH; 
-	pkt->flags = 0; 
-        pkt->caplen = 0;        /* NOTE: we update caplen as we go given
-                                 * that we may not store all fields that
-                                 * exists in the actual pcap packet (e.g.,
-                                 * non-Ethernet MAC, IP options)
-                                 */
+        pkt->caplen = ph->caplen; 
 
-	/* skip pcap header */
-	pktofs = sizeof(pcap_hdr_t); 
-	base += pktofs; 
- 
-        /* copy MAC information
-         * XXX we do this only for ethernet frames.
-         *     should look into how many pcap format exists and are
-         *     actually used.
+        /* 
+         * copy the packet payload 
          */
-	bcopy(base, &pkt->layer2.eth, 14);
-	if (H16(pkt->layer2.eth.type) != 0x0800) {
-	    /* 
-	     * this is not an IP packet. move the base pointer to next
-	     * packet and restart. 
-	     */
-	    logmsg(LOGCAPTURE, "non-IP packet received (%04x)\n",
-		H16(pkt->layer2.eth.type));
-	    base += len - pktofs;
-	    continue;
-	}
-	pktofs += 14; 
-	base += 14; 
-
-        /* copy IP header */
-        pkt->ih = *(struct _como_iphdr *) base; 
-        pkt->caplen += sizeof(struct _como_iphdr);
-
-        /* skip the IP header
-         *
-         * XXX we are losing IP options if any in the packets.
-         *     need to find a place to put them in the como packet
-         *     data structure...
+        bcopy(base + sizeof(pcap_hdr_t), pkt->payload, ph->caplen); 
+        
+        /* 
+         * update layer2 information and offsets of layer 3 and above. 
+         * this sniffer only runs on ethernet frames. 
          */
-        pktofs += (IP(vhl) & 0x0f) << 2;
-        base += (IP(vhl) & 0x0f) << 2;
-
-        /* copy layer 4 header and payload */
-        bcopy(base, &pkt->layer4, len - pktofs);
-        pkt->caplen += (len - pktofs);
+        updateofs(pkt, COMO_L2_ETH); 
 
         /* increment the number of processed packets */
         npkts++;
-        base += (len - pktofs);
+        base += sizeof(pcap_hdr_t) + ph->caplen; 
         out_buf_used += STDPKT_LEN(pkt); 
     }
 

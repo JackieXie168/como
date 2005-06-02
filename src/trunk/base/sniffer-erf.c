@@ -54,16 +54,7 @@
 struct _snifferinfo { 
     char buf[BUFSIZE];          /* temporary packet buffer */
     int nbytes; 	        /* valid bytes in buffer */
-    int flags;                  /* DAG flags */
-#define SNIFF_USE_ISL           0x1
 };
-
-
-/* Cisco ISL header size. 
- * We do nothing with it. Just skip. 
- */
-#define ISL_HDRSIZE     26      /* ISL header is 24 byte long, but DAG 
-				 * uses 26 */
 
 
 /*
@@ -86,9 +77,6 @@ sniffer_start(source_t * src)
     src->ptr = safe_malloc(sizeof(struct _snifferinfo));
     info = (struct _snifferinfo *) src->ptr; 
     info->nbytes = 0;
-    info->flags = 0;
-    if (src->args && strstr(src->args, "useISL") != NULL) 
-        info->flags |= SNIFF_USE_ISL; 
 
     return 0;		/* success */
 }
@@ -129,7 +117,7 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	dag_record_t * rec;         /* DAG record structure */
 	pkt_t *pkt;                 /* CoMo record structure */
 	int len;                    /* total record length */
-	int pktofs; 		    /* offset in current record */
+	int type; 		    
 
         /* access to packet record */
         rec = (dag_record_t *) base;
@@ -148,85 +136,48 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
          */
 	pkt = (pkt_t *)((char *)out_buf + out_buf_used);
 	pkt->ts = rec->ts;
-	pkt->caplen = 0; 
-        pkt->flags = 0; 
 	pkt->len = (uint32_t) ntohs(rec->wlen);
-        pktofs = dag_record_size; 
+	pkt->caplen = len; 
 
-	/* copy MAC information */
-	switch (rec->type) { 
-	case TYPE_HDLC_POS:
-	    pkt->type = COMO_L2_HDLC; 
-	    bcopy(&rec->rec.pos.hdlc, &pkt->layer2.hdlc, 4);     
+        /*
+         * copy the packet payload
+         */
+        bcopy(base + dag_record_size, pkt->payload, len);
+    
+        /*
+         * we need to figure out what interface we are monitoring.
+         * some information is in the DAG record but for example Cisco
+         * ISL is not reported.
+         */
+        switch (rec->type) {
+        case TYPE_LEGACY:
+            /* we consider legacy to be only packet-over-sonet. this
+             * is just pass through.
+             */   
+  
+        case TYPE_HDLC_POS:
+            type = COMO_L2_HDLC;
+            break;
 
-	    /* check if this is an IP packet */
-	    if (H16(pkt->layer2.hdlc.type) != 0x0800) { 
-		logmsg(V_LOGCAPTURE, "non-IP packet received (%04x)\n", 
-		    H16(pkt->layer2.hdlc.type)); 
-		base += len; 
-		continue; 
-	    } 
-	
-            pktofs += 4; 
-	    break; 
+        case TYPE_ETH:
+            type = COMO_L2_ETH;
+            break;
 
-	case TYPE_ETH:
-            if (info->flags & SNIFF_USE_ISL) { 
-                /* 
-                 * if SNIFF_USE_ISL is set, this interface is monitoring 
-                 * a link where frames are encapsulated using Cisco ISL. We 
-                 * strip the ISL header off and discard it (no info there). 
-                 * Then we process the rest as a normal packet. Given that 
-                 * the DAG card does not support ISL we have to play with 
-                 * the dag_record_t to get the timestamp and then to get 
-                 * to the actual packet. 
-                 */
-                base += ISL_HDRSIZE; 
-	  	len -= ISL_HDRSIZE; 
-                rec = (dag_record_t *) base;
-                pkt->len -= ISL_HDRSIZE; 
-            } 
+        default:
+            /* other types are not supported */
+            base += len;
+            continue;
+        }
 
-	    pkt->type = COMO_L2_ETH; 
-	    bcopy(&rec->rec.eth.dst, &pkt->layer2.eth, 14);     
-
-	    /* check if this is an IP packet */
-	    if (ntohs(rec->rec.eth.etype) != 0x0800) {
-		logmsg(V_LOGCAPTURE, "non-IP packet received (%04x)\n", 
-		    H16(pkt->layer2.eth.type)); 
-		base += len; 
-		continue; 
-	    } 
-            pktofs += 16; 
-	    break;
-
-	default: 
-	    /* other types are not supported */
-	    base += len; 
-	    continue; 
-	}
-
-	/* copy IP header */
-	base += pktofs; 
-        pkt->ih = *(struct _como_iphdr *) base; 
-	pkt->caplen += sizeof(struct _como_iphdr); 
-	
-	/* skip the IP header
-	 * 
-	 * XXX we are losing IP options if any in the packets. 
-	 *     need to find a place to put them in the como packet 
-	 *     data structure...
-	 */
-	pktofs += (IP(vhl) & 0x0f) << 2;
-	base += (IP(vhl) & 0x0f) << 2;
-
-        /* copy layer 4 header and payload */
-        bcopy(base, &pkt->layer4, len - pktofs);  
-	pkt->caplen += (len - pktofs);
+        /*
+         * update layer2 information and offsets of layer 3 and above.
+         * this sniffer only runs on ethernet frames.
+         */
+        updateofs(pkt, type);
 
         /* increment the number of processed packets */
         npkts++;
-	base += (len - pktofs); 
+	base += len; 
 	out_buf_used += STDPKT_LEN(pkt); 
     }
 

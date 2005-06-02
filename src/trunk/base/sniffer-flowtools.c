@@ -122,8 +122,10 @@ pkt_fillin(struct fts3rec_v5 * f)
     /* CoMo header */
     pkt->ts = netflow2ts(f, f->First); 
     pkt->len = f->dOctets / f->dPkts;
-    pkt->caplen = sizeof(struct _como_iphdr);
-    pkt->type = COMO_L2_NONE; 
+    pkt->l2type = COMO_L2_NONE; 
+    pkt->l3type = ETHERTYPE_IP; 
+    pkt->layer3ofs = 0; 
+    pkt->layer4ofs = sizeof(struct _como_iphdr); 
 
     /* IP header */
     IP(vhl) = 0x45; 
@@ -133,6 +135,7 @@ pkt_fillin(struct fts3rec_v5 * f)
     N32(IP(src_ip)) = htonl(f->srcaddr);
     N32(IP(dst_ip)) = htonl(f->dstaddr);
     
+    pkt->caplen = sizeof(struct _como_iphdr);
     switch (f->prot) {
     case IPPROTO_TCP:
         N16(TCP(src_port)) = htons(f->srcport);

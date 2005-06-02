@@ -95,6 +95,10 @@ struct _source {
     void *ptr;			/* sniffer-dependent information */ 
     int fd;                     /* file desc. we use */
 };
- 
 
+
+/* some functions and variables */
+void updateofs(pkt_t * pkt, int type);
+
+ 
 #endif /* _COMO_SNIFFERS_H */

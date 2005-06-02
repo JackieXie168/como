@@ -94,22 +94,55 @@ struct _como_eth {
     char	dst[6];
     char	src[6];
     n16_t	type;
-    char	pad[2];		/* padding to align to 32 bits */
 };
+
+
+/*
+ * VLAN header 
+ */
+struct _como_vlan {
+    char dst[6];
+    char src[6];
+    n16_t type;			/* 0x8100 for 802.1q */
+    n16_t vlan; 
+    n16_t ethtype; 
+};
+
 
 /* 
  * Cisco HDLC framing (used for POS point-to-point links) 
  */
 struct _como_hdlc {
-    uint8_t 	address; 	/* 0x0F unicast, 0x8F broadcast */
-    uint8_t	control;	/* always 0 */
-    n16_t	type; 		/* Ethernet-like type codes */
+    uint8_t address; 		/* 0x0F unicast, 0x8F broadcast */
+    uint8_t control;		/* always 0 */
+    n16_t type; 		/* Ethernet-like type codes */
 };
+
+/* 
+ * Cisco ISL framing (used for VLAN trunking) 
+ */ 
+struct _como_isl { 
+    char da[5]; 		/* dest. address 0x01000c0000 or 0x03000c0000 */
+    uint8_t type:4; 		/* 0 for ethernet */
+    uint8_t user:4; 		/* priority */
+    char sa[6];			/* source address */
+    n16_t len; 			/* packet length (excluding ISL) */
+    char snap[3];		/* SNAP, constant 0xaaaa03 */
+    char hsa[3];		/* source address, 0x00000c */
+    n16_t vlan;			/* vlan ID (15bit), last bit is BPDU */
+    n16_t index; 		/* index, ignored */
+    n16_t res; 			/* reserved */
+
+    char dst[6];		/* ethernet frame, dst address */
+    char src[6];		/* ethernet frame, src address */
+    n16_t ethtype;		/* ethernet frame, type field */
+};
+
 
 /* 
  * IP header 
  */
-struct _como_iphdr {	/* XXX possibly have __packed */
+struct _como_iphdr {	
     uint8_t	vhl;
     uint8_t	tos;
     n16_t	len;
@@ -120,6 +153,7 @@ struct _como_iphdr {	/* XXX possibly have __packed */
     n16_t	cksum;
     n32_t	src_ip;
     n32_t	dst_ip;
+    char        options[0];
 };
 
 /* 
@@ -135,7 +169,7 @@ struct _como_tcphdr {
     n16_t	win;
     n16_t	cksum;
     n16_t	urg;
-    uint8_t payload[0]; 
+    char  	payload[0]; 
 };
 
 /* 
@@ -146,7 +180,7 @@ struct _como_udphdr {
     n16_t	dst_port;
     n16_t	len;
     n16_t	cksum;
-    uint8_t payload[0]; 
+    char  	payload[0]; 
 };
 
 /* 
@@ -155,73 +189,68 @@ struct _como_udphdr {
 struct _como_icmphdr {
     uint8_t     type;
     uint8_t     code; 	/* XXX stuff missing... */
-    uint8_t payload[0]; 
+    char  	payload[0]; 
 };
     
 
 /*
- * macros to use for packet header fields
- * There are more macros in modules/generic_filter.c
+ * macros to use for packet header fields. these can be 
+ * used in the filters present in the como.conf file. 
  */
-#define ETH(field)	(pkt->layer2.eth.field)
-#define IP(field)	(pkt->ih.field)
-#define TCP(field)	(pkt->layer4.tcph.field)
-#define UDP(field)	(pkt->layer4.udph.field)
-#define ICMP(field)	(pkt->layer4.icmph.field)
+#define ETH(field)		\
+    (((struct _como_eth *) pkt->payload)->field)
+#define VLAN(field)		\
+    (((struct _como_vlan *) pkt->payload)->field)
+#define HDLC(field)		\
+    (((struct _como_hdlc *) pkt->payload)->field)
+#define ISL(field)		\
+    (((struct _como_isl *) pkt->payload)->field)
+#define IP(field)		\
+    (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field)
+#define TCP(field)		\
+    (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field)
+#define UDP(field)		\
+    (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field)
+#define ICMP(field)		\
+    (((strict _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field)
 
-
-/* 
- * CoMo header size. 
- * That is all the information we add on top of the packet 
- * we collect from the wire. Right now this include timestamp (8 bytes), 
- * wire length (4 bytes), capture length (2 bytes), layer2 type (1 bytes) 
- * and flags (1 bytes -- no flags are defined so far)
- */
-#define COMO_HDR_SIZE	16
-
+#define ETHP(pkt, field)	ETH(field)
+#define IPP(pkt, field)		\
+    (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field)
 
 /*
  * struct _como_pkt (pkt_t) is the structure describing a packet
  * passed around the capture module.
  * 
  * NOTE: the CoMo header information (ts, caplen, len -- for now) are 
- *       all encoded in host byte order. The rest of the packet is in 
- *       network byte order instead. 
+ *       all encoded in host byte order. The rest of the packet (payload)
+ *       is as seen on the wire. 
  *       The byte ordering is changed only when a CoMo system sends 
  *       a packet stream to another CoMo system (via the sniffer-dump). 
  *       In that case the CoMo header is all in network byte order. 
  * 
- *       XXX this is done mainly to keep the code simple. there are no 
- *           other reasons. comments? --gianluca
+ * XXX should we make it consistently network byte order? -gianluca
  */
 struct _como_pkt {
     uint64_t ts;		/* timestamp */
     uint32_t len;		/* length on the wire */
-    uint16_t caplen;		/* capture length (excluding layer2) */
-    uint8_t  type; 		/* layer 2 type */
-    uint8_t  flags; 		/* flags */
-    union _como_mac { 
-	struct _como_eth eth; 	/* ethernet frame */
-	struct _como_hdlc hdlc;	/* Cisco HDLC frame */
-	char padding[16]; 	/* force all compilers to align this to 32bit */
-    } layer2; 
-    struct _como_iphdr ih;      /* the IP header */
-    union _como_transport {
-        struct _como_tcphdr tcph;
-        struct _como_udphdr udph;
-        struct _como_icmphdr icmph;
-	uint8_t payload[0]; 
-    } layer4;
+    uint32_t caplen;		/* capture length */
+    uint16_t l2type; 		/* layer2 type */
+    uint16_t l3type; 		/* layer3 type using ethernet codes */
+    uint16_t layer3ofs;		/* offset where layer3 header starts */
+    uint16_t layer4ofs; 	/* offset where layer4 header starts */
+    char payload[0]; 		/* the full packet is here */ 
 };
 
 
 /* 
  * Known layer2 types 
  */
-#define COMO_L2_SIZE	sizeof(union _como_mac)	/* size of layer2 part */
-#define COMO_L2_NONE	0		/* no layer2 (e.g., replayed data) */
-#define COMO_L2_ETH	1		/* ethernet */
-#define COMO_L2_HDLC	2		/* Cisco HDLC */
+#define COMO_L2_NONE	0x0000	/* no layer2 (e.g., replayed data) */
+#define COMO_L2_ETH	0x0001	/* Ethernet */
+#define COMO_L2_HDLC	0x0002	/* Cisco HDLC */
+#define COMO_L2_VLAN	0x0003	/* 802.1q packet */
+#define COMO_L2_ISL	0x0004	/* Cisco ISL */
 
 
 /*
@@ -236,8 +265,10 @@ struct _como_pktdesc {
 #define COMO_AVG_PKTLEN 	0x0001	/* pkt len are averaged */
 #define COMO_FULL_PKT 		0x0002	/* full packet capture */
 	
+    struct _como_isl isl; 		/* Cisco ISL bitmask */
     struct _como_eth eth; 		/* Ethernet bitmask */
     struct _como_hdlc hdlc;		/* Cisco HDLC bitmask */
+    struct _como_vlan vlan; 		/* 802.1q bitmask */
     struct _como_iphdr ih;		/* IP header bitmask */
     struct _como_tcphdr tcph;		/* TCP header bitmask */
     struct _como_udphdr udph;		/* UDP header bitmask */
@@ -248,11 +279,11 @@ struct _como_pktdesc {
 /* 
  * macro to move in a packet batch. 
  */
-#define STDPKT_LEN(p)   (COMO_HDR_SIZE + COMO_L2_SIZE + (p)->caplen) 
+#define STDPKT_LEN(p)   (sizeof(p) + (p)->caplen) 
 #define STDPKT_NEXT(p)  ((pkt_t *)((char *)p + STDPKT_LEN(p)))
 
 /* packet length when packet is in network byte order */
-#define NTOH_STDPKT_LEN(p)   (COMO_HDR_SIZE + COMO_L2_SIZE + ntohs((p)->caplen))
+#define NTOH_STDPKT_LEN(p)   (sizeof(p) + ntohl((p)->caplen))
 
 /* 
  * timestamp macros 

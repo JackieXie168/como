@@ -190,7 +190,7 @@ sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
     uint out_buf_used;			/* bytes in output buffer */
 
     npkts = out_buf_used = 0;
-    while (COMO_HDR_SIZE + info->snaplen < out_buf_size - out_buf_used) {
+    while (sizeof(pkt_t) + info->snaplen < out_buf_size - out_buf_used) {
         struct pcap_pkthdr pkthdr;
         pkt_t *pkt;
         char *pcappkt;
@@ -213,42 +213,18 @@ sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
         pkt = (pkt_t *) ((char *)out_buf + out_buf_used);
         pkt->ts = TIME2TS(pkthdr.ts.tv_sec, pkthdr.ts.tv_usec);
         pkt->len = pkthdr.len;
-        pkt->type = COMO_L2_ETH; 
-        pkt->flags = 0; 
-        pkt->caplen = 0;	/* NOTE: we update caplen as we go given 
-				 * that we may not store all fields that 
-				 * exists in the actual pcap packet (e.g., 
-			 	 * non-Ethernet MAC, IP options)
-				 */
-    
-	/* copy MAC information */
-	bcopy(pcappkt, &pkt->layer2.eth, 14); 
-	if (H16(pkt->layer2.eth.type) != 0x0800) {
-	    /*
-	     * this is not an IP packet. move the base pointer to next
-	     * packet and restart.
-	     */
-	    logmsg(LOGCAPTURE, "non-IP packet received (%04x)\n",
-		H16(pkt->layer2.eth.type));
-	    continue;
-	}
-	pktofs += 14; 
-        
-	/* copy IP header */
-        pkt->ih = *(struct _como_iphdr *) (pcappkt + pktofs);
-        pkt->caplen += sizeof(struct _como_iphdr);
+	pkt->caplen = pkthdr.caplen; 
 
-        /* skip the IP header
-         *
-         * XXX we are losing IP options if any in the packets.
-         *     need to find a place to put them in the como packet
-         *     data structure...
+        /*
+         * copy the packet payload
          */
-        pktofs += (IP(vhl) & 0x0f) << 2;
+        bcopy(pcappkt, pkt->payload, pkt->caplen); 
 
-        /* copy layer 4 header and payload */
-        bcopy(pcappkt + pktofs, &pkt->layer4, pkthdr.caplen - pktofs);
-        pkt->caplen += (pkthdr.caplen - pktofs);
+        /*
+         * update layer2 information and offsets of layer 3 and above.
+         * this sniffer only runs on ethernet frames.
+         */
+        updateofs(pkt, COMO_L2_ETH);
 
         /* increment the number of processed packets */
         npkts++;
