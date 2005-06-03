@@ -49,21 +49,10 @@
 #define or              ||
 #define ALL             1
 
-#ifndef IP
-#   define IP(field)    (pkt->ih. ## field)
-#endif
-
-#ifndef TCP
-#   define TCP(field)   (pkt->p.tcph. ## field)
-#endif
-
-#ifndef UDP
-#   define UDP(field)   (pkt->p.udph. ## field)
-#endif
-
+#define COMOPKT(field)      (((pkt_t *) pkt)->field)
+#define isIP		    (COMOPKT(l3type) == ETHERTYPE_IP) 
 #define PROTO(x)            (IP(proto) == IPPROTO_ ## x)
 #define proto(x)            PROTO(x)
-#define COMOPKT(field)      (pkt-> ## field)
 #define DIR(x)              (COMOPKT(dir) == (x))
 #define IFACE(x)            DIR(x)
 #define CLASS_A(sd)         IN_CLASSA(H32(IP(sd ## _ip)))
