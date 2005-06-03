@@ -107,7 +107,8 @@ load(char * buf, size_t len, timestamp_t * ts)
     "set y2label \"Packets\" textcolor lt 4;"				\
     "set y2tics nomirror;"						\
     "set ytics nomirror;"						\
-    "set autoscale y;"							\
+    "set autoscale ymax;"						\
+    "set autoscale xfix;"						\
     "set nokey;"							\
     "set xdata time;"							\
     "set timefmt \"%%s\";"						\

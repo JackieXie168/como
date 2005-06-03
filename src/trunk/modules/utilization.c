@@ -163,24 +163,22 @@ load(char *buf, size_t len, timestamp_t *ts)
 
 #define PRETTYFMT  	"%.24s %10u %10u\n"
 #define PLAINFMT  	"%12ld %10u %10u\n"
-#define GNUPLOTFMT      "%ld %u %u\n"
+#define GNUPLOTFMT      "%ld %.2f %.2f\n"
 
 #define PRETTYHDR  	"Date                     Bytes      HighWaterMark\n"
 
-#define GNUPLOTHDR                                              \
-    "set terminal postscript eps color \"Times-Roman\" 14;"             \
-    "set ylabel \"Mbps\" font \"Times-Roman\",16;"                      \
-    "set xlabel \"Time\" font \"Times-Roman\",16;"                      \
+#define GNUPLOTHDR                                                      \
+    "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"    \
     "set grid;"                                                         \
     "set ylabel \"Mbps\";"                                              \
     "set xlabel \"Time\";"                                              \
-    "set autoscale x;"                                                  \
-    "set autoscale y;"                                                  \
+    "set autoscale ymax;"                                               \
+    "set autoscale xfix;"                                               \
     "set xdata time;"                                                   \
     "set timefmt \"%%s\";"                                              \
     "set format x \"%%H:%%M\";"                                         \
-    "plot \"-\" using 1:2 t \"Average\" w lines lt 1," 			\
-    "\"-\" using 1:3 t \"Max 100ms\" w lines lt 2\n"    		\
+    "plot \"-\" using 1:2 with lines lt 3 title \"Avg traffic (1s)\", " \
+    "\"-\" using 1:3 with lines lt 4 title \"High Watermark (100ms)\"\n"
 
 #define GNUPLOTFOOTER   "e\n"
 
@@ -225,13 +223,13 @@ print(char *buf, size_t *len, char * const args[])
     ratio = TIME2TS(1,0) / WATERMARK_IVL; 
 
     if (fmt == PRETTYFMT) { 
-	*len = sprintf(s, fmt, 
-		   (char *) asctime(localtime(&ts)), (uint) ntohl(x->bytes), 
+	*len = sprintf(s, fmt, (char *) asctime(localtime(&ts)), 
+		   (uint) ntohl(x->bytes), 
 		   (uint) ntohl(x->hi_watermark) * ratio);
     } else if (fmt == GNUPLOTFMT) { 
-	*len = sprintf(s, fmt, 
-		   (long int) ts, (uint) ntohl(x->bytes)*8/1024/1024, 
-		   (uint) ntohl(x->hi_watermark) * ratio * 8 / 1024 / 1024);
+	*len = sprintf(s, fmt, (long int) ts, 
+		   (float) ntohl(x->bytes) * 8.0 /1000000, 
+		   (float) ntohl(x->hi_watermark) * ratio * 8.0 / 1000000);
     } else {
 	*len = sprintf(s, fmt, 
 		   (long int) ts, (uint) ntohl(x->bytes), 
