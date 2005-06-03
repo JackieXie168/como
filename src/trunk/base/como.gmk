@@ -24,6 +24,7 @@ SRCS_como := \
 	storage.c \
 	storage-client.c \
 	heap.c \
+	sniffers.c \
 	os.c
 
 LIBS = $(LIBDL) m		
