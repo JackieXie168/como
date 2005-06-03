@@ -136,7 +136,7 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 
         /* access to packet record */
         rec = (dag_record_t *) base;
-        len = ntohs(rec->rlen);
+        len = ntohs(rec->rlen) - dag_record_size;
 
         /* check if we have enough space in output buffer */
         if (sizeof(pkt_t) + len > out_buf_size - out_buf_used)
@@ -152,12 +152,11 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
         pkt = (pkt_t *)((char *)out_buf + out_buf_used);
         pkt->ts = rec->ts;
         pkt->len = ntohs(rec->wlen);
-        pkt->caplen = len;
 
-        /* 
-         * copy the packet payload 
-         */
-        bcopy(base + dag_record_size, pkt->payload, len); 
+	/* 
+	 * skip the DAG header 
+	 */
+	base += dag_record_size; 
         
 	/* 
 	 * we need to figure out what interface we are monitoring. 
@@ -176,6 +175,8 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 
 	case TYPE_ETH: 
 	    type = COMO_L2_ETH; 
+	    base += 2; 	/* DAG adds 4 bytes to Ethernet headers */
+	    len -= 2; 
 	    break; 
 
 	default: 
@@ -183,6 +184,12 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
             base += len;
             continue;
 	} 
+
+        /* 
+         * copy the packet payload 
+         */
+        pkt->caplen = len;
+        bcopy(base, pkt->payload, len); 
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 

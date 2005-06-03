@@ -59,7 +59,7 @@ isISL(pkt_t * pkt)
     const char val[] = {0x01, 0x00, 0x0c, 0x00, 0x00}; 
     int i; 
 
-    if (ISL(da[0]) != 0x01 || ISL(da[0]) != 0x03) 
+    if (ISL(da[0]) != 0x01 && ISL(da[0]) != 0x03) 
 	return 0; 
 
     for (i = 1; i < 5; i++) 
