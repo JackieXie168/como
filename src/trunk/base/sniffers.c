@@ -46,7 +46,8 @@ static size_t como_l2_len[] = {
     0,          // COMO_L2_NONE
     14,         // COMO_L2_ETH
     4,          // COMO_L2_HDLC
-    18          // COMO_L2_VLAN
+    18,         // COMO_L2_VLAN
+    40          // COMO_L2_ISL
 };
 
 /* 

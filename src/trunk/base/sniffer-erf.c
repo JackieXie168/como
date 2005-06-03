@@ -121,7 +121,7 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 
         /* access to packet record */
         rec = (dag_record_t *) base;
-        len = ntohs(rec->rlen);
+        len = ntohs(rec->rlen) - dag_record_size;
 
 	/* check if we have enough space in output buffer */
 	if (sizeof(pkt_t) + len > out_buf_size - out_buf_used)
@@ -137,13 +137,10 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	pkt = (pkt_t *)((char *)out_buf + out_buf_used);
 	pkt->ts = rec->ts;
 	pkt->len = (uint32_t) ntohs(rec->wlen);
-	pkt->caplen = len; 
 
-        /*
-         * copy the packet payload
-         */
-        bcopy(base + dag_record_size, pkt->payload, len);
-    
+	/* skip DAG header */
+	base += dag_record_size; 
+
         /*
          * we need to figure out what interface we are monitoring.
          * some information is in the DAG record but for example Cisco
@@ -161,6 +158,8 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 
         case TYPE_ETH:
             type = COMO_L2_ETH;
+	    base += 2; 		/* ethernet frames have padding */
+	    len -= 2; 
             break;
 
         default:
@@ -169,6 +168,11 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
             continue;
         }
 
+        /*
+         * copy the packet payload
+         */
+	pkt->caplen = len; 
+        bcopy(base + dag_record_size, pkt->payload, len);
         /*
          * update layer2 information and offsets of layer 3 and above.
          * this sniffer only runs on ethernet frames.
