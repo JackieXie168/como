@@ -185,10 +185,10 @@ load(char *buf, size_t len, timestamp_t *ts)
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
-    EFLOWDESC *x = (EFLOWDESC *) buf; 
+    EFLOWDESC *x;
     static char s[2048];
     struct in_addr addr;
-    time_t ts = (time_t) ntohl(x->ts);
+    time_t ts; 
 
     if (buf == NULL && args != NULL) { 
 	*len = sprintf(s, PRETTYHDR); 
