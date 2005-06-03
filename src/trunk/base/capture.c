@@ -32,6 +32,7 @@
 #include <unistd.h>     /* read, write etc. */
 #include <string.h>     /* bzero */
 #include <errno.h>      /* errno */
+#include <assert.h>
 
 #include "como.h"
 #include "sniffers.h"
@@ -225,20 +226,21 @@ flush_table(module_t * mdl, tailq_t * expired)
 
     /* check if the table is there and if it is non-empty */
     ct = mdl->ca_hashtable;
-    if (ct && ct->records) {
-        if (ct->records > ct->size)
-            logmsg(LOGWARN,
-		"flush_table table '%s' overfull (%d vs %d) -- %d live\n",
-		mdl->name, ct->records, ct->size, ct->live_buckets);
+    assert(ct != NULL); 
+    assert(ct->records > 0); 
 
-        logmsg(V_LOGCAPTURE,
-            "flush_tables %p(%s) buckets %d records %d live %d\n", ct,
-            mdl->name, ct->size, ct->records, ct->live_buckets);
+    if (ct->records > ct->size)
+	logmsg(LOGWARN,
+	    "flush_table table '%s' overfull (%d vs %d) -- %d live\n",
+	    mdl->name, ct->records, ct->size, ct->live_buckets);
 
-        /* add to linked list and remove from here. */
-        TQ_APPEND(expired, ct, next_expired);
-        mdl->ca_hashtable = NULL;
-    }
+    logmsg(V_LOGCAPTURE,
+	"flush_tables %p(%s) buckets %d records %d live %d\n", ct,
+	mdl->name, ct->size, ct->records, ct->live_buckets);
+
+    /* add to linked list and remove from here. */
+    TQ_APPEND(expired, ct, next_expired);
+    mdl->ca_hashtable = NULL;
 
     logmsg(V_LOGCAPTURE, "module %s flush_table done.\n", mdl->name);
 }
@@ -385,9 +387,9 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 
         /* flush the current flow table, if needed */
 	ct->ts = pkt->ts; 
-        if (ct->ts > ct->ivl + mdl->max_flush_ivl) {  
+        if (ct->ts > ct->ivl + mdl->max_flush_ivl && ct->records) {  
             flush_table(mdl, expired);
-            ct = mdl->ca_hashtable = create_table(mdl, pkt->ts); 
+	    ct = mdl->ca_hashtable = create_table(mdl, pkt->ts); 
 	}
 
 
