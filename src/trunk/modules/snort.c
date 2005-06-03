@@ -248,7 +248,7 @@ check_options(ruleinfo_t *i, pkt_t *pkt)
 		if (pload_len == 0) 
 		    break; 
                 pl = safe_malloc(pload_len); 
-                bcopy(pkt->layer4.tcph.payload, pl, pload_len); 
+                bcopy(TCP(payload), pl, pload_len); 
                 if (strstr(pl, opt->content) == NULL)
                     return 0;
                 free(pl);

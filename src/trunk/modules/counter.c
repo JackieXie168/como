@@ -59,7 +59,7 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->pkts = 0;
     }
 
-    x->byts += H16(IP(len));
+    x->byts += pkt->len; 
     x->pkts++;
 
     return 0;
@@ -100,22 +100,20 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define GNUPLOTFMT	"%12ld %12llu %12llu\n"
 
 #define GNUPLOTHDR						\
-    "set terminal postscript eps color \"Times-Roman\" 14;"		\
-    "set ylabel \"Bytes\" font \"Times-Roman\",16;"			\
-    "set xlabel \"Time\" font \"Times-Roman\",16;"			\
+    "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"		\
     "set grid;"								\
-    "set ylabel \"Bytes\";"						\
+    "set ylabel \"Bytes\" textcolor lt 3;"				\
     "set xlabel \"Time\";"						\
-    "set y2label \"Packets\";"						\
+    "set y2label \"Packets\" textcolor lt 4;"				\
     "set y2tics nomirror;"						\
     "set ytics nomirror;"						\
-    "set autoscale x;"							\
     "set autoscale y;"							\
+    "set nokey;"							\
     "set xdata time;"							\
     "set timefmt \"%%s\";"						\
     "set format x \"%%H:%%M\";"						\
-    "plot \"-\" using 1:2 t \"Bytes\" axis x1y1 smooth csplines lt 1, "	\
-    "\"-\" using 1:3 t \"Packets\" axis x1y2 smooth csplines lt 2\n"	\
+    "plot \"-\" using 1:2 axis x1y1 with lines lt 3, "	\
+    "\"-\" using 1:3 axis x1y2 with lines lt 4\n"	\
 
 #define GNUPLOTFOOTER	"e\n"
 

@@ -225,7 +225,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
-    EFLOWDESC *ex;
+    EFLOWDESC *ex = (EFLOWDESC *) buf; 
     static char s[2048];
     struct in_addr saddr, daddr;
     char src[20], dst[20];

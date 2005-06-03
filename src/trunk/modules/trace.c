@@ -118,7 +118,7 @@ store(void *fh, char *buf, size_t len)
      * before saving it to disk 
      */
     pkt->ts = HTONLL(pkt->ts); 
-    pkt->caplen = htons(pkt->caplen); 
+    pkt->caplen = htonl(pkt->caplen); 
     pkt->len = htonl(pkt->len); 
 
     memcpy(buf, x->buf, len); 

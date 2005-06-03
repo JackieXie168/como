@@ -97,7 +97,7 @@ typedef struct {
  * the packets from given sniffer
  */
 static pktdesc_t indesc, outdesc;
-static pkt_t pkt_template; 
+static pkt_t * pkt_template; 
 
 
 /* 
@@ -225,10 +225,14 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     outdesc.flags = COMO_AVG_PKTLEN; 
     N16(outdesc.ih.len) = 0xffff;
     
-    bzero(&pkt_template, sizeof(pkt_t));
-    pkt_template.ih.vhl = 0x45; 
-    pkt_template.caplen = htons(sizeof(struct _como_iphdr)); 
-    pkt_template.ih.proto = IPPROTO_TCP; 
+    pkt_template = safe_calloc(1, sizeof(struct _como_iphdr) + sizeof(pkt_t)); 
+    pkt_template->caplen = htonl(sizeof(struct _como_iphdr)); 
+    pkt_template->l2type = COMO_L2_NONE; 
+    pkt_template->l3type = ETHERTYPE_IP;
+    pkt_template->layer3ofs = 0; 
+    pkt_template->layer4ofs = sizeof(struct _como_iphdr); 
+    IPP(pkt_template, vhl) = 0x45; 
+    IPP(pkt_template, proto) = IPPROTO_TCP; 
 
     return 0;
 }
@@ -332,7 +336,7 @@ replay(char *buf, char *out, size_t * len)
     static int npkts = 0; 
     size_t out_len; 
     
-    if (*len < NTOH_STDPKT_LEN(&pkt_template))
+    if (*len < NTOH_STDPKT_LEN(pkt_template))
         return -1;
     
     /* 
@@ -350,14 +354,14 @@ replay(char *buf, char *out, size_t * len)
 	    npkts += NTOHLL(app->pkts[i]); 
 	    nbytes += NTOHLL(app->bytes[i]); 
 	} 
-	N16(pkt_template.ih.len) = htons((uint16_t) (nbytes / npkts)); 
+	N16(IPP(pkt_template, len)) = htons((uint16_t) (nbytes / npkts)); 
 	ts = TIME2TS(ntohl(app->ts), 0);
-	pkt_template.ts = HTONLL(ts); 
+	pkt_template->ts = HTONLL(ts); 
     }
     
     for (out_len = 0; out_len < *len && npkts > 0; npkts--) { 
-	bcopy(&pkt_template, out + out_len, NTOH_STDPKT_LEN(&pkt_template)); 
-	out_len += NTOH_STDPKT_LEN(&pkt_template);
+	bcopy(pkt_template, out + out_len, NTOH_STDPKT_LEN(pkt_template)); 
+	out_len += NTOH_STDPKT_LEN(pkt_template);
     } 
     
     *len = out_len; 

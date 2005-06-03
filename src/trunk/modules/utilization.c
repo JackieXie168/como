@@ -93,7 +93,7 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->bytes_ivl = 0;
     }
 
-    x->bytes_ivl += H16(IP(len));
+    x->bytes_ivl += pkt->len; 
     if (x->bytes_ivl > x->hi_watermark)
         x->hi_watermark = x->bytes_ivl;
 
