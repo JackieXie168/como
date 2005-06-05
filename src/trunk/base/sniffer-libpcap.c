@@ -128,12 +128,12 @@ sniffer_start(source_t * src)
     } 
 
     /* find all the symbols that we will need */
-    sp_open = (sniff_pcap_open) dlfunc(info->handle, "pcap_open_live");  
-    sp_noblock = (sniff_pcap_noblock) dlfunc(info->handle, "pcap_setnonblock"); 
-    sp_link = (sniff_pcap_datalink) dlfunc(info->handle, "pcap_datalink"); 
-    sp_fileno = (sniff_pcap_fileno) dlfunc(info->handle, "pcap_fileno"); 
-    sp_close = (sniff_pcap_close) dlfunc(info->handle, "pcap_close"); 
-    info->dispatch = (sniff_pcap_dispatch) dlfunc(info->handle,"pcap_dispatch");
+    sp_open = (sniff_pcap_open) dlsym(info->handle, "pcap_open_live");  
+    sp_noblock = (sniff_pcap_noblock) dlsym(info->handle, "pcap_setnonblock"); 
+    sp_link = (sniff_pcap_datalink) dlsym(info->handle, "pcap_datalink"); 
+    sp_fileno = (sniff_pcap_fileno) dlsym(info->handle, "pcap_fileno"); 
+    sp_close = (sniff_pcap_close) dlsym(info->handle, "pcap_close"); 
+    info->dispatch = (sniff_pcap_dispatch) dlsym(info->handle,"pcap_dispatch");
 	    
     /* initialize the pcap handle */
     info->pcap = sp_open(src->device, snaplen, promisc, timeout, errbuf);
@@ -264,7 +264,7 @@ sniffer_stop(source_t * src)
     sniff_pcap_close sp_close; 
     
     close(src->fd);
-    sp_close = (sniff_pcap_close) dlfunc(info->handle, "pcap_close"); 
+    sp_close = (sniff_pcap_close) dlsym(info->handle, "pcap_close"); 
     sp_close(info->pcap);
     free(src->ptr);
 }
