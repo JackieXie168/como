@@ -33,8 +33,6 @@
 #include <glob.h>	/* glob */
 #include <errno.h>	/* errno values */
 #include <ftlib.h>      /* flow-tools stuff */
-//#include <sys/types.h>
-//#include <sys/stat.h>
 
 #include "sniffers.h"
 #include "como.h"
@@ -103,7 +101,7 @@ netflow2ts(struct fts3rec_v5 * f, uint32_t ms)
 
 
 /*
- * -- pkt_fillin
+ * -- fillpkt
  * 
  * A flow record defines all pkt_t fields but the timestamp. We fill 
  * in one template to speed up things later on. We put the timestamp of 
@@ -111,7 +109,7 @@ netflow2ts(struct fts3rec_v5 * f, uint32_t ms)
  * replay of the flow record. 
  */
 static pkt_t
-pkt_fillin(struct fts3rec_v5 * f) 
+fillpkt(struct fts3rec_v5 * f) 
 {
     pkt_t p; 
     pkt_t * pkt = &p;
@@ -231,7 +229,7 @@ flowtools_read(source_t * src)
     /* build a new flow record */
     flow = safe_calloc(1, sizeof(struct _flowinfo));
     flow->end_ts = netflow2ts(fr, fr->Last);
-    flow->pkt = pkt_fillin(fr);
+    flow->pkt = fillpkt(fr);
     flow->increment = (flow->end_ts - flow->pkt.ts) / fr->dPkts;
     flow->length_last = fr->dOctets % fr->dPkts;
 
@@ -270,6 +268,7 @@ static int
 sniffer_start(source_t * src) 
 {
     struct _snifferinfo * info;
+    pktdesc_t * p; 
     int ret;
 
     /* 
@@ -340,23 +339,23 @@ sniffer_start(source_t * src)
 	    info->min_ts = ts; 
     } while (info->max_ts - info->min_ts > info->window);
 
-#if 0 		/* XXX this is not supported yet!! */
     /*  
      * given that the output stream is not a plain packet 
      * stream, describe it in the source_t data structure 
      */ 
     p = src->output = safe_calloc(1, sizeof(pktdesc_t));
     p->ts = TIME2TS(120, 0);
-    N16(p->bm.ih.len) = 0xffff;
-    outdesc.bm.ih.proto = 0xff;
-    N32(outdesc.bm.ih.src_ip) = 0xffffffff;
-    N32(outdesc.bm.ih.dst_ip) = 0xffffffff;
-    N16(outdesc.bm.tcph.src_port) = 0xffff;
-    N16(outdesc.bm.tcph.dst_port) = 0xffff;
-    outdesc.bm.tcph.flags = 0xff;
-    N16(outdesc.bm.udph.src_port) = 0xffff;
-    N16(outdesc.bm.udph.dst_port) = 0xffff;
-#endif
+    p->caplen = sizeof(struct _como_iphdr) + sizeof(struct _como_tcphdr); 
+    p->flags = COMO_AVG_PKTLEN; 
+    N16(p->ih.len) = 0xffff;
+    p->ih.proto = 0xff;
+    N32(p->ih.src_ip) = 0xffffffff;
+    N32(p->ih.dst_ip) = 0xffffffff;
+    N16(p->tcph.src_port) = 0xffff;
+    N16(p->tcph.dst_port) = 0xffff;
+    p->tcph.flags = 0xff;
+    N16(p->udph.src_port) = 0xffff;
+    N16(p->udph.dst_port) = 0xffff;
     
     return 0; 
 }

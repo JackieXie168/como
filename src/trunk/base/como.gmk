@@ -37,7 +37,7 @@ LIBDIRS = /usr/local/lib
 SNIFFERS = como		
 ifneq ($(shell uname),CYGWIN_NT-5.1)
 	SNIFFERS += libpcap pcap
-	LIBS += pcap 
+#	LIBS += pcap 
 endif
 # Linux does not have bpf
 ifeq ($(shell uname),FreeBSD)

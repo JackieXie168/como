@@ -30,6 +30,8 @@
 #include <fcntl.h>      /* open */
 #include <unistd.h>     /* close */
 #include <string.h>     /* memset */
+#include <errno.h>
+#include <dlfcn.h>	/* dlopen */
 #include <pcap.h>
 
 #include "sniffers.h"
@@ -48,12 +50,24 @@ static char errbuf[PCAP_ERRBUF_SIZE];
 #define LIBPCAP_DEFAULT_SNAPLEN 96		/* packet capture */
 #define LIBPCAP_DEFAULT_TIMEOUT 0		/* timeout to serve packets */
 
+/* 
+ * functions that we need from libpcap.so 
+ */
+typedef int (*sniff_pcap_dispatch)(pcap_t *, int, pcap_handler, u_char *); 
+typedef pcap_t * (*sniff_pcap_open)(const char *, int, int, int, char *);
+typedef void (*sniff_pcap_close)(pcap_t *); 
+typedef int (*sniff_pcap_noblock)(pcap_t *, int, char *); 
+typedef int (*sniff_pcap_fileno)(pcap_t *); 
+typedef int (*sniff_pcap_datalink)(pcap_t *); 
+
 /*
  * This data structure will be stored in the source_t structure and 
  * used for successive callbacks.
  */
 struct _snifferinfo {
-    pcap_t *pcap;	/* pcap handle */
+    void * handle;  			/* handle to libpcap.so */
+    sniff_pcap_dispatch dispatch;	/* ptr to pcap_dispatch function */
+    pcap_t *pcap;			/* pcap handle */
     uint snaplen; 
 }; 
     
@@ -73,6 +87,11 @@ sniffer_start(source_t * src)
     uint promisc = LIBPCAP_DEFAULT_PROMISC; 
     uint snaplen = LIBPCAP_DEFAULT_SNAPLEN; 
     uint timeout = LIBPCAP_DEFAULT_TIMEOUT; 
+    sniff_pcap_open sp_open; 
+    sniff_pcap_fileno sp_fileno;
+    sniff_pcap_noblock sp_noblock; 
+    sniff_pcap_datalink sp_link; 
+    sniff_pcap_close sp_close; 
 
     errbuf[0] = '\0';
 
@@ -99,8 +118,25 @@ sniffer_start(source_t * src)
     src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
 
+    /* link the libpcap library */
+    info->handle = dlopen("libpcap.so", RTLD_NOW);
+    if (info->handle == NULL) { 
+	logmsg(LOGWARN, "sniffer %s opening libpcap.so: %s\n", 
+	    src->cb->name, strerror(errno)); 
+	free(src->ptr); 
+	return -1; 
+    } 
+
+    /* find all the symbols that we will need */
+    sp_open = (sniff_pcap_open) dlfunc(info->handle, "pcap_open_live");  
+    sp_noblock = (sniff_pcap_noblock) dlfunc(info->handle, "pcap_setnonblock"); 
+    sp_link = (sniff_pcap_datalink) dlfunc(info->handle, "pcap_datalink"); 
+    sp_fileno = (sniff_pcap_fileno) dlfunc(info->handle, "pcap_fileno"); 
+    sp_close = (sniff_pcap_close) dlfunc(info->handle, "pcap_close"); 
+    info->dispatch = (sniff_pcap_dispatch) dlfunc(info->handle,"pcap_dispatch");
+	    
     /* initialize the pcap handle */
-    info->pcap = pcap_open_live(src->device, snaplen, promisc, timeout, errbuf);
+    info->pcap = sp_open(src->device, snaplen, promisc, timeout, errbuf);
     info->snaplen = snaplen; 
     
     /* check for initialization errors */
@@ -116,7 +152,7 @@ sniffer_start(source_t * src)
      * It is very important to set pcap in non-blocking mode, otherwise
      * sniffer_next() will try to fill the entire buffer before returning.
      */
-    if (pcap_setnonblock(info->pcap, 1, errbuf) < 0) {
+    if (sp_noblock(info->pcap, 1, errbuf) < 0) {
         logmsg(LOGWARN, "%s\n", errbuf);
 	free(src->ptr);
         return -1;
@@ -125,48 +161,38 @@ sniffer_start(source_t * src)
     /* 
      * we only support Ethernet frames so far. 
      */
-    if (pcap_datalink(info->pcap) != DLT_EN10MB) {
+    if (sp_link(info->pcap) != DLT_EN10MB) {
 	logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
-	pcap_close(info->pcap);
+	sp_close(info->pcap);
 	return -1;
     }
     
-    src->fd = pcap_fileno(info->pcap);
+    src->fd = sp_fileno(info->pcap);
     return 0; 		/* success */
 }
 
 
-/*
- * Here, we basically replicate the implementation of pcap_next():
- * this is because the pcap(3) man page (which is wrong in many respects)i
- * claims that pcap_next() is unaffected by pcap_setnonblock(), while
- * pcap_dispatch() is declared affected; this is crearly wrong as
- * pcap_next() is itself implemented through a call to pcap_dispatch()!
- * Anyway, as this implementation detail could change in the future, we
- * stick to the man page and call pcap_dispatch() anyway.
+/* 
+ * -- processpkt
+ * 
+ * this is the callback needed by pcap_dispatch. we use it to 
+ * copy the data from the pcap packet into a pkt_t data structure. 
+ * 
  */
-typedef struct {
-    struct pcap_pkthdr *hdr;
-    const u_char *pkt;
-} libpcap_pkt;
-
-/* this is the callback as needed by pcap_dispatch */
 static void
-libpcap_onepkt(u_char *userData, const struct pcap_pkthdr *h, const u_char *pkt)
+processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
 {
-    libpcap_pkt *sp = (libpcap_pkt*)userData;
-    *sp->hdr = *h;
-    sp->pkt = pkt;
+    pkt_t * pkt = (pkt_t *) data; 
+    pkt->ts = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
+    pkt->len = h->len;
+    pkt->caplen = h->caplen;
+
+    /*
+     * copy the packet payload
+     */
+    bcopy(buf, pkt->payload, pkt->caplen);
 }
 
-static const u_char*
-libpcap_fetch_one_pkt(pcap_t *p, struct pcap_pkthdr *h)
-{
-    libpcap_pkt s = {h, 0};
-    if (pcap_dispatch(p, 1, libpcap_onepkt, (u_char*)&s) <= 0)
-	return NULL;
-    return s.pkt;
-}
 
 /*
  * -- sniffer_next 
@@ -191,39 +217,29 @@ sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
 
     npkts = out_buf_used = 0;
     while (sizeof(pkt_t) + info->snaplen < out_buf_size - out_buf_used) {
-        struct pcap_pkthdr pkthdr;
+	int count; 
+	char * buf;
         pkt_t *pkt;
-        char *pcappkt;
-	int pktofs; 
         
 	/*
-         * we have to retreive one packet at a time 
-         * because of their variable length
-         */
-	pktofs = 0;
-        memset(&pkthdr, 0, sizeof(struct pcap_pkthdr));
-        pcappkt = (u_char *) libpcap_fetch_one_pkt(info->pcap, &pkthdr);
-        if (pcappkt == NULL)
-	    break;
-       
-	/*
-	 * Now we have a packet: start filling a new pkt_t struct 
-	 * (beware that it could be discarded later on)
+	 * we use pcap_dispatch() because pcap_next() is assumend unaffected
+	 * by the pcap_setnonblock() call. (but it doesn't seem that this is 
+	 * actually the case but we still believe the man page. 
+ 	 * 
+	 * we retrieve one packet at a time for simplicity. 
+	 * XXX check the cost of processing one packet at a time? 
+	 * 
 	 */
-        pkt = (pkt_t *) ((char *)out_buf + out_buf_used);
-        pkt->ts = TIME2TS(pkthdr.ts.tv_sec, pkthdr.ts.tv_usec);
-        pkt->len = pkthdr.len;
-	pkt->caplen = pkthdr.caplen; 
-
-        /*
-         * copy the packet payload
-         */
-        bcopy(pcappkt, pkt->payload, pkt->caplen); 
+	buf = out_buf + out_buf_used; 
+	count = info->dispatch(info->pcap, 1, processpkt, buf); 
+	if (count == 0) 
+	    break;; 
 
         /*
          * update layer2 information and offsets of layer 3 and above.
          * this sniffer only runs on ethernet frames.
          */
+	pkt = (pkt_t *) buf; 
         updateofs(pkt, COMO_L2_ETH);
 
         /* increment the number of processed packets */
@@ -245,9 +261,11 @@ static void
 sniffer_stop(source_t * src) 
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
+    sniff_pcap_close sp_close; 
     
     close(src->fd);
-    pcap_close(info->pcap);
+    sp_close = (sniff_pcap_close) dlfunc(info->handle, "pcap_close"); 
+    sp_close(info->pcap);
     free(src->ptr);
 }
 
