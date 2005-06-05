@@ -37,7 +37,6 @@ LIBDIRS = /usr/local/lib
 SNIFFERS = como		
 ifneq ($(shell uname),CYGWIN_NT-5.1)
 	SNIFFERS += libpcap pcap
-#	LIBS += pcap 
 endif
 # Linux does not have bpf
 ifeq ($(shell uname),FreeBSD)
@@ -105,14 +104,14 @@ pippo.o:
 	(							\
 	echo "char stdpkt[$$sz_f +32 ] = \"replace_stdpkt\";";	\
 	echo "char template[$$sz_g +32 ] = \"replace_template\";" ; \
-	) > pippo.c; \
-	cc -c pippo.c ; \
+	) > pippo.c; 						\
+	$(CC) -c pippo.c ; 					\
 	set `strings -at d pippo.o | grep "replace_stdpkt"` ; pos_f=$$1 ; \
 	set `strings -at d pippo.o | grep "replace_template"` ; pos_g=$$1 ; \
 	dd if=$$f of=pippo.o obs=$$pos_f seek=1 conv=notrunc  ; \
-	dd if=$$g of=pippo.o obs=$$pos_g seek=1 conv=notrunc ; \
+	dd if=$$g of=pippo.o obs=$$pos_g seek=1 conv=notrunc ; 	\
+	rm pippo.c						\
 	) 2> /dev/null
-	rm pippo.c
 
 CFLAGS_como := -Dfoo
 
