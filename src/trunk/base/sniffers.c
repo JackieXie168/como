@@ -100,7 +100,7 @@ updateofs(pkt_t * pkt, int type)
         if (H16(ETH(type)) == ETHERTYPE_VLAN) {
             pkt->l2type = COMO_L2_VLAN;
             pkt->l3type = H16(VLAN(ethtype));
-        } if (isISL(pkt)) { 
+        } else if (isISL(pkt)) { 
 	    pkt->l2type = COMO_L2_ISL; 
 	    pkt->l3type = H16(ISL(ethtype)); 
 	} else { 
