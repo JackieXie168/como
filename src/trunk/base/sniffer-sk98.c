@@ -67,7 +67,7 @@ struct map_area_header {
     unsigned u2k_prod;
     unsigned u2k_tokens[RING_SIZE];
 
-    /* Stuff mostly written by kernel space */
+    /* Stuff mostly written by kernel */
     unsigned u2k_cons;
     unsigned k2u_prod;
     struct {
@@ -101,6 +101,8 @@ struct _snifferinfo {
     struct packet_data_area * packet_pool;	
     unsigned retimer_size;		
     clock_retimer_t ** clock_retimers;	
+    int tokens[RING_SIZE];
+    int no_tokens; 
 };
 
 
@@ -246,6 +248,9 @@ sniffer_start(source_t * src)
         return -1;
     } 
 
+    /* we have no packets */
+    info->no_tokens = -1; 
+
     /* do timer calibration */
     calibrate(info); 
 
@@ -276,22 +281,32 @@ return_token(struct map_area_header * m, unsigned token)
  *
  */
 static int
-sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
+sniffer_next(source_t * src, pkt_t *out, int max_no)
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
-    uint npkts;                 /* processed pkts */
-    uint out_buf_used;          /* bytes in output buffer */
+    pkt_t * pkt;
+    int npkts;                 /* processed pkts */
 
-    npkts = out_buf_used = 0; 
     mb();
-    while (info->m->k2u_cons != info->m->k2u_prod) {
+
+    /* return all tokens of previous round */
+    for (; info->no_tokens >= 0; info->no_tokens--) {
+	info->m->k2u_cons++;
+	return_token(info->m, info->tokens[info->no_tokens]);
+    } 
+
+    info->no_tokens = 0; 
+
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	uint ind;
 	uint token;
 	ushort iface;
 	struct timeval tv;
 	int len; 
-	pkt_t *pkt;
 	char * base; 
+
+        if (info->m->k2u_cons == info->m->k2u_prod) 
+	    break; 	/* no more tokens */
 
 	ind = info->m->k2u_cons % RING_SIZE;
 	token = info->m->k2u_pipe[ind].token;
@@ -306,50 +321,36 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 
 	if (iface >= info->retimer_size || info->clock_retimers[iface] == NULL){
 	    /* Clock calibration was incomplete.  Uh oh. */
+	    logmsg(V_LOGSNIFFER, "calibration incomplete, returning token\n"); 
 	    return_token(info->m, token);
 	    info->m->k2u_cons++;
 	    continue;
 	}
 
 	/* we have a good incoming packet; deal with it. */
+	info->tokens[npkts] = token; 
 	base = info->packet_pool[token].payload; 
 	len = info->m->k2u_pipe[ind].len; 
 	getTime(info->clock_retimers[iface], info->m->k2u_pipe[ind].tstamp, 
 		&tv, NULL);
 
-        /* check if we have enough space in output buffer */
-        if (sizeof(pkt_t) + len > out_buf_size - out_buf_used)
-            break;
-
         /*
          * Now we have a packet: start filling a new pkt_t struct
          * (beware that it could be discarded later on)
          */
-        pkt = (pkt_t *) ((char *)out_buf + out_buf_used);
         pkt->ts = TIME2TS(tv.tv_sec, tv.tv_usec); 
         pkt->len = len; 
         pkt->caplen = len;
-
-        /* 
-         * copy the packet payload 
-         */
-        bcopy(base, pkt->payload, len); 
+	pkt->payload = base; 
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
-        updateofs(pkt, COMO_L2_ETH); 
-
-	/* done with this packet. return the token */
-	info->m->k2u_cons++;
-	return_token(info->m, token);
-
-        /* increment the number of processed packets */
-        npkts++;
-        out_buf_used += STDPKT_LEN(pkt); 
+        updateofs(pkt, COMOTYPE_ETH); 
     }
 
+    info->no_tokens = npkts; 
     return npkts;		
 }
 

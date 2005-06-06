@@ -48,7 +48,11 @@
  *
  */
 
+/* sniffer specific information */
 #define BUFSIZE (500*1024) 	/* NOTE: bpf max buffersize is 0x80000 */
+struct _snifferinfo { 
+    char buf[BUFSIZE]; 
+};
 
 
 /*
@@ -146,6 +150,8 @@ sniffer_start(source_t *src)
     }
 
     src->fd = fd; 
+    src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
+
     return 0;		/* success */
 }
 
@@ -164,61 +170,54 @@ sniffer_start(source_t *src)
  *                                      plus alignment padding)
  */
 static int
-sniffer_next(source_t *src, void *out_buf, size_t out_buf_size)
+sniffer_next(source_t *src, pkt_t *out, int max_no) 
 {
-    static char buf[BUFSIZE];   /* base of the capture buffer */
+    struct _snifferinfo * info; /* sniffer specific information */
+    pkt_t * pkt; 		/* CoMo packet structure */
     char * wh;                  /* where to copy from */
-    uint npkts;                 /* processed pkts */
-    uint out_buf_used;          /* bytes in output buffer */
-    int nbytes;			/* bytes in input buffer */
+    int npkts;                  /* processed pkts */
+    int nbytes; 		/* valid bytes in buffer */
+
+    info = (struct _snifferinfo *) src->ptr; 
 
     /* read next batch of packets */
-    nbytes = read(src->fd, buf, BUFSIZE);
+    nbytes = read(src->fd, info->buf, BUFSIZE);
     if (nbytes < 0)   
         return nbytes;
 
-    wh = buf;
-    npkts = out_buf_used = 0;
-    while (nbytes - (wh - buf) > (int) sizeof(struct bpf_hdr)) { 
+    wh = info->buf;
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
         struct bpf_hdr * bh;        /* BPF record structure */
-        pkt_t *pkt;                 /* CoMo record structure */
+        int left; 
  
         bh = (struct bpf_hdr *) wh; 
+	left = nbytes - (int) (wh - info->buf); 
+
+	/* check if there is a full bpf header */
+	if (left < (int) sizeof(struct bpf_hdr)) 
+	    break; 
 
         /* check if entire record is available */
-        if ((int) (bh->bh_hdrlen + bh->bh_caplen) > nbytes - (int) (wh - buf))
-            break;
-
-        /* check if we have enough space in output buffer */
-        if (sizeof(pkt_t) + bh->bh_caplen > out_buf_size - out_buf_used)
+        if (left < (int) (bh->bh_hdrlen + bh->bh_caplen)) 
             break;
 
         /*
          * Now we have a packet: start filling a new pkt_t struct
          * (beware that it could be discarded later on)
          */
-        pkt = (pkt_t *) ((char *)out_buf + out_buf_used);
         pkt->ts = TIME2TS(bh->bh_tstamp.tv_sec, bh->bh_tstamp.tv_usec);
         pkt->len = bh->bh_datalen; 
         pkt->caplen = bh->bh_caplen; 
+        pkt->payload = wh + bh->bh_hdrlen; 
 
-        /* 
-	 * copy the packet payload 
-	 */
-	bcopy(wh + bh->bh_hdrlen, pkt->payload, bh->bh_caplen); 
-	
 	/* 
 	 * update layer2 information and offsets of layer 3 and above. 
 	 * this sniffer only runs on ethernet frames. 
 	 */
-	updateofs(pkt, COMO_L2_ETH); 
-
-        /* increment the number of processed packets */
-        npkts++;
+	updateofs(pkt, COMOTYPE_ETH); 
 
 	/* bpf aligns packets to long word */
 	wh += BPF_WORDALIGN(bh->bh_caplen + bh->bh_hdrlen); 
-        out_buf_used += STDPKT_LEN(pkt); 
     }
 
     /* return the number of copied packets */
@@ -234,6 +233,7 @@ sniffer_next(source_t *src, void *out_buf, size_t out_buf_size)
 static void
 sniffer_stop(source_t * src)
 {
+    free(src->ptr); 
     close(src->fd);
 }
 

@@ -91,12 +91,12 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
+sniffer_next(source_t * src, pkt_t *out, int max_no)
 {
     struct _snifferinfo * info; /* sniffer specific information */
+    pkt_t *pkt;                 /* packet records */
     char * base; 	 	/* current position in input buffer */
-    uint npkts;                 /* processed pkts */
-    uint out_buf_used;		/* bytes in output buffer */
+    int npkts;                  /* processed pkts */
     int rd;
 
     info = (struct _snifferinfo *) src->ptr; 
@@ -112,20 +112,18 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	return -1; 	/* end of file, nothing left to do */
 
     base = info->buf; 
-    npkts = out_buf_used = 0; 
-    while (info->nbytes - (base - info->buf) > dag_record_size) { 
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	dag_record_t * rec;         /* DAG record structure */
-	pkt_t *pkt;                 /* CoMo record structure */
 	int len;                    /* total record length */
-	int type; 		    
+	int type; 		    /* interface type */
+
+	/* see if we have a record */
+	if (info->nbytes - (base - info->buf) < dag_record_size)  
+	    break; 
 
         /* access to packet record */
         rec = (dag_record_t *) base;
         len = ntohs(rec->rlen) - dag_record_size;
-
-	/* check if we have enough space in output buffer */
-	if (sizeof(pkt_t) + len > out_buf_size - out_buf_used)
-	    break; 
 
         /* check if entire record is available */
         if (len > info->nbytes - (int) (base - info->buf)) 
@@ -134,7 +132,6 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
         /* 
 	 * ok, data is good now, copy the packet over 
          */
-	pkt = (pkt_t *)((char *)out_buf + out_buf_used);
 	pkt->ts = rec->ts;
 	pkt->len = (uint32_t) ntohs(rec->wlen);
 
@@ -153,11 +150,11 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
              */   
   
         case TYPE_HDLC_POS:
-            type = COMO_L2_HDLC;
+            type = COMOTYPE_HDLC;
             break;
 
         case TYPE_ETH:
-            type = COMO_L2_ETH;
+            type = COMOTYPE_ETH;
 	    base += 2; 		/* ethernet frames have padding */
 	    len -= 2; 
             break;
@@ -169,10 +166,11 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
         }
 
         /*
-         * copy the packet payload
+         * point to the packet payload
          */
 	pkt->caplen = len; 
-        bcopy(base + dag_record_size, pkt->payload, len);
+	pkt->payload = base; 
+
         /*
          * update layer2 information and offsets of layer 3 and above.
          * this sniffer only runs on ethernet frames.
@@ -180,10 +178,15 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
         updateofs(pkt, type);
 
         /* increment the number of processed packets */
-        npkts++;
 	base += len; 
-	out_buf_used += STDPKT_LEN(pkt); 
     }
+
+    /* if we have zero packets to give and we reached the 
+     * end of file, then return -1 to indicate that there 
+     * are no more packets. 
+     */
+    if (npkts == 0 && rd == 0) 
+	return -1; 
 
     info->nbytes -= (base - info->buf); 
     bcopy(base, info->buf, info->nbytes); 

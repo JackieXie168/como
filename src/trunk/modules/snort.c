@@ -244,7 +244,7 @@ check_options(ruleinfo_t *i, pkt_t *pkt)
                 return 1;
 
             case SNTOK_CONTENT:
-		pload_len = STDPKT_LEN(pkt) - sizeof(pkt_t); 
+		pload_len = pkt->caplen; 
 		if (pload_len == 0) 
 		    break; 
                 pl = safe_malloc(pload_len); 
@@ -375,8 +375,8 @@ update(pkt_t *pkt, void *fh, int new_rec)
     shdr->alert = -1;
     if (rule_match >= 0 && ri[rule_match].action == SNTOK_ALERT)
         shdr->alert = rule_match;
-    bcopy(&shdr->pkt, pkt, STDPKT_LEN(pkt)); 
-    x->sz = STDPKT_LEN(pkt) + sizeof(shdr->alert); 
+    bcopy(&shdr->pkt, pkt->payload, pkt->caplen); 
+    x->sz = pkt->caplen + sizeof(shdr->alert); 
 
     /* 
      * all records are always full, this way we rely on 
@@ -410,7 +410,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     }
     shdr = (struct snort_hdr *) buf;
     *ts = shdr->pkt.ts; 
-    return (STDPKT_LEN(&shdr->pkt) + sizeof(shdr->alert));
+    return (shdr->pkt.caplen + sizeof(shdr->alert));
 }
 
 
@@ -592,7 +592,7 @@ print(char *buf, size_t *len, char * const args[])
     } 
 
     /* just send the entire packet */
-    *len = STDPKT_LEN(&shdr->pkt); 
+    *len = shdr->pkt.caplen; 
     return buf + sizeof(int);
 }
 

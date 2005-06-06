@@ -239,18 +239,20 @@ struct _como_pkt {
     uint16_t l3type; 		/* layer3 type using ethernet codes */
     uint16_t layer3ofs;		/* offset where layer3 header starts */
     uint16_t layer4ofs; 	/* offset where layer4 header starts */
-    char payload[0]; 		/* the full packet is here */ 
+    char * payload; 		/* pointer to packet */ 
 };
 
 
 /* 
  * Known layer2 types 
  */
-#define COMO_L2_NONE	0x0000	/* no layer2 (e.g., replayed data) */
-#define COMO_L2_ETH	0x0001	/* Ethernet */
-#define COMO_L2_HDLC	0x0002	/* Cisco HDLC */
-#define COMO_L2_VLAN	0x0003	/* 802.1q packet */
-#define COMO_L2_ISL	0x0004	/* Cisco ISL */
+#define COMOTYPE_NONE	0x0000	/* no layer2 (e.g., replayed data) */
+#define COMOTYPE_ETH	0x0001	/* Ethernet */
+#define COMOTYPE_HDLC	0x0002	/* Cisco HDLC */
+#define COMOTYPE_VLAN	0x0003	/* 802.1q packet */
+#define COMOTYPE_ISL	0x0004	/* Cisco ISL */
+#define COMOTYPE_WLAN	0x0005  /* IEEE 802.11 */
+#define COMOTYPE_WLANR  0x0006  /* IEEE 802.11 w/radio information */
 
 
 /*
@@ -275,15 +277,6 @@ struct _como_pktdesc {
     struct _como_icmphdr icmph;		/* ICMP header bitmask */
 }; 
 
-
-/* 
- * macro to move in a packet batch. 
- */
-#define STDPKT_LEN(p)   (sizeof(p) + (p)->caplen) 
-#define STDPKT_NEXT(p)  ((pkt_t *)((char *)p + STDPKT_LEN(p)))
-
-/* packet length when packet is in network byte order */
-#define NTOH_STDPKT_LEN(p)   (sizeof(p) + ntohl((p)->caplen))
 
 /* 
  * timestamp macros 

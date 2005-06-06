@@ -37,11 +37,6 @@
 #include "sniffers.h"
 #include "como.h"
 
-/*
- * Many pcap_* functions require a buffer of PCAP_ERRBUF_SIZE bytes to
- * store possible error messages. So don't touch :)
- */
-static char errbuf[PCAP_ERRBUF_SIZE];
 
 /* 
  * default values for libpcap 
@@ -64,11 +59,15 @@ typedef int (*sniff_pcap_datalink)(pcap_t *);
  * This data structure will be stored in the source_t structure and 
  * used for successive callbacks.
  */
+#define BUFSIZE		(1024 * 1024)
 struct _snifferinfo {
     void * handle;  			/* handle to libpcap.so */
     sniff_pcap_dispatch dispatch;	/* ptr to pcap_dispatch function */
     pcap_t *pcap;			/* pcap handle */
-    uint snaplen; 
+    int type; 				/* como type (link layer) */
+    uint snaplen; 			/* capture length */
+    char pktbuf[BUFSIZE];		/* packet buffer */
+    char errbuf[PCAP_ERRBUF_SIZE + 1];	/* error buffer for libpcap */
 }; 
     
 
@@ -93,8 +92,6 @@ sniffer_start(source_t * src)
     sniff_pcap_datalink sp_link; 
     sniff_pcap_close sp_close; 
 
-    errbuf[0] = '\0';
-
     if (src->args) { 
 	/* process input arguments */
 	char * p; 
@@ -115,7 +112,7 @@ sniffer_start(source_t * src)
      * allocate the _snifferinfo and link it to the 
      * source_t data structure
      */
-    src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
+    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
 
     /* link the libpcap library */
@@ -136,24 +133,24 @@ sniffer_start(source_t * src)
     info->dispatch = (sniff_pcap_dispatch) dlsym(info->handle,"pcap_dispatch");
 	    
     /* initialize the pcap handle */
-    info->pcap = sp_open(src->device, snaplen, promisc, timeout, errbuf);
+    info->pcap = sp_open(src->device, snaplen, promisc, timeout, info->errbuf);
     info->snaplen = snaplen; 
     
     /* check for initialization errors */
     if (info->pcap == NULL) {
-        logmsg(LOGWARN, "%s\n", errbuf);
+        logmsg(LOGWARN, "%s\n", info->errbuf);
 	free(src->ptr); 
         return -1;
     }
-    if (errbuf[0] != '\0')
-        logmsg(LOGWARN, "%s\n", errbuf);
+    if (info->errbuf[0] != '\0')
+        logmsg(LOGWARN, "%s\n", info->errbuf);
     
     /*
      * It is very important to set pcap in non-blocking mode, otherwise
      * sniffer_next() will try to fill the entire buffer before returning.
      */
-    if (sp_noblock(info->pcap, 1, errbuf) < 0) {
-        logmsg(LOGWARN, "%s\n", errbuf);
+    if (sp_noblock(info->pcap, 1, info->errbuf) < 0) {
+        logmsg(LOGWARN, "%s\n", info->errbuf);
 	free(src->ptr);
         return -1;
     }
@@ -161,7 +158,20 @@ sniffer_start(source_t * src)
     /* 
      * we only support Ethernet frames so far. 
      */
-    if (sp_link(info->pcap) != DLT_EN10MB) {
+    switch (sp_link(info->pcap)) { 
+    case DLT_EN10MB: 
+	info->type = COMOTYPE_ETH; 
+	break; 
+
+    case DLT_IEEE802_11: 
+	info->type = COMOTYPE_WLAN; 
+	break; 
+
+    case DLT_IEEE802_11_RADIO: 
+	info->type = COMOTYPE_WLANR;	/* w/radio information */ 
+	break; 
+
+    default: 
 	logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
 	sp_close(info->pcap);
 	return -1;
@@ -209,18 +219,19 @@ processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
  * 
  */
 static int
-sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
+sniffer_next(source_t * src, pkt_t * out, int max_no) 
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
-    uint npkts;				/* processed packets */
-    uint out_buf_used;			/* bytes in output buffer */
+    pkt_t * pkt;
+    int npkts;				/* processed packets */
+    int nbytes = 0; 
 
-    npkts = out_buf_used = 0;
-    while (sizeof(pkt_t) + info->snaplen < out_buf_size - out_buf_used) {
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	int count; 
-	char * buf;
-        pkt_t *pkt;
         
+	/* point the packet payload to next packet */
+	pkt->payload = info->pktbuf + nbytes; 
+
 	/*
 	 * we use pcap_dispatch() because pcap_next() is assumend unaffected
 	 * by the pcap_setnonblock() call. (but it doesn't seem that this is 
@@ -230,21 +241,17 @@ sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
 	 * XXX check the cost of processing one packet at a time? 
 	 * 
 	 */
-	buf = out_buf + out_buf_used; 
-	count = info->dispatch(info->pcap, 1, processpkt, buf); 
+	count = info->dispatch(info->pcap, 1, processpkt, (char *) pkt); 
 	if (count == 0) 
-	    break;; 
+	    break;
 
         /*
          * update layer2 information and offsets of layer 3 and above.
          * this sniffer only runs on ethernet frames.
          */
-	pkt = (pkt_t *) buf; 
-        updateofs(pkt, COMO_L2_ETH);
+        updateofs(pkt, info->type);
 
-        /* increment the number of processed packets */
-        npkts++;
-        out_buf_used += STDPKT_LEN(pkt);
+	nbytes += pkt->caplen; 
     }
     
     return npkts;

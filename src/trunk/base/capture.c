@@ -39,15 +39,17 @@
 #include "sniffer-list.h"
 
 /* poll time (in usec) */
-#define POLL_WAIT   500000
+#define POLL_WAIT   1000
 
+/* packet buffer */
+#define PKT_BUFFER 	8192		
+ 
 /* flush and freeze/unfreeze thresholds */
 #define MB(m)				((m)*1024*1024)
 #define FLUSH_THRESHOLD(mem)		(MB(mem) / 2) 
 #define FREEZE_THRESHOLD(mem)		(MB(mem) / 10)
 #define UNFREEZE_THRESHOLD(mem)		(MB(mem) - MB(mem) / 3) 
 
-#define PKT_BUF_SIZE (1024 * 1024)
 
 /* sniffer list and callbacks */
 extern struct _sniffer *__sniffers[];
@@ -371,7 +373,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
     ct = mdl->ca_hashtable;
 
     max_ts = 0; 
-    for (i = 0; i < no_pkts; i++, pkt = STDPKT_NEXT(pkt)) {
+    for (i = 0; i < no_pkts; i++, pkt++) { 
         rec_t *prev, *cand;
         uint32_t hash;
         uint bucket;
@@ -526,7 +528,7 @@ capture_mainloop(int export_fd)
     filter_fn * filter;		/* filter function */
     memlist_t * flush_map;	/* freed blocks in the flow tables */
     tailq_t expired;		/* expired flow tables */
-    uint8_t pkt_buf[PKT_BUF_SIZE];   /* batch of packets from sniffer */
+    pkt_t pkts[PKT_BUFFER]; 	/* packet buffer */
     int sniffers_left;		/* how many sniffers are left ? */
     int sent2export;		/* message sent to export */
     source_t *src;
@@ -694,8 +696,23 @@ capture_mainloop(int export_fd)
             sent2export = 1;            /* wait response from export */
         }
 
-	if (sniffers_left == 0)
+	if (sniffers_left == 0) { 
+	    if (!sent2export) { 
+		/* no more packets coming, send to export the 
+		 * last tables and be done... 
+		 */
+		int idx;
+
+		for (idx = 0; idx < map.module_count; idx++) {
+		    module_t * mdl = &map.modules[idx];
+		    ctable_t *ct = mdl->ca_hashtable;
+
+		    if (ct && ct->records)  
+			flush_table(mdl, &expired);
+                }
+            }
 	    continue;
+	} 
 
         /*
 	 * check sniffers for packet reception (both the ones that use 
@@ -712,7 +729,7 @@ capture_mainloop(int export_fd)
 	    if ( !(src->cb->flags & SNIFF_POLL) && !FD_ISSET(src->fd, &r))
 		continue;	/* nothing to read here. */
 
-	    count = src->cb->sniffer_next(src, pkt_buf, sizeof(pkt_buf));
+	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER); 
 	    if (count == 0)
 		continue;
 
@@ -735,7 +752,7 @@ capture_mainloop(int export_fd)
 	     * The element of the array is set if the packet is of interest
 	     * for the given classifier, and it is 0 otherwise.
              */
-            which = filter(pkt_buf, count, map.module_count);
+            which = filter(pkts, count, map.module_count);
 
             /*
              * Now browse through the classifiers and
@@ -749,7 +766,7 @@ capture_mainloop(int export_fd)
             for (idx = 0; idx < map.module_count; idx++) {
 	  	if (map.modules[idx].status == MDL_ACTIVE) { 
 		    last_ts = capture_pkt(&map.modules[idx], 
-			pkt_buf, count, which, &expired);
+			pkts, count, which, &expired);
 		} 
                 which += count; /* next module, new list of packets */
             }

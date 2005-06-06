@@ -41,7 +41,19 @@
 #include "como.h"
 #include "sniffers.h"
 
+/*
+ * SNIFFER  ---    pcap files 
+ *
+ * Reads pcap trace files. It supports only ethernet traces (DLT_EN10MB). 
+ *
+ */
+
+/* sniffer specific information */
 #define BUFSIZE (1024*1024) 
+struct _snifferinfo { 
+    char buf[BUFSIZE];   /* base of the capture buffer */
+    int nbytes;      	 /* valid bytes in buffer */
+};
 
 
 /* 
@@ -79,6 +91,7 @@ sniffer_start(source_t * src)
     }
 
     src->fd = fd; 
+    src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
     return 0;
 }
 
@@ -101,71 +114,60 @@ typedef struct {
  *
  */
 static int
-sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
+sniffer_next(source_t * src, pkt_t *out, int max_no) 
 {
-    static char buf[BUFSIZE];   /* base of the capture buffer */
-    static int nbytes = 0;      /* valid bytes in buffer */
+    struct _snifferinfo * info; 
+    pkt_t *pkt;                 /* CoMo record structure */
     char * base;                /* current position in input buffer */
-    uint npkts;                 /* processed pkts */
-    uint out_buf_used;          /* bytes in output buffer */
+    int npkts;                 /* processed pkts */
     int rd;
 
+    info = (struct _snifferinfo *) src->ptr; 
+
     /* read pcap records from fd */
-    rd = read(src->fd, buf + nbytes, BUFSIZE - nbytes);
+    rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes);
     if (rd < 0)
         return rd;
 
     /* update number of bytes to read */
-    nbytes += rd;
-    if (nbytes == 0)
+    info->nbytes += rd;
+    if (info->nbytes == 0)
         return -1;       /* end of file, nothing left to do */
 
-    base = buf;
-    npkts = out_buf_used = 0;
-    while (nbytes - (base - buf) > (int) sizeof(pcap_hdr_t)) {
-        pcap_hdr_t * ph;            /* PCAP record structure */
-        pkt_t *pkt;                 /* CoMo record structure */
+    base = info->buf;
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
+        pcap_hdr_t * ph = (pcap_hdr_t *) base ; 
+	int left = info->nbytes - (base - info->buf); 
 
-        ph = (pcap_hdr_t *) base; 
-
-        /* check if we have enough space in output buffer */
-        if (sizeof(pkt_t) + ph->caplen > out_buf_size - out_buf_used)
-            break;
+	/* do we have a pcap header? */
+	if (left < (int) sizeof(pcap_hdr_t)) 
+	    break; 
 
         /* check if entire record is available */
-        if ((int) sizeof(pcap_hdr_t) + ph->caplen > nbytes - (int) (base - buf))
+        if (left < (int) sizeof(pcap_hdr_t) + ph->caplen) 
             break;
 
         /*      
          * Now we have a packet: start filling a new pkt_t struct
          * (beware that it could be discarded later on)
          */
-        pkt = (pkt_t *) ((char *)out_buf + out_buf_used); 
         pkt->ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
         pkt->len = ph->len;
         pkt->caplen = ph->caplen; 
+        pkt->payload = base + sizeof(pcap_hdr_t); 
 
-        /* 
-         * copy the packet payload 
-         */
-        bcopy(base + sizeof(pcap_hdr_t), pkt->payload, ph->caplen); 
-        
         /* 
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
-        updateofs(pkt, COMO_L2_ETH); 
+        updateofs(pkt, COMOTYPE_ETH); 
 
         /* increment the number of processed packets */
-        npkts++;
         base += sizeof(pcap_hdr_t) + ph->caplen; 
-        out_buf_used += STDPKT_LEN(pkt); 
     }
 
-    if (base == buf) 
-	logmsg(LOGCAPTURE, "buffer %d byte long, no packets read\n", nbytes);
-    nbytes -= (base - buf);
-    bcopy(base, buf, nbytes);
+    info->nbytes -= (base - info->buf);
+    bcopy(base, info->buf, info->nbytes);
     return npkts;
 }
 
@@ -178,6 +180,7 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 static void
 sniffer_stop (source_t * src)
 {
+    free(src->ptr);
     close(src->fd);
 }
 

@@ -34,18 +34,18 @@ LIBDIRS = /usr/local/lib
 # filenames are sniffer-$(FOO).c
 # and a corresponding entry point 
 #
+
 SNIFFERS = como		
+
+# add pcap support
 ifneq ($(shell uname),CYGWIN_NT-5.1)
-	SNIFFERS += libpcap pcap
+	SNIFFERS += pcap libpcap 
 endif
-# Linux does not have bpf
+
+# bpf, but Linux does not have bpf
 ifeq ($(shell uname),FreeBSD)
 	SNIFFERS += bpf
 endif
-
-# sniffers that are still experimental or that 
-# require additional support in the system 
-# (e.g., external drivers or libraries). 
 
 # Endace DAG cards.
 #

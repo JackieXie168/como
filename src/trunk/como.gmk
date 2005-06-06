@@ -22,13 +22,17 @@
 # If a name in $(PROGS) ends in .so then the program is built as a shared lib.
 #
 # A BASEDIR variable *must* be defined.
-
+#
 # Dynamically loadable modules (for handlers) are expected to reside
 # in the directory MODULEDIR (defaults to 'modules/').
 # The list of sources (one for each module) should be put in the
 # variable 'MODULES', without the leading directory name which
 # will be prepended automatically.
 # See the example below.
+#
+
+# set the compiler, if needed
+# CC = arm-linux-gcc
 
 # CFLAGS is set to something very pedantic, and for good reasons, so
 # please do not alter them.
@@ -48,7 +52,7 @@ DBGFLAGS?=-g
 # OPTFLAGS?=-O2
 
 # #define's used to build this version of the code.
-DEFS+=-DCOMO_VERSION=\"0.4-current\"
+DEFS+=-DCOMO_VERSION=\"0.4-current-001\"
 
 # You are really not supposed to touch this!
 # Here we have a lot of make magic to compute actual file names
@@ -79,14 +83,16 @@ INCOPTS= $(INCDIRS:%=-I%) -I. -I..
 # Force the inclusion of 'os.h' by all programs, which provides
 # os-dependent customization.
 
-CFLAGS+= $(DBGFLAGS) \
+CFLAGS+= \
+	$(DBGFLAGS) \
 	$(WARNINGS) \
 	$(OPTFLAGS) \
 	$(INCOPTS) \
 	$(DEFS) \
 	-include $(BASEDIR)/include/os.h
 
-LIBOPTS= $(LIBDIRS:%=-L%) \
+LIBOPTS= \
+	$(LIBDIRS:%=-L%) \
 	$(LIBS:%=-l%)
 
 # The directory where modules reside. Leave this unchanged unless

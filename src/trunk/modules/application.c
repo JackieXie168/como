@@ -97,7 +97,7 @@ typedef struct {
  * the packets from given sniffer
  */
 static pktdesc_t indesc, outdesc;
-static pkt_t * pkt_template; 
+static char template[1024]; 
 
 
 /* 
@@ -110,6 +110,7 @@ static uint8_t port2app[65536];			/* mapping port number to app */
 static int
 init(__unused void *mem, __unused size_t msize, char *args[])
 {
+    pkt_t * pkt; 
     int i;
 
     memset(port2app, UNKNOWN, sizeof(port2app));
@@ -225,14 +226,15 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     outdesc.flags = COMO_AVG_PKTLEN; 
     N16(outdesc.ih.len) = 0xffff;
     
-    pkt_template = safe_calloc(1, sizeof(struct _como_iphdr) + sizeof(pkt_t)); 
-    pkt_template->caplen = htonl(sizeof(struct _como_iphdr)); 
-    pkt_template->l2type = COMO_L2_NONE; 
-    pkt_template->l3type = ETHERTYPE_IP;
-    pkt_template->layer3ofs = 0; 
-    pkt_template->layer4ofs = sizeof(struct _como_iphdr); 
-    IPP(pkt_template, vhl) = 0x45; 
-    IPP(pkt_template, proto) = IPPROTO_TCP; 
+    pkt = (pkt_t *) template; 
+    pkt->caplen = htonl(sizeof(struct _como_iphdr)); 
+    pkt->l2type = htons(COMOTYPE_NONE); 
+    pkt->l3type = htons(ETHERTYPE_IP);
+    pkt->layer3ofs = 0; 
+    pkt->layer4ofs = htons(sizeof(struct _como_iphdr));
+    pkt->payload = template + sizeof(pkt_t); 
+    IP(vhl) = 0x45; 
+    IP(proto) = IPPROTO_TCP; 
 
     return 0;
 }
@@ -334,9 +336,14 @@ static int
 replay(char *buf, char *out, size_t * len)
 {
     static int npkts = 0; 
+    pkt_t * pkt; 
     size_t out_len; 
+    size_t plen; 
     
-    if (*len < NTOH_STDPKT_LEN(pkt_template))
+    pkt = (pkt_t *) template; 
+    plen = ntohl(pkt->caplen) + sizeof(pkt_t); 
+
+    if (*len < plen) 
         return -1;
     
     /* 
@@ -354,14 +361,15 @@ replay(char *buf, char *out, size_t * len)
 	    npkts += NTOHLL(app->pkts[i]); 
 	    nbytes += NTOHLL(app->bytes[i]); 
 	} 
-	N16(IPP(pkt_template, len)) = htons((uint16_t) (nbytes / npkts)); 
+	N16(IP(len)) = htons((uint16_t) (nbytes / npkts)); 
 	ts = TIME2TS(ntohl(app->ts), 0);
-	pkt_template->ts = HTONLL(ts); 
+	pkt->ts = HTONLL(ts); 
     }
     
     for (out_len = 0; out_len < *len && npkts > 0; npkts--) { 
-	bcopy(pkt_template, out + out_len, NTOH_STDPKT_LEN(pkt_template)); 
-	out_len += NTOH_STDPKT_LEN(pkt_template);
+	pkt->payload = out + out_len + sizeof(pkt_t); 
+	bcopy(template, out + out_len, sizeof(pkt_t) + htonl(pkt->caplen)); 
+	out_len += sizeof(pkt_t) + htonl(pkt->caplen); 
     } 
     
     *len = out_len; 

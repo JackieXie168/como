@@ -33,6 +33,7 @@
 #include <glob.h>	/* glob */
 #include <errno.h>	/* errno values */
 #include <ftlib.h>      /* flow-tools stuff */
+#include <assert.h>
 
 #include "sniffers.h"
 #include "como.h"
@@ -58,6 +59,7 @@
  * This data structure will be stored in the source_t structure and 
  * used for successive callbacks.
  */
+#define BUFSIZE		(1024*1024)
 struct _snifferinfo {
     glob_t in; 			/* result of src->device pattern */
     int curfile; 		/* index of current file in in.gl_pathv */
@@ -66,6 +68,8 @@ struct _snifferinfo {
     timestamp_t max_ts; 	/* max start time in the heap */
     timestamp_t window; 	/* min diff between max_ts and min_ts */
     struct ftio ftio;		/* flow-tools I/O data structure */
+    char buf[BUFSIZE];		/* buffer used between sniffer-next calls */
+    uint nbytes; 		/* bytes used in the buffer */
 }; 
 
 
@@ -75,6 +79,7 @@ struct _snifferinfo {
  */
 struct _flowinfo { 
     pkt_t pkt;			/* next packet that will be generated */
+    char payload[40]; 		/* payload (max IP + TCP header) */
     uint32_t length_last;	/* length of last packet */
     timestamp_t increment; 	/* timestamp increment at each packet */
     timestamp_t end_ts;		/* timestamp of last packet */
@@ -101,29 +106,26 @@ netflow2ts(struct fts3rec_v5 * f, uint32_t ms)
 
 
 /*
- * -- fillpkt
+ * -- cookpkt
  * 
  * A flow record defines all pkt_t fields but the timestamp. We fill 
  * in one template to speed up things later on. We put the timestamp of 
  * the beginning of the flow and it will then be modified during the 
  * replay of the flow record. 
  */
-static pkt_t
-fillpkt(struct fts3rec_v5 * f) 
+static void
+cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow) 
 {
-    pkt_t p; 
-    pkt_t * pkt = &p;
+    pkt_t * pkt = &flow->pkt; 
     
-    /* clear the packet */
-    bzero(pkt, sizeof(pkt_t)); 		/* XXX just for now. */
-
-    /* CoMo header */
     pkt->ts = netflow2ts(f, f->First); 
     pkt->len = f->dOctets / f->dPkts;
-    pkt->l2type = COMO_L2_NONE; 
+    pkt->caplen = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
+    pkt->l2type = COMOTYPE_NONE; 
     pkt->l3type = ETHERTYPE_IP; 
     pkt->layer3ofs = 0; 
     pkt->layer4ofs = sizeof(struct _como_iphdr); 
+    pkt->payload = flow->payload; 
 
     /* IP header */
     IP(vhl) = 0x45; 
@@ -132,26 +134,12 @@ fillpkt(struct fts3rec_v5 * f)
     IP(proto) = f->prot; 
     N32(IP(src_ip)) = htonl(f->srcaddr);
     N32(IP(dst_ip)) = htonl(f->dstaddr);
-    
-    pkt->caplen = sizeof(struct _como_iphdr);
-    switch (f->prot) {
-    case IPPROTO_TCP:
-        N16(TCP(src_port)) = htons(f->srcport);
-        N16(TCP(dst_port)) = htons(f->dstport);
-	pkt->caplen += sizeof(struct _como_tcphdr);
-        break;
 
-    case IPPROTO_UDP:
-        N16(UDP(src_port)) = htons(f->srcport);
-        N16(UDP(dst_port)) = htons(f->dstport);
-	pkt->caplen += sizeof(struct _como_udphdr);
-        break;
-
-    default:
-        break;
-    }
-    
-    return p;
+    /* fill the port numbers even if the protocol 
+     * is not UDP or TCP... just for simplicity 
+     */
+    N16(UDP(src_port)) = htons(f->srcport);
+    N16(UDP(dst_port)) = htons(f->dstport);
 }
 
 
@@ -229,7 +217,7 @@ flowtools_read(source_t * src)
     /* build a new flow record */
     flow = safe_calloc(1, sizeof(struct _flowinfo));
     flow->end_ts = netflow2ts(fr, fr->Last);
-    flow->pkt = fillpkt(fr);
+    cookpkt(fr, flow); 
     flow->increment = (flow->end_ts - flow->pkt.ts) / fr->dPkts;
     flow->length_last = fr->dOctets % fr->dPkts;
 
@@ -369,23 +357,27 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
+sniffer_next(source_t * src, pkt_t *out, int max_no) 
 {
     struct _snifferinfo * info; 
-    struct _flowinfo * flow; 
-    uint npkts;                 /* processed pkts */
-    uint out_buf_used;          /* bytes in output buffer */
+    pkt_t * pkt; 
+    int npkts;                 /* processed pkts */
     
+    assert(src != NULL);
+    assert(src->ptr != NULL); 
+    assert(out != NULL); 
+
     info = (struct _snifferinfo *) src->ptr; 
+    info->nbytes = 0; 
 
-    /* update the minimum timestamp from the root of the heap */
-    flow = heap_root(info->heap);
-    if (flow == NULL) 
-	return -1; 		/* heap is empty, we are done! */
+    /* first check if the heap is empty, 
+     * if so we are done. 
+     */
+    if (heap_root(info->heap) == NULL)
+	return -1;
 
-    npkts = out_buf_used = 0; 
-    while (out_buf_used + sizeof(pkt_t) < out_buf_size) {
-	pkt_t * pkt; 
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) {
+	struct _flowinfo * flow; 
 
 	/* 
 	 * read from flow-tools file so that we have a full info->window 
@@ -406,10 +398,22 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	/* get the first flow from the heap */
 	heap_extract(info->heap, (void **) &flow); 
 
-	/* generate the first packet and update the pkt template */
-	pkt = (pkt_t *) ((char *)out_buf + out_buf_used); 
+	/* 
+	 * check if we have enough space in the packet buffer 
+	 */
+	if (info->nbytes < flow->pkt.caplen) 
+	    break; 
+
+	/* copy the first packet of the flow and update 
+	 * the pkt template. note that we cannot just point to the 
+	 * packet template because that is due to change (e.g., the 
+	 * length of the last packet may be different from all the 
+	 * others. 
+	 */
 	*pkt = flow->pkt; 
-	out_buf_used += STDPKT_LEN(pkt); 
+	bcopy(pkt->payload, info->buf + info->nbytes, pkt->caplen); 
+	pkt->payload = info->buf + info->nbytes; 
+	info->nbytes += pkt->caplen; 
 
 	/* 
 	 * check if this flow has more packets. If so, update the 
@@ -426,9 +430,6 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	    flow->pkt.ts += flow->increment; 
 	    heap_insert(info->heap, flow); 
 	} 
-
-	/* increment packet count */
-	npkts++; 
 
 	/* update the minimum timestamp from the root of the heap */
 	flow = heap_root(info->heap);

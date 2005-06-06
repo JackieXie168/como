@@ -33,11 +33,11 @@
 #include <netinet/in.h> /* struct sockaddr_in */
 #include <string.h>     /* strerror */
 #include <errno.h>
+#include <assert.h>
 
 #include "como.h" 
 #include "sniffers.h" 
 
-#define BUFSIZE		(1024*1024)
 
 
 /*
@@ -49,6 +49,12 @@
  *
  */
 
+/* sniffer-specific information */
+#define BUFSIZE		(1024*1024)
+struct _snifferinfo { 
+    char buf[BUFSIZE]; 	     /* base of the capture buffer */
+    int nbytes; 	     /* valid bytes in buffer */
+};
 
 /**
  * -- sniffer_start
@@ -89,6 +95,7 @@ sniffer_start(source_t * src)
     } 
 
     src->fd = sd; 
+    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     return sd;
 }
 
@@ -102,54 +109,61 @@ sniffer_start(source_t * src)
  * 
  */
 static int
-sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
+sniffer_next(source_t * src, pkt_t * out, int max_no)
 {
-    static char buf[BUFSIZE];   /* base of the capture buffer */
-    static int nbytes = 0;      /* valid bytes in buffer */
+    struct _snifferinfo * info; 
+    pkt_t * pkt; 
     char * base;                /* current position in input buffer */
-    uint npkts;                 /* processed pkts */
-    int out_buf_used;           /* bytes in output buffer */
+    int npkts;                  /* processed pkts */
     int rd;
 
+    assert(src->ptr != NULL); 
+
+    info = (struct _snifferinfo *) src->ptr; 
+
     /* read CoMo packets from stream */
-    rd = read(src->fd, buf + nbytes, BUFSIZE - nbytes);
+    rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes);
     if (rd < 0)   
         return rd; 
 
     /* update number of bytes to read */
-    nbytes += rd;  
-    if (nbytes == 0)
+    info->nbytes += rd;  
+    if (info->nbytes == 0)
         return -1;      /* end of file, nothing left to do */
 
-    base = buf;
-    npkts = out_buf_used = 0;
-    while (nbytes - (base - buf) > (int) sizeof(pkt_t)) {
-        pkt_t * pkt;                 /* CoMo record structure */ 
-
-	pkt = (pkt_t *) base; 
+    base = info->buf;
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
+	pkt_t * p = (pkt_t *) base; 
+	uint left = info->nbytes - (base - info->buf); 
 	
-        /* check if we have enough space in output buffer */
-        if (NTOH_STDPKT_LEN(pkt) > out_buf_size - out_buf_used)
+	/* check if we have enough for a new packet record */
+	if (left < sizeof(pkt_t)) 
+	    break;
+
+	/* check if we have the payload as well */
+        if (left < ntohl(p->caplen) + sizeof(pkt_t)) 
             break;
 
-        /* check if entire record is available */
-        if (NTOH_STDPKT_LEN(pkt) > (size_t) nbytes - (base - buf))
-            break;
+	/* ok, copy the packet header */
+	pkt->ts = NTOHLL(p->ts); 
+	pkt->len = ntohl(p->len); 
+	pkt->caplen = ntohl(p->caplen);
+        pkt->l2type = ntohs(p->l2type); 
+  	pkt->l3type = ntohs(p->l3type); 
+        pkt->layer3ofs = ntohs(p->layer3ofs); 
+        pkt->layer4ofs = ntohs(p->layer4ofs); 
 
-	bcopy(base, out_buf + out_buf_used, NTOH_STDPKT_LEN(pkt)); 
-	base += NTOH_STDPKT_LEN(pkt); 
-	
-	/* we need to fix byte order of CoMo header */
-	pkt = (pkt_t *) (out_buf + out_buf_used);
-	pkt->ts = NTOHLL(pkt->ts); 
-	pkt->len = ntohl(pkt->len); 
-	pkt->caplen = ntohl(pkt->caplen);
-	out_buf_used += STDPKT_LEN(pkt); 
-	npkts++; 
+	/* the payload is just after the packet. update 
+	 * the payload pointer. 
+	 */
+	pkt->payload = base + sizeof(pkt_t); 
+
+	/* move forward */
+	base += pkt->caplen + sizeof(pkt_t); 
     }
 
-    nbytes -= (base - buf);
-    bcopy(base, buf, nbytes);
+    info->nbytes -= (base - info->buf);
+    bcopy(base, info->buf, info->nbytes);
     return npkts;
 }
 
@@ -161,6 +175,7 @@ sniffer_next(source_t * src, void * out_buf, size_t out_buf_size)
 static void
 sniffer_stop(source_t * src) 
 {
+    free(src->ptr);
     close(src->fd);
 }
 

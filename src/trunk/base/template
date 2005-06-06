@@ -99,7 +99,7 @@ filter(pkt_t *pkt, int n_packets, int n_out)
     for (i = 0; i < n_out; i++)
         outs[i] = which + n_packets*i;
 
-    for (i=0; i < n_packets; i++, pkt = STDPKT_NEXT(pkt)) {
+    for (i=0; i < n_packets; i++, pkt++) { 
 
         /*
          * here we expect lines of the form

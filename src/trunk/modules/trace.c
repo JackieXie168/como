@@ -56,7 +56,8 @@
 #define REC_SIZE	2048
 
 FLOWDESC {
-    char    buf[REC_SIZE]; 
+    int len; 
+    char buf[REC_SIZE]; 
 };
 
 
@@ -96,7 +97,10 @@ static int
 update(pkt_t *pkt, void *fh, __unused int isnew)
 {
     FLOWDESC *x = F(fh);
-    memcpy(x->buf, pkt, STDPKT_LEN(pkt));  
+
+    memcpy(x->buf, pkt, sizeof(pkt_t)); 
+    memcpy(x->buf + sizeof(pkt_t), pkt->payload, pkt->caplen); 
+
     return 1;		/* records are always full */
 }
 
@@ -106,23 +110,26 @@ store(void *fh, char *buf, size_t len)
 {
     FLOWDESC *x = F(fh);
     pkt_t * pkt; 
+    size_t need;
     
-    if (len < REC_SIZE)
+    pkt = (pkt_t *) x->buf; 
+    need = pkt->caplen + sizeof(pkt_t) ; 
+
+    if (len < need)
         return -1;
 
-    pkt = (pkt_t *) x->buf; 
-    len = STDPKT_LEN(pkt); 
-
-    /* 
-     * convert the CoMo header in network byte order 
-     * before saving it to disk 
-     */
+    /* convert the CoMo header in network byte order */
     pkt->ts = HTONLL(pkt->ts); 
     pkt->caplen = htonl(pkt->caplen); 
     pkt->len = htonl(pkt->len); 
+    pkt->l2type = htons(pkt->l2type); 
+    pkt->l3type = htons(pkt->l3type); 
+    pkt->layer3ofs = htons(pkt->layer3ofs); 
+    pkt->layer4ofs = htons(pkt->layer4ofs); 
+    pkt->payload = NULL; 
 
-    memcpy(buf, x->buf, len); 
-    return len; 
+    memcpy(buf, pkt, need); 
+    return need; 
 }
 
 
@@ -138,7 +145,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 
     pkt = (pkt_t *) buf; 
     *ts = NTOHLL(pkt->ts);
-    return NTOH_STDPKT_LEN(pkt); 
+    return (sizeof(pkt_t) + ntohl(pkt->caplen)); 
 }
 
 
@@ -328,12 +335,15 @@ static int
 replay(char *buf, char *out, size_t * len)
 {
     pkt_t * pkt = (pkt_t *) buf; 
+    size_t need = ntohl(pkt->caplen) + sizeof(pkt_t); 
 
-    if (*len < NTOH_STDPKT_LEN(pkt)) 
+    if (*len < need) 
 	return -1; 
 
-    bcopy(buf, out, NTOH_STDPKT_LEN(pkt)); 
-    *len = NTOH_STDPKT_LEN(pkt); 
+    bcopy(buf, out, need); 
+    pkt = (pkt_t *) out; 
+    pkt->payload = out + sizeof(pkt_t); 
+    *len = need; 
     return 0;	
 }
 

@@ -42,8 +42,6 @@
  * 
  */
 
-#define BUFSIZE   (1024 * 1024)
-
 
 /* sniffer specific information */
 struct _snifferinfo { 
@@ -107,13 +105,13 @@ sniffer_start(source_t * src)
  * return the number of packets read. 
  */
 static int
-sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
+sniffer_next(source_t * src, pkt_t * out, int max_no) 
 {
     struct _snifferinfo * info; /* sniffer information */
+    pkt_t *pkt;                 /* CoMo record structure */
     char *top;           	/* pointer to top of stream buffer */
-    uint npkts;			/* number of pkts processed */
-    uint out_buf_used; 		/* bytes in output buffer */
     char *base;                 /* current position in stream */
+    int npkts;			/* number of pkts processed */
 
     info = (struct _snifferinfo *) src->ptr;
 
@@ -127,29 +125,25 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
         return 0;
 
     base = info->bottom; 
-    npkts = out_buf_used = 0; 
-    while (top - base > dag_record_size) {
+    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	dag_record_t *rec;          /* DAG record structure */ 
-	pkt_t *pkt;                 /* CoMo record structure */
 	int len;                    /* total record length */
         int type; 
 
         /* access to packet record */
         rec = (dag_record_t *) base;
-        len = ntohs(rec->rlen) - dag_record_size;
 
-        /* check if we have enough space in output buffer */
-        if (sizeof(pkt_t) + len > out_buf_size - out_buf_used)
-            break;
-   
+        /* check if there is one record */
+	if (top - base < dag_record_size)
+	    break; 
+
         /* check if entire record is available */
-        if (len > top - base) 
+        if (ntohs(rec->rlen) > top - base) 
             break;
     
         /*
          * ok, data is good now, copy the packet over
          */
-        pkt = (pkt_t *)((char *)out_buf + out_buf_used);
         pkt->ts = rec->ts;
         pkt->len = ntohs(rec->wlen);
 
@@ -157,6 +151,7 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	 * skip the DAG header 
 	 */
 	base += dag_record_size; 
+        len = ntohs(rec->rlen) - dag_record_size;
         
 	/* 
 	 * we need to figure out what interface we are monitoring. 
@@ -170,11 +165,11 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
 	     */
 
 	case TYPE_HDLC_POS: 
-	    type = COMO_L2_HDLC; 
+	    type = COMOTYPE_HDLC; 
 	    break; 
 
 	case TYPE_ETH: 
-	    type = COMO_L2_ETH; 
+	    type = COMOTYPE_ETH; 
 	    base += 2; 	/* DAG adds 4 bytes to Ethernet headers */
 	    len -= 2; 
 	    break; 
@@ -189,7 +184,7 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
          * copy the packet payload 
          */
         pkt->caplen = len;
-        bcopy(base, pkt->payload, len); 
+	pkt->payload = base; 
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 
@@ -197,10 +192,8 @@ sniffer_next(source_t * src, void *out_buf, size_t out_buf_size)
          */
         updateofs(pkt, type); 
 
-        /* increment the number of processed packets */
-        npkts++;
+	/* move to next packet in the buffer */
         base += len; 
-        out_buf_used += STDPKT_LEN(pkt); 
     }
 
     info->bottom = base; 

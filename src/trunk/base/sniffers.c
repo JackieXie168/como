@@ -30,7 +30,7 @@
 #include <net/ethernet.h> 
 #include "stdpkt.h" 
 
-#ifdef linux
+#ifndef ETHERTYPE_VLAN
 #define ETHERTYPE_VLAN  0x8100
 #endif 
 
@@ -43,11 +43,13 @@
  * Layer 2 header lengths
  */
 static size_t como_l2_len[] = {
-    0,          // COMO_L2_NONE
-    14,         // COMO_L2_ETH
-    4,          // COMO_L2_HDLC
-    18,         // COMO_L2_VLAN
-    40          // COMO_L2_ISL
+    0,          // COMOTYPE_NONE
+    14,         // COMOTYPE_ETH
+    4,          // COMOTYPE_HDLC
+    18,         // COMOTYPE_VLAN
+    40,         // COMOTYPE_ISL
+    18, 	// COMOTYPE_WLAN		// XXX fix this
+    18		// COMOTYPE_WLANR		// XXX fix this
 };
 
 /* 
@@ -96,19 +98,19 @@ updateofs(pkt_t * pkt, int type)
 {
     pkt->l2type = type; 
     switch (pkt->l2type) { 
-    case COMO_L2_ETH: 
+    case COMOTYPE_ETH: 
         if (H16(ETH(type)) == ETHERTYPE_VLAN) {
-            pkt->l2type = COMO_L2_VLAN;
+            pkt->l2type = COMOTYPE_VLAN;
             pkt->l3type = H16(VLAN(ethtype));
         } else if (isISL(pkt)) { 
-	    pkt->l2type = COMO_L2_ISL; 
+	    pkt->l2type = COMOTYPE_ISL; 
 	    pkt->l3type = H16(ISL(ethtype)); 
 	} else { 
             pkt->l3type = H16(ETH(type));
         }
 	break; 
 
-    case COMO_L2_HDLC: 
+    case COMOTYPE_HDLC: 
 	pkt->l3type = H16(HDLC(type)); 
         break; 
 
