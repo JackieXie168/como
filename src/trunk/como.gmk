@@ -52,7 +52,7 @@ DBGFLAGS?=-g
 # OPTFLAGS?=-O2
 
 # #define's used to build this version of the code.
-DEFS+=-DCOMO_VERSION=\"0.4-current-001\"
+DEFS+=-DCOMO_VERSION=\"0.4-current-050608\"
 
 # You are really not supposed to touch this!
 # Here we have a lot of make magic to compute actual file names
