@@ -64,6 +64,7 @@ struct _snifferinfo {
     glob_t in; 			/* result of src->device pattern */
     int curfile; 		/* index of current file in in.gl_pathv */
     heap_t * heap; 		/* heap with flow records read so far */
+    timestamp_t last_ts; 	/* last packet timestamp */
     timestamp_t min_ts; 	/* min start time in the heap (root) */
     timestamp_t max_ts; 	/* max start time in the heap */
     timestamp_t window; 	/* min diff between max_ts and min_ts */
@@ -192,6 +193,9 @@ flowtools_read(source_t * src)
     struct fts3rec_v5 * fr;
     struct _flowinfo * flow; 
 
+    assert(src != NULL); 
+    assert(src->ptr != NULL); 
+
     info = (struct _snifferinfo *) src->ptr; 
     if (info->curfile == info->in.gl_pathc) 
 	return 0;		/* all files have been processed */
@@ -224,6 +228,12 @@ flowtools_read(source_t * src)
     /* insert in the heap */
     heap_insert(info->heap, flow);
 
+    /* update the max and min timestamps in the heap */
+    if (flow->pkt.ts > info->max_ts) 
+	info->max_ts = flow->pkt.ts; 
+    if (flow->pkt.ts < info->min_ts) 
+	info->min_ts = flow->pkt.ts; 
+
     return flow->pkt.ts; 
 }
 
@@ -232,7 +242,7 @@ flowtools_read(source_t * src)
  * -- flow_cmp
  * 
  * This is the sorting callback required by the heap service. 
- * It compare the timestamps of the next packets for two flows, a and b, 
+ * It compare the timestamps of the next packets for two Flows, a and b, 
  * and returns (a < b).  
  */
 static int
@@ -264,7 +274,7 @@ sniffer_start(source_t * src)
      */
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
-    info->window = 300; 		/* default window is 5 minutes */
+    info->window = TIME2TS(300,0) ; 	/* default window is 5 minutes */
 
     /* 
      * list all files that match the given pattern. 
@@ -316,16 +326,11 @@ sniffer_start(source_t * src)
     info->min_ts = (timestamp_t) ~0; 
     info->max_ts = (timestamp_t) 0; 
     do { 
-	timestamp_t ts; 
-
-	ts = flowtools_read(src); 
-	if (ts == 0) 
+	if (!flowtools_read(src)) 
 	    break; 		/* EOF */
-	if (ts > info->max_ts) 
-	    info->max_ts = ts; 
-	else if (ts < info->min_ts) 
-	    info->min_ts = ts; 
-    } while (info->max_ts - info->min_ts > info->window);
+    } while (info->max_ts - info->min_ts < info->window);
+
+    info->last_ts = info->min_ts; 
 
     /*  
      * given that the output stream is not a plain packet 
@@ -383,17 +388,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 * read from flow-tools file so that we have a full info->window 
  	 * of flows in the heap. 
 	 */ 
-	while (info->max_ts - info->min_ts < info->window) { 
-	    timestamp_t ts; 
-
-	    ts = flowtools_read(src);
-	    if (ts == 0) 
+	while (info->max_ts - info->min_ts < info->window) {
+	    if (!flowtools_read(src))
 		break; 		/* EOF */
-	    if (ts > info->max_ts) 
-		info->max_ts = ts;
-	    else if (ts < info->min_ts) 
-		info->min_ts = ts;
-        } 
+	}
 
 	/* get the first flow from the heap */
 	heap_extract(info->heap, (void **) &flow); 
@@ -401,7 +399,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	/* 
 	 * check if we have enough space in the packet buffer 
 	 */
-	if (info->nbytes < flow->pkt.caplen) 
+	if (BUFSIZE - info->nbytes < flow->pkt.caplen) 
 	    break; 
 
 	/* copy the first packet of the flow and update 
@@ -436,8 +434,16 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	if (flow == NULL) 
 	    break; 		/* we are done; next time we will stop */
 	info->min_ts = flow->pkt.ts;
+
+	/* if we have processed more than one second worth of
+	 * packets stop and return to CAPTURE so that it can 
+ 	 * process EXPORT messages, etc. 
+	 */
+	if (pkt->ts - info->last_ts > TIME2TS(1,0))
+	    break; 
     }
 
+    info->last_ts = pkt->ts; 
     return npkts;
 }
 
@@ -447,10 +453,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 static void
 sniffer_stop(source_t * src)
 {
-    struct _snifferinfo * info; 
+    struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
 
-    info = (struct _snifferinfo *) src->ptr; 
-
+    assert(src->ptr != NULL); 
+    assert(info->heap != NULL); 
     ftio_close(&info->ftio);
     heap_close(info->heap); 
     close(src->fd); 
