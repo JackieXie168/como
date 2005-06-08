@@ -50,6 +50,8 @@
 #define FREEZE_THRESHOLD(mem)		(MB(mem) / 10)
 #define UNFREEZE_THRESHOLD(mem)		(MB(mem) - MB(mem) / 3) 
 
+/* global state */
+extern struct _como map;
 
 /* sniffer list and callbacks */
 extern struct _sniffer *__sniffers[];
@@ -346,8 +348,6 @@ freeze_module(void)
 
 #endif
 
-/* global state */
-extern struct _como map;
 
 /*
  * -- capture_pkt
