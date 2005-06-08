@@ -295,12 +295,12 @@ supervisor_mainloop(int accept_fd)
         ss = secs % 60; 
 
 	fprintf(stderr, 
-	    "\r-- up %dd %dh %dm %ds -- mem %u/%u/%uMB"
-	    " -- pkts %llu (%llu) -- mdl %d/%d --\r", 
+	    "\r-- up %dd%dh%dm%ds - mem %u/%u/%uMB (%d)"
+	    " - pkts %llu (%llu) - mdl %d/%d\r", 
 	    dd, hh, mm, ss,
 	    map.stats->mem_usage_cur/(1024*1024), 
 	    map.stats->mem_usage_peak/(1024*1024), 
-	    map.mem_size,
+	    map.mem_size, map.stats->table_queue, 
 	    map.stats->pkts, map.stats->pkts / secs,
 	    map.stats->modules_active, map.module_count); 
 

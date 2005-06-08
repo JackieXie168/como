@@ -242,6 +242,7 @@ flush_table(module_t * mdl, tailq_t * expired)
 
     /* add to linked list and remove from here. */
     TQ_APPEND(expired, ct, next_expired);
+    map.stats->table_queue++; 
     mdl->ca_hashtable = NULL;
 
     logmsg(V_LOGCAPTURE, "module %s flush_table done.\n", mdl->name);
@@ -577,7 +578,7 @@ capture_mainloop(int export_fd)
 	    module_t * mdl = &map.modules[idx];
 
             if (!match_desc(mdl->callbacks.indesc, src->output)) { 
-		logmsg(LOGWARN, "module %s does not get %s packets\n", 
+		logmsg(LOGWARN, "module %s incompatible with sniffer-%s\n", 
 		    mdl->name, src->cb->name);
 		mdl->status = MDL_INCOMPATIBLE; 
 		map.stats->modules_active--;
@@ -601,6 +602,7 @@ capture_mainloop(int export_fd)
 
     /* init expired flow tables queue */
     TQ_HEAD(&expired) = NULL;
+    map.stats->table_queue = 0; 
 
     /*
      * This is the actual main loop where we monitor the various
@@ -693,6 +695,7 @@ capture_mainloop(int export_fd)
                 panic("error writing export_fd got %d", ret);  
 
             TQ_HEAD(&expired) = NULL;   /* we are done with this. */
+	    map.stats->table_queue = 0; /* reset counter */
             sent2export = 1;            /* wait response from export */
         }
 
@@ -764,10 +767,11 @@ capture_mainloop(int export_fd)
              *
              */
             for (idx = 0; idx < map.module_count; idx++) {
-	  	if (map.modules[idx].status == MDL_ACTIVE) { 
-		    last_ts = capture_pkt(&map.modules[idx], 
-			pkts, count, which, &expired);
-		} 
+	  	if (map.modules[idx].status != MDL_ACTIVE) 
+		    continue; 
+
+		last_ts = capture_pkt(&map.modules[idx], pkts, count, 
+						which, &expired);
                 which += count; /* next module, new list of packets */
             }
         }

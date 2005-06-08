@@ -374,12 +374,10 @@ struct _export_array {
  */
 struct _statistics { 
     struct timeval start; 	/* CoMo start time */
-
     int modules_active;		/* no. of modules processing packets */
-
+    int table_queue; 		/* expired tables in capture->export queue */
     size_t mem_usage_cur; 	/* current shared memory usage */
     size_t mem_usage_peak; 	/* peak shared memory usage */
-
     uint64_t pkts; 		/* sniffed packets so far */
 
 };
