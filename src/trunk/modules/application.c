@@ -289,6 +289,8 @@ load(char * buf, size_t len, timestamp_t * ts)
     return sizeof(app_t);
 }
 
+#define PLAINHDR 		NULL
+
 #define PRETTYHDR               \
     "Date                     " \
     "  Web (bytes/pkts)"	\
@@ -300,37 +302,89 @@ load(char * buf, size_t len, timestamp_t * ts)
     "               P2P"	\
     "           Unknown\n"
 
+#define GNUPLOTHDR 							\
+    "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
+    "set grid;"								\
+    "set ylabel \"Mbps\";"						\
+    "set xlabel \"Time\";"						\
+    "set autoscale ymax;"						\
+    "set timefmt \"%%s\";"						\
+    "set format x \"%%H:%%M\";"						\
+    "plot \"-\" using 1:16 with filledcurve x2 title \"Unknown\"," 	\
+    "     \"-\" using 1:14 with filledcurve x1 title \"P2P\","		\
+    "     \"-\" using 1:12 with filledcurve x1 title \"Games\","	\
+    "     \"-\" using 1:10 with filledcurve x1 title \"Stream\","	\
+    "     \"-\" using 1:8 with filledcurve x1 title \"Network\","	\
+    "     \"-\" using 1:6 with filledcurve x1 title \"Email\","		\
+    "     \"-\" using 1:4 with filledcurve x1 title \"Terminal\","	\
+    "     \"-\" using 1:2 with filledcurve x1 title \"Web\";\n"	
+
+#define GNUPLOTFOOTER	"e\n"
+
+#define PRETTYFMT	"%.24s "	/* 24 character to skip the \n in 
+					 * asctime() 
+					 */
+#define GNUPLOTFMT	"%12ld "
+#define PLAINFMT	"%13ld "	/* XXX we need to make PLAINFMT
+					 *     different from GNUPLOTFMT, 
+					 *     so that the pointer fmt is 
+					 *     actually different. this is
+					 *     not pretty, needs fixing!!
+					 */
+
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
-    static char s[2048];
-    app_t *x; 
+    static char s[4096];
+    static char * fmt; 
+    app_t * x; 
     time_t ts; 
     int i; 
 
     if (buf == NULL && args != NULL) { 
-	/* we support one format only. print the header */
-	*len = sprintf(s, PRETTYHDR);  
+	int n; 
+
+        /* first call of print, process the arguments and return */
+        for (n = 0; args[n]; n++) {
+            if (!strcmp(args[n], "format=plain")) {
+                *len = 0; 
+                fmt = PLAINFMT;
+            } else if (!strcmp(args[n], "format=pretty")) {
+	        *len = sprintf(s, PRETTYHDR);  
+                fmt = PRETTYFMT;
+            } else if (!strcmp(args[n], "format=gnuplot")) {
+                *len = sprintf(s, GNUPLOTHDR); 
+                fmt = GNUPLOTFMT;
+            } 
+        } 
+
+	/* send the header back */
 	return s; 
     } 
 
     if (buf == NULL && args == NULL) {
 	/* no footer */
 	*len = 0; 
+        if (fmt == GNUPLOTFMT) 
+            *len = sprintf(s, GNUPLOTFOOTER);
 	return s; 
     } 
 	
     x = (app_t *) buf; 
     ts = (time_t) ntohl(x->ts);
 
-    *len = sprintf(s, "%.24s ", asctime(localtime(&ts))); 
+    if (fmt == PRETTYFMT) 
+	*len = sprintf(s, fmt, asctime(localtime(&ts))); 
+    else 
+	*len = sprintf(s, fmt, ts) ; 
+
     for (i = 0; i < APPLICATIONS; i++) { 
 	*len += sprintf(s + *len, "%8llu %8llu ", 
 	    NTOHLL(x->bytes[i]), NTOHLL(x->pkts[i]));
     } 
     *len += sprintf(s + *len, "\n"); 
     return s;
-};
+}
 
 static int
 replay(char *buf, char *out, size_t * len)
