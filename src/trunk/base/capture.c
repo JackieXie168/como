@@ -566,6 +566,7 @@ capture_mainloop(int export_fd)
 	    continue; 
 	} 
 	sniffers_left++;
+	assert(src->flags != 0); 
         
 	/*
 	 * now we browse the list of modules to make sure that 
@@ -639,7 +640,7 @@ capture_mainloop(int export_fd)
 	     * if this sniffer uses polling, set the timeout for 
 	     * the select() instead of adding the file descriptor to FD_SET 
 	     */  
-	    if (src->fd < 0 || (src->cb->flags & SNIFF_POLL)) {
+	    if (src->fd < 0 || (src->flags & SNIFF_POLL)) {
 		pto = &t; 
 		continue;	/* do not select() on this one */
 	    }
@@ -649,7 +650,7 @@ capture_mainloop(int export_fd)
 	     * file, stop processing packets. this will give EXPORT
 	     * some time to process the tables and free memory.  
 	     */
-	    if ((src->cb->flags & SNIFF_FILE) && 
+	    if ((src->flags & SNIFF_FILE) && 
 		map.stats->mem_usage_cur > FLUSH_THRESHOLD(map.mem_size)) {
 		continue;	/* do not select() on this one */
 	    } 
@@ -726,10 +727,10 @@ capture_mainloop(int export_fd)
             int idx;
 	    int count = 0;
 
-	    if (src->fd < 0)
-		continue;	/* invalid device */
+	    if (src->flags & SNIFF_INACTIVE)
+		continue;	/* inactive device */
 
-	    if ( !(src->cb->flags & SNIFF_POLL) && !FD_ISSET(src->fd, &r))
+	    if ((src->flags & SNIFF_SELECT) && !FD_ISSET(src->fd, &r))
 		continue;	/* nothing to read here. */
 
 	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER); 
@@ -738,7 +739,7 @@ capture_mainloop(int export_fd)
 
             if (count < 0) {
                 src->cb->sniffer_stop(src);
-		src->fd = -1;
+		src->flags |= SNIFF_INACTIVE; 
 		sniffers_left--;
                 continue;
             }

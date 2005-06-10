@@ -67,17 +67,13 @@ struct _snifferinfo {
 static int
 sniffer_start(source_t * src) 
 {
-    struct _snifferinfo * info; 
-
     /* open the ERF trace file */
     src->fd = open(src->device, O_RDONLY); 
     if (src->fd < 0)
         return -1; 
 
-    src->ptr = safe_malloc(sizeof(struct _snifferinfo));
-    info = (struct _snifferinfo *) src->ptr; 
-    info->nbytes = 0;
-
+    src->flags = SNIFF_FILE; 
+    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
     return 0;		/* success */
 }
 
@@ -207,5 +203,5 @@ sniffer_stop(source_t * src)
 }
 
 sniffer_t erf_sniffer = { 
-    "erf", sniffer_start, sniffer_next, sniffer_stop, SNIFF_FILE
+    "erf", sniffer_start, sniffer_next, sniffer_stop
 };

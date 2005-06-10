@@ -255,6 +255,7 @@ sniffer_start(source_t * src)
     calibrate(info); 
 
     src->fd = fd; 
+    src->flags = SNIFF_POLL;
     return 0;	/* success */
 }
 
@@ -355,5 +356,5 @@ sniffer_stop (source_t * src)
 }
 
 sniffer_t sk98_sniffer = {
-    "sk98", sniffer_start, sniffer_next, sniffer_stop, 0
+    "sk98", sniffer_start, sniffer_next, sniffer_stop
 };

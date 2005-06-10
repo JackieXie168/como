@@ -95,6 +95,7 @@ sniffer_start(source_t * src)
     } 
 
     src->fd = sd; 
+    src->flags = SNIFF_POLL; 	/* just to slow it down... */
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     return sd;
 }
@@ -180,5 +181,5 @@ sniffer_stop(source_t * src)
 }
 
 struct _sniffer como_sniffer = { 
-    "como", sniffer_start, sniffer_next, sniffer_stop, SNIFF_POLL
+    "como", sniffer_start, sniffer_next, sniffer_stop
 };

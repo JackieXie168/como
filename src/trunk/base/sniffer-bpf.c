@@ -150,6 +150,7 @@ sniffer_start(source_t *src)
     }
 
     src->fd = fd; 
+    src->flags = SNIFF_SELECT; 
     src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
 
     return 0;		/* success */
@@ -238,4 +239,5 @@ sniffer_stop(source_t * src)
 }
 
 struct _sniffer bpf_sniffer = {
-    "bpf", sniffer_start, sniffer_next, sniffer_stop, 0};
+    "bpf", sniffer_start, sniffer_next, sniffer_stop
+};

@@ -94,6 +94,7 @@ sniffer_start(source_t * src)
     info->bottom = NULL;
 
     src->fd = fd; 
+    src->flags = SNIFF_POLL; 
     return 0;		/* success */
 }
 
@@ -216,5 +217,5 @@ sniffer_stop(source_t * src)
 }
 
 sniffer_t dag_sniffer = { 
-    "dag", sniffer_start, sniffer_next, sniffer_stop, SNIFF_POLL 
+    "dag", sniffer_start, sniffer_next, sniffer_stop
 };

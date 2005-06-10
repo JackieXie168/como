@@ -96,6 +96,7 @@ sniffer_start(source_t * src)
     }
 
     src->fd = fd; 
+    src->flags = SNIFF_FILE; 
     src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
     return 0;
 }
@@ -191,5 +192,5 @@ sniffer_stop (source_t * src)
 
 
 sniffer_t pcap_sniffer = {
-    "pcap", sniffer_start, sniffer_next, sniffer_stop, SNIFF_FILE
+    "pcap", sniffer_start, sniffer_next, sniffer_stop
 };

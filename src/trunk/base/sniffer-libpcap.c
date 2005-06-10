@@ -186,6 +186,7 @@ sniffer_start(source_t * src)
     }
     
     src->fd = sp_fileno(info->pcap);
+    src->flags = SNIFF_SELECT; 
     return 0; 		/* success */
 }
 
@@ -285,4 +286,5 @@ sniffer_stop(source_t * src)
 }
 
 struct _sniffer libpcap_sniffer = { 
-    "libpcap", sniffer_start, sniffer_next, sniffer_stop, 0};
+    "libpcap", sniffer_start, sniffer_next, sniffer_stop
+};

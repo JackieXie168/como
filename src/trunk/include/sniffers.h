@@ -75,9 +75,6 @@ struct _sniffer {
     start_fn * sniffer_start;   /* start the sniffer */
     next_fn * sniffer_next;     /* get next packet */
     stop_fn * sniffer_stop;     /* stop the sniffer */
-    int flags;
-#define	SNIFF_POLL	0x10000	/* device must be polled */
-#define	SNIFF_FILE	0x01000	/* device reads from file */
 };
 
 /*
@@ -89,12 +86,18 @@ struct _sniffer {
 struct _source {
     struct _source *next;
     sniffer_t *cb;              /* callbacks */
+    int fd;                     /* file descriptor we are using */
+    char *device;		/* device name */
+    char *args;			/* optional arguments */
     pktdesc_t *output;		/* packet stream description */
-    char *device;
-    char *args;
     void *ptr;			/* sniffer-dependent information */ 
-    int fd;                     /* file desc. we use */
+    uint32_t flags;		/* sniffer flags */
 };
+
+#define	SNIFF_SELECT	0x0001	/* device must be polled */
+#define	SNIFF_POLL	0x0002	/* device must be polled */
+#define	SNIFF_FILE	0x0004	/* device reads from file */
+#define SNIFF_INACTIVE	0x0008	/* sniffer is inactive */
 
 
 /* some functions and variables */
