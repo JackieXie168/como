@@ -270,6 +270,7 @@ return_token(struct map_area_header * m, unsigned token)
     unsigned ind;
     ind = m->u2k_prod % RING_SIZE;
     m->u2k_tokens[ind] = token;
+    mb();
     m->u2k_prod++;
 }
 
@@ -287,13 +288,9 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     pkt_t * pkt;
     int npkts;                 /* processed pkts */
 
-    mb();
-
     /* return all tokens of previous round */
-    for (; info->no_tokens >= 0; info->no_tokens--) {
-	info->m->k2u_cons++;
+    for (; info->no_tokens >= 0; info->no_tokens--) 
 	return_token(info->m, info->tokens[info->no_tokens]);
-    } 
 
     info->no_tokens = 0; 
 
@@ -302,12 +299,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	uint token;
 	ushort iface;
 	struct timeval tv;
-	int len; 
-	char * base; 
 
         if (info->m->k2u_cons == info->m->k2u_prod) 
 	    break; 	/* no more tokens */
-
+	mb();
 	ind = info->m->k2u_cons % RING_SIZE;
 	token = info->m->k2u_pipe[ind].token;
 
@@ -316,38 +311,32 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    /* Kernel decided not to use this token.  Return it. */
 	    return_token(info->m, token);
 	    info->m->k2u_cons++;
-	    continue;
+	    return npkts;
 	}
 
 	if (iface >= info->retimer_size || info->clock_retimers[iface] == NULL){
 	    /* Clock calibration was incomplete.  Uh oh. */
-	    logmsg(V_LOGSNIFFER, "calibration incomplete, returning token\n"); 
+	    logmsg(LOGWARN, "calibration incomplete, returning token\n"); 
 	    return_token(info->m, token);
 	    info->m->k2u_cons++;
-	    continue;
+	    return -1;
 	}
 
 	/* we have a good incoming packet; deal with it. */
 	info->tokens[npkts] = token; 
-	base = info->packet_pool[token].payload; 
-	len = info->m->k2u_pipe[ind].len; 
 	getTime(info->clock_retimers[iface], info->m->k2u_pipe[ind].tstamp, 
 		&tv, NULL);
-
-        /*
-         * Now we have a packet: start filling a new pkt_t struct
-         * (beware that it could be discarded later on)
-         */
         pkt->ts = TIME2TS(tv.tv_sec, tv.tv_usec); 
-        pkt->len = len; 
-        pkt->caplen = len;
-	pkt->payload = base; 
+        pkt->len = info->m->k2u_pipe[ind].len; 
+        pkt->caplen = info->m->k2u_pipe[ind].len; 
+	pkt->payload = info->packet_pool[token].payload; 
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
         updateofs(pkt, COMOTYPE_ETH); 
+	info->m->k2u_cons++;
     }
 
     info->no_tokens = npkts; 
