@@ -58,20 +58,33 @@ FLOWDESC {
 static uint32_t
 hash(pkt_t *pkt)
 {
-    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^
-             (N16(TCP(src_port)) << 3) ^ (N16(TCP(dst_port)) << 3));
+    uint sport, dport; 
+
+    sport = dport = 0;
+    if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
+	sport = N16(UDP(src_port)); 
+	dport = N16(UDP(dst_port)); 
+    } 
+
+    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^ (sport << 3) ^ (dport << 3));
 }
 
 static int
 match(pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
+    uint sport, dport; 
+    
+    sport = dport = 0;
+    if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
+	sport = N16(UDP(src_port)); 
+	dport = N16(UDP(dst_port)); 
+    } 
 
     return (
          N32(IP(src_ip)) == N32(x->src_ip) &&
          N32(IP(dst_ip)) == N32(x->dst_ip) &&
-         N16(TCP(src_port)) == N16(x->src_port) &&
-         N16(TCP(dst_port)) == N16(x->dst_port) &&
+         sport == N16(x->src_port) && dport == N16(x->dst_port) &&
          IP(proto) == x->proto
     );
 }
@@ -83,13 +96,17 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts); 
-        x->src_ip = IP(src_ip);
-        x->dst_ip = IP(dst_ip);
-        x->src_port = TCP(src_port);
-        x->dst_port = TCP(dst_port);
-        x->proto = IP(proto);
 	x->bytes = 0;
 	x->pkts = 0;
+        x->proto = IP(proto);
+        x->src_ip = IP(src_ip);
+        x->dst_ip = IP(dst_ip);
+
+        N16(x->src_port) = N16(x->dst_port) = 0; 
+	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
+	    x->src_port = UDP(src_port); 
+	    x->dst_port = UDP(dst_port); 
+	} 
     }
 
     x->bytes += H16(IP(len));
