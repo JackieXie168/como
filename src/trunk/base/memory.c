@@ -98,7 +98,7 @@ struct _mem_block {
     void *_magic;
 #define	MY_MAGIC	(void *)0x91919191
 #define	MY_MAGIC_IN_USE	(void *)0x50b50b
-    uint size;			/* actual size of data[] */
+    size_t size;			/* actual size of data[] */
     char data[0];
 };
 

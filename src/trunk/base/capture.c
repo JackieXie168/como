@@ -755,6 +755,9 @@ capture_mainloop(int export_fd)
 	     * The element of the array is set if the packet is of interest
 	     * for the given classifier, and it is 0 otherwise.
              */
+	    logmsg(V_LOGCAPTURE, 
+		    "calling filter with pkts %p, n_pkts %d, n_out %d\n", 
+		    pkts, count, map.module_count); 
             which = filter(pkts, count, map.module_count);
 
             /*
@@ -769,6 +772,11 @@ capture_mainloop(int export_fd)
             for (idx = 0; idx < map.module_count; idx++) {
 	  	if (map.modules[idx].status != MDL_ACTIVE) 
 		    continue; 
+
+		assert(map.modules[idx].name != NULL); 
+		logmsg(V_LOGCAPTURE, 
+			"sending %d packets to module %s for processing", 
+			count, map.modules[idx].name); 
 
 		last_ts = capture_pkt(&map.modules[idx], pkts, count, 
 						which, &expired);
