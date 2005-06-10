@@ -71,8 +71,14 @@ struct _snifferinfo {
     struct ftio ftio;		/* flow-tools I/O data structure */
     char buf[BUFSIZE];		/* buffer used between sniffer-next calls */
     uint nbytes; 		/* bytes used in the buffer */
+    int scale; 			/* scaling pkts/bytes for sampled Netflow */
+    int iface; 			/* interface of interest (SNMP index) */
+    int flags; 			/* options */
 }; 
 
+
+/* sniffer options */
+#define FLOWTOOLS_STREAM 	0x01	/* always wait for more files */
 
 /* 
  * This data structure is saved in the heap and contains the flow 
@@ -153,16 +159,33 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow)
  *
  */
 int 
-flowtools_next(int ofd, struct _snifferinfo * info) 
+flowtools_next(int ofd, char * device, struct _snifferinfo * info) 
 {
     int fd; 
     int ret; 
 
     if (ofd >= 0) {
+	/* close current file */
 	ftio_close(&info->ftio); 
-	close(ofd);
+	close(ofd); 
+
+	/* move to next file */
+	info->curfile++;  
     } 
   
+    if (info->curfile == (int) info->in.gl_pathc) {
+	/*
+	 * no files left. check again the input directory to
+	 * see if new files are there. if not return 0.
+	 */
+	ret = glob(device, GLOB_ERR|GLOB_TILDE, NULL, &info->in);
+	if (ret != 0) 
+	    logmsg(LOGWARN, "sniffer-flowtools: error matching %s: %s\n",
+		device, strerror(errno));
+	
+	return -1;           /* no files to process */
+    }
+
     logmsg(LOGSNIFFER, "opening file %s\n", info->in.gl_pathv[info->curfile]);
     fd = open(info->in.gl_pathv[info->curfile], O_RDONLY);
     if (fd < 0) 
@@ -197,26 +220,36 @@ flowtools_read(source_t * src)
     assert(src->ptr != NULL); 
 
     info = (struct _snifferinfo *) src->ptr; 
-    if (info->curfile == info->in.gl_pathc) 
-	return 0;		/* all files have been processed */
 
     /* get next flow record */
-    fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);
+    fr = NULL; 
+    if (src->fd >= 0) 
+	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);
     if (fr == NULL) {
-	/* end of file. go to next if any. */
-	info->curfile++;
-	if (info->curfile == info->in.gl_pathc)
-	    return 0; 		/* no files left */
-
-	src->fd = flowtools_next(src->fd, info); 
-	if (src->fd < 0) {		/* XXX errors are ignored here... */
-	    logmsg(LOGWARN, "sniffer-flowtools: opening %s: %s\n",
-		info->in.gl_pathv[info->curfile], strerror(errno));
+	src->fd = flowtools_next(src->fd, src->device, info); 
+	if (src->fd < 0) { 
+	    /* file is not ready, yet. this is normal if we are streaming
+	     * flowtools files. if not it could be an error. in both cases
+	     * we return 0 and have sniffer_next() deal with it. 
+	     */
 	    return 0; 
-        } 
+	} 
 
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);  
     }
+
+    /* 
+     * filter out flows that do not cross the interface 
+     * of interest. if iface is 0, all flows are of interest. 
+     */
+    if (info->iface && (info->iface != fr->input && info->iface != fr->output))
+	return (netflow2ts(fr, fr->Last));
+
+    /* 
+     * scale the bytes/pkts of this record 
+     */
+    fr->dPkts *= info->scale; 
+    fr->dOctets *= info->scale; 
 
     /* build a new flow record */
     flow = safe_calloc(1, sizeof(struct _flowinfo));
@@ -252,6 +285,69 @@ flow_cmp(const void * fa, const void * fb)
 }
 
 
+/* 
+ * -- configsniffer
+ * 
+ * process config parameters 
+ *
+ */
+static void 
+configsniffer(char * args, struct _snifferinfo * info) 
+{
+    char * wh; 
+
+    if (args == NULL) 
+	return; 
+
+    /*
+     * "window". 
+     * sets how much ahead in the flow records we need to read 
+     * before replaying packets to make sure that no out-of-order 
+     * packets will be sent.
+     */
+    wh = strstr(args, "window");
+    if (wh != NULL) {
+	char * x = index(wh, '=');      
+	if (x == NULL)
+	    logmsg(LOGWARN, "sniffer-flowtools: invalid argument %s\n", wh);
+	info->window = TIME2TS(atoi(x + 1), 0);
+    }
+
+    /* 
+     * "scale". 
+     * for sampled netflow set the scaling factor we need to apply
+     * to the packet and byte count present in the flow record.
+     */
+    wh = strstr(args, "scale");
+    if (wh != NULL) {
+	char * x = index(wh, '=');
+	if (x == NULL) 
+	    logmsg(LOGWARN, "sniffer-flowtools: invalid argument %s\n", wh);
+	info->scale = atoi(x + 1);
+    }
+
+    /*
+     * "iface".
+     * for sampled netflow set the scaling factor we need to apply
+     * to the packet and byte count present in the flow record.
+     */
+    wh = strstr(args, "iface");
+    if (wh != NULL) {
+	char * x = index(wh, '=');
+	if (x == NULL)
+	    logmsg(LOGWARN, "sniffer-flowtools: invalid argument %s\n", wh);
+	info->iface = atoi(x + 1);
+    }
+
+    /* 
+     * "stream" 
+     * streaming mode. the sniffer will wait for more files once done.  
+     */
+    wh = strstr(args, "stream");
+    if (wh != NULL) 
+	info->flags |= FLOWTOOLS_STREAM; 
+}
+
 
 /*
  * -- sniffer_start
@@ -275,6 +371,7 @@ sniffer_start(source_t * src)
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
     info->window = TIME2TS(300,0) ; 	/* default window is 5 minutes */
+    info->scale = 1;			/* default no scaling */
 
     /* 
      * list all files that match the given pattern. 
@@ -294,7 +391,8 @@ sniffer_start(source_t * src)
     } 
 	
     /* open the first file */
-    src->fd = flowtools_next(-1, info); 
+    info->curfile = 0;
+    src->fd = flowtools_next(-1, src->device, info); 
     if (src->fd < 0) {
         logmsg(LOGWARN, "sniffer-flowtools: opening %s: %s\n", 
 	    info->in.gl_pathv[info->curfile], strerror(errno)); 
@@ -304,16 +402,9 @@ sniffer_start(source_t * src)
     } 
 
     /* 
-     * set the window size, i.e., how much ahead in the flow records 
-     * we need to read before replaying packets to make sure that no 
-     * out-of-order packets will be sent. 
+     * set the config values 
      */
-    if (src->args && strstr(src->args, "window=") != NULL) {
-	char * wh; 
-
-	wh = index(src->args, '=') + 1; 
-	info->window = TIME2TS(atoi(wh), 0); 
-    }
+    configsniffer(src->args, info);
 
     /* initialize the heap */
     info->heap = heap_init(flow_cmp);
@@ -350,6 +441,7 @@ sniffer_start(source_t * src)
     N16(p->udph.src_port) = 0xffff;
     N16(p->udph.dst_port) = 0xffff;
     
+    src->flags = SNIFF_FILE; 		/* this sniffer operates on files */
     return 0; 
 }
 
@@ -379,7 +471,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
      * if so we are done. 
      */
     if (heap_root(info->heap) == NULL)
-	return -1;
+	return ((info->flags & FLOWTOOLS_STREAM)? 0 : -1);  
 
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) {
 	struct _flowinfo * flow; 
@@ -389,8 +481,17 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
  	 * of flows in the heap. 
 	 */ 
 	while (info->max_ts - info->min_ts < info->window) {
-	    if (!flowtools_read(src))
-		break; 		/* EOF */
+	    if (!flowtools_read(src)) { 
+		/* 
+		 * no more flow records to be read. if we are 
+		 * in stream mode, give to CAPTURE whatever we have
+	 	 * got so far and try again later. otherwise, process 
+		 * the flow records left in the heap. 
+		 */
+		if (info->flags & FLOWTOOLS_STREAM) 
+		    return npkts;	
+		break;
+	    } 
 	}
 
 	/* get the first flow from the heap */
@@ -412,6 +513,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	bcopy(pkt->payload, info->buf + info->nbytes, pkt->caplen); 
 	pkt->payload = info->buf + info->nbytes; 
 	info->nbytes += pkt->caplen; 
+	info->last_ts = pkt->ts; 
 
 	/* 
 	 * check if this flow has more packets. If so, update the 
@@ -443,7 +545,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    break; 
     }
 
-    info->last_ts = pkt->ts; 
     return npkts;
 }
 
@@ -457,13 +558,16 @@ sniffer_stop(source_t * src)
 
     assert(src->ptr != NULL); 
     assert(info->heap != NULL); 
-    ftio_close(&info->ftio);
+
     heap_close(info->heap); 
-    close(src->fd); 
+    if (src->fd > 0) { 
+	ftio_close(&info->ftio);
+	close(src->fd); 
+    } 
     free(src->ptr); 
 }
 
 
 sniffer_t flowtools_sniffer = { 
-    "flowtools", sniffer_start, sniffer_next, sniffer_stop, SNIFF_FILE 
+    "flowtools", sniffer_start, sniffer_next, sniffer_stop
 };
