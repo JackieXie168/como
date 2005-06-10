@@ -32,7 +32,12 @@
 #include <string.h>     /* memset */
 #include <errno.h>
 #include <dlfcn.h>	/* dlopen */
+
+#ifndef USE_STARGATE
 #include <pcap.h>
+#else
+#include "pcap-stargate.h"
+#endif
 
 #include "sniffers.h"
 #include "como.h"
@@ -118,7 +123,7 @@ sniffer_start(source_t * src)
     /* link the libpcap library */
     info->handle = dlopen("libpcap.so", RTLD_NOW);
     if (info->handle == NULL) { 
-	logmsg(LOGWARN, "sniffer %s opening libpcap.so: %s\n", 
+	logmsg(LOGWARN, "sniffer %s error opening libpcap.so: %s\n", 
 	    src->cb->name, strerror(errno)); 
 	free(src->ptr); 
 	return -1; 
@@ -167,9 +172,12 @@ sniffer_start(source_t * src)
 	info->type = COMOTYPE_WLAN; 
 	break; 
 
+#ifdef DLT_IEEE802_11_RADIO		
+    /* some version of libpcap do not support this */
     case DLT_IEEE802_11_RADIO: 
 	info->type = COMOTYPE_WLANR;	/* w/radio information */ 
 	break; 
+#endif
 
     default: 
 	logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );

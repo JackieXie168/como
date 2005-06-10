@@ -31,8 +31,12 @@
 # See the example below.
 #
 
-# set the compiler, if needed
-# CC = arm-linux-gcc
+ifdef USE_STARGATE
+	# we need a cross-platform compiler
+	CC = arm-linux-gcc
+	DEFS+=-DUSE_STARGATE 
+	WARNINGS?=-W -Wall -Werror -Wshadow 
+endif
 
 # CFLAGS is set to something very pedantic, and for good reasons, so
 # please do not alter them.
@@ -52,7 +56,7 @@ DBGFLAGS?=-g
 # OPTFLAGS?=-O2
 
 # #define's used to build this version of the code.
-DEFS+=-DCOMO_VERSION=\"0.4-current-050608\"
+DEFS+=-DCOMO_VERSION=\"0.4-current-050609\"
 
 # You are really not supposed to touch this!
 # Here we have a lot of make magic to compute actual file names

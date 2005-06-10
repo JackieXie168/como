@@ -35,8 +35,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include <pcap.h>	/* DLT_* on linux */
 #include <net/if.h>
+
+#ifndef USE_STARGATE
+#include <pcap.h>	/* DLT_* on linux */
+#else 
+#include "pcap-stargate.h"
+#endif 
 
 #include "como.h"
 #include "sniffers.h"
