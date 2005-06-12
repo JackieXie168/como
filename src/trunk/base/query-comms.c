@@ -127,10 +127,27 @@ query_parse(char *buf)
     q.end = t.tv_sec + 20;
     q.format = Q_OTHER; 
 
+    /* 
+     * check if the request is valid. look for GET and HTTP/1 
+     * somewhere in the string. 
+     */
     if (strstr(buf, "GET") != buf) {
 	logmsg(LOGQUERY, "Malformed request %s\n", buf);
 	return NULL;
     }
+
+    end = strstr(buf, "HTTP/1");  
+    if (end == NULL) {
+	logmsg(LOGQUERY, "Malformed request %s\n", buf);
+	return NULL;
+    }
+    
+    /* mark the end of the useful string. walk backwards and 
+     * remove any space at the end of the HTTP request. 
+     */
+    *end = '\0';
+    for (; end > buf && index(" \t", *end) != NULL; end--)
+	*end = '\0';
 
     /* after GET we expect whitespace then a string */
     for (p = buf + 3; *p && index(" \t", *p) != NULL; p++)
@@ -146,18 +163,6 @@ query_parse(char *buf)
 	logmsg(LOGQUERY, "Missing argument %s\n", buf);
 	return &q;
     }
-    /* skip the query string */
-    for (end = p; *end && index(" \t", *end) == NULL; end++)
-	;
-    if (p == buf+3 || *p == '\0') {
-	logmsg(LOGQUERY, "Malformed request %s\n", buf);
-	return NULL;
-    }
-    if (strstr(end, "HTTP/1") == NULL) {
-	logmsg(LOGQUERY, "Malformed request %s\n", buf);
-	return NULL;
-    }
-    *end = '\0';
 
     logmsg(LOGQUERY, "Good request %s\n", p);
     p = urldecode(p);
