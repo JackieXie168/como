@@ -289,7 +289,6 @@ load(char * buf, size_t len, timestamp_t * ts)
     return sizeof(app_t);
 }
 
-#define PLAINHDR 		NULL
 
 #define PRETTYHDR               \
     "Date                     " \
@@ -305,9 +304,12 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define GNUPLOTHDR 							\
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
     "set grid;"								\
-    "set ylabel \"Mbps\";"						\
-    "set xlabel \"Time\";"						\
+    "set ylabel \"Percentage\";"					\
+    "set xlabel \"Time (H:M UTC)\";"					\
     "set autoscale ymax;"						\
+    "set autoscale xfix;"						\
+    "set key outside;"							\
+    "set xdata time;"							\
     "set timefmt \"%%s\";"						\
     "set format x \"%%H:%%M\";"						\
     "plot \"-\" using 1:16 with filledcurve x2 title \"Unknown\"," 	\
@@ -344,6 +346,10 @@ print(char *buf, size_t *len, char * const args[])
     if (buf == NULL && args != NULL) { 
 	int n; 
 
+	/* default is pretty printing */
+	*len = sprintf(s, PRETTYHDR);  
+	fmt = PRETTYFMT;
+
         /* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=plain")) {
@@ -378,9 +384,31 @@ print(char *buf, size_t *len, char * const args[])
     else 
 	*len = sprintf(s, fmt, ts) ; 
 
-    for (i = 0; i < APPLICATIONS; i++) { 
-	*len += sprintf(s + *len, "%8llu %8llu ", 
-	    NTOHLL(x->bytes[i]), NTOHLL(x->pkts[i]));
+    if (fmt == GNUPLOTFMT) { 
+	/* 
+	 * in gnuplot we plot the percentage of traffic. 
+	 * we compute them here and then output. 
+	 */
+	uint64_t bytessum = 0; 
+	uint64_t pktssum = 0; 
+
+	for (i = 0; i < APPLICATIONS; i++) {
+	    bytessum += NTOHLL(x->bytes[i]); 
+	    pktssum += NTOHLL(x->pkts[i]); 
+	}
+	
+	/* now print the values */
+	for (i = 0; i < APPLICATIONS; i++) { 
+	    *len += sprintf(s + *len, "%8llu %8llu ", 
+		(100*NTOHLL(x->bytes[i]))/bytessum,
+		(100*NTOHLL(x->pkts[i]))/pktssum);
+	}
+    } else {
+	/* print the value as they are */
+	for (i = 0; i < APPLICATIONS; i++) { 
+	    *len += sprintf(s + *len, "%8llu %8llu ", 
+		NTOHLL(x->bytes[i]), NTOHLL(x->pkts[i]));
+	}
     } 
     *len += sprintf(s + *len, "\n"); 
     return s;
