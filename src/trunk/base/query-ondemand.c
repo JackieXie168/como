@@ -54,6 +54,72 @@
 extern struct _como map;
 
 
+/* 
+ * -- send_status
+ * 
+ * send the node status back to the client. status information 
+ * include node name, location, software version, link speed, data source, 
+ * and some load information (memory usage, no. of modules, average traffic). 
+ */
+static void
+send_status(__unused qreq_t * req, int client_fd) 
+{
+    char buf[1024]; 
+    int ret; 
+    int len; 
+
+    /* send HTTP header */
+    ret = como_writen(client_fd, 
+	    "HTTP/1.0 200 OK\nContent-Type: text/plain\n\n", 0);
+    if (ret < 0) 
+	panic("sending data to the client");  
+
+    /* send name, location, version, build date, speed and data source 
+     * all information that is static and present in the map 
+     */
+    len = sprintf(buf, 
+	    "Name: %s\n"
+	    "Location: %s\n" 
+	    "Version: CoMo v%s\n"
+	    "Build date: %s\n"
+	    "Build time: %s\n"
+	    "Speed: %s\n",
+	    map.name, map.location, COMO_VERSION, __DATE__, __TIME__,
+	    map.linkspeed); 
+    ret = como_writen(client_fd, buf, len);
+    if (ret < 0)
+	panic("sending status to the client");   
+
+    /* send comments if any */
+    if (map.comment != NULL) { 
+	len = sprintf(buf, "Comment: %s\n", map.comment); 
+	ret = como_writen(client_fd, buf, len);
+	if (ret < 0)
+	    panic("sending status to the client");
+    }
+
+#if 0 
+    /* send usage information */
+    len = sprintf(buf, 
+            "Memory current: %.1fMB\n"
+            "Memory peak: %.1fMB\n"
+            "Memory size: %dMB\n"
+            "Modules total: %d\n"  
+            "Modules active: %d\n"  
+	    "Avg. Packets/sec (24 hours): %d\n"
+	    "Avg. Packets/sec (1 hour): %d\n"
+	    "Avg. Packets/sec (5 minutes): %d\n",
+            (float) map.stats->mem_usage_cur/(1024*1024),
+            (float) map.stats->mem_usage_peak/(1024*1024),
+            map.mem_size, map.stats->modules_active, map.module_count,
+	    map.stats->pps_24hrs, map.stats->pps_1hr, map.stats->pps_5min); 
+    ret = como_writen(client_fd, buf, len);
+    if (ret < 0)
+        panic("sending status to the client");
+#endif
+}
+
+
 /*
  * -- getrecord
  *
@@ -228,6 +294,17 @@ query_ondemand(int client_fd)
     req = (qreq_t *) qryrecv(client_fd); 
     if (req == NULL) 
 	panic("query-ondemand receiving query"); 
+
+    if (req->format == Q_STATUS) { 
+	/* 
+	 * status queries can always be answered. send 
+	 * back the information about this CoMo instance (i.e., name, 
+	 * location, version, etc.) 
+	 */
+	send_status(req, client_fd);
+	close(client_fd);
+	return; 
+    }
 
     logmsg(V_LOGQUERY,
         "got query (%d bytes); mdl: %s filter: %s\n",  

@@ -74,7 +74,11 @@ enum tokens {
     TOK_STREAMSIZE,
     TOK_ARGS,
     TOK_MIN_FLUSH,
-    TOK_MAX_FLUSH
+    TOK_MAX_FLUSH,
+    TOK_NAME,   
+    TOK_LOCATION,
+    TOK_LINKSPEED,
+    TOK_COMMENT
 };
 
 
@@ -128,6 +132,10 @@ keyword_t keywords[] = {
     { "args",        TOK_ARGS,        2, CTX_MODULE},
     { "min-flush",   TOK_MIN_FLUSH,   2, CTX_MODULE},
     { "max-flush",   TOK_MAX_FLUSH,   2, CTX_MODULE},
+    { "name",        TOK_NAME,        2, CTX_GLOBAL},
+    { "location",    TOK_LOCATION,    2, CTX_GLOBAL},
+    { "linkspeed",   TOK_LINKSPEED,   2, CTX_GLOBAL},
+    { "comment",     TOK_COMMENT,     2, CTX_GLOBAL},
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -627,6 +635,22 @@ do_config(int argc, char *argv[])
     case TOK_MAX_FLUSH: 
 	mdl->max_flush_ivl = 
 		TIME2TS(atoi(argv[1])/1000,(atoi(argv[1])%1000)*1000);
+	break; 
+
+    case TOK_NAME: 
+        safe_dup(&map.name, argv[1]);
+	break; 
+
+    case TOK_LOCATION:
+        safe_dup(&map.location, argv[1]);
+	break; 
+
+    case TOK_LINKSPEED:
+        safe_dup(&map.linkspeed, argv[1]);
+	break; 
+
+    case TOK_COMMENT: 
+        safe_dup(&map.comment, argv[1]);
 	break; 
 
     default:

@@ -72,6 +72,12 @@ struct _como {
 	 * process decides what to do with it, with some string
 	 * matching function.
 	 */
+
+    /* node information */
+    char * name; 
+    char * location; 
+    char * linkspeed; 
+    char * comment; 
 };
 
 

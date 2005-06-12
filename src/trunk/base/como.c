@@ -147,6 +147,9 @@ main(int argc, char *argv[])
     map.module_max = DEFAULT_MODULE_MAX; 
     map.modules = safe_calloc(map.module_max, sizeof(module_t)); 
     map.workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
+    map.name = strdup("CoMo Node"); 
+    map.location = strdup("Unknown"); 
+    map.linkspeed = strdup("Unknown"); 
 
     /* create the filter template file */
     /* XXX check that we use the user-defined template */

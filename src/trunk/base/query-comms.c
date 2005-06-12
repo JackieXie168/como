@@ -184,9 +184,12 @@ query_parse(char *buf)
 	    q.format = Q_RAW;
         } else if (strstr(p1, "format=como") == p1) {
 	    q.format = Q_COMO;
+        } else if (strstr(p1, "status") == p1) {
+	    q.format = Q_STATUS;
 	} else {
-	    q.args[nargs++] = strdup(p1);
 	    logmsg(V_LOGQUERY, "custom argument: %s\n", p1);
+	    q.args[nargs] = strdup(p1); 
+	    nargs++;
 	}
     }
     return &q;
