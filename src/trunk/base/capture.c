@@ -644,7 +644,7 @@ capture_mainloop(int export_fd)
 	    if (src->fd < 0 || (src->flags & SNIFF_POLL)) {
 		if (src->polling < TIME2TS(tout.tv_sec, tout.tv_usec)) {
 		    tout.tv_sec = TS2SEC(src->polling); 
-		    tout.tv_usec = TS2SEC(src->polling); 
+		    tout.tv_usec = TS2USEC(src->polling); 
 		} 
 		pto = &tout; 
 		continue;	/* do not select() on this one */
