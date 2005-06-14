@@ -14,6 +14,7 @@ MODULES= \
 	connx.so \
 	trace.so \
 	application.so \
+	finddst.so
 #	netflow.so \
 
 ifdef HAVE_FLEX_AND_BISON
