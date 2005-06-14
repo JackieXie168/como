@@ -38,8 +38,8 @@
 #include "como.h"
 #include "module.h"
 
-#define TOPN        10			/* Top-10 destinations */
-#define EXPORT_IVL  TIME2TS(5,0)	/* export interval (seconds) */
+#define TOPN        10		/* Top-10 destinations */
+#define EXPORT_IVL  5		/* export interval (seconds) */
 
 #define FLOWDESC	struct _ca_topdest
 #define EFLOWDESC	FLOWDESC
@@ -52,7 +52,6 @@ FLOWDESC {
 };
 
 
-static timestamp_t last_export = 0; 
 
 static uint32_t
 hash(pkt_t *pkt)
@@ -73,7 +72,7 @@ update(pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh);
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts - pkt->ts % EXPORT_IVL);
+	x->ts = TS2SEC(pkt->ts) - TS2SEC(pkt->ts) % EXPORT_IVL;
         x->dst_ip = IP(dst_ip);
         x->bytes = 0;
         x->pkts = 0;
@@ -99,9 +98,6 @@ export(void *efh, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
-    EFLOWDESC *tmp; 
-
-    tmp = CMPEF(&efh); 
 
     if (isnew) {
 	ex->ts = x->ts; 
@@ -128,19 +124,18 @@ compare(const void *efh1, const void *efh2)
 static int
 action(void *efh, timestamp_t current_time, int count)
 {
+    static uint32_t last_export = 0; 
+
     if (efh == NULL) { 
 	/* 
 	 * this is the action for the entire table. 
 	 * check if it is time to export the table. 
 	 * if not stop. 
 	 */
-	if (last_export == 0) 
-	    last_export = current_time - current_time % EXPORT_IVL; 
-
-	if (current_time - last_export < EXPORT_IVL) 
+	if (TS2SEC(current_time) - last_export < EXPORT_IVL) 
 	    return ACT_STOP;		/* too early */
 
-	last_export = current_time - current_time % EXPORT_IVL; 
+	last_export = TS2SEC(current_time) - TS2SEC(current_time) % EXPORT_IVL; 
 	return ACT_GO; 		/* dump the records */
     }
 
@@ -202,7 +197,7 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (EFLOWDESC *) buf; 
     ts = (time_t) ntohl(x->ts);
-    addr.s_addr = N32(x->dst_ip);
+    addr.s_addr = N32(x->dst_ip) & 0x000fffff;
     *len = sprintf(s, PRETTYFMT, asctime(localtime(&ts)), inet_ntoa(addr), 
 	       NTOHLL(x->bytes), NTOHLL(x->pkts));
     return s;

@@ -339,6 +339,7 @@ print(char *buf, size_t *len, char * const args[])
 {
     static char s[4096];
     static char * fmt; 
+    static int count = 0; 
     app_t * x; 
     time_t ts; 
     int i; 
@@ -391,6 +392,13 @@ print(char *buf, size_t *len, char * const args[])
 	 */
 	uint64_t bytessum = 0; 
 	uint64_t pktssum = 0; 
+	uint64_t bytes = 0; 
+	uint64_t pkts = 0; 
+
+        if ((count++ % 5) != 0) { 
+	    *len = 0; 
+	    return s;
+        } 
 
 	for (i = 0; i < APPLICATIONS; i++) {
 	    bytessum += NTOHLL(x->bytes[i]); 
@@ -398,11 +406,16 @@ print(char *buf, size_t *len, char * const args[])
 	}
 	
 	/* now print the values */
-	for (i = 0; i < APPLICATIONS; i++) { 
-	    *len += sprintf(s + *len, "%8llu %8llu ", 
-		(100*NTOHLL(x->bytes[i]))/bytessum,
-		(100*NTOHLL(x->pkts[i]))/pktssum);
+	for (i = 0; i < APPLICATIONS - 1; i++) { 
+	    // bytes += NTOHLL(x->bytes[i]); 
+	    // pkts += NTOHLL(x->pkts[i]); 
+	    bytes += (100*NTOHLL(x->bytes[i]))/bytessum; 
+	    pkts += (100*NTOHLL(x->pkts[i]))/pktssum; 
+	    *len += sprintf(s + *len, "%8llu %8llu ", bytes, pkts); 
 	}
+
+	/* for the last value to be 100 */
+	*len += sprintf(s + *len, "%8llu %8llu ", 100 - bytes, 100 - bytes); 
     } else {
 	/* print the value as they are */
 	for (i = 0; i < APPLICATIONS; i++) { 
