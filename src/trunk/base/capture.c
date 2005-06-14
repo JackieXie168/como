@@ -535,6 +535,7 @@ capture_mainloop(int export_fd)
     timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     source_t *src;
 
+    
     /* we only get a socketpair to the export process */
 
     /*
@@ -741,6 +742,17 @@ capture_mainloop(int export_fd)
 	    gettimeofday(&now, NULL); 
 	    map.stats->delay = 	
 		TS2SEC(TIME2TS(now.tv_sec, now.tv_usec) - last_ts); 
+	    if (map.stats->delay < 0) { 
+		/* 
+		 * this can happen when the timestamps are done in the
+		 * capture card. the system is using NTP for synchronization
+		 * the card may be using GPS or such. 
+		 * 
+		 * right now we ignore this event and trust the timestamp
+		 * we get. 
+		 */
+		map.stats->delay = 0; 
+	    } 
 
 	    if (src->flags & SNIFF_INACTIVE)
 		continue;	/* inactive device */
@@ -795,7 +807,7 @@ capture_mainloop(int export_fd)
 			count, map.modules[idx].name); 
 
 		last_ts = capture_pkt(&map.modules[idx], pkts, count, 
-						which, &expired);
+					which, &expired);
                 which += count; /* next module, new list of packets */
             }
         }

@@ -84,7 +84,7 @@ send_status(__unused qreq_t * req, int client_fd)
 	    "Build date: %s\n"
 	    "Build time: %s\n"
 	    "Speed: %s\n"
-	    "Delay: %u\n",
+	    "Delay: %d\n",
 	    map.name, map.location, COMO_VERSION, __DATE__, __TIME__,
 	    map.linkspeed, map.stats->delay); 
     ret = como_writen(client_fd, buf, len);

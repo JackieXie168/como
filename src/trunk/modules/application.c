@@ -306,13 +306,13 @@ load(char * buf, size_t len, timestamp_t * ts)
     "set grid;"								\
     "set ylabel \"Percentage\";"					\
     "set xlabel \"Time (H:M UTC)\";"					\
-    "set autoscale ymax;"						\
+    "set yrange [0:100];"						\
     "set autoscale xfix;"						\
     "set key outside;"							\
     "set xdata time;"							\
     "set timefmt \"%%s\";"						\
     "set format x \"%%H:%%M\";"						\
-    "plot \"-\" using 1:16 with filledcurve x2 title \"Unknown\"," 	\
+    "plot \"-\" using 1:16 with filledcurve x1 title \"Unknown\"," 	\
     "     \"-\" using 1:14 with filledcurve x1 title \"P2P\","		\
     "     \"-\" using 1:12 with filledcurve x1 title \"Games\","	\
     "     \"-\" using 1:10 with filledcurve x1 title \"Stream\","	\
@@ -415,7 +415,8 @@ print(char *buf, size_t *len, char * const args[])
 	}
 
 	/* for the last value to be 100 */
-	*len += sprintf(s + *len, "%8llu %8llu ", 100 - bytes, 100 - bytes); 
+	//*len += sprintf(s + *len, "%8llu %8llu ", 100 - bytes, 100 - pkts); 
+	*len += sprintf(s + *len, "%8u %8u ", 100, 100); 
     } else {
 	/* print the value as they are */
 	for (i = 0; i < APPLICATIONS; i++) { 
