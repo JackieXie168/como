@@ -47,6 +47,24 @@ FLOWDESC {
     uint64_t    pkts;
 };
 
+static int meas_ivl = 1;     /* measurement granularity */
+
+static int
+init(__unused void *mem, __unused size_t msize, char *args[])
+{
+    int i;
+
+    if (args == NULL) 
+	return 0; 
+
+    for (i = 0; args[i]; i++) {
+	if (strstr(args[i], "granularity")) {
+	    char * val = index(args[i], '=') + 1;
+	    meas_ivl = atoi(val);
+        }
+    }
+    return 0;
+}
 
 static int
 update(pkt_t *pkt, void *fh, int isnew)
@@ -74,8 +92,8 @@ store(void *rp, char *buf, size_t len)
 	return -1; 
 
     PUTH64(buf, x->ts);
-    PUTH64(buf, x->byts);
-    PUTH64(buf, x->pkts);
+    PUTH64(buf, x->byts/meas_ivl);
+    PUTH64(buf, x->pkts/meas_ivl);
 
     return sizeof(FLOWDESC);
 }
@@ -176,21 +194,21 @@ print(char *buf, size_t *len, char * const args[])
 }
 
 callbacks_t callbacks = {
-    sizeof(FLOWDESC),
-    0, 
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    update,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    store,
-    load,
-    print,
-    NULL
+    ca_recordsize: sizeof(FLOWDESC),
+    ex_recordsize: 0,
+    indesc: NULL, 
+    outdesc: NULL,
+    init: init,
+    check: NULL,
+    hash: NULL,
+    match: NULL,
+    update: update,
+    ematch: NULL,
+    export: NULL,
+    compare: NULL,
+    action: NULL,
+    store: store,
+    load: load,
+    print: print,
+    replay: NULL
 };
