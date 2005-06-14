@@ -92,6 +92,7 @@ struct _source {
     pktdesc_t *output;		/* packet stream description */
     void *ptr;			/* sniffer-dependent information */ 
     uint32_t flags;		/* sniffer flags */
+    uint64_t polling; 	/* polling interval, if needed */
 };
 
 #define	SNIFF_SELECT	0x0001	/* device must be polled */
