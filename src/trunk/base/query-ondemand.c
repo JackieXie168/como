@@ -83,9 +83,10 @@ send_status(__unused qreq_t * req, int client_fd)
 	    "Version: CoMo v%s\n"
 	    "Build date: %s\n"
 	    "Build time: %s\n"
-	    "Speed: %s\n",
+	    "Speed: %s\n"
+	    "Delay: %u\n",
 	    map.name, map.location, COMO_VERSION, __DATE__, __TIME__,
-	    map.linkspeed); 
+	    map.linkspeed, map.stats->delay); 
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
 	panic("sending status to the client");   

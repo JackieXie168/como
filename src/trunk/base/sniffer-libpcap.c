@@ -187,6 +187,7 @@ sniffer_start(source_t * src)
     
     src->fd = sp_fileno(info->pcap);
     src->flags = SNIFF_SELECT; 
+    src->polling = 0;
     return 0; 		/* success */
 }
 

@@ -256,6 +256,7 @@ sniffer_start(source_t * src)
 
     src->fd = fd; 
     src->flags = SNIFF_POLL;
+    src->polling = TIME2TS(0, 1000); 
     return 0;	/* success */
 }
 

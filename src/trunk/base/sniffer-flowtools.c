@@ -442,6 +442,7 @@ sniffer_start(source_t * src)
     N16(p->udph.dst_port) = 0xffff;
     
     src->flags = SNIFF_FILE; 		/* this sniffer operates on files */
+    src->polling = 0; 
     return 0; 
 }
 
@@ -470,8 +471,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     /* first check if the heap is empty, 
      * if so we are done. 
      */
-    if (heap_root(info->heap) == NULL)
-	return ((info->flags & FLOWTOOLS_STREAM)? 0 : -1);  
+    if (heap_root(info->heap) == NULL && !(info->flags & FLOWTOOLS_STREAM))
+	return -1;  
 
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) {
 	struct _flowinfo * flow; 
@@ -488,8 +489,17 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 	 * got so far and try again later. otherwise, process 
 		 * the flow records left in the heap. 
 		 */
-		if (info->flags & FLOWTOOLS_STREAM) 
+		if (info->flags & FLOWTOOLS_STREAM) { 
+		    /* we don't have files to process anymore. write a 
+		     * message and sleep for 10 mins. 
+		     */
+		    assert(src->fd == -1); 
+		    logmsg(LOGWARN, "sniffing from %s\n", src->device);
+		    logmsg(0, "   no more files to read, but want more\n");
+		    logmsg(0, "   going to sleed for 10minutes\n");
+		    src->polling = TIME2TS(600, 0);
 		    return npkts;	
+		} 
 		break;
 	    } 
 	}

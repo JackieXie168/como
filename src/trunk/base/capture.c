@@ -532,8 +532,8 @@ capture_mainloop(int export_fd)
     pkt_t pkts[PKT_BUFFER]; 	/* packet buffer */
     int sniffers_left;		/* how many sniffers are left ? */
     int sent2export;		/* message sent to export */
+    timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     source_t *src;
-    timestamp_t last_ts; 	/* timestamp of the most recent packet seen */
 
     /* we only get a socketpair to the export process */
 
@@ -616,7 +616,7 @@ capture_mainloop(int export_fd)
     for (;;) {
 	fd_set r;
 	int i, maxfd = 0;
-	struct timeval t = {POLL_WAIT / 1000000, POLL_WAIT % 1000000};
+	struct timeval tout = {0xffffffff, 0xffffffff}; 
 	struct timeval *pto = NULL;
 
         errno = 0;
@@ -641,7 +641,11 @@ capture_mainloop(int export_fd)
 	     * the select() instead of adding the file descriptor to FD_SET 
 	     */  
 	    if (src->fd < 0 || (src->flags & SNIFF_POLL)) {
-		pto = &t; 
+		if (src->polling < TIME2TS(tout.tv_sec, tout.tv_usec)) {
+		    tout.tv_sec = TS2SEC(src->polling); 
+		    tout.tv_usec = TS2SEC(src->polling); 
+		} 
+		pto = &tout; 
 		continue;	/* do not select() on this one */
 	    }
 
@@ -723,9 +727,20 @@ capture_mainloop(int export_fd)
 	 * select() and the ones that don't)
          */
 	for (src = map.sources; src; src = src->next) {
+	    struct timeval now; 
             int * which;
             int idx;
 	    int count = 0;
+
+	    /* 
+	     * compute the delay of this stream compared to the actual 
+	     * time. this is useful for anyone that wants to query the 
+	     * system for the most recent data without querying about the
+	     * past. 
+	     */
+	    gettimeofday(&now, NULL); 
+	    map.stats->delay = 	
+		TS2SEC(TIME2TS(now.tv_sec, now.tv_usec) - last_ts); 
 
 	    if (src->flags & SNIFF_INACTIVE)
 		continue;	/* inactive device */

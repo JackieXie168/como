@@ -97,6 +97,7 @@ sniffer_start(source_t * src)
 
     src->fd = fd; 
     src->flags = SNIFF_FILE; 
+    src->polling = 0; 
     src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
     return 0;
 }
