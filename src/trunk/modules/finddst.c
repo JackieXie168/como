@@ -142,7 +142,7 @@ action(void * fh, timestamp_t t, __unused int count)
 
     if (fh == NULL) {
 	if (t >= last_ts + TIME2TS(meas_ivl, 0)) {
-	    last_ts = t - t % TIME2TS(meas_ivl, 0); 
+	    last_ts = t - (t % TIME2TS(meas_ivl, 0)); 
 	    return ACT_GO; 
 	} 
 	return ACT_STOP; 

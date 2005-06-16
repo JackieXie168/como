@@ -72,7 +72,7 @@ update(pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh);
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts) - TS2SEC(pkt->ts) % EXPORT_IVL;
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % EXPORT_IVL);
         x->dst_ip = IP(dst_ip);
         x->bytes = 0;
         x->pkts = 0;
@@ -132,10 +132,11 @@ action(void *efh, timestamp_t current_time, int count)
 	 * check if it is time to export the table. 
 	 * if not stop. 
 	 */
-	if (TS2SEC(current_time) - last_export < EXPORT_IVL) 
+	uint32_t ivl = TS2SEC(current_time) - TS2SEC(current_time) % EXPORT_IVL;
+	if (ivl - last_export < EXPORT_IVL) 
 	    return ACT_STOP;		/* too early */
 
-	last_export = TS2SEC(current_time) - TS2SEC(current_time) % EXPORT_IVL; 
+	last_export = ivl; 
 	return ACT_GO; 		/* dump the records */
     }
 
@@ -197,7 +198,7 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (EFLOWDESC *) buf; 
     ts = (time_t) ntohl(x->ts);
-    addr.s_addr = N32(x->dst_ip) & 0x000fffff;
+    addr.s_addr = N32(x->dst_ip);
     *len = sprintf(s, PRETTYFMT, asctime(localtime(&ts)), inet_ntoa(addr), 
 	       NTOHLL(x->bytes), NTOHLL(x->pkts));
     return s;
