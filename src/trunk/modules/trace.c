@@ -62,10 +62,10 @@ FLOWDESC {
 
 
 /*
- * bytes to capture in each packet. this excludes the layer2 header 
- * that is always as well as the CoMo header (with timestamp, etc.) 
+ * bytes to capture in each packet. this includes layer2 header 
+ * but does not include the CoMo header.  
  */
-static int snaplen = 40; 
+static int snaplen = 56; 
 
 /* 
  * description of the output trace for sniffer-como
@@ -97,9 +97,12 @@ static int
 update(pkt_t *pkt, void *fh, __unused int isnew)
 {
     FLOWDESC *x = F(fh);
+    int len; 
 
+    len = (pkt->caplen > snaplen)? snaplen : pkt->caplen; 
     memcpy(x->buf, pkt, sizeof(pkt_t)); 
-    memcpy(x->buf + sizeof(pkt_t), pkt->payload, pkt->caplen); 
+    ((pkt_t *) x->buf)->caplen = len;
+    memcpy(x->buf + sizeof(pkt_t), pkt->payload, len); 
 
     return 1;		/* records are always full */
 }
