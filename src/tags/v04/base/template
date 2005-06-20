@@ -1,0 +1,114 @@
+/*
+ * Copyright (c) 2004 Intel Corporation
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ * $Id$
+ */
+
+/*
+ * Template for a generic filter to be compiled on the fly with
+
+        cc -O -I. -I.. -I- -nostdlib -shared -Wl,-x,-S \
+                -o /tmp/filterXXX.so -include /tmp/filterXXX \
+                template.c
+ */
+
+#include <sys/types.h>
+#include <netinet/in.h> /* some macro definitions */
+
+#include "stdpkt.h"
+
+
+/*
+ * some macros that could be useful to implement the filters
+ */
+
+#define not             !
+#define and             &&
+#define or              ||
+#define ALL             1
+
+#define COMOPKT(field)      (((pkt_t *) pkt)->field)
+#define isIP		    (COMOPKT(l3type) == ETHERTYPE_IP) 
+#define PROTO(x)            (IP(proto) == IPPROTO_ ## x)
+#define proto(x)            PROTO(x)
+#define DIR(x)              (COMOPKT(dir) == (x))
+#define IFACE(x)            DIR(x)
+#define CLASS_A(sd)         IN_CLASSA(H32(IP(sd ## _ip)))
+#define CLASS_B(sd)         IN_CLASSB(H32(IP(sd ## _ip)))
+#define CLASS_C(sd)         IN_CLASSC(H32(IP(sd ## _ip)))
+#define CLASS_D(sd)         IN_CLASSD(H32(IP(sd ## _ip)))
+#define MULTICAST(sd)       CLASS_D(sd)
+#define EXPERIMENTAL(sd)    IN_EXPERIMENTAL(H32(IP(sd ## _ip)))
+#define BADCLASS(sd)        IN_BADCLASS(H32(IP(sd ## _ip)))
+#define NET(sd, n, l)       net(#n, l, N32(IP(sd ## _ip)))
+
+#define MASK 0xFFFFFFFF
+
+
+int
+net (char *net, uint plen, uint32_t addr)
+{
+    struct in_addr innet;
+
+    if(inet_aton(net, &innet))
+        return (innet.s_addr == (addr & ntohl(MASK << (32-plen))));
+    else
+        return 0;
+}
+
+
+int *
+filter(pkt_t *pkt, int n_packets, int n_out)
+{
+    static int *which;
+    static uint size;
+    uint i = n_packets*n_out*sizeof(int); /* size of the output bitmap */
+    int *outs[MODULE_COUNT];
+
+    if (which == NULL) {
+        size = i;
+        which = (int *)malloc(i);
+    } else if (size < i) {
+        size = i;
+        which = (int *)realloc(which, i);
+    }
+
+    bzero(which, i);
+    for (i = 0; i < n_out; i++)
+        outs[i] = which + n_packets*i;
+
+    for (i=0; i < n_packets; i++, pkt++) { 
+
+        /*
+         * here we expect lines of the form
+         *  outs[0][i] = ...filter 0 ... ;
+         *  outs[1][i] = ...filter 1 ... ;
+         */
+
+        USERFILTER
+    }
+
+    return which;
+}

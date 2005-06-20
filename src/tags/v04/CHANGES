@@ -1,0 +1,174 @@
+$Id$
+
+--------------------------------
+---- CoMo v0.4 (Jun 20th, 2005)
+--
+
+. Packet data structure (pkt_t)
+
+  The new pkt_t data structure now contains a pointer to the 
+  full packet payload and a set of pointers to reach layer3 and 
+  layer4 headers. This allows for variable lenght headers at 
+  layer 2 and 3.
+
+. Sniffers
+
+  The code of all sniffers has been simplified thanks to the new
+  pkt_t data structure. We have removed the need of a memory copy 
+  in the DAG and SK98 sniffers as well as in all sniffers that read 
+  a trace from file. 
+
+  We now support multiple instances of any sniffers although CAPTURE
+  does not attempt to reorder packets from multiple sniffers if they
+  are not time-ordered, i.e. if multiple sniffers are defined packets 
+  can have non-monotonically increasing timestamps. 
+
+. Stargate
+
+  Added configuration variable to compile the code for the Stargate
+  platform (see platformx.sourceforge.net). It needs arm-linux-gcc 3.2.2. 
+  Porting to the Stargate required to link libpcap.so dynamically. 
+
+. Adaptive polling time 
+
+  All sniffers that do not support select() can now change the polling 
+  interval to deal with burst of packets or when waiting for new data.
+
+. Support for link layer protocols
+
+  New link layer protocols fully support: VLAN tags, ISL. IEEE 802.11 
+  is understood but the support is still very basic. We have defined 
+  COMOTYPE_XXX constants to specify the Layer2 protocol, e.g. COMOTYPE_ETH, 
+  COMOTYPE_VLAN, etc.
+
+. Sniffer flow-tools 
+
+  This sniffer now allows: i) to scale the number of packets and bytes according
+  to the sampling rate; ii) to filter flow records depending on the router 
+  output interface; iii) deal with new flowtools file received from the 
+  collector. 
+
+. Status information 
+
+  It is possible to define some status information (node name, location, etc)
+  in the configuration file. This information is accessed with 
+  http://localhost:44444/?status
+
+. Behavior of print() callback 
+
+  The print callback is now called by query-ondemand() once before the records
+  are processed and once after all records are processed. This allows 
+  the modules to add an header and footer to the output stream.
+
+. Modules
+
+  Counter, Utilization, Application now support gnuplot scripts using the 
+  new print() callback behavior. The scripts only work with gnuplot v4 that
+  supports receiving data from standard input and require some additional 
+  processing. To receive a postscript image out of the counter module one
+  can do: 
+
+    fetch -o - "http://localhost:44444/?module=counter&format=gnuplot" |   \
+    awk '{v[i++] = $0; print $0;} /^e/ {for (j=1;j<i;j++) print v[j];}' |   \
+    gnuplot > tmp.eps
+ 
+
+--------------------------------
+---- CoMo v0.3 (May 30th, 2005)
+--
+
+. Sniffers 
+
+  Consistent use of pkt_t in the sniffers implemented so far. 
+  Added a new flag (SNIFF_FILE) to indicate that the sniffer is
+  operating from a trace file. This allows CAPTURE to slow down (i.e., 
+  stop reading packets) when the memory is scarce. 
+
+. Implemented sniffer-flowtools
+
+  CoMo can now read a directory that contains flow-tools files. 
+  The sniffer supports only NetFlow v5 and regenerates a packet stream
+  that "resembles" the original stream. 
+
+. HTTP-like query interface 
+
+  This allows to query a como machine from any browser with something 
+  like: http://<hostname>:44444?module=counter&format=gnuplot&start...
+  We also use the HTTP error codes to send error messages or other 
+  information. 
+
+. Full packet capture 
+
+  CAPTURE deals with sniffers that provide full packet payloads. 
+
+. Snort module 
+
+  Understand Snort rules' syntax and runs them on the packet stream 
+  within CoMo. 
+
+. Implemented sniffer-sk98
+
+  Support Syskonnect cards. It runs only under Linux and requires a 
+  dedicated driver that can be found at 
+  http://www.cl.cam.ac.uk/Research/SRG/netos/nprobe/downloads/sk98lin.tar.bz2
+
+. Module data re-use
+
+  A new callback (replay()) is now defined that allows a module to generate
+  a packet stream from its own data base.
+
+. Implemented sniffer-como
+
+  A CoMo system can now receive a packet stream from another CoMo system. 
+  The sniffer goes through the usual query interface and requests one 
+  module to generate a packet stream from its own database. 
+
+. Command line interface
+
+  It is possible to run CoMo from the command link in the absence of a 
+  configuration file. 
+
+. Support for Cisco HDLC and Cisco ISL
+
+  CoMo can monitor links using Cisco HDLC and Cisco ISL (ISL is only 
+  supported for Endace DAG cards and the information is discarded). 
+  
+. Improved user interface
+
+  The use interface now prints the amount of shared memory used, the 
+  number of packets processed and the active modules. 
+
+. Removed query process. 
+
+  SUPERVISOR is now in charge of receiving queries and to fork a 
+  query-ondemand process for each incoming query. 
+
+. Configurable CAPTURE flush intervals
+
+  Each module can now configure the min-flush and max-flush intervals 
+  that indicate how often (or how rarely) CAPTURE should flush the module
+  state and send it to EXPORT. 
+
+  CAPTURE will choose any value between min-flush and max-flush according 
+  to its needs (right now just memory).
+
+. Speeding up STORAGE operations
+
+  Reduced the amount of coordination between storage-client and storage-server
+  to speed up disk access. Storage-server is not informed of read operations 
+  that do not require a new mmap operation. The minimum size of an mmap is 
+  also defined within storage and has no relationship with the block size 
+  required by the client process. 
+  
+. Cleaned up modules' code
+
+  The FLOWDESC now contains only information that the module can modify. 
+  The rec_t structure used to link it to the hash tables is not visible 
+  anymore. 
+
+. Modified behavior of print() to allow writing header and footer
+
+  The print() callback gets called once before the records and after the
+  all records are processed. This allows a module to add a header or a 
+  footer to the print out. Useful to embed data in other scripts (e.g., 
+  gnuplot, html, etc.). 
