@@ -39,6 +39,7 @@
 #include "como.h"
 #include "sniffers.h"
 #include "sk98_timers.h"
+#include "sk98_uspace_if.h"
 
 /* 
  * SNIFFER  ---    SysKonnect card SK98
@@ -58,53 +59,18 @@ struct packet_data_area {
 };
 
 
-/* 
- * Rings with packet tokens. Modified by kernel and user 
- */
-#define RING_SIZE 65534
-struct map_area_header {
-    /* Stuff mostly written by userspace */
-    unsigned k2u_cons;
-    unsigned u2k_prod;
-    unsigned u2k_tokens[RING_SIZE];
-
-    /* Stuff mostly written by kernel */
-    unsigned u2k_cons;
-    unsigned k2u_prod;
-    struct {
-	unsigned token;
-	unsigned tstamp;
-	unsigned short len;
-	unsigned short interface;
-    } k2u_pipe[RING_SIZE];
-
-    unsigned drop_counter;
-};
-
 #define mb() asm volatile("lock; addl $0, (%%esp)" ::: "memory")
-
-
-/* 
- * IOCTL structure used to pass info to the driver
- */
-struct sk98_ioctl_map {
-    void *start_addr;
-    unsigned long len;
-    unsigned offset;
-};
-#define SK98_IOCTL_MAP 1
-
 
 /* 
  * Sniffer state variables for SK98 card (include packets, tokens
  * and time-synchronization information).  
  */
 struct _snifferinfo { 
-    struct map_area_header * m;	
+    struct sk98_map_area_header * m;	
     struct packet_data_area * packet_pool;	
     unsigned retimer_size;		
     clock_retimer_t ** clock_retimers;	
-    int tokens[RING_SIZE];
+    int tokens[SK98_RING_SIZE];
     int no_tokens; 
 };
 
@@ -116,12 +82,12 @@ struct _snifferinfo {
  * 
  */
 static void
-discard_packets(struct map_area_header * m)
+discard_packets(struct sk98_map_area_header * m)
 {
     /* Return packets to the OS without examining them */
     while (m->k2u_prod > m->k2u_cons) {
-	m->u2k_tokens[m->u2k_prod % RING_SIZE] = 
-		m->k2u_pipe[m->k2u_cons % RING_SIZE].token;
+	m->u2k_tokens[m->u2k_prod % SK98_RING_SIZE] = 
+		m->k2u_pipe[m->k2u_cons % SK98_RING_SIZE].token;
 	mb();
 	m->u2k_prod++;
 	m->k2u_cons++;
@@ -139,7 +105,7 @@ discard_packets(struct map_area_header * m)
 void 
 calibrate(struct _snifferinfo * info)
 {
-    struct map_area_header * m = info->m; 
+    struct sk98_map_area_header * m = info->m; 
     clock_retimer_t ** cr = info->clock_retimers;	
     uint size = info->retimer_size; 
     uint num;
@@ -162,7 +128,7 @@ calibrate(struct _snifferinfo * info)
             uint iface;
             int ind;
 
-            ind = s % RING_SIZE;
+            ind = s % SK98_RING_SIZE;
             iface = m->k2u_pipe[ind].interface;
             if (iface == (unsigned short)-1)
                 continue;
@@ -183,7 +149,7 @@ calibrate(struct _snifferinfo * info)
             calibrated += doTimer(cr[iface], m->k2u_pipe[ind].tstamp, 0, &now);
         }
         discard_packets(m);
-    } while (calibrated != num);
+    } while (num != 2);
 
     info->retimer_size = size; 
     info->clock_retimers = cr;
@@ -233,7 +199,7 @@ sniffer_start(source_t * src)
      * mmap the region that contains the ring buffers 
      * with the tokens. 
      */ 
-    info->m = mmap(NULL, sizeof(struct map_area_header), 
+    info->m = mmap(NULL, sizeof(struct sk98_map_area_header), 
 			PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (info->m == MAP_FAILED) {
         logmsg(LOGWARN, "sniffer-sk98: failed to mmap %s: %s\n", 
@@ -245,6 +211,7 @@ sniffer_start(source_t * src)
     /* inform the driver of where the packets should go */
     args.len = 1024 * 1024 * BUFFER_MB;
     args.offset = 0;
+    args.version = SK98_CURRENT_VERSION;
     info->packet_pool = safe_malloc(args.len);
     args.start_addr = info->packet_pool;
     if (ioctl(fd, SK98_IOCTL_MAP, &args) < 0) {
@@ -275,10 +242,10 @@ sniffer_start(source_t * src)
  * gives token back to kernel
  */
 static void
-return_token(struct map_area_header * m, unsigned token)
+return_token(struct sk98_map_area_header * m, unsigned token)
 {
     unsigned ind;
-    ind = m->u2k_prod % RING_SIZE;
+    ind = m->u2k_prod % SK98_RING_SIZE;
     m->u2k_tokens[ind] = token;
     mb();
     m->u2k_prod++;
@@ -313,7 +280,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
         if (info->m->k2u_cons == info->m->k2u_prod) 
 	    break; 	/* no more tokens */
 	mb();
-	ind = info->m->k2u_cons % RING_SIZE;
+	ind = info->m->k2u_cons % SK98_RING_SIZE;
 	token = info->m->k2u_pipe[ind].token;
 
 	iface = info->m->k2u_pipe[ind].interface;
@@ -359,7 +326,7 @@ sniffer_stop (source_t * src)
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr;
 
-    munmap(info->m,  sizeof(struct map_area_header));
+    munmap(info->m,  sizeof(struct sk98_map_area_header));
     free(info->packet_pool); 
     free(src->ptr);
 }
