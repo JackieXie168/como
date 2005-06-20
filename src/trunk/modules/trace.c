@@ -65,7 +65,7 @@ FLOWDESC {
  * bytes to capture in each packet. this includes layer2 header 
  * but does not include the CoMo header.  
  */
-static int snaplen = 56; 
+static unsigned snaplen = 56; 
 
 /* 
  * description of the output trace for sniffer-como
