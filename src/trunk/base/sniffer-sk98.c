@@ -28,6 +28,7 @@
  * $Id$
  */
 
+#include <assert.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -208,7 +209,10 @@ sniffer_start(source_t * src)
 
     /* Start up the timestamps library 
      * 
-     * XXX where do we get 78110207 from? (initial frequency?) 
+     * 78110207 is an initial frequency estimate from the card's data
+     * sheet, in Hz.  There are also some cards in existence which
+     * need about half this; in that case, timer calibration may take
+     * a little longer but it should still work.
      */
     initialise_timestamps(1, 78110207, NULL);
 
@@ -249,10 +253,12 @@ sniffer_start(source_t * src)
     } 
 
     /* we have no packets */
-    info->no_tokens = -1; 
+    info->no_tokens = 0;
 
+    logmsg(LOGSNIFFER, "starting sk98 timer calibration...\n");
     /* do timer calibration */
     calibrate(info); 
+    logmsg(LOGSNIFFER, "done sk98 timer calibration.\n");
 
     src->fd = fd; 
     src->flags = SNIFF_POLL;
@@ -291,10 +297,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     int npkts;                 /* processed pkts */
 
     /* return all tokens of previous round */
-    for (; info->no_tokens >= 0; info->no_tokens--) 
-	return_token(info->m, info->tokens[info->no_tokens]);
+    for (; info->no_tokens > 0; info->no_tokens--)
+	return_token(info->m, info->tokens[info->no_tokens - 1]);
 
-    info->no_tokens = 0; 
+    assert(info->no_tokens == 0);
 
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	uint ind;
