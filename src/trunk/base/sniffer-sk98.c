@@ -61,7 +61,7 @@ struct packet_data_area {
 /* 
  * Rings with packet tokens. Modified by kernel and user 
  */
-#define RING_SIZE 65535
+#define RING_SIZE 65534
 struct map_area_header {
     /* Stuff mostly written by userspace */
     unsigned k2u_cons;
@@ -77,6 +77,8 @@ struct map_area_header {
 	unsigned short len;
 	unsigned short interface;
     } k2u_pipe[RING_SIZE];
+
+    unsigned drop_counter;
 };
 
 #define mb() asm volatile("lock; addl $0, (%%esp)" ::: "memory")
