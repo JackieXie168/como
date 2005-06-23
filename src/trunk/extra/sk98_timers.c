@@ -108,44 +108,8 @@ struct __clock_retimer_st {
 static unsigned long drift_period = 1500000; // min= 48ms, max=0.432s
 static unsigned long nictstamp_freq = 31250000;
 
-static int do_clock_retime;
-static FILE *drift_file;
-
 /*************************************************************************/
 
-
-static void record_tstamp_drift_file(unsigned long nictstamp,
-				     struct timeval *now,
-				     unsigned total_pkts,
-				     unsigned dev_num)
-{
-    unsigned long data[5];
-    if(drift_file) {
-	data[0] = nictstamp;
-	data[1] = (unsigned long) now->tv_sec;
-	data[2] = (unsigned long) now->tv_usec;
-	data[3] = total_pkts;
-	data[4] = dev_num;
-	fwrite(data, sizeof(unsigned long), 5, drift_file);
-	fflush(drift_file);
-    }
-}
-
-static void record_endrec_drift_file(struct timeval *timebase,
-				     unsigned dev_num)
-{
-    unsigned long data[5];
-    if(drift_file)
-    {
-	data[0] = 0;
-	data[1] = (unsigned long) timebase->tv_sec;
-	data[2] = (unsigned long) timebase->tv_usec;
-	data[3] = 0;
-	data[4] = dev_num;
-	fwrite(data, sizeof(unsigned long), 5, drift_file);
-	fflush(drift_file);
-    }
-}
 
 /* Is x >= y, allowing for overflow? */
 #define TSTAMP_GREATEREQ(x, y) \
@@ -219,7 +183,7 @@ clock_retimer_t *new_clock_retimer(const char *name, unsigned dev_num)
    Returns 1 if we just went from an uncalibrated to a calibrated
    state. */
 int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
-	    unsigned total_pkts, struct timeval *now)
+	    struct timeval *now)
 {
     struct timeval est_time; /* Estimated packet arrival time */
     double timed; /* Difference between est_time and time, seconds */
@@ -239,10 +203,7 @@ int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
 
     if (timer->mode == clock_mode_prestart) {
 	reset_timer(timer, nictstamp, now);
-	if(do_clock_retime)
-	    timer->mode = clock_mode_find_intercept;
-	else
-	    timer->mode = clock_mode_constant_output;
+	timer->mode = clock_mode_find_intercept;
 	timer->samples_bad = 0;
 	return 0;
     }
@@ -253,8 +214,6 @@ int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
     }
 
     timer->nextdrift += drift_interval();
-
-    record_tstamp_drift_file(nictstamp, now, total_pkts, timer->dev_num);
 
     if (timer->mode == clock_mode_constant_output) {
 	/* That's all we need to do for now. */
@@ -365,7 +324,6 @@ int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
     secs_to_tv(&timer->time_base,
 	       tv_to_secs(&timer->time_base) - inter);
 
-    record_endrec_drift_file(&timer->time_base, timer->dev_num);
     timer->mode = clock_mode_constant_output;
 
     return 1;
@@ -448,21 +406,8 @@ void getTime(clock_retimer_t *timer, unsigned long nictstamp, struct timeval *tv
     return;
 }
 
-void initialise_timestamps(unsigned do_retime, unsigned long initial_freq,
-			   const char *drift_fname)
+void initialise_timestamps(unsigned long initial_freq)
 {
-    char hostname[256];
-
-    if (!do_retime)
-	abort();
-    do_clock_retime = do_retime;
     if (initial_freq != 0)
 	nictstamp_freq = initial_freq;
-    if (drift_fname != NULL) {
-	drift_file = fopen(drift_fname, "w");
-	if (drift_file == NULL)
-	    err(1, "openning drift file %s", drift_fname);
-
-	gethostname(hostname, 256);
-    }
 }

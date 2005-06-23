@@ -143,13 +143,13 @@ calibrate(struct _snifferinfo * info)
 
             if (cr[iface] == NULL) {
                 logmsg(V_LOGSNIFFER, "Found interface %d\n", iface);
-                cr[iface] = new_clock_retimer("", 0);
+                cr[iface] = new_clock_retimer("", iface);
                 num++;
             }
-            calibrated += doTimer(cr[iface], m->k2u_pipe[ind].tstamp, 0, &now);
+            calibrated += doTimer(cr[iface], m->k2u_pipe[ind].tstamp, &now);
         }
         discard_packets(m);
-    } while (num != 2);
+    } while (num != calibrated);
 
     info->retimer_size = size; 
     info->clock_retimers = cr;
@@ -182,7 +182,7 @@ sniffer_start(source_t * src)
      * need about half this; in that case, timer calibration may take
      * a little longer but it should still work.
      */
-    initialise_timestamps(1, 78110207, NULL);
+    initialise_timestamps(78110207);
 
     /* open the device */
     fd = open(src->device, O_RDWR);
@@ -210,7 +210,7 @@ sniffer_start(source_t * src)
 
     /* inform the driver of where the packets should go */
     args.len = 1024 * 1024 * BUFFER_MB;
-    args.offset = 0;
+    args.offset = 24;
     args.version = SK98_CURRENT_VERSION;
     info->packet_pool = safe_malloc(args.len);
     args.start_addr = info->packet_pool;

@@ -37,10 +37,8 @@ typedef struct __clock_retimer_st clock_retimer_t;
 void getTime(clock_retimer_t *timer, unsigned long nictstamp,
 	     struct timeval *tv, struct timespec *ts);
 int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
-	    unsigned total_pkts, struct timeval *now);
+	    struct timeval *now);
 
 clock_retimer_t *new_clock_retimer(const char *name, unsigned dev_num);
 
-void initialise_timestamps(unsigned do_clock_retime,
-			   unsigned long initial_freq,
-			   const char *drift_fname);
+void initialise_timestamps(unsigned long initial_freq);
