@@ -8,28 +8,6 @@
   <meta name="description" content="CoMolive!">
 </head>
 
-<!-- This javascript is to handle the drop down menu. The content of 
-     the menu can be found in include/menulist.php.inc -->
-<script type="text/javascript">
-<!--
-function showmenu(name, id) {
-    clearmenu(name); 
-    var d = document.getElementById(name + id);
-    if (d) 
-        d.style.display='block';
-}
-
-function clearmenu(name) { 
-  for (var i = 1; i <= 10; i++) {
-    if (document.getElementById('smenu'+i)) {
-      document.getElementById('smenu'+i).style.display='none';
-    } 
-  }
-}
-
-//-->
-</script>
-
 <body onload="javascript:clearmenu('smenu');">
 
 <div id=header>
