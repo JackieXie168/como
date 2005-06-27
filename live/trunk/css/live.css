@@ -1,0 +1,218 @@
+a, a:visited  { 
+    color: #475677; 
+    text-decoration: none; 
+}
+
+a:hover { 
+    text-decoration: underline; 
+}
+
+body {
+    font-family : "lucida sans unicode", verdana, arial, sans-serif;
+    text-align: left;
+    background: white;
+    margin-top: 0;
+    margin-left: 0px;
+    margin-right: 0px;
+}
+
+img { 
+    border: 0; 
+    padding: 0;
+    margin: 0; 
+}
+
+p, ul, li, td, form, input {
+    font-family : "lucida sans unicode", verdana, arial, sans-serif;
+    font-size: 9pt;
+    margin: 0; 
+}
+
+.goback { 
+    position: absolute; 
+    top: 10px; 
+    right: 0px; 
+    font-family : "lucida sans unicode", verdana, arial, sans-serif;
+    font-size: 7pt;
+    z-index: 10;
+} 
+
+#header { 
+    position:absolute;
+    top: 0px; 
+    left: 20px;
+    text-align: left; 
+    padding: 0; 
+    width: 800; 
+    z-index: 5;
+}
+
+#content {
+    position: absolute;
+    width: 800px;
+    height: 450px;
+    top: 100px;
+    left: 20px;
+    border-left: 1px dashed gray;
+    border-right: 1px dashed gray;
+    border-top: 1px dashed gray;
+    z-index: 2;
+}
+
+#footer {
+    position:absolute; 
+    width: 802px; 
+    left: 20px;
+    top: 550px; 
+    background-color: #DDD;
+    border-top: 1px dashed gray;
+    border-bottom: 1px solid gray;
+    font-family : "lucida sans unicode", verdana, arial, sans-serif;
+    font-size: 8pt;
+    text-align: center;
+    z-index: 20;
+}
+
+#controls { 
+    position: absolute; 
+    top: 105px;
+    left: 500px; 
+    width: 200px;
+    z-index: 8;
+}
+
+#intel { 
+    position: absolute; 
+    top: 500px; 
+    left: 640px; 
+}
+
+.graph {
+    position: relative;
+    width: 600px;
+    height: 445px;
+    top: 0px;
+    left: 0px;
+    margin: 0;
+    padding-top: 5px;
+    padding-bottom: 10px;
+    padding-left: 1px;
+    padding-right: 1px;
+    border-right: 1px dashed gray;
+}
+
+.sysinfo { 
+    position: absolute;
+    top: 0px; 
+    left: 601px;
+    width: 187px; 
+    background-color: white;	
+    margin: 2; 
+    padding-left: 5px; 
+    padding-right: 5px;
+    font-size: 9pt;
+}
+
+.title {
+    font-weight: bold;
+    font-size: 9pt;
+    padding-bottom: 3px;
+    color: #475677;
+}
+
+#areatitle {
+    font-weight: bold;
+    font-size: 9pt;
+    padding-top: 12px;
+    padding-bottom: 3px;
+    padding-left: 3px;
+    color: #475677;
+}
+    
+dl, dt, dd, ul, li {
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+#menu {
+    position: absolute; 
+    top: 81; 
+    left: 20;
+    right: 0;
+    width: 800px;
+    padding-top: 0; 
+    font-weight: bold;
+    z-index: 5;
+}
+
+#menu ul { 
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+#menu dl {
+    float: left;
+    width: 7em;
+    padding: 0;
+    list-style-type: none;
+    margin: 0;
+}
+
+#menu dt {
+    cursor: pointer;
+    text-align: left;
+    font-weight: bold;
+    font-size: 9pt;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+#menu dd {
+    border: 1px solid #ddd;
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+#menu li {
+    text-align: left;
+    background: #fff;
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+#menu li a, #menu dt a {
+    color: #000;
+    text-decoration: none;
+    display: block;
+    height: 100%;
+    border: 0 none;
+}
+
+#menu li a:hover {
+    background: #ddd;
+}
+
+#menu dt a:hover {
+    background: #fff;
+}
+
+#menu .inactive { 
+    color: #ddd;
+}
+
+.modules { 
+    width: 10em; 
+}
+
+.help { 
+    position: absolute; 
+    right: 0;
+    width: 8em;
+    text-align: right; 
+}
