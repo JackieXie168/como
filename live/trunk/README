@@ -1,0 +1,34 @@
+$Id$ 
+
+CoMolive! v0.1 
+Copyright (c) 2005 Intel Corporation
+All rights reserved. 
+
+--------------------------
+This is a graphical query interface for CoMo. 
+Still under development. 
+
+. Installation notes
+
+ - Edit the comolive.conf file to set several variables 
+   needed to locate the files. 
+
+ - Edit the node database 
+
+. Node database
+
+ The .list files in the $NODEDB directory contain the lists of
+ nodes grouped according to continent (in the current
+ definition given by list.php).
+
+ Each line in the .list files must contain the following
+ information.
+
+ (first line): <name of region>
+ (second line): <headings of columns>
+ (next lines): <host>; <name>; <location>; <interface>; <data feed>;
+
+ The file list.php looks for files with names like europe.list, 
+ north_america.list, etc. Change the names according to your 
+ system settings. 
+
