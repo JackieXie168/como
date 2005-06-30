@@ -76,26 +76,6 @@ if (!file_exists("$fullname.jpg")) {
 //    system("rm -f $fullname.gp", $return);
 }
 
-/* 
- * finally write the php_env.php file for the flash client 
- * 
- * XXX we have just one environment file. when multiple clients 
- *     are accessing the web page they may incur in conflicts over 
- *     this file and load the wrong images. probably adding session 
- *     information we can solve this problem. it is still not clear 
- *     how to inform the flash client about which file it needs to load. 
- */
-
-$fp = fopen("$rootdir/$RESULTS/php_env.php", 'w');
-$info = "image=$filename.jpg&node=$host&module=$mdl&start=$stime&end=$etime&format=gnuplot";
-if (!is_null($filter))
-    $info .= "&filter=$filter"; 
-else
-    $info .= "&filter=ALL";
-fwrite($fp, "<?php echo \"$info\" ?>"); 
-fclose($fp);
-
-
 ?>
 
 
