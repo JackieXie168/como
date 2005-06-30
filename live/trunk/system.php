@@ -83,7 +83,7 @@ include ("include/vcrbuttons.php");
 	if ($USEFLASH == false) 
  	    print "<img src=$filename.jpg>";
 	else 
-	    include("flash/zoom.html");
+	    include("flash/zooming.php");
     ?> 
 
   </div>
