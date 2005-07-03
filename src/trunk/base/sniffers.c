@@ -48,8 +48,6 @@ static size_t como_l2_len[] = {
     4,          // COMOTYPE_HDLC
     18,         // COMOTYPE_VLAN
     40,         // COMOTYPE_ISL
-    18, 	// COMOTYPE_WLAN		// XXX fix this
-    18		// COMOTYPE_WLANR		// XXX fix this
 };
 
 /* 
@@ -74,7 +72,7 @@ isISL(pkt_t * pkt)
 
 
 /* 
- * -- update_ofs 
+ * -- updatel4 
  * 
  * populates layer3ofs and layer4ofs values of a packet
  */
@@ -88,7 +86,7 @@ updatel4(pkt_t * pkt)
 
 
 /*
- * -- update_l2_info 
+ * -- updateofs 
  * 
  * updates type and offset information in the pkt_t data structure. 
  * requires the type of interface as input. 

@@ -68,6 +68,10 @@ ifdef HAVE_FTLIB_AND_ZLIB
 	LIBS += ft z
 endif
 
+ifdef USE_PRISM2
+	SNIFFERS += prism2
+endif
+
 # add sniffers  
 x=$(SNIFFERS:%=sniffer-%.c)
 SRCS_como += $(x)

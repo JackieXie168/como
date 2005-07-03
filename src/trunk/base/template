@@ -49,12 +49,8 @@
 #define or              ||
 #define ALL             1
 
-#define COMOPKT(field)      (((pkt_t *) pkt)->field)
-#define isIP		    (COMOPKT(l3type) == ETHERTYPE_IP) 
 #define PROTO(x)            (IP(proto) == IPPROTO_ ## x)
 #define proto(x)            PROTO(x)
-#define DIR(x)              (COMOPKT(dir) == (x))
-#define IFACE(x)            DIR(x)
 #define CLASS_A(sd)         IN_CLASSA(H32(IP(sd ## _ip)))
 #define CLASS_B(sd)         IN_CLASSB(H32(IP(sd ## _ip)))
 #define CLASS_C(sd)         IN_CLASSC(H32(IP(sd ## _ip)))

@@ -30,6 +30,7 @@
 #define _COMO_SNIFFERS_H
 
 #include "stdpkt.h"
+#include "stdwlan.h"
 
 /* sniffer-related typedefs */
 typedef struct _source          source_t;

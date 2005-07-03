@@ -197,6 +197,8 @@ struct _como_icmphdr {
  * macros to use for packet header fields. these can be 
  * used in the filters present in the como.conf file. 
  */
+#define COMO(field)		\
+    (((struct _como_pkt *) pkt)->field)
 #define ETH(field)		\
     (((struct _como_eth *) pkt->payload)->field)
 #define VLAN(field)		\
@@ -291,6 +293,13 @@ struct _como_pktdesc {
 #define TIME2TS(s, u)	((((u_int64_t) (s)) << 32) + \
 			((((u_int64_t) (u)) << 32) / 1000000))
 #define TIMEVAL2TS(rec) (TIME2TS((rec)->unix_secs,(rec)->unix_nsecs))
+
+/* 
+ * useful macros 
+ */
+#define isIP            (COMO(l3type) == ETHERTYPE_IP)
+#define isTCP           (IP(proto) == IPPROTO_TCP)
+#define isUDP           (IP(proto) == IPPROTO_UDP)
 
 
 #endif /* _COMO_STDPKT_H */

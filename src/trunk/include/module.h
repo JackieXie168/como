@@ -31,6 +31,10 @@
 
 #include <string.h>		/* memcpy */
 
+#include "stdpkt.h"
+#include "stdwlan.h"
+#include "comotypes.h"
+
 /*
  * Some useful macros to write modules
  */
