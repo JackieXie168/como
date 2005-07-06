@@ -101,12 +101,13 @@ struct __clock_retimer_st {
 				  final answer, but we can use them to
 				  make initial estimates for the next
 				  phase. */
+    unsigned long tstamp_freq;
 };
 
 
 
 static unsigned long drift_period = 1500000; // min= 48ms, max=0.432s
-static unsigned long nictstamp_freq = 31250000;
+static unsigned long def_nictstamp_freq = 312500000;
 
 /*************************************************************************/
 
@@ -173,6 +174,7 @@ clock_retimer_t *new_clock_retimer(const char *name, unsigned dev_num)
 	err(1, "allocating timer recalibration structure");
     work->name = strdup(name);
     work->dev_num = dev_num;
+    work->tstamp_freq = def_nictstamp_freq;
     return work;
 }
 
@@ -208,17 +210,17 @@ int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
 	return 0;
     }
 
+    if (timer->mode == clock_mode_constant_output) {
+	/* That's all we need to do for now. */
+	return 0;
+    }
+
     if (!TSTAMP_GREATEREQ(nictstamp, timer->nextdrift)) {
 	/* It's too early to do the next phase. */
 	return 0;
     }
 
     timer->nextdrift += drift_interval();
-
-    if (timer->mode == clock_mode_constant_output) {
-	/* That's all we need to do for now. */
-	return 0;
-    }
 
     getTime(timer, nictstamp, &est_time, NULL);
 
@@ -266,7 +268,6 @@ int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
 	return 0;
     }
 
-
     /* Interesting times:
 
        -- We start a calibration run, system clock (A)
@@ -306,11 +307,11 @@ int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
     s2_r = s_yy - (grad * grad * s_xx) / (timer->samples - 2);
     uncerc2 = s2_r * (1 + 1.0 / timer->samples + m_x * m_x / s_xx);
 
-    logmsg(LOGCAPTURE, "Interface %d: timer uncerc %e, grad %e.\n",
-	   timer->dev_num, sqrt(uncerc2), grad);
-
     /* Guess the nictstamp frequency from the data we've collected. */
-    nictstamp_freq = ((1.0 + grad) * (double) nictstamp_freq)+0.5;
+    timer->tstamp_freq = ((1.0 + grad) * (double) timer->tstamp_freq)+0.5;
+
+    logmsg(LOGSNIFFER, "Interface %d: timer uncerc %e, grad %e, freq %d.\n",
+	   timer->dev_num, sqrt(uncerc2), grad, timer->tstamp_freq);
 
     if (grad > 1e-6 || grad < -1e-6 || timer->samples_bad) {
 	/* We don't trust the calculated intercept if we've had to
@@ -326,6 +327,8 @@ int doTimer(clock_retimer_t *timer, unsigned long nictstamp,
 
     timer->mode = clock_mode_constant_output;
 
+    logmsg(LOGSNIFFER, "Interface %d: frequency estimate %d.\n",
+	   timer->dev_num, timer->tstamp_freq);
     return 1;
 }
 
@@ -355,9 +358,9 @@ void getTime(clock_retimer_t *timer, unsigned long nictstamp, struct timeval *tv
        that to be safe, so we have to fart about with fixed point
        arithmetic, like so. */
     tics = timer->tic_cur - timer->tic_base;
-    t.tv_sec = tics / nictstamp_freq;
-    t.tv_nsec = (1000000000ull * (tics % nictstamp_freq)) /
-	nictstamp_freq;
+    t.tv_sec = tics / timer->tstamp_freq;
+    t.tv_nsec = (1000000000ull * (tics % timer->tstamp_freq)) /
+	timer->tstamp_freq;
     assert(t.tv_nsec >= 0);
     assert(t.tv_nsec < 1000000000);
 
@@ -409,5 +412,5 @@ void getTime(clock_retimer_t *timer, unsigned long nictstamp, struct timeval *tv
 void initialise_timestamps(unsigned long initial_freq)
 {
     if (initial_freq != 0)
-	nictstamp_freq = initial_freq;
+	def_nictstamp_freq = initial_freq;
 }
