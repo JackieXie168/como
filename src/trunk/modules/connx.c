@@ -62,8 +62,16 @@ FLOWDESC {
 static uint32_t
 hash(pkt_t *pkt)
 {
-    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^
-             (N16(TCP(src_port)) << 3) ^ (N16(TCP(dst_port)) << 3));
+    if (pkt->l3type == ETH_P_IP) {
+	if (pkt->l4type == IPPROTO_TCP || pkt->l4type == IPPROTO_UDP)
+	    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^
+		    (N16(TCPUDP(src_port)) << 3) ^
+		    (N16(TCPUDP(dst_port)) << 3));
+	else
+	    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)));
+    } else {
+	return 0;
+    }
 }
 
 static int
@@ -72,10 +80,16 @@ match(pkt_t *pkt, void *fh)
     FLOWDESC *x = F(fh);
     uint16_t sport = 0, dport = 0; 
 
+    if (pkt->l3type != ETH_P_IP) {
+	if (x->proto == 0)
+	    return 1;
+	else
+	    return 0;
+    }
     if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) {
-	sport = N16(TCP(src_port));
-	dport = N16(TCP(dst_port));
-    } 
+	sport = N16(TCPUDP(src_port));
+	dport = N16(TCPUDP(dst_port));
+    }
 
     return (
          N32(IP(src_ip)) == N32(x->src_ip) &&
@@ -91,25 +105,34 @@ update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
-    if (isnew) {
-        x->src_ip = IP(src_ip);
-        x->dst_ip = IP(dst_ip);
-	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) {
-	    x->src_port = TCP(src_port);
-	    x->dst_port = TCP(dst_port);
- 	} else {
-	    N16(x->src_port) = 0; 
-	    N16(x->dst_port) = 0; 
-	} 
-        x->proto = IP(proto);
-        x->first = pkt->ts;
-	x->bytes = 0;
-	x->pkts = 0;
-    }
+    if (pkt->l3type == ETH_P_IP) {
+	if (isnew) {
+	    x->first = pkt->ts;
+	}
+	x->last = pkt->ts;
+	x->bytes += pkt->len;
+	x->pkts++;
+    } else {
+	if (isnew) {
+	    x->src_ip = IP(src_ip);
+	    x->dst_ip = IP(dst_ip);
+	    if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) {
+		x->src_port = TCPUDP(src_port);
+		x->dst_port = TCPUDP(dst_port);
+	    } else {
+		N16(x->src_port) = 0; 
+		N16(x->dst_port) = 0; 
+	    } 
+	    x->proto = IP(proto);
+	    x->first = pkt->ts;
+	    x->bytes = 0;
+	    x->pkts = 0;
+	}
 
-    x->last = pkt->ts;
-    x->bytes += H16(IP(len));
-    x->pkts++;
+	x->last = pkt->ts;
+	x->bytes += H16(IP(len));
+	x->pkts++;
+    }
 
     return 0;
 }

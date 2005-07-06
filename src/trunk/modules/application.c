@@ -112,6 +112,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 {
     pkt_t * pkt; 
     int i;
+    struct _como_iphdr *iph;
 
     memset(port2app, UNKNOWN, sizeof(port2app));
 
@@ -233,8 +234,9 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     pkt->layer3ofs = 0; 
     pkt->layer4ofs = htons(sizeof(struct _como_iphdr));
     pkt->payload = template + sizeof(pkt_t); 
-    IP(vhl) = 0x45; 
-    IP(proto) = IPPROTO_TCP; 
+    iph = (struct _como_iphdr *)(pkt->payload + pkt->layer3ofs);
+    iph->vhl = 0x45; 
+    iph->proto = IPPROTO_TCP; 
 
     return 0;
 }
@@ -251,10 +253,12 @@ update(pkt_t *pkt, void *fh, int isnew)
         bzero(x->bytes, sizeof(x->bytes)); 
         bzero(x->pkts, sizeof(x->pkts)); 
     }
-    
-    app = port2app[H16(TCP(src_port))] & port2app[H16(TCP(dst_port))];
-    x->bytes[app] += H16(IP(len));
-    x->pkts[app]++;
+
+    if (pkt->l3type == ETH_P_IP && pkt->l4type == IPPROTO_TCP) {
+	app = port2app[H16(TCP(src_port))] & port2app[H16(TCP(dst_port))];
+	x->bytes[app] += H16(IP(len));
+	x->pkts[app]++;
+    }
 
     return 0;
 }
@@ -451,13 +455,14 @@ replay(char *buf, char *out, size_t * len)
 	timestamp_t ts; 
 	int nbytes; 
 	int i; 
-
+	struct _como_iphdr *iph = (struct _como_iphdr *)(pkt->payload +
+							 pkt->layer3ofs);
 	nbytes = 0; 
 	for (i = 0; i < APPLICATIONS; i++) { 
 	    npkts += NTOHLL(app->pkts[i]); 
 	    nbytes += NTOHLL(app->bytes[i]); 
 	} 
-	N16(IP(len)) = htons((uint16_t) (nbytes / npkts)); 
+	N16(iph->len) = htons((uint16_t) (nbytes / npkts)); 
 	ts = TIME2TS(ntohl(app->ts), 0);
 	pkt->ts = HTONLL(ts); 
     }

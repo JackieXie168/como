@@ -199,26 +199,39 @@ struct _como_icmphdr {
  */
 #define COMO(field)		\
     (((struct _como_pkt *) pkt)->field)
-#define ETH(field)		\
-    (((struct _como_eth *) pkt->payload)->field)
-#define VLAN(field)		\
-    (((struct _como_vlan *) pkt->payload)->field)
-#define HDLC(field)		\
-    (((struct _como_hdlc *) pkt->payload)->field)
-#define ISL(field)		\
-    (((struct _como_isl *) pkt->payload)->field)
+#define __EXTRACT_L2_FIELD(type, tag, field) \
+    (pkt->l2type == type ? \
+     (((struct tag *)pkt->payload)->field) : \
+     (abort(), ((struct tag *)NULL)->field))
+#define ETH(field) __EXTRACT_L2_FIELD(COMOTYPE_ETH, _como_eth, field)
+#define VLAN(field) __EXTRACT_L2_FIELD(COMOTYPE_VLAN, _como_vlan, field)
+#define HDLC(field) __EXTRACT_L2_FIELD(COMOTYPE_HDLC, _como_hdlc, field)
+#define ISL(field) __EXTRACT_L2_FIELD(COMOTYPE_ISL, _como_isl, field)
+
 #define IP(field)		\
-    (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field)
+    (pkt->l3type == ETH_P_IP ?  \
+     (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field) : \
+     (abort(),((struct _como_iphdr *)NULL)->field))
 #define TCP(field)		\
-    (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (pkt->l3type == ETH_P_IP && pkt->l4type == IPPROTO_TCP ? \
+     (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
+     (abort(),((struct _como_tcphdr *)NULL)->field))
 #define UDP(field)		\
-    (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (pkt->l3type == ETH_P_IP && pkt->l4type == IPPROTO_UDP ? \
+     (((struct _como_udphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
+     (abort(), ((struct _como_udphdr *)NULL)->field))
+#define TCPUDP(field)           \
+    (pkt->l4type == IPPROTO_TCP ? TCP(field) : UDP(field))
 #define ICMP(field)		\
-    (((strict _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (pkt->l3type == ETH_P_IP && pkt->l4type == IPPROTO_ICMP ? \
+     (((struct _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
+     (abort(), ((struct _como_icmphdr *)NULL)->field))
 
 #define ETHP(pkt, field)	ETH(field)
 #define IPP(pkt, field)		\
-    (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field)
+    (pkt->l3type == ETH_P_IP ?  \
+     (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field) : \
+     (abort(), ((struct _como_iphdr *)NULL)->field))
 
 /*
  * struct _como_pkt (pkt_t) is the structure describing a packet
@@ -237,8 +250,11 @@ struct _como_pkt {
     uint64_t ts;		/* timestamp */
     uint32_t len;		/* length on the wire */
     uint32_t caplen;		/* capture length */
-    uint16_t l2type; 		/* layer2 type */
+    uint32_t l2type; 		/* layer2 type */
     uint16_t l3type; 		/* layer3 type using ethernet codes */
+    uint16_t l4type;            /* layer4 type using whatever codes
+				   are appropriate for the layer2 in
+				   use */
     uint16_t layer3ofs;		/* offset where layer3 header starts */
     uint16_t layer4ofs; 	/* offset where layer4 header starts */
     char * payload; 		/* pointer to packet */ 
@@ -255,7 +271,6 @@ struct _como_pkt {
 #define COMOTYPE_ISL	0x0004	/* Cisco ISL */
 #define COMOTYPE_WLAN	0x0005  /* IEEE 802.11 */
 #define COMOTYPE_WLANR  0x0006  /* IEEE 802.11 w/radio information */
-
 
 /*
  * pktdesc_t describes both what a module is going to read or what a

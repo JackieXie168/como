@@ -67,6 +67,12 @@ match(pkt_t *pkt, void *fh)
 }
 
 static int
+check(pkt_t *pkt)
+{
+    return pkt->l3type == ETH_P_IP;
+}
+
+static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
@@ -211,7 +217,7 @@ callbacks_t callbacks = {
     indesc: NULL, 
     outdesc: NULL, 
     init: NULL,
-    check: NULL,
+    check: check,
     hash: hash,
     match: match,
     update: update,

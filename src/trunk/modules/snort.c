@@ -135,7 +135,10 @@ init(__unused void *mem, __unused size_t msize, char **args)
 unsigned int 
 check_proto(ruleinfo_t *i, pkt_t *pkt)
 {
-    return (i->proto == IP(proto));
+    if (pkt->l3type == ETH_P_IP)
+	return (i->proto == IP(proto));
+    else
+	return 0;
 }
 
 /**
@@ -149,8 +152,8 @@ unsigned int
 check_tcp_src_port(ruleinfo_t *i, pkt_t *pkt)
 {
     unsigned int r = 0;
-    r = ( i->src_ports.lowport <= H16(TCP(src_port)) &&
-          i->src_ports.highport >= H16(TCP(src_port))    );
+    r = ( i->src_ports.lowport <= H16(TCPUDP(src_port)) &&
+          i->src_ports.highport >= H16(TCPUDP(src_port))    );
     if (i->src_ports.negation) r ^= 1;
     return r;
 }
@@ -473,11 +476,12 @@ create_alert_str(struct timeval *t, pkt_t *pkt, int rule, char *s)
     char proto[5];
     char *timestr;
     
-    timestr = ts_print(t);
-    snprintf(srcip, IP_ADDR_LEN + 1, "%s", IP_ADDR(IP(src_ip)));
-    snprintf(dstip, IP_ADDR_LEN + 1, "%s", IP_ADDR(IP(dst_ip)));
+    if (pkt->l3type == ETH_P_IP) {
+	timestr = ts_print(t);
+	snprintf(srcip, IP_ADDR_LEN + 1, "%s", IP_ADDR(IP(src_ip)));
+	snprintf(dstip, IP_ADDR_LEN + 1, "%s", IP_ADDR(IP(dst_ip)));
     
-    switch (IP(proto)) { 
+	switch (IP(proto)) { 
         case IPPROTO_TCP:
             sprintf(proto, "tcp");
             sprintf(srcport, "%d", H16(TCP(src_port))); 
@@ -503,10 +507,13 @@ create_alert_str(struct timeval *t, pkt_t *pkt, int rule, char *s)
             sprintf(srcport, "N/A");
             sprintf(dstport, "N/A");            
             break;
-    }
-    
-    sprintf(s, "%s [**] rule no. %d [**] [%s] %s:%s -> %s:%s\n",
+	}
+	sprintf(s, "%s [**] rule no. %d [**] [%s] %s:%s -> %s:%s\n",
                 timestr, rule, proto, srcip, srcport, dstip, dstport);
+    } else {
+	sprintf(s, "%s [**] rule no. %d [**] non-ip %x\n",
+		timestr, rule, pkt->l3type);
+    }
 }
     
 

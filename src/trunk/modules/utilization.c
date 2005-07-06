@@ -86,7 +86,7 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->last_watermark = pkt->ts;
     }
 
-    x->bytes += H16(IP(len));
+    x->bytes += pkt->len;
 
     if (pkt->ts - x->last_watermark > WATERMARK_IVL) {
         x->last_watermark = pkt->ts;

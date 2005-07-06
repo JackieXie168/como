@@ -170,23 +170,26 @@ static uint32_t
 hash(pkt_t *pkt)
 {
     uint32_t hashv = 5381;
-    hashv = (hashv << 5) + hashv + H32(IP(src_ip));
-    hashv = (hashv << 5) + hashv + H32(IP(dst_ip));
-    hashv = (hashv << 5)+ hashv + IP(proto);
-    switch (IP(proto)) {
-    case 6:                 /* TCP */
-        hashv = (hashv << 5) + hashv + H16(TCP(src_port));
-        hashv = (hashv << 5) + hashv + H16(TCP(dst_port));
-        break;
-    case 17:                /* UDP */
-        hashv = (hashv << 5) + hashv + H16(UDP(src_port));
-        hashv = (hashv << 5) + hashv + H16(UDP(dst_port));
-        break;
-    case 1:                 /* ICMP */
-        hashv = (hashv << 5) + hashv + ICMP(type);
-        hashv = (hashv << 5) + hashv + ICMP(code);
-        break;
-    }
+    if (pkt->l3type == ETH_P_IP) {
+	hashv = (hashv << 5) + hashv + H32(IP(src_ip));
+	hashv = (hashv << 5) + hashv + H32(IP(dst_ip));
+	hashv = (hashv << 5)+ hashv + IP(proto);
+	switch (IP(proto)) {
+	case IPPROTO_TCP:
+	    hashv = (hashv << 5) + hashv + H16(TCP(src_port));
+	    hashv = (hashv << 5) + hashv + H16(TCP(dst_port));
+	    break;
+	case IPPROTO_UDP:
+	    hashv = (hashv << 5) + hashv + H16(UDP(src_port));
+	    hashv = (hashv << 5) + hashv + H16(UDP(dst_port));
+	    break;
+	case IPPROTO_ICMP:
+	    hashv = (hashv << 5) + hashv + ICMP(type);
+	    hashv = (hashv << 5) + hashv + ICMP(code);
+	    break;
+	}
+    } else
+	hashv = 0;
     return hashv;
 }
 
@@ -199,15 +202,17 @@ match(pkt_t *pkt, rec_t *fh)
 {
     FLOWDESC *xx = F(fh);
     struct fts3rec_v5 *x = &xx->nf5;
-    
-    return H32(IP(src_ip)) == x->srcaddr &&
-        H32(IP(dst_ip)) == x->dstaddr &&
-        IP(proto) == x->prot &&
-        ( (x->prot == 6 && H16(TCP(src_port)) == x->srcport 
-                        && H16(TCP(dst_port)) == x->dstport) ||
-        (x->prot == 17 && H16(UDP(src_port)) == x->srcport
-                        && H16(UDP(dst_port)) == x->dstport) ||
-        (x->prot != 6 && x->prot != 17) );
+
+    if (pkt->l3type == ETH_P_IP)
+	return H32(IP(src_ip)) == x->srcaddr &&
+	    H32(IP(dst_ip)) == x->dstaddr &&
+	    IP(proto) == x->prot &&
+	    ( (x->prot == IPPROTO_UDP || x->prot == IPPROTO_TCP) &&
+	      H16(TCPUDP(src_port)) == x->srcport &&
+	      H16(TCPUDP(dst_port)) == x->dstport) ||
+	    (x->prot != IPPROTO_UDP && x->prot != IPPROTO_TCP);
+    else
+	return x->dstaddr == 0;
 }
 
 static int
@@ -217,21 +222,20 @@ update(pkt_t *pkt, rec_t *fh, int is_new)
     struct fts3rec_v5 *x = &xx->nf5;
     
     if (is_new) {
-        x->srcaddr = H32(IP(src_ip));
-        x->dstaddr = H32(IP(dst_ip));
-        switch (x->prot = IP(proto)) {
-        case 6:
-            x->srcport = H16(TCP(src_port));
-            x->dstport = H16(TCP(dst_port));
-            x->tcp_flags = TCP(flags);
-            break;
-        case 17:
-            x->srcport = H16(UDP(src_port));
-            x->dstport = H16(UDP(dst_port));
-            break;
+	if (pkt->l3type == ETH_P_IP) {
+	    x->srcaddr = H32(IP(src_ip));
+	    x->dstaddr = H32(IP(dst_ip));
+	    switch (x->prot = IP(proto)) {
+	    case IPPROTO_TCP:
+		x->tcp_flags = TCP(flags);
+	    case IPPROTO_UDP:
+		x->srcport = H16(TCPUDP(src_port));
+		x->dstport = H16(TCPUDP(dst_port));
+		break;
+	    }
+	    x->tos = pkt->ih.tos;
         }
-        x->tos = pkt->ih.tos;
-        
+
         x->dPkts = x->dOctets = 0;
         x->First = get_uptime(pkt->ts);
 
@@ -251,12 +255,13 @@ update(pkt_t *pkt, rec_t *fh, int is_new)
     x->unix_nsecs = TS2USEC(pkt->ts);
     x->Last = x->sysUpTime = get_uptime(pkt->ts);
     /*
-     * it is *not* useless to update sysUpTime a(s previously stated here)
+     * it is *not* useless to update sysUpTime (as previously stated here)
      * because it is needed to compute the actual flow start and end time
      */
     
     x->dPkts++;
-    x->dOctets += H16(IP(len));
+    if (pkt->l3type == ETH_P_IP)
+	x->dOctets += H16(IP(len));
     
     return 0;
     /*

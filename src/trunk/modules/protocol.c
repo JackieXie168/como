@@ -52,7 +52,10 @@ FLOWDESC {
 static uint32_t
 hash(pkt_t *pkt)
 {
-    return IP(proto);
+    if (pkt->l3type == ETH_P_IP)
+	return IP(proto);
+    else
+	return 0;
 }
 
 static int
@@ -60,7 +63,10 @@ match(pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
 
-    return (x->proto == (uint32_t) IP(proto));
+    if (pkt->l3type == ETH_P_IP)
+	return (x->proto == (uint32_t) IP(proto));
+    else
+	return x->proto == 0;
 }
 
 static int
@@ -70,12 +76,18 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts);
-        x->proto = (uint32_t) IP(proto);
+	if (pkt->l3type == ETH_P_IP)
+	    x->proto = (uint32_t) IP(proto);
+	else
+	    x->proto = 0;
         x->bytes = 0;
         x->pkts = 0;
     }
 
-    x->bytes += H16(IP(len));
+    if (pkt->l3type == ETH_P_IP)
+	x->bytes += H16(IP(len));
+    else
+	x->bytes += pkt->len;
     x->pkts++;
 
     return 0;

@@ -62,8 +62,8 @@ hash(pkt_t *pkt)
 
     sport = dport = 0;
     if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
-	sport = N16(UDP(src_port)); 
-	dport = N16(UDP(dst_port)); 
+	sport = N16(TCPUDP(src_port)); 
+	dport = N16(TCPUDP(dst_port)); 
     } 
 
     return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^ (sport << 3) ^ (dport << 3));
@@ -77,8 +77,8 @@ match(pkt_t *pkt, void *fh)
     
     sport = dport = 0;
     if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
-	sport = N16(UDP(src_port)); 
-	dport = N16(UDP(dst_port)); 
+	sport = N16(TCPUDP(src_port)); 
+	dport = N16(TCPUDP(dst_port)); 
     } 
 
     return (
@@ -87,6 +87,12 @@ match(pkt_t *pkt, void *fh)
          sport == N16(x->src_port) && dport == N16(x->dst_port) &&
          IP(proto) == x->proto
     );
+}
+
+static int
+check(pkt_t *pkt)
+{
+    return pkt->l3type == ETH_P_IP;
 }
 
 static int
@@ -104,8 +110,8 @@ update(pkt_t *pkt, void *fh, int isnew)
 
         N16(x->src_port) = N16(x->dst_port) = 0; 
 	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
-	    x->src_port = UDP(src_port); 
-	    x->dst_port = UDP(dst_port); 
+	    x->src_port = TCPUDP(src_port); 
+	    x->dst_port = TCPUDP(dst_port); 
 	} 
     }
 
@@ -200,7 +206,7 @@ callbacks_t callbacks = {
     NULL,
     NULL,
     NULL,
-    NULL,
+    check,
     hash,
     match,
     update,
