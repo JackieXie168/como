@@ -59,12 +59,12 @@ isISL(pkt_t * pkt)
 {
     const char val[] = {0x01, 0x00, 0x0c, 0x00, 0x00}; 
     int i; 
-
-    if (ISL(da[0]) != 0x01 && ISL(da[0]) != 0x03) 
+    struct _como_isl *islh = (struct _como_isl *)pkt->payload;
+    if (islh->da[0] != 0x01 && islh->da[0] != 0x03) 
 	return 0; 
 
     for (i = 1; i < 5; i++) 
-	if (ISL(da[i]) != val[i])
+	if (islh->da[i] != val[i])
 	    return 0; 
 
     return 1; 
@@ -80,8 +80,10 @@ static __inline__ void
 updatel4(pkt_t * pkt)
 {
     pkt->layer3ofs = pkt->layer4ofs = como_l2_len[pkt->l2type];
-    if (pkt->l3type ==  ETHERTYPE_IP)                                    
-        pkt->layer4ofs += ((IP(vhl) & 0x0f) << 2);          
+    if (pkt->l3type ==  ETHERTYPE_IP) {
+        pkt->layer4ofs += ((IP(vhl) & 0x0f) << 2);
+	pkt->l4type = IP(proto);
+    }
 }
 
 
