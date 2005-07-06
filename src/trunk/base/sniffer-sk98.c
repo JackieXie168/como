@@ -118,6 +118,7 @@ calibrate(struct _snifferinfo * info)
 	struct timeval now;
 	uint s, t;
 
+        discard_packets(m);
         while (m->k2u_cons >= m->k2u_prod)
             mb();
         t = m->k2u_prod;
@@ -148,7 +149,6 @@ calibrate(struct _snifferinfo * info)
             }
             calibrated += doTimer(cr[iface], m->k2u_pipe[ind].tstamp, &now);
         }
-        discard_packets(m);
     } while (num != calibrated);
 
     info->retimer_size = size; 
@@ -182,7 +182,7 @@ sniffer_start(source_t * src)
      * need about half this; in that case, timer calibration may take
      * a little longer but it should still work.
      */
-    initialise_timestamps(78110207);
+    initialise_timestamps(31250000);
 
     /* open the device */
     fd = open(src->device, O_RDWR);
@@ -229,9 +229,11 @@ sniffer_start(source_t * src)
     calibrate(info); 
     logmsg(LOGSNIFFER, "done sk98 timer calibration.\n");
 
+    discard_packets(info->m);
+
     src->fd = fd; 
     src->flags = SNIFF_POLL;
-    src->polling = TIME2TS(0, 1000); 
+    src->polling = TIME2TS(0, 1000);
     return 0;	/* success */
 }
 
@@ -264,13 +266,23 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
     pkt_t * pkt;
     int npkts;                 /* processed pkts */
+    int pending;
+    static int max_pending;
+    int x;
 
     /* return all tokens of previous round */
-    for (; info->no_tokens > 0; info->no_tokens--)
-	return_token(info->m, info->tokens[info->no_tokens - 1]);
+    mb();
+    for (x = 0; x < info->no_tokens; x++)
+	return_token(info->m, info->tokens[x]);
+    info->no_tokens = 0;
 
-    assert(info->no_tokens == 0);
-
+    pending = info->m->k2u_prod - info->m->k2u_cons;
+    if (pending < 0)
+	pending += SK98_RING_SIZE;
+    if (pending > max_pending)
+	max_pending = pending;
+    rlimit_logmsg(1000, LOGSNIFFER, "Current ring fullness %d, max %d, drop %d.\n",
+		  pending, max_pending, info->m->drop_counter);
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	uint ind;
 	uint token;
@@ -280,22 +292,27 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
         if (info->m->k2u_cons == info->m->k2u_prod) 
 	    break; 	/* no more tokens */
 	mb();
+	assert(info->m->k2u_cons < info->m->k2u_prod);
 	ind = info->m->k2u_cons % SK98_RING_SIZE;
 	token = info->m->k2u_pipe[ind].token;
 
 	iface = info->m->k2u_pipe[ind].interface;
 	if (iface == (ushort)-1) {
 	    /* Kernel decided not to use this token.  Return it. */
-	    return_token(info->m, token);
+	    mb();
 	    info->m->k2u_cons++;
+	    mb();
+	    return_token(info->m, token);
 	    return npkts;
 	}
 
 	if (iface >= info->retimer_size || info->clock_retimers[iface] == NULL){
 	    /* Clock calibration was incomplete.  Uh oh. */
 	    logmsg(LOGWARN, "calibration incomplete, returning token\n"); 
-	    return_token(info->m, token);
+	    mb();
 	    info->m->k2u_cons++;
+	    mb();
+	    return_token(info->m, token);
 	    return -1;
 	}
 
@@ -312,7 +329,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
-        updateofs(pkt, COMOTYPE_ETH); 
+        updateofs(pkt, COMOTYPE_ETH);
+	mb();
 	info->m->k2u_cons++;
     }
 
