@@ -68,7 +68,7 @@ typedef struct _sniffer 	sniffer_t;
 
 /* sniffer callbacks */
 typedef int (start_fn)(source_t *src);
-typedef int (next_fn)(source_t *src, pkt_t *pkts, int max_no); 
+typedef int (next_fn)(source_t *src, pkt_t *pkts, int max_no, int *dropnr); 
 typedef void (stop_fn)(source_t *src);
 
 struct _sniffer {

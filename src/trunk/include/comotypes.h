@@ -108,7 +108,7 @@ typedef int (match_fn)(pkt_t *pkt, void *fh);
  * not contemplated).
  * Mandatory.
  */
-typedef int (update_fn)(pkt_t *pkt, void *fh, int is_new);
+typedef int (update_fn)(pkt_t *pkt, void *fh, int is_new, unsigned drop_cntr);
 
 /**
  * ematch_fn() same as match_fn() but now it uses the current capture
@@ -287,6 +287,13 @@ struct _module {
     size_t bsize;		/* block size */
     off_t streamsize;       	/* max bytestream size */
     off_t offset;		/* current offset in the export file */
+
+    unsigned reported_global_drops;    /* How many global drops have
+					  been reported to this
+					  module? */
+    unsigned unreported_local_drops;   /* How many local drops need to
+					  be reported to this
+					  module? */
 };
 
 

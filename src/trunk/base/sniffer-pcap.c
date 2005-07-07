@@ -121,7 +121,7 @@ typedef struct {
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no) 
+sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr) 
 {
     struct _snifferinfo * info; 
     pkt_t *pkt;                 /* CoMo record structure */

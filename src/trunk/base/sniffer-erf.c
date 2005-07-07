@@ -88,7 +88,7 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no)
+sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
 {
     struct _snifferinfo * info; /* sniffer specific information */
     pkt_t *pkt;                 /* packet records */

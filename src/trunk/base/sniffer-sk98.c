@@ -232,8 +232,8 @@ sniffer_start(source_t * src)
     discard_packets(info->m);
 
     src->fd = fd; 
-    src->flags = SNIFF_POLL;
-    src->polling = TIME2TS(0, 1000);
+    src->flags = SNIFF_SELECT;
+    src->polling = 0;
     return 0;	/* success */
 }
 
@@ -261,29 +261,39 @@ return_token(struct sk98_map_area_header * m, unsigned token)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no)
+sniffer_next(source_t * src, pkt_t *out, int max_no, int *drop_counter)
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
     pkt_t * pkt;
     int npkts;                 /* processed pkts */
     int pending;
     static int max_pending;
+    static unsigned last_drop;
     int x;
+    unsigned new_drop;
 
     /* return all tokens of previous round */
     mb();
     for (x = 0; x < info->no_tokens; x++)
-	return_token(info->m, info->tokens[x]);
+	if (info->tokens[x] != -1)
+	    return_token(info->m, info->tokens[x]);
     info->no_tokens = 0;
+
+    npkts = 0;
+    pkt = out;
+    new_drop = info->m->drop_counter;
+    *drop_counter += new_drop - last_drop;
+    last_drop = new_drop;
 
     pending = info->m->k2u_prod - info->m->k2u_cons;
     if (pending < 0)
 	pending += SK98_RING_SIZE;
     if (pending > max_pending)
 	max_pending = pending;
-    rlimit_logmsg(1000, LOGSNIFFER, "Current ring fullness %d, max %d, drop %d.\n",
+    rlimit_logmsg(1000, LOGSNIFFER,
+		  "Current ring fullness %d, max %d, drop %d.\n",
 		  pending, max_pending, info->m->drop_counter);
-    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
+    for (; npkts < max_no; npkts++, pkt++) { 
 	uint ind;
 	uint token;
 	ushort iface;
@@ -303,6 +313,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    info->m->k2u_cons++;
 	    mb();
 	    return_token(info->m, token);
+	    info->no_tokens = npkts;
 	    return npkts;
 	}
 

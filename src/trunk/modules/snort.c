@@ -364,7 +364,7 @@ check(pkt_t *pkt)
 }
 
 static int
-update(pkt_t *pkt, void *fh, int new_rec)
+update(pkt_t *pkt, void *fh, int new_rec, __unused unsigned drop_cntr)
 {
     FLOWDESC *x;
     struct snort_hdr *shdr;

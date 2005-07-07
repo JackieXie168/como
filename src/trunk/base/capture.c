@@ -193,7 +193,7 @@ create_table(module_t * mdl, timestamp_t ts)
     len = sizeof(ctable_t) + mdl->ca_hashsize * sizeof(void *);
     ct = new_mem(NULL, len, "new_flow_table");
     if (ct == NULL)
-	panicx("CAPTURE ran out of memory (allocating table)");
+	return NULL;
 
     ct->size = mdl->ca_hashsize;
     ct->first_full = ct->size;      /* all records are empty */
@@ -361,17 +361,15 @@ freeze_module(void)
  */
 static timestamp_t
 capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which, 
-	tailq_t * expired)
+	    tailq_t * expired, int drop_counter)
 {
     pkt_t *pkt = (pkt_t *) pkt_buf;
-    ctable_t * ct; 
     timestamp_t max_ts; 
     int i;
+    int new_record;
 
-    if (mdl->ca_hashtable == NULL) 
+    if (mdl->ca_hashtable == NULL)
 	mdl->ca_hashtable = create_table(mdl, pkt->ts); 
-
-    ct = mdl->ca_hashtable;
 
     max_ts = 0; 
     for (i = 0; i < no_pkts; i++, pkt++) { 
@@ -389,10 +387,21 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	}
 
         /* flush the current flow table, if needed */
-	ct->ts = pkt->ts; 
-        if (ct->ts > ct->ivl + mdl->max_flush_ivl && ct->records) {  
-            flush_table(mdl, expired);
-	    ct = mdl->ca_hashtable = create_table(mdl, pkt->ts); 
+	if (mdl->ca_hashtable) {
+	    mdl->ca_hashtable->ts = pkt->ts; 
+	    if (mdl->ca_hashtable->ts >
+		mdl->ca_hashtable->ivl + mdl->max_flush_ivl &&
+		mdl->ca_hashtable->records) {  
+		flush_table(mdl, expired);
+		mdl->ca_hashtable = NULL;
+	    }
+	}
+	if (!mdl->ca_hashtable) {
+	    mdl->ca_hashtable = create_table(mdl, pkt->ts); 
+	    if (!mdl->ca_hashtable) {
+		mdl->unreported_local_drops++;
+		continue;
+	    }
 	}
 
 
@@ -416,23 +425,24 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
          * (if hash() is not provided, it defaults to 0)
          */
         hash = mdl->callbacks.hash != NULL ? mdl->callbacks.hash(pkt) : 0;
-        bucket = hash % ct->size;
+        bucket = hash % mdl->ca_hashtable->size;
 
         /*
          * keep track of the first entry in the table that is used.
          * this is useful for the EXPORT process that will have to
          * scan the entire hash table later.
          */
-        if (bucket < ct->first_full)
-            ct->first_full = bucket;
+        if (bucket < mdl->ca_hashtable->first_full)
+            mdl->ca_hashtable->first_full = bucket;
 
         prev = NULL;
-        cand = ct->bucket[bucket];
+        cand = mdl->ca_hashtable->bucket[bucket];
         while (cand) {
             /* if match() is not provided, any record matches */
             if (mdl->callbacks.match == NULL || mdl->callbacks.match(pkt, cand))
                 break;
             prev = cand;
+	    assert(cand->hash == hash);
             cand = cand->next;
         }
 
@@ -447,10 +457,10 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
             */
 
             /* move to the front, if needed */
-            if (ct->bucket[bucket] != cand) {
+            if (mdl->ca_hashtable->bucket[bucket] != cand) {
                 prev->next = cand->next;
-                cand->next = ct->bucket[bucket];
-                ct->bucket[bucket] = cand;
+                cand->next = mdl->ca_hashtable->bucket[bucket];
+                mdl->ca_hashtable->bucket[bucket] = cand;
             }
 
             /* check if this record was flagged as full */
@@ -458,10 +468,12 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
                 rec_t * x;
 
                 /* allocate a new record */
-                x = new_mem(ct->mem, mdl->callbacks.ca_recordsize, "new");
-		if (x == NULL) 
-		    panicx("CAPTURE ran out of memory (allocating record)");
-                x->hash = cand->hash;
+                x = new_mem(mdl->ca_hashtable->mem, mdl->callbacks.ca_recordsize, "new");
+		if (x == NULL) {
+		    mdl->unreported_local_drops++;
+		    continue;
+		}
+                x->hash = hash;
                 x->next = cand->next;
 
                 /* link the current full one to the list of full records */
@@ -469,48 +481,97 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
                 cand->next = x;
 
                 /* we moved cand to the front, now is x */
-                ct->bucket[bucket] = x;
+                mdl->ca_hashtable->bucket[bucket] = x;
 
                 /* done. new empty record ready. */
-                /* NOTE: we do not increment ct->records here because we count
+                /* NOTE: we do not increment mdl->ca_hashtable->records here because we count
 	 	 *       this just as a variable size record. */
 
-                /* now update the new record */
-                x->full = mdl->callbacks.update(pkt, x, 1);
-                continue;
-            }
+		new_record = 1;
+		cand = x;
+	    } else {
+		new_record = 0;
+	    }
+        } else {
+	    /*
+	     * not found!
+	     * create a new record, update table stats
+	     * and link it to the bucket.
+	     */
+	    cand = new_mem(mdl->ca_hashtable->mem,
+			   mdl->callbacks.ca_recordsize + sizeof(rec_t), 
+			   "new");
+	    if (cand == NULL) {
+		mdl->unreported_local_drops++;
+		continue;
+	    }
+	    cand->hash = hash;
+	    cand->next = mdl->ca_hashtable->bucket[bucket];
 
-            /* not full and not new, update the record */
-            cand->full = mdl->callbacks.update(pkt, cand, 0);
-            continue;
-        }
+	    mdl->ca_hashtable->records++;
+	    mdl->ca_hashtable->bucket[bucket] = cand;
+	    if (cand->next == NULL) 
+		mdl->ca_hashtable->live_buckets++;
 
-        /*
-         * not found!
-         * create a new record, update table stats
-         * and link it to the bucket.
-         */
-        cand = new_mem(ct->mem,
-		       mdl->callbacks.ca_recordsize + sizeof(rec_t), 
-		       "new");
-	if (cand == NULL) 
-	    panicx("CAPTURE ran out of memory (allocating record)");
-        cand->hash = hash;
-        cand->next = ct->bucket[bucket];
-
-        ct->records++;
-        ct->bucket[bucket] = cand;
-	if (cand->next == NULL) 
-	    ct->live_buckets++;
-
-        /* now update the new record */
-        cand->full = mdl->callbacks.update(pkt, cand, 1);
+	    new_record = 1;
+	}
+	cand->full = mdl->callbacks.update(pkt, cand, new_record,
+					   mdl->unreported_local_drops +
+					   (unsigned)(drop_counter -
+						      mdl->reported_global_drops));
+	mdl->reported_global_drops = drop_counter;
+	mdl->unreported_local_drops = 0;
     }
 
     return max_ts; 
 }
 
 
+static timestamp_t
+capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter,
+	     tailq_t *expired, int drop_counter)
+{
+    int * which;
+    int idx;
+    timestamp_t last_ts;
+
+    /*
+     * Select which classifiers need to see which packets The filter()
+     * function (see comments in file base/template) returns a
+     * bidimensional array of integer which[cls][pkt] where the first
+     * index indicates the classifier, the second indicates the packet
+     * in the batch.  The element of the array is set if the packet is
+     * of interest for the given classifier, and it is 0 otherwise.
+     */
+    logmsg(V_LOGCAPTURE, 
+	   "calling filter with pkts %p, n_pkts %d, n_out %d\n", 
+	   pkts, count, map.module_count); 
+    which = filter(pkts, count, map.module_count);
+
+    /*
+     * Now browse through the classifiers and perform the capture
+     * actions needed.
+     *
+     * XXX we do it this way just because anyway we have got a
+     * single-threaded process.  will have to change it in the
+     * future...
+     *
+     */
+    for (idx = 0; idx < map.module_count; idx++) {
+	if (map.modules[idx].status != MDL_ACTIVE)
+	    continue;
+
+	assert(map.modules[idx].name != NULL);
+	logmsg(V_LOGCAPTURE,
+	       "sending %d packets to module %s for processing",
+	       count, map.modules[idx].name);
+
+	last_ts = capture_pkt(&map.modules[idx], pkts, count,
+			      which, expired, drop_counter);
+	which += count; /* next module, new list of packets */
+    }
+    return last_ts;
+}
 
 
 /*
@@ -534,7 +595,7 @@ capture_mainloop(int export_fd)
     int sent2export;		/* message sent to export */
     timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     source_t *src;
-
+    int drop_counter;           /* global drop counter */
     
     /* we only get a socketpair to the export process */
 
@@ -729,8 +790,6 @@ capture_mainloop(int export_fd)
          */
 	for (src = map.sources; src; src = src->next) {
 	    struct timeval now; 
-            int * which;
-            int idx;
 	    int count = 0;
 
 	    /* 
@@ -760,7 +819,8 @@ capture_mainloop(int export_fd)
 	    if ((src->flags & SNIFF_SELECT) && !FD_ISSET(src->fd, &r))
 		continue;	/* nothing to read here. */
 
-	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER); 
+	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER,
+					  &drop_counter);
 	    if (count == 0)
 		continue;
 
@@ -774,42 +834,8 @@ capture_mainloop(int export_fd)
 	    logmsg(V_LOGCAPTURE, "received %d packets from sniffer\n", count);
 	    map.stats->pkts += count; 
 
-            /*
-             * Select which classifiers need to see which packets
-	     * The filter() function (see comments in file base/template)
-	     * returns a bidimensional array of integer which[cls][pkt]
-	     * where the first index indicates the classifier, the second
-	     * indicates the packet in the batch.
-	     * The element of the array is set if the packet is of interest
-	     * for the given classifier, and it is 0 otherwise.
-             */
-	    logmsg(V_LOGCAPTURE, 
-		    "calling filter with pkts %p, n_pkts %d, n_out %d\n", 
-		    pkts, count, map.module_count); 
-            which = filter(pkts, count, map.module_count);
-
-            /*
-             * Now browse through the classifiers and
-             * perform the capture actions needed.
-             *
-             * XXX we do it this way just because anyway we
-             *     have got a single-threaded process. 
-	     *     will have to change it in the future... 
-             *
-             */
-            for (idx = 0; idx < map.module_count; idx++) {
-	  	if (map.modules[idx].status != MDL_ACTIVE) 
-		    continue; 
-
-		assert(map.modules[idx].name != NULL); 
-		logmsg(V_LOGCAPTURE, 
-			"sending %d packets to module %s for processing", 
-			count, map.modules[idx].name); 
-
-		last_ts = capture_pkt(&map.modules[idx], pkts, count, 
-					which, &expired);
-                which += count; /* next module, new list of packets */
-            }
+	    last_ts = capture_pkts(pkts, count, filter, &expired,
+				   drop_counter);
         }
 
 	/* 

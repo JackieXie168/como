@@ -110,7 +110,7 @@ sniffer_start(source_t * src)
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no)
+sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *dropcntr)
 {
     struct _snifferinfo * info; 
     pkt_t * pkt; 

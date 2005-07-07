@@ -172,7 +172,7 @@ sniffer_start(source_t *src)
  *                                      plus alignment padding)
  */
 static int
-sniffer_next(source_t *src, pkt_t *out, int max_no) 
+sniffer_next(source_t *src, pkt_t *out, int max_no, __unused int *dropcounter) 
 {
     struct _snifferinfo * info; /* sniffer specific information */
     pkt_t * pkt; 		/* CoMo packet structure */

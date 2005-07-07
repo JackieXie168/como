@@ -216,7 +216,7 @@ match(pkt_t *pkt, rec_t *fh)
 }
 
 static int
-update(pkt_t *pkt, rec_t *fh, int is_new)
+update(pkt_t *pkt, rec_t *fh, int is_new, __unused unsigned drop_cntr)
 {
     FLOWDESC *xx = F(fh);
     struct fts3rec_v5 *x = &xx->nf5;

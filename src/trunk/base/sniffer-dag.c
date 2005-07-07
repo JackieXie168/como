@@ -107,7 +107,7 @@ sniffer_start(source_t * src)
  * return the number of packets read. 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no) 
+sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *dropcntr) 
 {
     struct _snifferinfo * info; /* sniffer information */
     pkt_t *pkt;                 /* CoMo record structure */

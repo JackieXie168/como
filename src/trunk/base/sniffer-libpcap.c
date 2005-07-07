@@ -229,7 +229,7 @@ processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no) 
+sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr)
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
     pkt_t * pkt;
