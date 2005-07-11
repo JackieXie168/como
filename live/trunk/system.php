@@ -102,7 +102,7 @@ include ("include/vcrbuttons.php");
 	  $dmin = floor($delay / 60); 
 	  print "Delay: $dmin minutes<br>"; 
       }
-      if (!is_null($comment)) 
+      if (isset($comment) && (!is_null($comment))) 
 	  print "Notes: $comment<br>";
 ?>
       <br>
