@@ -78,7 +78,9 @@ enum tokens {
     TOK_NAME,   
     TOK_LOCATION,
     TOK_LINKSPEED,
-    TOK_COMMENT
+    TOK_COMMENT,
+    TOK_DROPFILE,
+    TOK_DROPLOGSIZE
 };
 
 
@@ -136,6 +138,8 @@ keyword_t keywords[] = {
     { "location",    TOK_LOCATION,    2, CTX_GLOBAL},
     { "linkspeed",   TOK_LINKSPEED,   2, CTX_GLOBAL},
     { "comment",     TOK_COMMENT,     2, CTX_GLOBAL},
+    { "drop-log",    TOK_DROPFILE,    2, CTX_GLOBAL},
+    { "drop-log-size",TOK_DROPLOGSIZE,2, CTX_GLOBAL},
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -488,6 +492,21 @@ createdir(char * basedir)
     } 
 }
 
+static off_t
+parse_size(const char *arg)
+{
+    char *ptr;
+    off_t res;
+    res = strtol(arg, &ptr, 10);
+    if (ptr[0] == 'G')
+	res *= 1024*1024*1024;
+    else if (ptr[0] == 'M')
+	res *= 1024*1024;
+    else if (ptr[0] == 'K')
+	res *= 1024;
+    return res;
+}
+
 /*
  * -- do_config
  *
@@ -501,7 +520,6 @@ do_config(int argc, char *argv[])
     static int scope = CTX_GLOBAL;      /* scope of current keyword */
     static module_t * mdl = NULL;       /* module currently open */
     keyword_t *t;
-    char * ptr; 
     int i;
 
     /*
@@ -607,13 +625,7 @@ do_config(int argc, char *argv[])
         break;
 
     case TOK_STREAMSIZE: 
-	mdl->streamsize = strtol(argv[1], &ptr, 10); 
-	if (ptr[0] == 'G') 
-	    mdl->streamsize *= 1024*1024*1024; 
-	else if (ptr[0] == 'M') 
-	    mdl->streamsize *= 1024*1024; 
-	else if (ptr[0] == 'K') 
-	    mdl->streamsize *= 1024; 
+	mdl->streamsize = parse_size(argv[1]);
 	break;
 
     case TOK_ARGS:
@@ -652,6 +664,14 @@ do_config(int argc, char *argv[])
     case TOK_COMMENT: 
         safe_dup(&map.comment, argv[1]);
 	break; 
+
+    case TOK_DROPFILE:
+	safe_dup(&map.dropfile, argv[1]);
+	break;
+
+    case TOK_DROPLOGSIZE:
+	map.dropfilesize = parse_size(argv[1]);
+	break;
 
     default:
 	logmsg(LOGWARN, "unknown keyword %s\n", argv[0]);

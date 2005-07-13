@@ -78,8 +78,30 @@ struct _como {
     char * location; 
     char * linkspeed; 
     char * comment; 
+
+    /* Drop recording information */
+    struct drop_ring *dr; /* Allocated by supervisor; in
+			     export<->capture shared memory segment */
+    char *dropfile; /* Filename */
+    off_t dropfilesize; /* Maximum size; start rolling at this
+			 * point */
 };
 
+/* Note that drop timestamps are, by their nature, somewhat
+ * imprecise. */
+/* sizeof(struct drop_record) must be a small power of two! */
+struct drop_record {
+    timestamp_t time;
+    int mdl;
+    unsigned npkts;
+};
+
+#define NR_DROP_RECORDS 256
+struct drop_ring {
+    unsigned prod_ptr;
+    unsigned cons_ptr;
+    struct drop_record data[NR_DROP_RECORDS];
+};
 
 /*---  Prototypes -----*/
 
@@ -193,5 +215,16 @@ void *load_object(char *base_name, char *symbol);
 #define DEFAULT_MINCAPTUREIVL	0 		/* min capture flush interval */
 #define DEFAULT_REPLAY_BUFSIZE	(1024*1024)	/* replay packet trace buffer */
 
+/* The "memory" bit is a gcc-ism saying that any pending writes to
+   memory presently held in registers need to be flushed, and any
+   previously loaded values which have been cached somewhere need to
+   be discarded.  Processor re-ordering is inhibited by any locked
+   instruction which actually touches memory; addl $0,0(%%esp) is the
+   cheapest such instruction which has no side effects and which is
+   guaranteed to be present on all x86 processors from 486 on.
+
+   mfence would also work, but isn't actually that much faster and
+   isn't available on all processors. */
+#define mb() asm volatile ("lock;addl $0,0(%%esp)\n":::"memory")
 
 #endif /* _COMO_COMO_H */

@@ -348,6 +348,24 @@ freeze_module(void)
 
 #endif
 
+static void
+do_drop_record(struct drop_ring *dr,
+	       int mdl,
+	       timestamp_t ts,
+	       unsigned nr_pkts)
+{
+    struct drop_record *d;
+
+    d = &dr->data[dr->prod_ptr % NR_DROP_RECORDS];
+    d->time = ts;
+    d->npkts = nr_pkts;
+    d->mdl = mdl;
+    mb();
+    if (dr->prod_ptr >= dr->cons_ptr + NR_DROP_RECORDS)
+	rlimit_logmsg(1000, LOGWARN, "Losing drop records!\n");
+    dr->prod_ptr++;
+    mb();
+}
 
 /*
  * -- capture_pkt
@@ -361,7 +379,7 @@ freeze_module(void)
  */
 static timestamp_t
 capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which, 
-	    tailq_t * expired, int drop_counter)
+	    tailq_t * expired, int drop_counter, struct drop_ring *dr)
 {
     pkt_t *pkt = (pkt_t *) pkt_buf;
     timestamp_t max_ts; 
@@ -520,6 +538,15 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 					   (unsigned)(drop_counter -
 						      mdl->reported_global_drops));
 	mdl->reported_global_drops = drop_counter;
+	if (mdl->unreported_local_drops) {
+	    struct timeval ts;
+	    gettimeofday(&ts, NULL);
+	    do_drop_record(dr,
+			   mdl->index,
+			   TIME2TS(ts.tv_sec, ts.tv_usec),
+			   mdl->unreported_local_drops);
+
+	}
 	mdl->unreported_local_drops = 0;
     }
 
@@ -529,7 +556,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 
 static timestamp_t
 capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter,
-	     tailq_t *expired, int drop_counter)
+	     tailq_t *expired, int drop_counter, struct drop_ring *dr)
 {
     int * which;
     int idx;
@@ -567,7 +594,7 @@ capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter,
 	       count, map.modules[idx].name);
 
 	last_ts = capture_pkt(&map.modules[idx], pkts, count,
-			      which, expired, drop_counter);
+			      which, expired, drop_counter, dr);
 	which += count; /* next module, new list of packets */
     }
     return last_ts;
@@ -596,7 +623,9 @@ capture_mainloop(int export_fd)
     timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     source_t *src;
     int drop_counter;           /* global drop counter */
-    
+    int old_drops;
+    struct drop_ring *dr = map.dr;
+
     /* we only get a socketpair to the export process */
 
     /*
@@ -819,8 +848,15 @@ capture_mainloop(int export_fd)
 	    if ((src->flags & SNIFF_SELECT) && !FD_ISSET(src->fd, &r))
 		continue;	/* nothing to read here. */
 
+	    old_drops = drop_counter;
 	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER,
 					  &drop_counter);
+	    if (drop_counter != old_drops)
+		do_drop_record(dr,
+			       -1,
+			       TIME2TS(now.tv_sec, now.tv_usec),
+			       drop_counter - old_drops);
+
 	    if (count == 0)
 		continue;
 
@@ -835,7 +871,7 @@ capture_mainloop(int export_fd)
 	    map.stats->pkts += count; 
 
 	    last_ts = capture_pkts(pkts, count, filter, &expired,
-				   drop_counter);
+				   drop_counter, dr);
         }
 
 	/* 

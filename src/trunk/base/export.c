@@ -406,6 +406,48 @@ store_records(module_t * mdl, timestamp_t ts)
     mcheck(NULL);
 }
 
+#define MAP_SIZE 8192
+static void
+do_drop(struct drop_record *dr, int storage_fd)
+{
+    static int fd = -1;
+    static unsigned used_in_map;
+    static void *lmap;
+    static off_t off_in_file;
+    ssize_t temp;
+
+    if (fd < 0) {
+	char *b;
+	asprintf(&b, "%s/%s", map.basedir, map.dropfile);
+	fd = csopen(b, CS_WRITER, map.dropfilesize, storage_fd);
+	if (fd < 0) {
+	    rlimit_logmsg(1000, LOGWARN, "Cannot open %s\n", b);
+	    free(b);
+	    return;
+	}
+	free(b);
+    }
+    /* Note that this only works because sizeof(*dr) is a small power
+       of two (think what happens near page boundaries) */
+    if (used_in_map + sizeof(*dr) >= MAP_SIZE) {
+	lmap = NULL;
+    }
+    if (!lmap) {
+	temp = MAP_SIZE;
+	lmap = csmap(fd, off_in_file, &temp);
+	if (!lmap) {
+	    rlimit_logmsg(1000, LOGWARN, "Cannot map drop file\n");
+	    return;
+	}
+	used_in_map = 0;
+    }
+    memcpy(lmap + used_in_map,
+	   dr,
+	   sizeof(*dr));
+    used_in_map += sizeof(*dr);
+    off_in_file += sizeof(*dr);
+}
+#undef MAP_SIZE
 
 /**
  * -- export_mainloop
@@ -476,6 +518,17 @@ export_mainloop(int capture_fd)
 	ret = select(max_fd + 1, &r, NULL, NULL, NULL);
 	if (ret < 0 && errno != EINTR) 
 	    panic("error in the select (%s)\n", strerror(errno)); 
+
+	while (map.dr->prod_ptr != map.dr->cons_ptr) {
+	    unsigned p;
+	    p = map.dr->prod_ptr;
+	    mb();
+	    while (p != map.dr->cons_ptr) {
+		do_drop(&map.dr->data[map.dr->cons_ptr % NR_DROP_RECORDS],
+			storage_fd);
+		map.dr->cons_ptr++;
+	    }
+	}
 
 	if (FD_ISSET(capture_fd, &r)) {
 	    msg_t x;

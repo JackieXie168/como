@@ -59,8 +59,6 @@ struct packet_data_area {
 };
 
 
-#define mb() asm volatile("lock; addl $0, (%%esp)" ::: "memory")
-
 /* 
  * Sniffer state variables for SK98 card (include packets, tokens
  * and time-synchronization information).  
