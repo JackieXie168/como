@@ -67,6 +67,8 @@ send_status(__unused qreq_t * req, int client_fd)
     char buf[1024]; 
     int ret; 
     int len; 
+    module_t *mdl;
+    int idx;
 
     /* send HTTP header */
     ret = como_writen(client_fd, 
@@ -90,6 +92,17 @@ send_status(__unused qreq_t * req, int client_fd)
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
 	panic("sending status to the client");   
+
+    /* send list of loaded modules */
+    for (idx = 0; idx < map.module_count; idx++) { 
+	mdl = &map.modules[idx]; 
+
+	len = sprintf(buf, "Module: %-20s\tFilter: %s\n", mdl->name,
+                      mdl->filter);
+	ret = como_writen(client_fd, buf, len);
+	if (ret < 0)
+	    panic("sending status to the client");
+    } 
 
     /* send comments if any */
     if (map.comment != NULL) { 
@@ -274,6 +287,7 @@ query_ondemand(int client_fd)
     off_t ofs; 
     char * output; 
     ssize_t len;
+    int module_found = 0;
 
     /* set the name of this process */
     map.procname = "qd"; 
@@ -332,6 +346,7 @@ query_ondemand(int client_fd)
 	    continue; 
 
 	/* check filter string */
+        module_found = 1;
 	if (!strcmp(req->filter, mdl->filter)) 
 	    break; 	/* found! */
     } 
@@ -342,10 +357,17 @@ query_ondemand(int client_fd)
 	 * no module found. return an error message 
 	 * to the client. 
 	 */
-	logmsg(LOGWARN, "query module not found (%s)\n", req->module); 
-	ret = como_writen(client_fd, 
-		"HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n "
-                "Module not found\n", 0);
+        if (!module_found) {
+	    logmsg(LOGWARN, "query module not found (%s)\n", req->module);
+	    ret = como_writen(client_fd, 
+			      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
+			      "Module not found\n", 0);
+        } else {
+	    logmsg(LOGWARN, "query filter not found (%s)\n", req->filter);
+	    ret = como_writen(client_fd, 
+			      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
+			      "Filter not found\n", 0);
+	}
 	if (ret < 0)
 	    panic("sending data to the client"); 
 	close(client_fd);
