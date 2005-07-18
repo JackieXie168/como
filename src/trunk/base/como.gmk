@@ -97,7 +97,7 @@ build-sniffer-list:
 	echo "	NULL };" ;					\
 	) > sniffer-list.h
 
-pippo.o:
+pippo.o: $(BASEDIR)/include/stdpkt.h $(BASEDIR)/base/template
 	@( \
 	f="$(BASEDIR)/include/stdpkt.h" ;			\
 	echo "stdpkt.h is $${f}" ;				\

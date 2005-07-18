@@ -59,8 +59,8 @@
  */
 struct _como map;
 
-extern char template[];	/* dynamically filled */
-extern char stdpkt[];	/* dynamically filled */
+extern char template[];	/* dynamically filled in pippo.o */
+extern char stdpkt[];	/* dynamically filled in pippo.o */
 static char * 
 create_filter_template()
 {
