@@ -54,6 +54,8 @@ hash(pkt_t *pkt)
 {
     if (pkt->l3type == ETH_P_IP)
 	return IP(proto);
+    else if (pkt->l3type == ETH_P_IPV6)
+	return IPV6_PROTO(pkt);
     else
 	return 0;
 }
@@ -65,6 +67,8 @@ match(pkt_t *pkt, void *fh)
 
     if (pkt->l3type == ETH_P_IP)
 	return (x->proto == (uint32_t) IP(proto));
+    else if (pkt->l3type == ETH_P_IPV6)
+	return (x->proto == (uint32_t) IPV6_PROTO(pkt));
     else
 	return x->proto == 0;
 }
@@ -78,6 +82,8 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 	x->ts = TS2SEC(pkt->ts);
 	if (pkt->l3type == ETH_P_IP)
 	    x->proto = (uint32_t) IP(proto);
+	else if (pkt->l3type == ETH_P_IPV6)
+	    x->proto = (uint32_t) IPV6_PROTO(pkt);
 	else
 	    x->proto = 0;
         x->bytes = 0;
@@ -86,6 +92,8 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 
     if (pkt->l3type == ETH_P_IP)
 	x->bytes += H16(IP(len));
+    else if (pkt->l3type == ETH_P_IPV6)
+	x->bytes += H16(IPV6(base.len));
     else
 	x->bytes += pkt->len;
     x->pkts++;

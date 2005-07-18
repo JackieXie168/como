@@ -73,7 +73,7 @@ char *strndup(const char *s, unsigned int n);
 extern char *mkdtemp(char *template);
 extern char *mktemp(char *template);
 #include <sys/stat.h>	// mkdir
-#define	ETHERTYPE_IP	0x800
+#define	ETHERTYPE_IP	0x0800
 #define	ETHER_ADDR_LEN	6
 struct ether_addr {
 	unsigned char octet[ETHER_ADDR_LEN];

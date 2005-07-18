@@ -38,6 +38,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>          /* inet_ntop */
 
+/* temporarily */
+void logmsg(int flags, const char *fmt, ...);
+#define	LOGCAPTURE	0x0010
+
+#ifndef ETHERTYPE_IPV6
+#define	ETHERTYPE_IPV6	0x86dd	/* not in net/ethernet.h for some reason */
+#endif
+
 
 /*
  * Object types
@@ -72,9 +80,15 @@ struct _n64_t {
     uint64_t __x64;
 };
 
+struct _n128_t {
+    uint64_t __x64;
+    uint64_t __y64;
+};
+
 typedef	struct _n16_t	n16_t;	/* network format */
 typedef	struct _n32_t	n32_t;	/* network format */
 typedef	struct _n64_t	n64_t;	/* network format */
+typedef	struct _n128_t	n128_t;	/* network format */
 
 /*
  * Macros to convert a uint64_t from host to network byte order
@@ -157,6 +171,66 @@ struct _como_iphdr {
 };
 
 /* 
+ * IPv6 headers
+ */
+
+union _como_ipv6hdr {
+    /* Base header */
+    struct {
+	uint32_t vtcfl;		/* version, traffic class, flow label */
+	n16_t	len;		/* packet length */
+	uint8_t	nxthdr;		/* next header */
+	uint8_t	ttl;		/* hop limit */
+	n128_t	src_addr;	/* source address */
+	n128_t	dst_addr;	/* destination address */
+    } base;
+
+    /* Hop-by-hop or destination options */
+    struct {
+	uint8_t	nxthdr;		/* next header */
+	uint8_t	len;		/* header length in 64-bit words,
+				 * excluding first word */
+	char  	payload[0];
+    } opts;
+
+    /* Routing header */
+    struct {
+	uint8_t	nxthdr;		/* next header */
+	uint8_t	len;		/* header length in 64-bit words,
+				 * excluding first word */
+	uint8_t	type;		/* routing type */
+	uint8_t	segs;		/* segments left */
+	char  	payload[0];
+    } routing;
+
+    /* Fragment header */
+    struct {
+	uint8_t	nxthdr;		/* next header */
+	uint8_t	reserved;	/* reserved */
+	n16_t offset;		/* offset, reserved, more flag */
+	n32_t id;		/* identification */
+    } fragment;
+
+    /* Authentication header */
+    struct {
+	uint8_t	nxthdr;		/* next header */
+	uint8_t	len;		/* header length in *32-bit* words,
+				 * excluding 2 words */
+	n16_t reserved;		/* reserved */
+	n32_t spi;		/* security parameters index */
+	n32_t seq;		/* sequence number */
+	char  	payload[0];
+    } auth;
+
+    /* Encapsulating security payload */
+    struct {
+	n32_t spi;		/* security parameters index */
+	n32_t seq;		/* sequence number */
+	char  	payload[0];
+    } esp;
+};
+
+/* 
  * TCP header 
  */
 struct _como_tcphdr {
@@ -191,6 +265,16 @@ struct _como_icmphdr {
     uint8_t     code; 	/* XXX stuff missing... */
     char  	payload[0]; 
 };
+
+/* 
+ * ICMPv6 header 
+ */
+struct _como_icmpv6hdr {
+    uint8_t     type;
+    uint8_t     code;
+    n16_t	cksum;
+    char  	payload[0]; 
+};
     
 
 /*
@@ -212,6 +296,10 @@ struct _como_icmphdr {
     (pkt->l3type == ETH_P_IP ?  \
      (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field) : \
      (abort(),((struct _como_iphdr *)NULL)->field))
+#define IPV6(field)		\
+    (pkt->l3type == ETH_P_IPV6 ?  \
+     (((union _como_ipv6hdr *) (pkt->payload + pkt->layer3ofs))->field) : \
+     (abort(),((union _como_ipv6hdr *)NULL)->field))
 #define TCP(field)		\
     (pkt->l3type == ETH_P_IP && pkt->l4type == IPPROTO_TCP ? \
      (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
@@ -226,12 +314,21 @@ struct _como_icmphdr {
     (pkt->l3type == ETH_P_IP && pkt->l4type == IPPROTO_ICMP ? \
      (((struct _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
      (abort(), ((struct _como_icmphdr *)NULL)->field))
+#define ICMPV6(field)		\
+    (pkt->l3type == ETH_P_IPV6 && pkt->l4type == IPPROTO_ICMPV6 ? \
+     (((struct _como_icmpv6hdr *) (pkt->payload + pkt->layer4ofs))->field) : \
+     (abort(), ((struct _como_icmpv6hdr *)NULL)->field))
 
 #define ETHP(pkt, field)	ETH(field)
 #define IPP(pkt, field)		\
     (pkt->l3type == ETH_P_IP ?  \
      (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field) : \
      (abort(), ((struct _como_iphdr *)NULL)->field))
+#define IPV6P(pkt, field)		\
+    (pkt->l3type == ETH_P_IPV6 ?  \
+     (((union _como_ipv6hdr *) (pkt->payload + pkt->layer3ofs))->field) : \
+     (abort(), ((union _como_ipv6hdr *)NULL)->field))
+
 
 /*
  * struct _como_pkt (pkt_t) is the structure describing a packet
@@ -289,14 +386,71 @@ struct _como_pktdesc {
     struct _como_hdlc hdlc;		/* Cisco HDLC bitmask */
     struct _como_vlan vlan; 		/* 802.1q bitmask */
     struct _como_iphdr ih;		/* IP header bitmask */
+    union _como_ipv6hdr i6h;		/* IPv6 header bitmask */
     struct _como_tcphdr tcph;		/* TCP header bitmask */
     struct _como_udphdr udph;		/* UDP header bitmask */
     struct _como_icmphdr icmph;		/* ICMP header bitmask */
+    struct _como_icmpv6hdr icmpv6h;	/* ICMPv6 header bitmask */
 }; 
 
 
 /* 
- * timestamp macros 
+ * IPv6 macros
+ *
+ * Helper macro to advance a pointer by a specified number of octets
+ */
+#define ADVANCE(ptr, octets)	\
+    { ptr = (__typeof__(ptr)) (((char *) ptr) + octets); }
+
+/* 
+ * Helper function to traverse IPv6 header to find upper-layer header type
+ */
+inline uint8_t IPV6_PROTO(struct _como_pkt *pkt) {
+    /* get layer 3 header */
+    if (pkt->l3type != ETH_P_IPV6)
+	return (abort(),((union _como_ipv6hdr *)NULL)->base.nxthdr);
+    union _como_ipv6hdr *hdr = (union _como_ipv6hdr *) (pkt->payload + pkt->layer3ofs);
+
+    /* initialize */
+    int32_t len = H16(hdr->base.len);
+    uint8_t hdrtype = hdr->base.nxthdr;
+    uint8_t hdrlen = sizeof(hdr->base);
+    ADVANCE(hdr, hdrlen);
+
+    /* while more extension headers */
+    while (len > 0) {
+	switch (hdrtype) {
+	case IPPROTO_HOPOPTS:
+	case IPPROTO_ROUTING:
+	case IPPROTO_DSTOPTS:
+	    /* advance to next header (using 64-bit words) */
+	    hdrtype = hdr->opts.nxthdr;
+	    hdrlen = 8 * (1 + hdr->opts.len);
+            ADVANCE(hdr, hdrlen);
+	    len -= hdrlen;
+	    break;
+	case IPPROTO_AH:
+	    /* advance to next header (using 32-bit words) */
+	    hdrtype = hdr->auth.nxthdr;
+	    hdrlen = 4 * (2 + hdr->auth.len);
+            ADVANCE(hdr, hdrlen);
+	    len -= hdrlen;
+	    break;
+	case IPPROTO_FRAGMENT:
+	case IPPROTO_NONE:
+	case IPPROTO_ESP:
+	default:
+	    len = -1;	/* force exit and return this header */
+	    break;
+	}
+    }
+
+    return hdrtype;
+}
+
+
+/* 
+ * hdrtype macros 
  *
  * Convert times into NTP format timestamps -- 64 bits with
  * the high 32 for seconds and the low 32 for the fractional part.
@@ -313,8 +467,11 @@ struct _como_pktdesc {
  * useful macros 
  */
 #define isIP            (COMO(l3type) == ETHERTYPE_IP)
-#define isTCP           (IP(proto) == IPPROTO_TCP)
-#define isUDP           (IP(proto) == IPPROTO_UDP)
+#define isIPv6          (COMO(l3type) == ETHERTYPE_IPV6)
+#define isTCP           ((isIP && IP(proto) == IPPROTO_TCP) ||	\
+			 (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_TCP))
+#define isUDP           ((isIP && IP(proto) == IPPROTO_UDP) ||	\
+			 (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_UDP))
 
 
 #endif /* _COMO_STDPKT_H */
