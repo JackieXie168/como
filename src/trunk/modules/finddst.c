@@ -50,20 +50,14 @@ static uint32_t meas_ivl = 30; 		/* 30s minimum reporting interval */
 static uint32_t
 hash(pkt_t *pkt)
 {
-    if (pkt->l3type == ETH_P_IP)
-	return (H32(IP(dst_ip)) >> 8);
-    else
-	return 0;
+    return (H32(IP(dst_ip)) >> 8);
 }
 
 static int
 match(pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
-    if (pkt->l3type == ETH_P_IP)
-	return ((H32(IP(dst_ip)) & 0xffffff00) == x->dst_ip); 
-    else
-	return x->dst_ip == 0;
+    return ((H32(IP(dst_ip)) & 0xffffff00) == x->dst_ip); 
 }
 
 static int
@@ -75,16 +69,10 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 	x->ts = TS2SEC(pkt->ts); 
 	x->bytes = 0;
 	x->pkts = 0;
-	if (pkt->l3type == ETH_P_IP)
-	    x->dst_ip = H32(IP(dst_ip)) & 0xffffff00;
-	else
-	    x->dst_ip = 0;
+	x->dst_ip = H32(IP(dst_ip)) & 0xffffff00;
     }
 
-    if (pkt->l3type == ETH_P_IP)
-	x->bytes += H16(IP(len));
-    else
-	x->bytes += pkt->len;
+    x->bytes += H16(IP(len));
     x->pkts++;
 
     return 0;

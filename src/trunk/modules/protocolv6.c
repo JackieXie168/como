@@ -49,10 +49,66 @@ FLOWDESC {
     uint64_t    pkts;
 };
 
+
+/*
+ * Helper macro to advance a pointer by a specified number of octets
+ */
+#define ADVANCE(ptr, octets)    \
+    { ptr = (__typeof__(ptr)) (((char *) ptr) + octets); }
+
+
+/*
+ * Helper function to traverse IPv6 header to 
+ * find upper-layer header type
+ */
+__inline__ uint8_t 
+ipv6_proto(pkt_t *pkt) 
+{
+    union _como_ipv6hdr * hdr;
+
+    hdr = (union _como_ipv6hdr *) (pkt->payload + pkt->layer3ofs);
+        
+    /* initialize */
+    int32_t len = H16(hdr->base.len);
+    uint8_t hdrtype = hdr->base.nxthdr;
+    uint8_t hdrlen = sizeof(hdr->base);
+    ADVANCE(hdr, hdrlen);
+
+    /* while more extension headers */
+    while (len > 0) {
+        switch (hdrtype) {
+        case IPPROTO_HOPOPTS:
+        case IPPROTO_ROUTING:
+        case IPPROTO_DSTOPTS:
+            /* advance to next header (using 64-bit words) */
+            hdrtype = hdr->opts.nxthdr;
+            hdrlen = 8 * (1 + hdr->opts.len);
+            ADVANCE(hdr, hdrlen);
+            len -= hdrlen;
+            break;
+        case IPPROTO_AH:
+            /* advance to next header (using 32-bit words) */
+            hdrtype = hdr->auth.nxthdr;
+            hdrlen = 4 * (2 + hdr->auth.len);
+            ADVANCE(hdr, hdrlen);
+            len -= hdrlen;
+            break;
+        case IPPROTO_FRAGMENT:   
+        case IPPROTO_NONE:
+        case IPPROTO_ESP:
+        default:
+            len = -1;   /* force exit and return this header */
+            break;
+        }
+    }
+
+    return hdrtype;
+}
+
 static uint32_t
 hash(pkt_t *pkt)
 {
-    return IP(proto);
+    return (uint32_t) ipv6_proto(pkt);
 }
 
 static int
@@ -60,7 +116,7 @@ match(pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
 
-    return (x->proto == (uint32_t) IP(proto));
+    return (x->proto == (uint32_t) ipv6_proto(pkt));
 }
 
 static int
@@ -70,12 +126,12 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts);
-	x->proto = (uint32_t) IP(proto);
+	x->proto = (uint32_t) ipv6_proto(pkt);
         x->bytes = 0;
         x->pkts = 0;
     }
 
-    x->bytes += H16(IP(len));
+    x->bytes += H16(IPV6(base.len));
     x->pkts++;
 
     return 0;

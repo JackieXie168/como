@@ -60,10 +60,14 @@ hash(pkt_t *pkt)
 {
     uint sport, dport; 
 
-    sport = dport = 0;
-    if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
-	sport = N16(TCPUDP(src_port)); 
-	dport = N16(TCPUDP(dst_port)); 
+    if (IP(proto) == IPPROTO_TCP) { 
+	sport = N16(TCP(src_port)); 
+	dport = N16(TCP(dst_port)); 
+    } else if (IP(proto) == IPPROTO_UDP) { 
+	sport = N16(UDP(src_port)); 
+	dport = N16(UDP(dst_port)); 
+    } else { 
+	sport = dport = 0;
     } 
 
     return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^ (sport << 3) ^ (dport << 3));
@@ -75,11 +79,15 @@ match(pkt_t *pkt, void *fh)
     FLOWDESC *x = F(fh);
     uint sport, dport; 
     
-    sport = dport = 0;
-    if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
-	sport = N16(TCPUDP(src_port)); 
-	dport = N16(TCPUDP(dst_port)); 
-    } 
+    if (IP(proto) == IPPROTO_TCP) {
+        sport = N16(TCP(src_port));
+        dport = N16(TCP(dst_port));
+    } else if (IP(proto) == IPPROTO_UDP) {
+        sport = N16(UDP(src_port));
+        dport = N16(UDP(dst_port));
+    } else {
+        sport = dport = 0;
+    }
 
     return (
          N32(IP(src_ip)) == N32(x->src_ip) &&
@@ -92,7 +100,7 @@ match(pkt_t *pkt, void *fh)
 static int
 check(pkt_t *pkt)
 {
-    return pkt->l3type == ETH_P_IP;
+    return pkt->l3type == ETHERTYPE_IP;
 }
 
 static int
@@ -108,10 +116,17 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
         x->src_ip = IP(src_ip);
         x->dst_ip = IP(dst_ip);
 
-        N16(x->src_port) = N16(x->dst_port) = 0; 
+	if (IP(proto) == IPPROTO_TCP) {
+	    x->src_port = TCP(src_port); 
+	    x->dst_port = TCP(dst_port); 
+	} else if (IP(proto) == IPPROTO_UDP) {
+	    x->src_port = UDP(src_port); 
+	    x->dst_port = UDP(dst_port); 
+	} else {
+	    N16(x->src_port) = N16(x->dst_port) = 0; 
+	}
+
 	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
-	    x->src_port = TCPUDP(src_port); 
-	    x->dst_port = TCPUDP(dst_port); 
 	} 
     }
 

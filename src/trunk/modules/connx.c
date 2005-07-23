@@ -62,16 +62,22 @@ FLOWDESC {
 static uint32_t
 hash(pkt_t *pkt)
 {
-    if (pkt->l3type == ETH_P_IP) {
-	if (pkt->l4type == IPPROTO_TCP || pkt->l4type == IPPROTO_UDP)
-	    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^
-		    (N16(TCPUDP(src_port)) << 3) ^
-		    (N16(TCPUDP(dst_port)) << 3));
-	else
-	    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)));
+    uint sport, dport;
+
+    if (pkt->l3type != ETHERTYPE_IP) 
+	return 0; 
+
+    if (IP(proto) == IPPROTO_TCP) {
+        sport = N16(TCP(src_port));
+        dport = N16(TCP(dst_port));
+    } else if (IP(proto) == IPPROTO_UDP) {
+        sport = N16(UDP(src_port));
+        dport = N16(UDP(dst_port));
     } else {
-	return 0;
+        sport = dport = 0;
     }
+
+    return (N32(IP(src_ip)) ^ N32(IP(dst_ip)) ^ (sport << 3) ^ (dport << 3));
 }
 
 static int
@@ -80,15 +86,21 @@ match(pkt_t *pkt, void *fh)
     FLOWDESC *x = F(fh);
     uint16_t sport = 0, dport = 0; 
 
-    if (pkt->l3type != ETH_P_IP) {
+    if (pkt->l3type != ETHERTYPE_IP) {
 	if (x->proto == 0)
 	    return 1;
 	else
 	    return 0;
     }
-    if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) {
-	sport = N16(TCPUDP(src_port));
-	dport = N16(TCPUDP(dst_port));
+
+    if (IP(proto) == IPPROTO_TCP) {
+        sport = N16(TCP(src_port));
+        dport = N16(TCP(dst_port));
+    } else if (IP(proto) == IPPROTO_UDP) {
+        sport = N16(UDP(src_port));
+        dport = N16(UDP(dst_port));
+    } else {
+        sport = dport = 0;
     }
 
     return (
@@ -105,7 +117,7 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 {
     FLOWDESC *x = F(fh);
 
-    if (pkt->l3type == ETH_P_IP) {
+    if (pkt->l3type == ETHERTYPE_IP) {
 	if (isnew) {
 	    x->first = pkt->ts;
 	}
@@ -116,13 +128,17 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 	if (isnew) {
 	    x->src_ip = IP(src_ip);
 	    x->dst_ip = IP(dst_ip);
-	    if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) {
-		x->src_port = TCPUDP(src_port);
-		x->dst_port = TCPUDP(dst_port);
+
+	    if (IP(proto) == IPPROTO_TCP) {
+		x->src_port = TCP(src_port);
+		x->dst_port = TCP(dst_port);
+	    } else if (IP(proto) == IPPROTO_UDP) {
+		x->src_port = UDP(src_port);
+		x->dst_port = UDP(dst_port);
 	    } else {
-		N16(x->src_port) = 0; 
-		N16(x->dst_port) = 0; 
-	    } 
+		N16(x->src_port) = N16(x->dst_port) = 0;
+	    }
+
 	    x->proto = IP(proto);
 	    x->first = pkt->ts;
 	    x->bytes = 0;

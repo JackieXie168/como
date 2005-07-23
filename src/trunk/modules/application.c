@@ -254,7 +254,7 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
         bzero(x->pkts, sizeof(x->pkts)); 
     }
 
-    if (pkt->l3type == ETH_P_IP && pkt->l4type == IPPROTO_TCP) {
+    if (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_TCP) {
 	app = port2app[H16(TCP(src_port))] & port2app[H16(TCP(dst_port))];
 	x->bytes[app] += H16(IP(len));
 	x->pkts[app]++;

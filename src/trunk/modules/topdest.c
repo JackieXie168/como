@@ -69,7 +69,7 @@ match(pkt_t *pkt, void *fh)
 static int
 check(pkt_t *pkt)
 {
-    return pkt->l3type == ETH_P_IP;
+    return pkt->l3type == ETHERTYPE_IP; 
 }
 
 static int

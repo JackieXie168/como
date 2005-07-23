@@ -10,11 +10,12 @@ MODULES= \
 	utilization.so \
 	topdest.so \
 	tuple.so \
-	protocol.so \
 	connx.so \
 	trace.so \
 	application.so \
 	finddst.so \
+	protocol.so \
+	protocolv6.so \
 	ssid.so
 #	netflow.so \
 
