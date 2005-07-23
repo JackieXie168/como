@@ -43,6 +43,7 @@
 #include "pcap-stargate.h"
 #endif
 
+#include "stdwlan.h"
 #include "sniffers.h"
 #include "como.h"
 
@@ -85,11 +86,33 @@ struct _snifferinfo {
 struct wlan_req {
     u_int16_t       len;
     u_int16_t       type;
+    u_int16_t	    val[512];
 };
 
 #define SIOCSPRISM2DEBUG        _IOW('i', 137, struct ifreq)
 #define SIOCGPRISM2DEBUG        _IOWR('i', 138, struct ifreq)
 #define PRISM_MONITOR_MODE      0x0B
+#define PRISM_SET_CHANNEL       0x08
+
+
+/* 
+ * -- send_ioctl
+ * 
+ * ioctl to configure interface 
+ */
+void 
+send_ioctl(struct ifreq * ifr) 
+{
+    int s; 
+
+    s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s == -1)
+	panic("socket %s", ifr->ifr_name); 
+    if (ioctl(s, SIOCSPRISM2DEBUG, ifr) == -1)
+	panic("ioclt %s", ifr->ifr_name); 
+    close(s); 
+}
+
 
 /*
  * -- sniffer_start
@@ -105,6 +128,7 @@ sniffer_start(source_t * src)
     struct _snifferinfo * info;
     uint snaplen = LIBPCAP_DEFAULT_SNAPLEN; 
     uint timeout = LIBPCAP_DEFAULT_TIMEOUT; 
+    uint channel = 0; 
     sniff_pcap_open sp_open; 
     sniff_pcap_fileno sp_fileno;
     sniff_pcap_noblock sp_noblock; 
@@ -112,20 +136,36 @@ sniffer_start(source_t * src)
     sniff_pcap_close sp_close; 
     struct wlan_req wreq;
     struct ifreq ifr;
-    int s;
 
     if (src->args) { 
 	/* process input arguments */
 	char * p; 
+	char * val;
 
-	if ((p = strstr(src->args, "snaplen=")) != NULL) 
-            snaplen = atoi(p + 8);
-	if ((p = strstr(src->args, "timeout=")) != NULL) 
-            timeout = atoi(p + 8);
+	if ((p = strstr(src->args, "snaplen")) != NULL) {
+	    /* number of bytes to read from packet */
+	    val = index(p, '=') + 1; 
+            snaplen = atoi(val);
+	} 
+	if ((p = strstr(src->args, "timeout")) != NULL) {
+	    /* timeout to regulate reception of packets */
+	    val = index(p, '=') + 1; 
+            timeout = atoi(val);
+	}
+	if ((p = strstr(src->args, "channel")) != NULL) {
+	    /* frequency channel to monitor */
+	    val = index(p, '=') + 1; 
+            channel = atoi(val);
+	    if (channel < 1) 
+		channel = 1; 
+	    else if (channel > 14) 
+		channel = 14; 
+	}
     }
 
     logmsg(V_LOGSNIFFER, 
-	"sniffer-prism2: snaplen %d, timeout %d\n", snaplen, timeout); 
+	"sniffer-prism2: snaplen %d, timeout %d, channel %d\n", 
+	snaplen, timeout, channel); 
 
     /* 
      * set the interface in monitor mode
@@ -137,13 +177,22 @@ sniffer_start(source_t * src)
     bzero((char *)&ifr, sizeof(ifr));
     strcpy(ifr.ifr_name, src->device);
     ifr.ifr_data = (caddr_t) &wreq;
+    send_ioctl(&ifr); 
 
-    s = socket(AF_INET, SOCK_DGRAM, 0);
-    if (s == -1)
-	panic(src->device);
-    if (ioctl(s, SIOCSPRISM2DEBUG, &ifr) == -1)
-	panic("ioclt %s", src->device);
-    close(s);
+    /* 
+     * fix the channel, if requested 
+     */
+    if (channel != 0) { 
+	bzero((char *)&wreq, sizeof(wreq));
+	wreq.type = PRISM_SET_CHANNEL; 
+	wreq.len = 1; 
+	wreq.val[0] = channel; 
+
+	bzero((char *)&ifr, sizeof(ifr));
+	strcpy(ifr.ifr_name, src->device);
+	ifr.ifr_data = (caddr_t) &wreq;
+	send_ioctl(&ifr); 
+    } 
 
     /* 
      * allocate the _snifferinfo and link it to the 
