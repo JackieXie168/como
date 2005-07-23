@@ -32,6 +32,7 @@
 #include <sys/time.h>   /* struct timeval */
 
 #include "comotypes.h"
+#include "sniffers.h"
 
 /*
  * Data structure containing all the configuration parameters

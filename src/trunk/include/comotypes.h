@@ -31,7 +31,6 @@
 
 #include <inttypes.h>
 #include "stdpkt.h"
-#include "sniffers.h"
 
 /*
  * New definitions of object types
@@ -48,6 +47,8 @@ typedef struct _export_table    etable_t;       /* export hash table */
 typedef struct _export_array    earray_t;       /* export record array */
 
 typedef struct _statistics	stats_t; 	/* statistic counters */
+
+typedef struct _como_pktdesc    pktdesc_t;      /* Packet description */
 
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
@@ -389,5 +390,28 @@ struct _statistics {
     int delay;	 		/* packet capture delay (secs) */
 };
     
+
+/*
+ * pktdesc_t describes both what a module is going to read or what a
+ * sniffer/module is going to write in its ingoing/outgoing pkt_t streams.
+ * The fields within the "bm" structure are all bitmasks.
+ */
+struct _como_pktdesc {
+    uint64_t ts;                        /* timestamp granularity */
+    uint16_t caplen;                    /* packet capture lenght (max) */
+    uint16_t flags;                     /* flags for several options */
+#define COMO_AVG_PKTLEN         0x0001  /* pkt len are averaged */
+#define COMO_FULL_PKT           0x0002  /* full packet capture */
+
+    struct _como_isl isl;               /* Cisco ISL bitmask */
+    struct _como_eth eth;               /* Ethernet bitmask */
+    struct _como_hdlc hdlc;             /* Cisco HDLC bitmask */
+    struct _como_vlan vlan;             /* 802.1q bitmask */
+    struct _como_iphdr ih;              /* IP header bitmask */
+    struct _como_tcphdr tcph;           /* TCP header bitmask */
+    struct _como_udphdr udph;           /* UDP header bitmask */
+    struct _como_icmphdr icmph;         /* ICMP header bitmask */
+};
+
 
 #endif /* _COMOTYPES_H */
