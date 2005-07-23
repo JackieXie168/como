@@ -30,9 +30,6 @@
 #include <net/ethernet.h> 
 #include "stdpkt.h" 
 
-#ifndef ETHERTYPE_VLAN
-#define ETHERTYPE_VLAN  0x8100
-#endif 
 
 /* 
  * this file includes some inline helper functions to be 

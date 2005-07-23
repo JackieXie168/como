@@ -168,6 +168,10 @@ sniffer_start(source_t * src)
 	info->type = COMOTYPE_ETH; 
 	break; 
 
+#if 0 
+    /* we do not support DLT_ values different from EN10MB. for 802.11
+     * frames one can use sniffer-prism instead. 
+     */
     case DLT_IEEE802_11: 
 	info->type = COMOTYPE_WLAN; 
 	break; 
@@ -177,6 +181,7 @@ sniffer_start(source_t * src)
     case DLT_IEEE802_11_RADIO: 
 	info->type = COMOTYPE_WLANR;	/* w/radio information */ 
 	break; 
+#endif
 #endif
 
     default: 
