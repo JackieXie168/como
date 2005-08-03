@@ -154,30 +154,40 @@ send_status(__unused qreq_t * req, int client_fd)
 static void *
 getrecord(int fd, off_t * ofs, load_fn *ld, size_t *len, timestamp_t *ts)
 {
+    size_t sz; 
     char * ptr; 
 
     assert(ld != NULL); 
 
     /* 
      * mmap len bytes starting from last ofs. 
+     * 
      * len bytes are supposed to guarantee to contain
      * at least one record to make sure the load() doesn't
      * fail (note that only load knows the record length). 
+     * 
      */ 
     ptr = csmap(fd, *ofs, len); 
     if (ptr == NULL) 
 	return NULL;
 
     /* give the record to load() */
-    *len = ld(ptr, *len, ts); 
-    *ofs += *len;
+    sz = ld(ptr, *len, ts); 
+    *ofs += sz; 
 
     /*
-     * check if we have lost sync. The only escape seems to be 
-     * to seek to the beginning of the next file in the bytestream. 
+     * check if we have lost sync (indicated by a zero timestamp, i.e. 
+     * the load() callback couldn't read the record, or by a load() callback
+     * that asks for more bytes -- shouldn't be doing this given the 
+     * assumption that we always read one full record. 
+     * 
+     * The only escape seems to be to seek to the beginning of the next 
+     * file in the bytestream. 
      */
-    if (*ts == 0)
+    if (*ts == 0 || sz > *len)
 	ptr = GR_LOSTSYNC;
+
+    *len = sz; 
     return ptr;
 }
 
@@ -287,7 +297,7 @@ query_ondemand(int client_fd)
     off_t ofs; 
     char * output; 
     ssize_t len;
-    int module_found = 0;
+    int module_found; 
 
     /* set the name of this process */
     map.procname = "qd"; 
@@ -307,8 +317,10 @@ query_ondemand(int client_fd)
     }
 
     req = (qreq_t *) qryrecv(client_fd); 
-    if (req == NULL) 
-	panic("query-ondemand receiving query"); 
+    if (req == NULL) {
+	close(client_fd);
+	return; 
+    } 
 
     if (req->format == Q_STATUS) { 
 	/* 
@@ -320,6 +332,15 @@ query_ondemand(int client_fd)
 	close(client_fd);
 	return; 
     }
+
+    if (req->module == NULL) { 
+	/* 
+	 * no module defined. return warning message and exit
+	 */
+	logmsg(LOGWARN, "query module not defined\n"); 
+	close(client_fd);
+	return; 
+    } 
 
     logmsg(V_LOGQUERY,
         "got query (%d bytes); mdl: %s filter: %s\n",  
@@ -338,6 +359,7 @@ query_ondemand(int client_fd)
      *     is not the same as "B and A"). 
      * 
      */
+    module_found = 0; 
     for (idx = 0; idx < map.module_count; idx++) { 
 	mdl = &map.modules[idx]; 
 
@@ -352,7 +374,6 @@ query_ondemand(int client_fd)
     } 
 
     if (idx == map.module_count) { 
-
 	/* 
 	 * no module found. return an error message 
 	 * to the client. 
@@ -360,13 +381,13 @@ query_ondemand(int client_fd)
         if (!module_found) {
 	    logmsg(LOGWARN, "query module not found (%s)\n", req->module);
 	    ret = como_writen(client_fd, 
-			      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
-			      "Module not found\n", 0);
+		      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
+		      "Module not found\n", 0);
         } else {
 	    logmsg(LOGWARN, "query filter not found (%s)\n", req->filter);
 	    ret = como_writen(client_fd, 
-			      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
-			      "Filter not found\n", 0);
+		      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
+		      "Filter not found\n", 0);
 	}
 	if (ret < 0)
 	    panic("sending data to the client"); 

@@ -160,8 +160,8 @@ query_parse(char *buf)
 	;
     if (*p != '?') {
 	/* invalid module, but do not fail so we return a 'not found' */
-	logmsg(LOGQUERY, "Missing argument %s\n", buf);
-	return &q;
+	logmsg(LOGQUERY, "Malformed request %s\n", buf);
+	return NULL; 
     }
 
     logmsg(LOGQUERY, "Good request %s\n", p);
