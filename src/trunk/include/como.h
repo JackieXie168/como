@@ -151,6 +151,7 @@ int como_writen(int fd, const char *buf, size_t len);
 void logmsg(int flags, const char *fmt, ...);
 void rlimit_logmsg(unsigned interval, int flags, const char *fmt, ...);
 char * loglevel_name(int flags); 
+char * getprotoname(int proto); 
 
 /*
  * panic() and panicx() are a printf-like function to print a panic message

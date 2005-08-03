@@ -40,7 +40,6 @@
 #include <sys/types.h>
 #include <string.h>		/* bcopy */
 #include <stdio.h>		/* fprintf, stderr */
-#include <netdb.h>		/* getprotobynumber */
 #include <net/ethernet.h>	/* ether_addr, ether_ntoa */
 
 #include "como.h"
@@ -200,7 +199,6 @@ print(char *buf, size_t *len, char * const args[])
     pkt_t p, *pkt; 
     int hh, mm, ss; 
     uint32_t addr; 
-    struct protoent * pe; 
 
     if (buf == NULL && args != NULL) { 
 	/* first call, process the arguments */
@@ -246,9 +244,8 @@ print(char *buf, size_t *len, char * const args[])
         /* 
          * print IP header information 
          */
-        pe = getprotobynumber(IP(proto)); 
-	*len += sprintf(s + *len, "IP | %s - ", pe->p_name); 
-        *len += sprintf(s + *len, "tos 0x%2x ttl %d id %d length: %d - ", 
+	*len += sprintf(s + *len, "IP | %s - ", getprotoname(IP(proto))); 
+        *len += sprintf(s + *len, "tos 0x%x ttl %d id %d length: %d - ", 
 		   IP(tos), IP(ttl), H16(IP(id)), H16(IP(len)));   
 
 	/* 

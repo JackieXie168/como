@@ -41,8 +41,8 @@
 #include <sys/un.h>			/* sockaddr unix */
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#undef	__unused	/* XXX linux's netdb.h has a variable with this name */
-#include <netdb.h>			/* gethostbyname */
+#undef __unused        /* XXX linux's netdb.h has a variable with this name */
+#include <netdb.h>                     /* gethostbyname */
 
 #ifdef linux
 #include <netinet/ether.h> 		/* ether_ntoa */
@@ -334,91 +334,6 @@ load_object(char *base_name, char *symbol)
 }
 
 
-#if 0  // XXX this is broken right now -gianluca
-
-/** 
- * -- print_pkt
- * 
- * Packet pretty printing...
- */
-void
-print_pkt(pkt_t *hdr, int have_mac)
-{
-    static int cnt = 0;
-    char dst[20], src[20];
-
-    if (cnt-- == 0) {
-	cnt = 40;
-	logmsg(V_LOGDEBUG, "%s%s%s%s",
-	    "tv_sec.tv_usec length",
-	    " _destination-mac_ ____source-mac___ type",
-	    " vhl tos len _id_ off ttl p  sum_",
-	    " ____src_ip____  ____dst_ip____\n");
-    }
-    //logmsg(LOGDEBUG, "%6ld.%06ld: [%4d]",
-	//    hdr->ts.tv_sec % 1000000,
-	//    hdr->ts.tv_usec,
-    logmsg(LOGDEBUG, "%12ld: [%4d]",
-       hdr->ts,
-       hdr->len
-    );
-
-#if 0 
-    if (have_mac) { /* XXX hack */
-	logmsg(0, " %s",
-	    ether_ntoa((struct  ether_addr *)hdr->mach.dst) );
-	logmsg(0, " %s %04x",
-	    ether_ntoa((struct  ether_addr *)hdr->mach.src),
-	    H16(hdr->mach.type)
-	);
-
-	if (H16(hdr->mach.type) != ETHERTYPE_IP)
-        goto done;
-    }
-#endif
-
-    logmsg(0, "  %02x %02x %04x %04x %04x %02x %02x %04x %-16s -> %-16s",
-	    hdr->ih.vhl,
-	    hdr->ih.tos,
-	    H16(hdr->ih.len),
-	    hdr->ih.id,
-	    H16(hdr->ih.ofs),
-	    hdr->ih.ttl,
-	    hdr->ih.proto,
-	    H16(hdr->ih.cksum),
-	    inet_ntop(AF_INET, &hdr->ih.src_ip, src, sizeof(src)),
-	    inet_ntop(AF_INET, &hdr->ih.dst_ip, dst, sizeof(dst))
-    );
-    switch (hdr->ih.proto) {
-    case 6:	/* tcp */ {
-	logmsg(0, " %5d -> %5d", H16(hdr->p.tcph.src_port),
-		H16(hdr->p.tcph.dst_port));
-	}
-	break;
-    }
-done:
-    logmsg(0, "\n");
-    return;
-}
-
-#endif
-
-/* Store the PID - makes attaching the debugger less hassle */
-void
-createPIDfile(char * procname)
-{
-    char *pidfilename;
-    FILE *pidfile;
-
-    asprintf(&pidfilename, "%s/como-%s.pid", map.workdir, procname);
-    pidfile = fopen(pidfilename, "w");
-    if (NULL != pidfile) {
-	fprintf(pidfile, "%d\n", getpid());
-	fclose(pidfile);
-    }
-    free(pidfilename);
-}
-
 /*
  * Create either a unix domain or tcp socket.
  * A prefix of S: indicates open in server mode, otherwise client.
@@ -529,6 +444,59 @@ error:
     return i;
 }
 
+
+/* 
+ * -- getprotoname
+ * 
+ * this function is basically getprotobynumber() that needs to 
+ * be redefined here because linux's netdb.h uses __unused as  
+ * variable name (?!?). In order to avoid the mess, it is easier
+ * to rewrite the function from scratch. 
+ * 
+ */
+char *
+getprotoname(int proto) 
+{
+    static char * alias[256] = {0}; 
+    int i; 
+
+    /* if alias array is not initialize, open /etc/protocols to 
+     * read the protocol names.
+     */
+    if (alias[0] == NULL) { 
+	FILE * fp; 
+	char line[120];
+
+	/* 
+	 * set all protocol aliases to the number 
+ 	 */
+	for (i = 0; i < 256; i++) 
+	    asprintf(&alias[i], "%d", i); 
+
+	/* open /etc/protocols and read all defined names */
+	fp = fopen("/etc/protocols", "r"); 
+	if (fp == NULL) 
+	    panic("opening /etc/protocols"); 
+	
+	while (!feof(fp)) { 
+	    char name[128]; 
+	    char * wh; 
+	    int number; 
+
+	    fgets(line, 120, fp); 
+	    wh = index(line, '#'); 
+	    if (wh != NULL) 
+		*wh = 0; 		/* remove comments */
+
+	    if (sscanf(line, "%s %d", name, &number) == 2) 
+		if (number < 256) 
+		    alias[number] = strdup(name); 
+	} 
+    } 
+
+    return alias[proto]; 
+}
+	    
 
 #if 0 
 
