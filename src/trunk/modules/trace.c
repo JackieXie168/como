@@ -37,10 +37,11 @@
  */
 
 #include <time.h>
-#include <string.h>         /* bcopy */
-#include <stdio.h>          /* fprintf, stderr */
 #include <sys/types.h>
-#include <net/ethernet.h>   /* ether_addr, ether_ntoa */
+#include <string.h>		/* bcopy */
+#include <stdio.h>		/* fprintf, stderr */
+#include <netdb.h>		/* getprotobynumber */
+#include <net/ethernet.h>	/* ether_addr, ether_ntoa */
 
 #include "como.h"
 #include "module.h"
@@ -53,11 +54,10 @@
  * FIFO order. 
  */
 #define FLOWDESC	struct _trace
-#define REC_SIZE	2048
 
 FLOWDESC {
     int len; 
-    char buf[REC_SIZE]; 
+    char buf[2048]; 
 };
 
 
@@ -101,6 +101,7 @@ update(pkt_t *pkt, void *fh, __unused int isnew, __unused unsigned drop_cntr)
 
     len = (pkt->caplen > snaplen)? snaplen : pkt->caplen; 
     memcpy(x->buf, pkt, sizeof(pkt_t)); 
+    ((pkt_t *) x->buf)->payload = NULL;
     ((pkt_t *) x->buf)->caplen = len;
     memcpy(x->buf + sizeof(pkt_t), pkt->payload, len); 
 
@@ -129,7 +130,6 @@ store(void *fh, char *buf, size_t len)
     pkt->l3type = htons(pkt->l3type); 
     pkt->layer3ofs = htons(pkt->layer3ofs); 
     pkt->layer4ofs = htons(pkt->layer4ofs); 
-    pkt->payload = NULL; 
 
     memcpy(buf, pkt, need); 
     return need; 
@@ -141,7 +141,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 {
     pkt_t * pkt; 
 
-    if (len < REC_SIZE) {
+    if (len < sizeof(pkt_t)) {
         ts = 0;
         return 0;
     }
@@ -152,187 +152,143 @@ load(char * buf, size_t len, timestamp_t * ts)
 }
 
 
-#if 0 
-
-/* XXX this is not needed for now. someone will have to spend some 
- *     time cleaning it up. right now it does not work. -gianluca
- *
- */
-
 /*
  * utility function used to pretty print tcp's control bits status
- * TODO: could be moved in a shared utility file
  */
-#define ADD_STR(m,x)    if(flags&(m)){strncpy(&s[i]," "x,4);i+=4;}
 
 static char*
 print_tcp_flags(uint8_t flags) {
-    static char s[36];
-    size_t i = 0;
+    static char s[7];
+    size_t i;
     
-    if (flags == 0)
-        return NULL;
-    
-    ADD_STR(0x80, "cwr");
-    ADD_STR(0x40, "ece");
-    ADD_STR(0x20, "urg");
-    ADD_STR(0x10, "ack");
-    ADD_STR(0x08, "psh");
-    ADD_STR(0x04, "rst");
-    ADD_STR(0x02, "syn");
-    ADD_STR(0x01, "fin");
-    
+    i = 0; 
+    s[i] = '.'; 
+
+    if (flags & 0x01) 
+	s[i++] = 'F';
+
+    if (flags & 0x02) 
+	s[i++] = 'S';
+	
+    if (flags & 0x04) 
+	s[i++] = 'R';
+  	
+    if (flags & 0x08) 
+	s[i++] = 'P';
+
+    if (flags & 0x10) 
+	s[i++] = 'A';
+  	
+    if (flags & 0x20) 
+	s[i++] = 'U';
+  	
+    if (flags & 0x40) 
+	s[i++] = 'E';
+  	
+    if (flags & 0x80) 
+	s[i++] = 'C';
+  	
     s[i] = '\0';
     return s;
 }
 
 
-#define OFFCOPY(d,s,n)  ((memcpy(d,s,n)),(n))
-
-#define OUT_BUFF_SIZ    2048
-#define  TIMESTR_LEN      15    /* strlen("MON DD HH:MM:SS") */
-#define  IP_ADDR_LEN      15    /* strlen("XXX.XXX.XXX.XXX") */
-#define MAC_ADDR_LEN      17    /* strlen("XX:XX:XX:XX:XX:XX") */
-
-/* Ugly CPP tweak, needed to use macro constants *
- * within strings - see CPP manual chapter 3.4   */
-#define STR(LEN)          #LEN
-#define NUM(LEN)          STR(LEN)
-
-/* TODO: move subsequent macros to a common file such as module.h */
-#define GETH64(x)  NTOHLL(*(uint64_t*)(x))
-#define GETH32(x)  ntohl(*(uint32_t*)(x))
-#define GETH16(x)  ntohl(*(uint16_t*)(x))
-#define GETH8(x)   (*(uint8_t*)(x))
-
-#define MAC_ADDR(x)     (ether_ntoa((struct ether_addr*)&(x)))
-#define IP_ADDR(x)      (inet_ntoa(*(struct in_addr*)&(N32(x))))
-
 static char *
-print (char *buf, size_t *out_len, __unused char * const args[])
+print(char *buf, size_t *len, char * const args[])
 {
-    static char out[OUT_BUFF_SIZ];
-    static char tss[TIMESTR_LEN + 1];
-    static char src[IP_ADDR_LEN + 1];
-    static char dst[IP_ADDR_LEN + 1];
-#if PRINT_MAC
-    static char msrc[MAC_ADDR_LEN + 1];
-    static char mdst[MAC_ADDR_LEN + 1];
-#endif
-    uint16_t flags_ofs, flags, ofs;
-    size_t len;
-    time_t ts;
-    pkt_t p;
-    int off;
-    
-    /* copy the packet back in a pkt_t structure */
-    memset(&p, 0, sizeof(pkt_t));
-    
-    p.ts      = GETH64(buf);
-    p.caplen  = GETH32(buf + 8);
-    p.len     = GETH32(buf + 12);
+    static char s[2048]; 
+    pkt_t p, *pkt; 
+    int hh, mm, ss; 
+    uint32_t addr; 
+    struct protoent * pe; 
 
-    off = 16;
+    if (buf == NULL && args != NULL) { 
+	/* first call, process the arguments */
+	*len = 0; 
+        return s; 
+    } 
+
+    if (buf == NULL && args == NULL) { 
+	/* last call, nothing to do */
+        *len = 0; 
+        return s; 
+    } 
     
-    off += OFFCOPY(&p.mach, buf + off, MAC_H_SIZE);
-    off += OFFCOPY(&p.ih,   buf + off,  IP_H_SIZE);
-    off += OFFCOPY(&p.p,    buf + off, APP_H_SIZE);
-    
-    buf += off;
-    
-    /*
-     * prepare a string with our desired timestamp output format
-     *
-     * if you want to display the year as well,
-     * define TIMESTAMP_LEN as 20 and use "%Y %b %e %T" as format
+    /* copy the packet CoMo header, converting 
+     * the fields in host-byte order 
      */
-    ts = (time_t)TS2SEC(p.ts);
-    strftime(tss, TIMESTR_LEN + 1, "%b %e %T", localtime(&ts));
+    pkt = (pkt_t *) buf; 
+    p.ts = NTOHLL(COMO(ts)); 
+    p.len = ntohl(COMO(len)); 
+    p.caplen = ntohl(COMO(caplen)); 
+    p.l2type = ntohl(COMO(l2type)); 
+    p.l3type = ntohs(COMO(l3type)); 
+    p.l4type = ntohs(COMO(l4type)); 
+    p.layer3ofs = ntohs(COMO(layer3ofs)); 
+    p.layer4ofs = ntohs(COMO(layer4ofs)); 
+    p.payload = buf + sizeof(pkt_t);
+
+    /* now we are ready to process this packet */
+    pkt = (pkt_t *) &p; 
     
-    /* prepare ASCII strings for IP and MAC addresses */
-#if PRINT_MAC
-    snprintf(msrc, MAC_ADDR_LEN + 1, "%s", MAC_ADDR(p.mach.src));
-    snprintf(mdst, MAC_ADDR_LEN + 1, "%s", MAC_ADDR(p.mach.dst));
-#endif
-    snprintf(src, IP_ADDR_LEN + 1, "%s", IP_ADDR(p.ih.src_ip));
-    snprintf(dst, IP_ADDR_LEN + 1, "%s", IP_ADDR(p.ih.dst_ip));
-    
+    /* print timestamp (hh:mm:ss.us) */
+    hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
+    mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
+    ss = TS2SEC(COMO(ts)) % 60; 
+    *len = sprintf(s, "%02d:%02d:%02d.%06d ", hh, mm, ss, TS2USEC(COMO(ts))); 
+
     /* 
-     * flags and offset from IP header are packet together
-     * in the same field, so we have to split them
+     * depending on the l3 type we print different 
+     * information 
      */
-    flags_ofs   = H16(p.ih.ofs);
-    flags       = (flags_ofs & 0xe000) >> 13;
-    ofs         = flags_ofs & 0x1fff;
-    
-    sprintf(out, "%s:%03u "
-            "(%4u/%4uB) "
-            "v%1hx %1uw tos:%2u %4uB "
-            "id:%5u F(d%1hxm%1hx) +%4u "
-            "ttl:%3u sip:%" NUM(IP_ADDR_LEN) "s"
-#if PRINT_MAC
-            " (%" NUM(MAC_ADDR_LEN) "s)"
-#endif
-            " dip:%" NUM(IP_ADDR_LEN) "s"
-#if PRINT_MAC
-            " (%" NUM(MAC_ADDR_LEN) "s)"
-#endif
-            " ",
-            tss, TS2MSEC(p.ts),
-            p.caplen, p.len,
-            p.ih.vhl >> 4, p.ih.vhl & 0x0f, p.ih.tos, H16(p.ih.len),
-            H16(p.ih.id), (flags & 0x2) > 1, flags & 0x1, ofs,
-            p.ih.ttl, src
-#if PRINT_MAC
-            , msrc
-#endif
-            , dst
-#if PRINT_MAC
-            , mdst
-#endif
-            );
-    
-    len = strlen(out);
-    
-    /* TODO: print a richer output, esp. for ICMP */
-    if (p.ih.proto == 0x06) {        /* TCP */
-        sprintf(out + len, "[TCP] sp:%5u dp:%5u seq:%10u ack:%10u "
-                "win:%5u %s",
-                H16(p.p.tcph.src_port), H16(p.p.tcph.dst_port),
-                (uint)H32(p.p.tcph.seq), (uint)H32(p.p.tcph.ack),
-                H16(p.p.tcph.win), print_tcp_flags(p.p.tcph.flags)
-                );
-    } else if (p.ih.proto == 0x11) { /* UDP */
-        sprintf(out + len, "[UDP] sp:%5u dp:%5u len:%5u",
-                H16(p.p.udph.src_port), H16(p.p.udph.dst_port),
-                H16(p.p.udph.len));
-    } else if (p.ih.proto == 0x01) { /* ICMP */
-        uint8_t type = p.p.icmph.type;
-        char* icmp_type = type == 0 ? "\"echo reply\"" :
-                    type == 3 ? "\"desination unreachable\"" :
-                    type == 4 ? "\"source quench\"" :
-                    type == 5 ? "\"redirect\"" :
-                    type == 8 ? "\"echo\"" :
-                    type == 11 ? "\"time exceeded\"" :
-                    type == 12 ? "\"parameter problem\"" :
-                    type == 13 ? "\"timestamp\"" :
-                    type == 14 ? "\"timestamp reply\"" :
-                    type == 15 ? "\"information request\"" :
-                    type == 16 ? "\"information reply\"" :
-                    "unknown type";
-        sprintf(out + len, "[ICMP] %s (%hu), code %hu",
-                icmp_type, p.p.icmph.type, p.p.icmph.code);
-    } else {
-        sprintf(out + len, "[unrecognized protocol...]");
+    switch (COMO(l3type)) { 
+    case ETHERTYPE_IP: 
+        /* 
+         * print IP header information 
+         */
+        pe = getprotobynumber(IP(proto)); 
+	*len += sprintf(s + *len, "IP | %s - ", pe->p_name); 
+        *len += sprintf(s + *len, "tos 0x%2x ttl %d id %d length: %d - ", 
+		   IP(tos), IP(ttl), H16(IP(id)), H16(IP(len)));   
+
+	/* 
+         * print IP addresses and port numbers (if any) 
+         */
+        addr = N32(IP(src_ip)); 
+	*len += sprintf(s + *len, inet_ntoa(*(struct in_addr*) &addr)); 
+	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP)  
+	    *len += sprintf(s + *len, ":%d", H16(UDP(src_port))); 
+
+	*len += sprintf(s + *len, " > "); 
+
+        addr = N32(IP(dst_ip)); 
+	*len += sprintf(s + *len, inet_ntoa(*(struct in_addr *) &addr)); 
+	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP)  
+	    *len += sprintf(s + *len, ":%d", H16(UDP(dst_port))); 
+
+        /* 
+	 * print TCP specific information 
+         */
+	if (IP(proto) == IPPROTO_TCP) { 
+	    *len += sprintf(s + *len, 
+			" %s seq %u ack %u win %u", 
+			print_tcp_flags(TCP(flags)), 
+			H32(TCP(seq)), H32(TCP(ack)), H16(TCP(win))); 
+	} 
+
+	break; 
+ 
+    default: 
+	*len += sprintf(s + *len, 
+                    "ethertype: 0x%04x --- print not supported", 
+		    COMO(l3type)); 
+	break;
     }
 
-    *out_len = strlen(out);
-    out[(*out_len)++] = '\n';
-
-    return out;
+    *len += sprintf(s + *len, "\n"); 
+    return s; 
 }
 
-#endif
 
 static int
 replay(char *buf, char *out, size_t * len)
@@ -366,7 +322,7 @@ callbacks_t callbacks = {
     action: NULL,
     store: store,
     load: load,
-    print: NULL,
+    print: print,
     replay: replay 
 };
 
