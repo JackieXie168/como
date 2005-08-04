@@ -23,6 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
+ * $Id$ 
  */
 
 %{
@@ -37,12 +38,13 @@ OPT_METADATA    msg|reference|sid|rev|classtype|priority
 OPT_PAYLOAD     content|nocase|rawbytes|depth|offset|distance|within|uricontent|isdataat|pcre|byte_test|byte_jump|regex|content-list
 OPT_NPAYLOAD    fragoffset|ttl|tos|id|ipopts|fragbits|dsize|flags|flow|flowbits|seq|ack|window|itype|icode|icmp_id|icmp_seq|rpc|ip_proto|sameip
 OPT_POSTDETECT  logto|session|sesp|react|tag
-KEYWORD         {OPT_METADATA}|{OPT_PAYLOAD}|{OPT_NPAYLOAD}|{OPT_POSTDETECT}
+OPT_OTHER       activates|activated-by|count
+KEYWORD         {OPT_METADATA}|{OPT_PAYLOAD}|{OPT_NPAYLOAD}|{OPT_POSTDETECT}|{OPT_OTHER}
 COLON           ":"
 SEMICOLON       ";"
 QUOTE           "\""
-CONTENT         {COLON}[a-zA-Z0-9"|""+"]+{SEMICOLON}
-QUOTEDCONTENT   {COLON}{QUOTE}[a-zA-Z0-9"|""+" ]+{QUOTE}{SEMICOLON}
+CONTENT         {COLON}[^; ]+{SEMICOLON}
+QUOTEDCONTENT   {COLON}{QUOTE}[^\"]+{QUOTE}{SEMICOLON}
 IPTOK           ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
 NETMASK         "/"({DIGIT}){1,2}
 COMMA           ","
@@ -58,38 +60,53 @@ CLOSEBR         ")"
 
 %option noyywrap
 %option nounput
+%option noyyalloc noyyfree noyyrealloc
 
 %%
 
 {ACTION}        { 
-                yylval.text = strndup(yytext, strlen(yytext)); 
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(ACTION); 
                 }
 {PROTO}         { 
-                yylval.text = strndup(yytext, strlen(yytext));
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(PROTO); 
                 } 
 {IPTOK}         { 
-                yylval.text = strndup(yytext, strlen(yytext));
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(IPTOK); 
                 }
 {NETMASK}       { 
-                yylval.text = strndup(yytext+1, strlen(yytext));
+                yslval.text = (char *)prv_alloc(strlen(yytext));
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext+1, strlen(yytext));
                 return(NETMASK); 
                 }
 {PORT}          { 
-                yylval.text = strndup(yytext, strlen(yytext));
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(PORT); 
                 }
 {COLON}         { 
                 return(COLON); 
                 }
 {DIRECTION}     { 
-                yylval.text = strndup(yytext, strlen(yytext));
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(DIRECTION); 
                 }
 {ANY}           {
-                yylval.text = strndup(yytext, strlen(yytext));
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(ANY);
                 }
 {NEGATION}      {
@@ -111,21 +128,42 @@ CLOSEBR         ")"
                 return(CLOSEBR);
                 }
 {CONTENT}       {
-                yylval.text = strndup(yytext+1, strlen(yytext+1) - 1);
+                yslval.text = (char *)prv_alloc(strlen(yytext)-1);
+                if (yslval.text == NULL) return -1;
+                strncpy(yslval.text, yytext+1, strlen(yytext)-2);
+                strcat(yslval.text, "\0");
                 return(CONTENT);
                 }
 {QUOTEDCONTENT} {
-                yylval.text = strndup(yytext+2, strlen(yytext+2) - 2);
-                return(QUOTEDCONTENT);
+                yslval.text = (char *)prv_alloc(strlen(yytext)-3);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext+2, strlen(yytext)-4);
+                strcat(yslval.text, "\0");
+                return(CONTENT);
                 }
 {KEYWORD}       {
-                yylval.text = strndup(yytext, strlen(yytext));
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(KEYWORD);
                 }
 {SEMICOLON}     {
                 return(SEMICOLON);
                 }                
 [ \t\n]+
+
 %%
 
-/* C Functions */
+/* Redefine memory allocation functions */
+
+void *yyalloc (size_t bytes) {
+    return prv_alloc(bytes);
+}
+
+void yyfree (void *ptr) {
+    return prv_free(ptr);
+}
+
+void *yyrealloc (void *ptr, size_t bytes) {
+    return prv_realloc(ptr, bytes);
+}
