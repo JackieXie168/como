@@ -131,11 +131,16 @@ clean:
 .c.o:
 	$(CC) $(CFLAGS) $(CFLAGS_$(PROG)) -c $(<) -o $(@)
 
-# Default rules to build flex and bison parsers (for the Snort module)
+# Default rules to build flex and bison parsers 
+# (for the Snort module and the filters)
+
+filter-%.c : PREFIX = f
+snort-%.c : PREFIX = s
+
 .l.c:
-	flex -t $(<) > $(@)
+	flex -Py$(PREFIX) -t $(<) > $(@)
 .y.c: 
-	bison -o $(@) $(<)
+	bison -p y$(PREFIX) -o $(@) $(<)
 
 # Template rule to compile multiple programs
 # XXX NOTE the workaround for a bug in gmake on FreeBSD:
@@ -176,8 +181,8 @@ $(foreach o,$(OBJS_$(MODULE)),$(eval $(o) : $(DEPS_$(MODULE))))
 $(foreach o,$(OBJS_$(MODULE)),$(eval $(MODULE) : $o))
 $(MODULE): $(addsuffix .c,$(basename $(MODULE))) 
 	$$(warning "building module $(MODULE)")
-	$$(CC) $$(CFLAGS) -shared -Wl,-x -o $$(@) $$(^)
-
+	$$(CC) $$(CFLAGS) -shared -Wl,-x -o $$(@) $$(^) \
+		$$(LIBOPTS) $$(LIBS_$(MODULE):%=-l%)
 endef
 
 # The template rule is instantiated as needed for each particular program
