@@ -40,6 +40,7 @@
 
 #include "como.h"
 #include "sniffers.h"
+#include "filter.h"
 
 /* global data structure that contains all
  * configuration information
@@ -564,10 +565,24 @@ do_config(int argc, char *argv[])
 
     case TOK_FILTER:
 	if (scope == CTX_MODULE) {
-	    safe_dup(&mdl->filter, argv[1]);
-	} else if (scope == CTX_GLOBAL) {
+#ifdef HAVE_FLEX_AND_BISON
+            char *s;
+            parse_filter(argv[1], &s);
+            safe_dup(&mdl->filter, s);
+            free(s);
+#else
+            safe_dup(&mdl->filter, argv[1]);
+#endif	
+        } else if (scope == CTX_GLOBAL) {
+#ifdef HAVE_FLEX_AND_BISON
+            char *s;
+            parse_filter(argv[1], &s);
+            safe_dup(&map.filter, s);
+            free(s);
+#else
 	    safe_dup(&map.filter, argv[1]);
-	}
+#endif	
+        }
 	break;
 
     case TOK_HASHSIZE:
@@ -699,6 +714,7 @@ parse_cfgline(const char *line)
 	IN_WORD,
 	IN_QUOTES,
 	END_QUOTES,
+        ESCAPE,
 	DONE
     } state = DONE;
     static int linenum;
@@ -713,6 +729,7 @@ parse_cfgline(const char *line)
 #define WHITESP		" \t\f\v\n\r"	/* whitespace */
 #define COMMENT		"#"		/* comment markers */
 #define QUOTE		"\""		/* quote markers */
+#define BACKSLASH       "\\"            /* backslash */
 
     srclen = strlen(line);
     linenum++;
@@ -785,6 +802,10 @@ parse_cfgline(const char *line)
 
 	case IN_QUOTES:
 	    /* wait for end-quote */
+	    if (index(BACKSLASH, c)) {
+                state = ESCAPE;
+                break;
+            }
 	    if (index(QUOTE, c)) {	/* end quote */
 		state = END_QUOTES;
 		break;
@@ -793,7 +814,12 @@ parse_cfgline(const char *line)
 	    copy = 1;
 	    break;
 
-	case END_QUOTES:
+        case ESCAPE:
+            copy = 1;
+            state = IN_QUOTES;
+            break;
+
+        case END_QUOTES:
 	    end_token = 1;
 	    state = IN_BLANK;
 	    break;
@@ -811,6 +837,7 @@ parse_cfgline(const char *line)
     }
     switch(state) {
     case IN_QUOTES:
+    case ESCAPE:
 	logmsg(LOGCONFIG, "missing endquote in line %d [%s]\n",
 	    linenum, line);
     	dst = 0;
