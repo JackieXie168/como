@@ -350,18 +350,21 @@ query_ondemand(int client_fd)
     /* 
      * check if the module is running using the same filter 
      * 
-     * XXX right now we just check if the module exists and is using the 
-     *     exactly same filter. in the future we will have to check 
-     *     if the module has been running during the interval of interest. 
-     *     if not, we have to run it on the stored packet trace. 
-     *     furthermore, the filter should be semantically equivalent but
-     *     right now we check the syntax as well (i.e., right now "A and B" 
-     *     is not the same as "B and A"). 
-     * 
+     * XXX right now we just check if the module exists and is using an
+     * equivalent filter:
+     * - With the new filter parser that uses Flex and Bison, the filters
+     *   only need to be semantically equivalent
+     *   (i.e., "A and B" is the same as "B and A").
+     * - When not using Flex and Bison, the filters have to be 
+     *   exactly the same.
+     *   (i.e., "A and B" is not the same as "B and A").
+     * In the future we will have to check if the module has been running
+     * during the interval of interest. If not, we have to run it on the
+     * stored packet trace. 
      */
     module_found = 0; 
     for (idx = 0; idx < map.module_count; idx++) { 
-	mdl = &map.modules[idx]; 
+        mdl = &map.modules[idx]; 
 
 	/* check module name */
 	if (strcmp(req->module, mdl->name))
