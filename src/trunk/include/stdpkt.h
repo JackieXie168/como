@@ -308,9 +308,9 @@ struct _como_icmphdr {
 #define TCP(field)              \
     (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field)
 #define UDP(field)              \
-    (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (((struct _como_udphdr *) (pkt->payload + pkt->layer4ofs))->field)
 #define ICMP(field)             \
-    (((strict _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (((struct _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field)
 
 #define ETHP(pkt, field)        ETH(field)
 #define IPP(pkt, field)         \
