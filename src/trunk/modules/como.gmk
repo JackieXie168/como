@@ -25,9 +25,10 @@ ifdef HAVE_FLEX_AND_BISON
             snort-lexic.c \
             snort-syntax.c
         SRCS_snort.so = \
-            snort-syntax.c
-        DEPS_snort.so = \
-            snort-lexic.c
+            snort-syntax.c \
+            bm.c
+        DEPS_snort.so = snort-lexic.c
+        LIBS_snort.so = pcre
 endif
 
 INCDIRS = ../base
