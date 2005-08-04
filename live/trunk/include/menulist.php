@@ -97,6 +97,13 @@ function clearmenu(name) {
 	   print "&stime=$topstart&etime=$topend\">";
 	   print "Top destinations</a></li>";
            ?>
+        <li>
+           <?php
+           print "<a href=\"system.php?";
+           print "node=$host&module=snort";
+           print "&stime=$stime&etime=$etime\">";
+           print "Snort module</a></li>";
+           ?>
       </ul>
     </dd>
   </dl>
