@@ -26,7 +26,11 @@
  * $Id$
  */
 
-#include <pcre.h>       /* pcre library headers */
+#ifdef __FreeBSD__ 
+#include <pcre.h>
+#else
+#include <pcre/pcre.h>       /* pcre library headers */
+#endif 
 
 #include "stdpkt.h"     /* pkt_t */
 

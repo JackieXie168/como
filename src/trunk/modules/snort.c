@@ -490,7 +490,7 @@ check_proto(ruleinfo_t *info, pkt_t *pkt)
         /* XXX TODO: Only works for Ethernet... add more link types? */
         return (H16(ETH(type)) == 0x0800);
     }
-    else if (pkt->l3type == ETH_P_IP) {
+    else if (pkt->l3type == ETHERTYPE_IP) {
         return (IP(proto) == info->proto);
     }
     else return 0;

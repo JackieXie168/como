@@ -79,7 +79,7 @@ endif
 # not include "-I" and "-L" prefixes (which are automatically prepended)
 # It's quite difficult to have sensible defaults for these variables
 # INCDIRS?=../libs/hf
-# LIBDIR?=../libs/hf
+# LIBDIRS?=../libs/hf
 INCDIRS+=$(BASEDIR)/include 
 INCDIRS+=$(BASEDIR)/extra 
 INCOPTS= $(INCDIRS:%=-I%) -I. -I..

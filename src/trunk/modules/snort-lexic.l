@@ -60,7 +60,7 @@ CLOSEBR         ")"
 
 %option noyywrap
 %option nounput
-%option noyyalloc noyyfree noyyrealloc
+/* %option noyyalloc noyyfree noyyrealloc */
 
 %%
 

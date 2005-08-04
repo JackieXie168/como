@@ -31,6 +31,8 @@ ifdef HAVE_FLEX_AND_BISON
         LIBS_snort.so = pcre
 endif
 
-INCDIRS = ../base
+INCDIRS = ../base /usr/local/include
+
+LIBDIRS = /usr/local/lib
 
 include ../como.gmk
