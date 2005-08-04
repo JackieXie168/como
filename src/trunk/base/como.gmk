@@ -10,6 +10,11 @@ PROGS = como	# list of program names
 # OBJS_como_DEPS = como.h comotypes.h
 DEPS_como := ../include/como.h
 
+ifdef HAVE_FLEX_AND_BISON
+        OTHER = filter-lexic.c
+        DEPS_como += filter-lexic.c
+endif
+
 SRCS_como := \
 	capture.c \
 	como.c \
@@ -26,6 +31,10 @@ SRCS_como := \
 	heap.c \
 	sniffers.c \
 	os.c
+
+ifdef HAVE_FLEX_AND_BISON
+        SRCS_como += filter-syntax.c
+endif
 
 LIBS = $(LIBDL) m		
 LIBDIRS = /usr/local/lib
@@ -45,6 +54,12 @@ endif
 # bpf, but Linux does not have bpf
 ifeq ($(shell uname),FreeBSD)
 	SNIFFERS += bpf
+endif
+
+# Flex/Bison support for filter expressions
+#
+ifdef HAVE_FLEX_AND_BISON
+        CFLAGS += -DHAVE_FLEX_AND_BISON
 endif
 
 # Endace DAG cards.
