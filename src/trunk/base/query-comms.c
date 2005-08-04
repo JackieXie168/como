@@ -36,6 +36,7 @@
 
 #include "como.h"
 #include "query.h"
+#include "filter.h"
 
 /*
  * Communication support for the query modules.
@@ -174,9 +175,16 @@ query_parse(char *buf)
 	    char * s = strchr(p1, '=');
 	    asprintf(&q.module, "%s", s + 1); 
 	} else if (strstr(p1, "filter=") == p1) {
-	    char * s = strchr(p1, '=');
-	    asprintf(&q.filter, "%s", s + 1); 
-	} else if (strstr(p1, "start=") == p1) {
+#ifdef HAVE_FLEX_AND_BISON
+            char * s;
+            parse_filter(strchr(p1, '=') + 1, &s);
+            asprintf(&q.filter, "%s", s);
+            free(s);
+#else
+            char * s = strchr(p1, '=');
+            asprintf(&q.filter, "%s", s + 1);
+#endif	
+        } else if (strstr(p1, "start=") == p1) {
 	    q.start = atoi(p1+6);
 	} else if (strstr(p1, "end=") == p1) {
 	    q.end = atoi(p1+4);
