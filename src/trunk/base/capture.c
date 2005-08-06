@@ -460,7 +460,6 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
             if (mdl->callbacks.match == NULL || mdl->callbacks.match(pkt, cand))
                 break;
             prev = cand;
-	    assert(cand->hash == hash);
             cand = cand->next;
         }
 

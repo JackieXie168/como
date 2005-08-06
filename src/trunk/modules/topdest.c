@@ -67,12 +67,6 @@ match(pkt_t *pkt, void *fh)
 }
 
 static int
-check(pkt_t *pkt)
-{
-    return pkt->l3type == ETHERTYPE_IP; 
-}
-
-static int
 update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 {
     FLOWDESC *x = F(fh);
@@ -217,7 +211,7 @@ callbacks_t callbacks = {
     indesc: NULL, 
     outdesc: NULL, 
     init: NULL,
-    check: check,
+    check: NULL,
     hash: hash,
     match: match,
     update: update,
