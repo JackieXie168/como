@@ -115,7 +115,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "Date                     Timestamp          Bytes    Pkts\n"
 #define PRETTYFMT	"%.24s %12d.%06d %8llu %8llu\n"
 #define PLAINFMT	"%12ld %16llu %12llu %12llu\n"
-#define GNUPLOTFMT	"%12ld %12llu %12llu\n"
+#define GNUPLOTFMT	"%ld %f %llu\n"
 
 #define GNUPLOTHDR						\
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
@@ -125,7 +125,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "set y2label \"Packets/sec\" textcolor lt 4;"			\
     "set y2tics nomirror;"						\
     "set ytics nomirror;"						\
-    "set autoscale ymax;"						\
+    "set yrange [0:*];"							\
     "set autoscale xfix;"						\
     "set nokey;"							\
     "set xdata time;"							\
@@ -184,7 +184,9 @@ print(char *buf, size_t *len, char * const args[])
 	    asctime(localtime(&t)), TS2SEC(ts), TS2USEC(ts), 
 	    NTOHLL(x->byts), NTOHLL(x->pkts));
     } else if (fmt == GNUPLOTFMT) {
-	*len = sprintf(s, fmt, (long int)t, 8*NTOHLL(x->byts)/1000000, NTOHLL(x->pkts));
+	float mbps;
+	mbps = 8.0 * (float) NTOHLL(x->byts) / 1000000.0; 
+	*len = sprintf(s, fmt, (long int)t, mbps, NTOHLL(x->pkts));
     } else {
 	*len = sprintf(s, fmt, 
 			(long int)t, ts, NTOHLL(x->byts), NTOHLL(x->pkts));
