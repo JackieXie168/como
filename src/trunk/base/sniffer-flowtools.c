@@ -86,7 +86,7 @@ struct _snifferinfo {
  */
 struct _flowinfo { 
     pkt_t pkt;			/* next packet that will be generated */
-    char payload[40]; 		/* payload (max IP + TCP header) */
+    char payload[48]; 		/* payload (NF + IP + TCP header) */
     uint32_t length_last;	/* length of last packet */
     timestamp_t increment; 	/* timestamp increment at each packet */
     timestamp_t end_ts;		/* timestamp of last packet */
@@ -127,12 +127,21 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow)
     
     pkt->ts = netflow2ts(f, f->First); 
     pkt->len = f->dOctets / f->dPkts;
-    pkt->caplen = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
-    pkt->l2type = COMOTYPE_NONE; 
+    pkt->caplen = sizeof(struct _como_nf) + 
+		  sizeof(struct _como_iphdr) + 
+		  sizeof(struct _como_udphdr);
+    pkt->l2type = COMOTYPE_NF; 
     pkt->l3type = ETHERTYPE_IP; 
-    pkt->layer3ofs = 0; 
-    pkt->layer4ofs = sizeof(struct _como_iphdr); 
+    pkt->l4type = f->prot;
+    pkt->layer3ofs = sizeof(struct _como_nf); 
+    pkt->layer4ofs = pkt->layer3ofs + sizeof(struct _como_iphdr); 
     pkt->payload = flow->payload; 
+
+    /* NetFlow header */
+    NF(src_mask) = f->src_mask;  
+    NF(dst_mask) = f->dst_mask;  
+    N16(NF(src_as)) = htons(f->src_as);  
+    N16(NF(dst_as)) = htons(f->dst_as);  
 
     /* IP header */
     IP(vhl) = 0x45; 
@@ -225,7 +234,7 @@ flowtools_read(source_t * src)
     fr = NULL; 
     if (src->fd >= 0) 
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);
-    if (fr == NULL) {
+    while (fr == NULL) {
 	src->fd = flowtools_next(src->fd, src->device, info); 
 	if (src->fd < 0) { 
 	    /* file is not ready, yet. this is normal if we are streaming
@@ -236,6 +245,11 @@ flowtools_read(source_t * src)
 	} 
 
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);  
+	if (fr == NULL) {
+	    logmsg(LOGWARN, "error reading flowtools file: %s\n", 
+		   strerror(errno));
+	    logmsg(0, "moving to next file in the directory\n"); 
+	}
     }
 
     /* 
