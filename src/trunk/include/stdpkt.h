@@ -129,6 +129,7 @@ struct _como_pkt {
 #define COMOTYPE_VLAN	0x0003	/* 802.1q packet */
 #define COMOTYPE_ISL	0x0004	/* Cisco ISL */
 #define COMOTYPE_PRISM	0x0005  /* IEEE 802.11 with Prism header */
+#define COMOTYPE_NF	0x0006	/* Flow records (NetFLow v5 info) */
 
 
 /* 
@@ -183,6 +184,23 @@ struct _como_isl {
     n16_t ethtype;		/* ethernet frame, type field */
 };
 
+
+/* 
+ * NetFlow-like record 
+ * It contains some information that can be derived from 
+ * NetFlow or cflowd records...
+ * 
+ * XXX still under development. we may want to add information 
+ *     that is present in the various versions of NetFLow. 
+ */
+struct _como_nf { 
+    uint8_t src_mask;	/* source prefix mask */
+    uint8_t dst_mask; 	/* destination prefix mask */
+    uint16_t padding; 	/* padding to make it word-aligned */
+    n16_t src_as;	/* source AS (could be peer AS or origin AS) */
+    n16_t dst_as; 	/* destination AS (peer AS or origin AS for dst IP) */
+};
+ 
 
 /* 
  * IP header 
@@ -303,6 +321,8 @@ struct _como_icmphdr {
     (((struct _como_hdlc *) pkt->payload)->field)
 #define ISL(field)              \
     (((struct _como_isl *) pkt->payload)->field)
+#define NF(field)               \
+    (((struct _como_nf *) pkt->payload)->field)
 #define IP(field)               \
     (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field)
 #define TCP(field)              \
