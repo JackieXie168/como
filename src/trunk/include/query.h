@@ -49,6 +49,7 @@ struct _query_req
     char * filter; 		/* filter expression */
     uint32_t start;             /* query starts at */
     uint32_t end;               /* query ends at */
+    int wait; 			/* set if query should wait for data */
     uint format;                /* query response format */
 #define Q_OTHER		154	/* any format (print() should know better) */
 #define Q_RAW		235	/* raw binary data */

@@ -47,6 +47,7 @@
  * We voluntarily use some weird values to catch errors.
  */
 #define CS_READER		0xff12	/* read mode */
+#define CS_READER_NOBLOCK	0xdfde	/* read mode (non blocking) */
 #define CS_WRITER		0x0437	/* write mode */
 
 /*
@@ -55,12 +56,23 @@
 #define FILE_NAMELEN    16 /* filenames are 16 decimal digits */
 #define FILE_NAMEFMT    "%s/%016llx" /* format used to print */
 
+typedef enum {
+   S_ERROR, 
+   S_NODATA, 
+   S_ACK, 
+   S_OPEN, 
+   S_CLOSE, 
+   S_REGION, 
+   S_SEEK, 
+   S_INFORM
+} msgtype_t; 
+
 
 /*
  * Message exchanged between STORAGE and its clients.
  */
 typedef struct {
-    enum {S_ERROR, S_ACK, S_OPEN, S_CLOSE, S_REGION, S_SEEK, S_INFORM} type; 
+    msgtype_t type;
     int id; 
     int arg;			/* seek method, open mode, error code */ 
     off_t ofs;			/* requested offset */
@@ -69,20 +81,20 @@ typedef struct {
 } csmsg_t;
 
 typedef enum {
-	CS_SEEK_NONE,		/* error */
+    CS_SEEK_NONE,		/* error */
 #if 0 /* unimplemented */
-	CS_SEEK_SET,		/* seek from the first byte */
-	CS_SEEK_CUR,		/* seek from the current byte */
-	CS_SEEK_END,		/* seek from the last byte */
+    CS_SEEK_SET,		/* seek from the first byte */
+    CS_SEEK_CUR,		/* seek from the current byte */
+    CS_SEEK_END,		/* seek from the last byte */
 #endif
-	CS_SEEK_FILE_NEXT,	/* goto next file */
+    CS_SEEK_FILE_NEXT,	/* goto next file */
 #if 0	/* XXX unimplemented */
-	CS_SEEK_FILE_SET,	/* seek from the first file */
-	CS_SEEK_FILE_CUR,	/* seek from the current file */
-	CS_SEEK_FILE_END,	/* seek from the last file */
-	CS_SEEK_TIME_SET,	/* seek from the first timestamp */
-	CS_SEEK_TIME_CUR,	/* seek from the current timestamp */
-	CS_SEEK_TIME_END,	/* seek from the last timestamp */
+    CS_SEEK_FILE_SET,	/* seek from the first file */
+    CS_SEEK_FILE_CUR,	/* seek from the current file */
+    CS_SEEK_FILE_END,	/* seek from the last file */
+    CS_SEEK_TIME_SET,	/* seek from the first timestamp */
+    CS_SEEK_TIME_CUR,	/* seek from the current timestamp */
+    CS_SEEK_TIME_END,	/* seek from the last timestamp */
 #endif
 } cs_method_t;
 

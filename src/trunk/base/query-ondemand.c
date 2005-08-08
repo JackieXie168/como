@@ -298,6 +298,7 @@ query_ondemand(int client_fd)
     char * output; 
     ssize_t len;
     int module_found; 
+    int mode; 
 
     /* set the name of this process */
     map.procname = "qd"; 
@@ -405,7 +406,8 @@ query_ondemand(int client_fd)
     storage_fd = create_socket("storage.sock", NULL);
 
     logmsg(V_LOGQUERY, "opening file for reading (%s)\n", mdl->output); 
-    file_fd = csopen(mdl->output, CS_READER, 0, storage_fd); 
+    mode =  req->wait? CS_READER : CS_READER_NOBLOCK; 
+    file_fd = csopen(mdl->output, mode, 0, storage_fd); 
     if (file_fd < 0) 
 	panic("opening file %s", mdl->output);
 
@@ -473,6 +475,9 @@ query_ondemand(int client_fd)
 		panic("reading from file %s\n", mdl->output); 
 
 	    if (len == 0) {
+		/* notify the end of stream to the module */
+		if (req->format == Q_OTHER) 
+		    printrecord(mdl, NULL, NULL, client_fd); 
 		logmsg(LOGQUERY, "reached end of file %s\n", mdl->output); 
 		break;
 	    }

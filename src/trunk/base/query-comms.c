@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/time.h>		/* struct timeval */
 #include <sys/uio.h>		/* write, read */
 #include <ctype.h>
 #include <assert.h>
@@ -127,6 +128,7 @@ query_parse(char *buf)
     q.start = t.tv_sec - 50;
     q.end = t.tv_sec + 20;
     q.format = Q_OTHER; 
+    q.wait = 1;
 
     /* 
      * check if the request is valid. look for GET and HTTP/1 
@@ -192,6 +194,8 @@ query_parse(char *buf)
 	    q.format = Q_RAW;
         } else if (strstr(p1, "format=como") == p1) {
 	    q.format = Q_COMO;
+        } else if (strstr(p1, "wait=no") == p1) {
+	    q.wait = 0; 
         } else if (strstr(p1, "status") == p1) {
 	    q.format = Q_STATUS;
 	} else {

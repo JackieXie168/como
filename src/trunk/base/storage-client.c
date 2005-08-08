@@ -127,24 +127,15 @@ static csfile_t * files[CS_MAXCLIENTS];
  *
  */
 static void
-waitforack(int sd, csmsg_t * m)
+waitforack(int sd, csmsg_t * m) 
 {
     fd_set rd;
     int ret = 0;
-    struct timeval t;
 
-again:				/* XXX this is just for debugging */
     FD_ZERO(&rd);
     FD_SET(sd, &rd);
-    t.tv_sec = 5;
-    t.tv_usec = 0;
     /* wait for the message */
-    ret = select(sd + 1, &rd, NULL, NULL, &t);
-    if (ret == 0) {
-	logmsg(V_LOGSTORAGE, "*** waitforack: TIMEOUT [%d] %x\n", sd, m);
-	goto again;
-    }
-	
+    ret = select(sd + 1, &rd, NULL, NULL, NULL);
     if (ret < 0)
 	panic("select error (%s)\n", strerror(errno));
 
@@ -171,13 +162,7 @@ csopen(const char * name, int mode, off_t size, int sd)
     csmsg_t m;
     int fd; 
 
-    if (mode != CS_READER && mode != CS_WRITER) {
-	logmsg(LOGWARN, "csopen: [%s] bad mode %d\n", name, mode);
-	return -1;
-    }
-
-    logmsg(LOGSTORAGE, "csopen: [%s] %s\n", name,
-	mode == CS_READER ? "CS_READER" : "CS_WRITER" );
+    assert(mode == CS_READER || mode == CS_WRITER || mode == CS_READER_NOBLOCK);
 
     /* look for an empty file descriptor */
     for (fd = 0; fd < CS_MAXCLIENTS && files[fd] != NULL; fd++)
@@ -366,9 +351,9 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method)
 	    close(cf->fd);
 
 #ifdef linux
-	flags = (cf->mode == CS_READER)? O_RDWR : O_RDWR|O_APPEND; 
+	flags = (cf->mode != CS_WRITER)? O_RDWR : O_RDWR|O_APPEND; 
 #else
-	flags = (cf->mode == CS_READER)? O_RDONLY : O_WRONLY|O_APPEND; 
+	flags = (cf->mode != CS_WRITER)? O_RDONLY : O_WRONLY|O_APPEND; 
 #endif
 	asprintf(&nm, "%s/%016llx", cf->name, in.ofs); 
 	cf->fd = open(nm, flags, 0666);
@@ -381,7 +366,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method)
     /*
      * mmap the new block 
      */
-    flags = (cf->mode == CS_READER)? PROT_READ : PROT_WRITE; 
+    flags = (cf->mode != CS_WRITER)? PROT_READ : PROT_WRITE; 
     cf->offset = ofs; 
     cf->size = *sz = in.size;
 
@@ -445,8 +430,8 @@ csmap(int fd, off_t ofs, ssize_t * sz)
     /* 
      * inflate the block size if too small. this will help answering
      * future requests. however do not tell anything to the caller. 
-     * we change *sz only if the storage process cannot handle the requested
-     * size; 
+     * we change *sz only if the storage process cannot handle the 
+     * requested size; 
      */
     newsz = (*sz < CS_OPTIMALSIZE)? CS_OPTIMALSIZE : *sz; 
     addr = _csmap(fd, ofs, &newsz, S_REGION);

@@ -993,7 +993,7 @@ handle_read(int s, csmsg_t * in, csclient_t *cl)
 	    bs, bs->name, in->ofs, 
 	    bs->file_first->bs_offset + bs->size, bs->the_writer);
 
-	if (bs->the_writer == NULL)
+	if (bs->the_writer == NULL || cl->mode == CS_READER_NOBLOCK)
 	    sendack(s, in->id, (off_t)0, (size_t)0); 
 	else 
 	    block_client(cl, in, s); 
