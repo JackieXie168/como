@@ -16,6 +16,7 @@ MODULES= \
 	finddst.so \
 	protocol.so \
 	protocolv6.so \
+	topAS.so \
 	ssid.so
 #	netflow.so \
 
