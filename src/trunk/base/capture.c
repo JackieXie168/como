@@ -348,16 +348,23 @@ freeze_module(void)
 
 #endif
 
+/* 
+ * -- do_drop_record 
+ * 
+ * stores the number of dropped packets in the array of 
+ * drop values that are then stored on disk in the drop log file. 
+ * 
+ */
 static void
-do_drop_record(struct drop_ring *dr,
-	       int mdl,
-	       timestamp_t ts,
-	       unsigned nr_pkts)
+do_drop_record(struct drop_ring *dr, int mdl, unsigned nr_pkts)
 {
     struct drop_record *d;
+    struct timeval now; 
+
+    gettimeofday(&now, NULL); 
 
     d = &dr->data[dr->prod_ptr % NR_DROP_RECORDS];
-    d->time = ts;
+    d->time = TIME2TS(now.tv_sec, now.tv_usec);
     d->npkts = nr_pkts;
     d->mdl = mdl;
     mb();
@@ -366,6 +373,7 @@ do_drop_record(struct drop_ring *dr,
     dr->prod_ptr++;
     mb();
 }
+
 
 /*
  * -- capture_pkt
@@ -379,7 +387,7 @@ do_drop_record(struct drop_ring *dr,
  */
 static timestamp_t
 capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which, 
-	    tailq_t * expired, int drop_counter, struct drop_ring *dr)
+	    tailq_t * expired)
 {
     pkt_t *pkt = (pkt_t *) pkt_buf;
     timestamp_t max_ts; 
@@ -534,18 +542,11 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	}
 	cand->full = mdl->callbacks.update(pkt, cand, new_record,
 					   mdl->unreported_local_drops +
-					   (unsigned)(drop_counter -
+					   (unsigned)(map.stats->drops -
 						      mdl->reported_global_drops));
-	mdl->reported_global_drops = drop_counter;
-	if (mdl->unreported_local_drops) {
-	    struct timeval ts;
-	    gettimeofday(&ts, NULL);
-	    do_drop_record(dr,
-			   mdl->index,
-			   TIME2TS(ts.tv_sec, ts.tv_usec),
-			   mdl->unreported_local_drops);
-
-	}
+	mdl->reported_global_drops = map.stats->drops;
+	if (mdl->unreported_local_drops)
+	    do_drop_record(map.dr, mdl->index, mdl->unreported_local_drops);
 	mdl->unreported_local_drops = 0;
     }
 
@@ -554,8 +555,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 
 
 static timestamp_t
-capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter,
-	     tailq_t *expired, int drop_counter, struct drop_ring *dr)
+capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter, tailq_t *expired) 
 {
     int * which;
     int idx;
@@ -592,11 +592,39 @@ capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter,
 	       "sending %d packets to module %s for processing",
 	       count, map.modules[idx].name);
 
-	last_ts = capture_pkt(&map.modules[idx], pkts, count,
-			      which, expired, drop_counter, dr);
+	last_ts = capture_pkt(&map.modules[idx], pkts, count, which, expired);
 	which += count; /* next module, new list of packets */
     }
     return last_ts;
+}
+
+
+/*
+ * -- get_sniffer_delay
+ * 
+ * This function compares current time with the timestamp received 
+ * from the sniffer. This is called delay (from current time) and reported
+ * in the "status" query. This way a client may adjust the timestamps 
+ * in the queries to offline como systems when asking for the most 
+ * recent data or queries like "last hour", etc.
+ */
+timestamp_t
+get_sniffer_delay(timestamp_t last_ts)
+{
+    struct timeval now;
+    timestamp_t ts;
+
+    gettimeofday(&now, NULL);
+    ts = TIME2TS(now.tv_sec, now.tv_usec);
+
+    /*
+     * NOTE: if last_ts is larger than the current time we
+     *       return zero delay. this event can happen when packet
+     *       timestamps are done directly in the capture card (e.g.,
+     *       Endace DAG cards). The system is using NTP for synchronization
+     *       that may be different from what the card is using.
+     */
+    return (ts > last_ts)? ts - last_ts : 0;
 }
 
 
@@ -621,9 +649,6 @@ capture_mainloop(int export_fd)
     int sent2export;		/* message sent to export */
     timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     source_t *src;
-    int drop_counter;           /* global drop counter */
-    int old_drops;
-    struct drop_ring *dr = map.dr;
 
     /* we only get a socketpair to the export process */
 
@@ -706,8 +731,7 @@ capture_mainloop(int export_fd)
     for (;;) {
 	fd_set r;
 	int i, maxfd = 0;
-	struct timeval tout = {0xffffffff, 0xffffffff}; 
-	struct timeval *pto = NULL;
+	struct timeval tout = {1, 0}; 
 
         errno = 0;
 
@@ -726,6 +750,9 @@ capture_mainloop(int export_fd)
 	 * we will deal with the others later on. 
 	 */
 	for (src = map.sources; src; src = src->next) {
+	    if (src->flags & SNIFF_INACTIVE) 
+		continue;	/* do not select() on this one */
+
 	    /* 
 	     * if this sniffer uses polling, set the timeout for 
 	     * the select() instead of adding the file descriptor to FD_SET 
@@ -735,7 +762,6 @@ capture_mainloop(int export_fd)
 		    tout.tv_sec = TS2SEC(src->polling); 
 		    tout.tv_usec = TS2USEC(src->polling); 
 		} 
-		pto = &tout; 
 		continue;	/* do not select() on this one */
 	    }
 
@@ -755,7 +781,7 @@ capture_mainloop(int export_fd)
 	}
 
 	/* wait for messages, sniffers or up to the polling interval */
-	i = select(maxfd+1, &r, NULL, NULL, pto);
+	i = select(maxfd+1, &r, NULL, NULL, &tout);
 	if (i < 0)
 	    panic("select"); 
 
@@ -794,52 +820,13 @@ capture_mainloop(int export_fd)
             sent2export = 1;            /* wait response from export */
         }
 
-	if (sniffers_left == 0) { 
-	    if (!sent2export) { 
-		/* no more packets coming, send to export the 
-		 * last tables and be done... 
-		 */
-		int idx;
-
-		for (idx = 0; idx < map.module_count; idx++) {
-		    module_t * mdl = &map.modules[idx];
-		    ctable_t *ct = mdl->ca_hashtable;
-
-		    if (ct && ct->records)  
-			flush_table(mdl, &expired);
-                }
-            }
-	    continue;
-	} 
-
         /*
 	 * check sniffers for packet reception (both the ones that use 
 	 * select() and the ones that don't)
          */
 	for (src = map.sources; src; src = src->next) {
-	    struct timeval now; 
 	    int count = 0;
-
-	    /* 
-	     * compute the delay of this stream compared to the actual 
-	     * time. this is useful for anyone that wants to query the 
-	     * system for the most recent data without querying about the
-	     * past. 
-	     */
-	    gettimeofday(&now, NULL); 
-	    map.stats->delay = 	
-		TS2SEC(TIME2TS(now.tv_sec, now.tv_usec) - last_ts); 
-	    if (map.stats->delay < 0) { 
-		/* 
-		 * this can happen when the timestamps are done in the
-		 * capture card. the system is using NTP for synchronization
-		 * the card may be using GPS or such. 
-		 * 
-		 * right now we ignore this event and trust the timestamp
-		 * we get. 
-		 */
-		map.stats->delay = 0; 
-	    } 
+	    int old_drops;
 
 	    if (src->flags & SNIFF_INACTIVE)
 		continue;	/* inactive device */
@@ -847,14 +834,11 @@ capture_mainloop(int export_fd)
 	    if ((src->flags & SNIFF_SELECT) && !FD_ISSET(src->fd, &r))
 		continue;	/* nothing to read here. */
 
-	    old_drops = drop_counter;
+	    old_drops = map.stats->drops;
 	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER,
-					  &drop_counter);
-	    if (drop_counter != old_drops)
-		do_drop_record(dr,
-			       -1,
-			       TIME2TS(now.tv_sec, now.tv_usec),
-			       drop_counter - old_drops);
+					  &map.stats->drops);
+	    if (map.stats->drops != old_drops)
+		do_drop_record(map.dr, -1, map.stats->drops - old_drops);
 
 	    if (count == 0)
 		continue;
@@ -869,9 +853,27 @@ capture_mainloop(int export_fd)
 	    logmsg(V_LOGCAPTURE, "received %d packets from sniffer\n", count);
 	    map.stats->pkts += count; 
 
-	    last_ts = capture_pkts(pkts, count, filter, &expired,
-				   drop_counter, dr);
+	    last_ts = capture_pkts(pkts, count, filter, &expired);
         }
+
+	/* compute delay from real time */
+	map.stats->delay = get_sniffer_delay(last_ts); 
+
+	/* 
+	 * if no sniffers are left, flush all the tables given that
+	 * no more packets will be received. 
+	 */
+	if (sniffers_left == 0) { 
+	    int idx;
+
+	    for (idx = 0; idx < map.module_count; idx++) {
+		module_t * mdl = &map.modules[idx];
+		ctable_t *ct = mdl->ca_hashtable;
+
+		if (ct && ct->records)  
+		    flush_table(mdl, &expired);
+	    }
+	} 
 
 	/* 
 	 * Now we check the memory usage. We use three thresholds.

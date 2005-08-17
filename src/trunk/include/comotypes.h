@@ -387,6 +387,7 @@ struct _statistics {
     size_t mem_usage_cur; 	/* current shared memory usage */
     size_t mem_usage_peak; 	/* peak shared memory usage */
     uint64_t pkts; 		/* sniffed packets so far */
+    int drops; 			/* global packet drop counter */
     int delay;	 		/* packet capture delay (secs) */
 };
     
