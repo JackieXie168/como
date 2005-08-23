@@ -124,7 +124,7 @@ sniffer_start(source_t * src)
     info->handle = dlopen("libpcap.so", RTLD_NOW);
     if (info->handle == NULL) { 
 	logmsg(LOGWARN, "sniffer %s error opening libpcap.so: %s\n", 
-	    src->cb->name, strerror(errno)); 
+	    src->cb->name, dlerror()); 
 	free(src->ptr); 
 	return -1; 
     } 
