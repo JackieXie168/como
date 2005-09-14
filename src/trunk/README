@@ -30,6 +30,9 @@ There are five options supported so far:
 * HAVE_FLEX_AND_BISON, needed to run the Snort module. It requires 
   bison v1.875 or higher. 
 
+* HAVE_PCRE, needed to use the Perl-Compatible Regular Expressions support
+  in the Snort module. It requires that libpcre is installed.
+  
 * USE_STARGATE, to compile the code for the Crossbow's Stargate platform 
   (see platformx.sourceforge.net). It requires arm-linux-gcc 3.2.2.
 
