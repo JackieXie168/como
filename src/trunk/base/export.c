@@ -68,10 +68,10 @@ create_record(module_t * mdl, uint32_t hash)
     /* first of all check if the ex_array is large enough. 
      * reallocate it if necessary 
      */
-    if (et->records > ea->size) { 
+    if (et->records >= ea->size) { 
 	size_t len; 
 
-	logmsg(LOGWARN, "need to reallocate ex_array for %s (%d -> %d)", 
+	logmsg(LOGWARN, "need to reallocate ex_array for %s (%d -> %d)\n", 
 	    mdl->name, ea->size, et->records * 2); 
 
 	len = sizeof(earray_t) + et->records * 2 * sizeof(rec_t *);
