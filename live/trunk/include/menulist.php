@@ -100,7 +100,7 @@ function clearmenu(name) {
         <li>
            <?php
            print "<a href=\"system.php?";
-           print "node=$host&module=snort";
+           print "node=$host&module=snort&filter=isIP";
            print "&stime=$stime&etime=$etime\">";
            print "Snort module</a></li>";
            ?>
