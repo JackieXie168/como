@@ -26,6 +26,16 @@
  * $Id$
  */
 
+/*
+ * Author: Diego Amores Lopez (damores@ac.upc.edu)
+ * 
+ * Description:
+ * ------------
+ *  
+ * Snort module for CoMo - Boyer-Moore pattern-matching algorithm
+ * 
+ */
+
 #include "como.h"       /* logmsg */
 
 #define ASIZE 256       /* anything that can be represented with a char */
@@ -96,14 +106,17 @@ void preBmGs(char *x, int m, int bmGs[]) {
       bmGs[m - 1 - suff[i]] = m - 1 - i;
 }
  
- 
-int BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[]) {
+/*
+ * -- BM
+ *
+ * Boyer-Moore pattern search
+ * Given a string, a pattern to search, their respective sizes, and precomputed
+ * data, this function returns the first appearance of the pattern in the string
+ * (or 0 if the pattern is not found)
+ *
+ */
+int BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], unsigned int *found) {
    int i, j;
-   // int bmGs[m], bmBc[ASIZE];
- 
-   /* Preprocessing */   
-   // preBmGs(x, m, bmGs);
-   // preBmBc(x, m, bmBc);
    
    /* Searching */
    j = 0;
@@ -115,7 +128,7 @@ int BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[]) {
       
       if (i < 0) {
          /* The pattern was found */
-         // OUTPUT(j);
+         *found = j;
          return 1;
       }
       else
@@ -125,5 +138,6 @@ int BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[]) {
           */
          j += MAX(bmGs[i], bmBc[(unsigned int)y[i + j]] - m + 1 + i);
    }
+   *found = 0;
    return 0;
 }
