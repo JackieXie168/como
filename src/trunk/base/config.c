@@ -522,6 +522,10 @@ do_config(int argc, char *argv[])
     static module_t * mdl = NULL;       /* module currently open */
     keyword_t *t;
     int i;
+    FILE *auxfp;
+    ssize_t readbytes;
+    size_t length;
+    char *line = NULL;
 
     /*
      * run some checks on the token (i.e., that it exists
@@ -574,14 +578,7 @@ do_config(int argc, char *argv[])
             safe_dup(&mdl->filter, argv[1]);
 #endif	
         } else if (scope == CTX_GLOBAL) {
-#ifdef HAVE_FLEX_AND_BISON
-            char *s;
-            parse_filter(argv[1], &s);
-            safe_dup(&map.filter, s);
-            free(s);
-#else
 	    safe_dup(&map.filter, argv[1]);
-#endif	
         }
 	break;
 
@@ -646,7 +643,23 @@ do_config(int argc, char *argv[])
     case TOK_ARGS:
         mdl->args = safe_calloc(argc, sizeof(char *));
         for (i = 1; i < argc; i++) {
-            safe_dup(&(mdl->args[i-1]), argv[i]);
+            if (argv[i][0] == '$') {
+                /* The arg must be read from an auxiliar file */
+                
+                /* Open the file */
+                if((auxfp = fopen(&argv[i][1], "r")) == NULL)
+                    panic("Error opening auxiliar file: %s\n", &argv[i][1]);
+                
+                /* Dump its content into a string */
+                mdl->args[i-1] = safe_calloc(1, sizeof(char));
+                strncpy(mdl->args[i-1], "\0", 1);
+                while((readbytes = getline(&line, &length, auxfp)) != -1) {
+                    mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], strlen(mdl->args[i-1]) + readbytes + 1);
+                    strncat(mdl->args[i-1], line, readbytes);
+                }
+                free(line);
+            }
+            else safe_dup(&(mdl->args[i-1]), argv[i]);
         }
         /* Last position is set to null to be able to know
          * when args finish from the modules
