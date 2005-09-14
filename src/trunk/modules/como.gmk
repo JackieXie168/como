@@ -5,6 +5,12 @@
 
 BASEDIR = ..
 
+# PCRE support for Snort rules
+#
+ifdef HAVE_PCRE
+        CFLAGS += -DHAVE_PCRE
+endif
+
 MODULES= \
 	counter.so \
 	utilization.so \
@@ -21,15 +27,20 @@ MODULES= \
 #	netflow.so \
 
 ifdef HAVE_FLEX_AND_BISON
-        MODULES += snort.so
+        MODULES += \
+            snort.so
         OTHER = \
             snort-lexic.c \
             snort-syntax.c
         SRCS_snort.so = \
             snort-syntax.c \
+            snort-mem.c \
             bm.c
-        DEPS_snort.so = snort-lexic.c
+        DEPS_snort.so = \
+            snort-lexic.c
+ifdef HAVE_PCRE
         LIBS_snort.so = pcre
+endif
 endif
 
 INCDIRS = ../base /usr/local/include
