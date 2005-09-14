@@ -25,7 +25,20 @@
  *
  * $Id$ 
  */
-
+ 
+/*
+ * Author: Diego Amores Lopez (damores@ac.upc.edu)
+ * 
+ * Description:
+ * ------------
+ *  
+ * Snort module for CoMo - lexic file
+ *
+ * Here we define the tokens that can appear in a Snort rule.
+ * GNU Flex turns this file into a C program that can get one token at a time
+ * from the input and send them to the Bison-generated parser.
+ */
+ 
 %{
 
 /* C Declarations */
@@ -35,47 +48,40 @@
 DIGIT           [0-9]
 ACTION          alert|log|pass|activate|dynamic
 OPT_METADATA    msg|reference|sid|rev|classtype|priority
-OPT_PAYLOAD     content|nocase|rawbytes|depth|offset|distance|within|uricontent|isdataat|pcre|byte_test|byte_jump|regex|content-list
+OPT_PAYLOAD     content|nocase|depth|offset|distance|within|isdataat|pcre|byte_test|byte_jump
 OPT_NPAYLOAD    fragoffset|ttl|tos|id|ipopts|fragbits|dsize|flags|flow|flowbits|seq|ack|window|itype|icode|icmp_id|icmp_seq|rpc|ip_proto|sameip
-OPT_POSTDETECT  logto|session|sesp|react|tag
 OPT_OTHER       activates|activated-by|count
-KEYWORD         {OPT_METADATA}|{OPT_PAYLOAD}|{OPT_NPAYLOAD}|{OPT_POSTDETECT}|{OPT_OTHER}
+KEYWORD         {OPT_METADATA}|{OPT_PAYLOAD}|{OPT_NPAYLOAD}|{OPT_OTHER}
 COLON           ":"
-SEMICOLON       ";"
-QUOTE           "\""
-CONTENT         {COLON}[^; ]+{SEMICOLON}
-QUOTEDCONTENT   {COLON}{QUOTE}[^\"]+{QUOTE}{SEMICOLON}
 IPTOK           ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
 NETMASK         "/"({DIGIT}){1,2}
 COMMA           ","
-DIRECTION       "->"|"<>"
-PROTO           ip|tcp|udp|icmp
 PORT            {DIGIT}+
-ANY             "any"
+ANYIP           "anyip"
+ANYPORT         "anyport"
+DIRECTION       "->"|"<>"
 NEGATION        "!"
 OPENSQBR        "["
 CLOSESQBR       "]"
+VAR             var
+VARNAME         [A-Z][A-Z_]*
+VARREF          "$"{VARNAME}
+PROTO           ip|tcp|udp|icmp
+SEMICOLON       ";"
 OPENBR          "("
 CLOSEBR         ")"
+CONTENT         {COLON}[^; ]+{SEMICOLON}
+QUOTE           "\""
+QUOTEDCONTENT   {COLON}{QUOTE}[^\"]+{QUOTE}{SEMICOLON}
+COMMENT         "#"(.)*
 
 %option noyywrap
 %option nounput
-/* %option noyyalloc noyyfree noyyrealloc */
+/* This should work with Flex version >= 2.5.11 */
+%option noyyalloc noyyfree noyyrealloc
 
 %%
 
-{ACTION}        { 
-                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
-                if (yslval.text == NULL) return -1; 
-                strncpy(yslval.text, yytext, strlen(yytext)+1);
-                return(ACTION); 
-                }
-{PROTO}         { 
-                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
-                if (yslval.text == NULL) return -1; 
-                strncpy(yslval.text, yytext, strlen(yytext)+1);
-                return(PROTO); 
-                } 
 {IPTOK}         { 
                 yslval.text = (char *)prv_alloc(strlen(yytext)+1);
                 if (yslval.text == NULL) return -1; 
@@ -94,38 +100,35 @@ CLOSEBR         ")"
                 strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(PORT); 
                 }
-{COLON}         { 
-                return(COLON); 
-                }
 {DIRECTION}     { 
                 yslval.text = (char *)prv_alloc(strlen(yytext)+1);
                 if (yslval.text == NULL) return -1; 
                 strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(DIRECTION); 
                 }
-{ANY}           {
+{VARNAME}       {
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1;
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
+                return(VARNAME);
+                }
+{VARREF}        {
+                yslval.text = (char *)prv_alloc(strlen(yytext));
+                if (yslval.text == NULL) return -1;
+                strncpy(yslval.text, yytext+1, strlen(yytext));
+                return(VARREF);
+                }
+{ACTION}        { 
                 yslval.text = (char *)prv_alloc(strlen(yytext)+1);
                 if (yslval.text == NULL) return -1; 
                 strncpy(yslval.text, yytext, strlen(yytext)+1);
-                return(ANY);
+                return(ACTION); 
                 }
-{NEGATION}      {
-                return(NEGATION);
-                }
-{OPENSQBR}      {
-                return(OPENSQBR);
-                }
-{CLOSESQBR}     {
-                return(CLOSESQBR);
-                }
-{COMMA}         {
-                return(COMMA);
-                }
-{OPENBR}        {
-                return(OPENBR);
-                }
-{CLOSEBR}       {
-                return(CLOSEBR);
+{PROTO}         {
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1;
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
+                return(PROTO);                
                 }
 {CONTENT}       {
                 yslval.text = (char *)prv_alloc(strlen(yytext)-1);
@@ -147,14 +150,49 @@ CLOSEBR         ")"
                 strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(KEYWORD);
                 }
+{COLON}         { 
+                return(COLON); 
+                }
+{ANYIP}         {
+                return(ANYIP);
+                }
+{ANYPORT}       {
+                return(ANYPORT);
+                }    
+{NEGATION}      {
+                return(NEGATION);
+                }
+{OPENSQBR}      {
+                return(OPENSQBR);
+                }
+{CLOSESQBR}     {
+                return(CLOSESQBR);
+                }
+{COMMA}         {
+                return(COMMA);
+                }
+{VAR}           {
+                return(VAR);
+                }
+{OPENBR}        {
+                return(OPENBR);
+                }
+{CLOSEBR}       {
+                return(CLOSEBR);
+                }
 {SEMICOLON}     {
                 return(SEMICOLON);
-                }                
+                }
+{COMMENT}       {
+                return(COMMENT);
+                }
 [ \t\n]+
 
 %%
 
-/* Redefine memory allocation functions */
+/* Redefine memory allocation functions
+ * This should work with Flex version >= 2.5.11 
+ */
 
 void *yyalloc (size_t bytes) {
     return prv_alloc(bytes);
