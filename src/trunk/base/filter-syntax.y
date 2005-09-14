@@ -26,6 +26,38 @@
  * $Id$ 
  */
 
+/*
+ * Author: Diego Amores Lopez (damores@ac.upc.edu)
+ * 
+ * Description:
+ * ------------
+ *  
+ * Filter parsing for CoMo - syntax file
+ * 
+ * Here we define the syntax of a CoMo filter, and the specific actions to be
+ * done when a part of a filter is recognised.
+ * 
+ * GNU Bison turns this file into a C program that can parse a filter string
+ * and return a semantically equivalent and normalized string, that can be
+ * compared with others.
+ *
+ * The following process is used to normalize a filter:
+ * 
+ * 1. Read the filter string and create a tree that represents the logical
+ *    expression obtained from it.
+ *
+ * 2. Transform the tree to Conjunctive Normal Form:
+ *      - Propagate negations inwards in the tree, until only literals
+ *        (leaves of the tree) are negated. Also clean the unnecessary
+ *        negations that this process leaves in the tree.
+ *      - Propagate disjunctions inwards, using the logical rules that apply.
+ *
+ * 3. Traverse the tree in postorder and transform it into a string that can
+ * be used as a CoMo filter, using lexicographical order to assure that two
+ * semantically equivalent filters always produce the same string.
+ * 
+ */
+ 
 %{
 
 /* C Declarations */
@@ -61,8 +93,11 @@ int yflex(void);
 void yferror(char const *);
 
 /*
- * makes a malloc'ed copy of src into *dst, freeing the previous one if any
- * taken from base/config.c
+ * -- safe_dup
+ *
+ * Makes a malloc'ed copy of src into *dst, freeing the previous one if any.
+ * Taken from base/config.c
+ *
  */
 static void
 safe_dup(char **dst, char *src)
@@ -74,10 +109,16 @@ safe_dup(char **dst, char *src)
         panic("out of memory");
 }
 
+
 /* Variable where the final string will be stored after parsing the filter */
 char **parsedstring;
 
-/* Create a new expression tree node */
+/* 
+ * -- TreeMake
+ * 
+ * Create a new expression tree node
+ *
+ */
 treenode_t *TreeMake(int node, treenode_t *left, treenode_t *right, char *t)
 {
   treenode_t *s = (treenode_t *)malloc(sizeof(*s));
@@ -88,7 +129,13 @@ treenode_t *TreeMake(int node, treenode_t *left, treenode_t *right, char *t)
   return(s);
 }
 
-/* Print an expression tree with indentation */
+/*
+ * -- TreePrintIndent
+ *
+ * Print an expression tree with indentation
+ * (only used for debug purposes)
+ *
+ */
 void TreePrintIndent(treenode_t *tree, int indent)
 {
   int i;
@@ -108,7 +155,13 @@ void TreePrintIndent(treenode_t *tree, int indent)
   TreePrintIndent(tree->right, indent + 1);
 }
 
-/* Print an expression tree */
+/*
+ * -- TreePrint
+ *
+ * Print an expression tree
+ * (only used for debug purposes)
+ *
+ */
 void TreePrint(treenode_t *tree)
 {
   if (tree)
@@ -127,7 +180,12 @@ void negate(treenode_t **);
 
 void propagate(treenode_t *);
 
-/* Propagate a negation inwards through an AND node */
+/* 
+ * -- negate_and
+ *
+ * Propagate a negation inwards through an AND node
+ *
+ */
 void negate_and(treenode_t **tree) {
     if (!T) return;
     if (T->nodetype == Tand) {
@@ -139,7 +197,12 @@ void negate_and(treenode_t **tree) {
         negate(tree);
 }
 
-/* Propagate a negation inwards through an OR node */
+/*
+ * -- negate_or
+ *
+ * Propagate a negation inwards through an OR node
+ *
+ */
 void negate_or(treenode_t **tree) {
     if (!T) return;
     if (T->nodetype == Tor) {
@@ -151,8 +214,13 @@ void negate_or(treenode_t **tree) {
         negate(tree);
 }
 
-/* Propagate negations inwards until only the leaves of the tree
-   can be negated */
+/*
+ * -- negate, propagate
+ *
+ * Propagate negations inwards until only the leaves of the tree
+ * can be negated
+ *
+ */
 
 void negate(treenode_t **tree) {
     if (!T) return;
@@ -197,7 +265,12 @@ void propagate(treenode_t *tree) {
     }            
 }
 
-/* Clean innecessary and residual negations from a tree */
+/*
+ * -- clean_neg
+ *
+ * Clean unnecessary and residual negations from a tree
+ *
+ */
 void clean_neg(treenode_t **tree) {
     treenode_t *aux;
     
@@ -225,7 +298,12 @@ void clean_neg(treenode_t **tree) {
     clean_neg(&(T->right));
 }
 
-/* Get the text of a tree leaf */
+/*
+ * -- get_text
+ *
+ * Get the text of a tree leaf
+ *
+ */
 char *get_text(treenode_t *n) {
     char *s;
     if (n->nodetype == Tpred)
@@ -238,7 +316,12 @@ char *get_text(treenode_t *n) {
 
 int found;
 
-/* Propagate disjunctions inwards */
+/*
+ * -- cnf, disjunct
+ *
+ * Propagate disjunctions inwards
+ *
+ */
 
 void cnf(treenode_t **);
 
@@ -289,12 +372,17 @@ void cnf(treenode_t **tree) {
     }
 }
 
-/* Transform a tree into a Conjunctive Normal Form expression */
+/*
+ * -- transform
+ *
+ * Transform a tree into a Conjunctive Normal Form expression
+ *
+ */
 void transform(treenode_t **tree) {
     if (!T) return;
     /* 1. Propagate negations inward */
     propagate(T);
-    /* 2. Clean the innecessary negations that are left in the tree */
+    /* 2. Clean the unnecessary negations that are left in the tree */
     clean_neg(tree);
     /* 3. Take care of conjunctions and disjunctions */
     do {
@@ -303,7 +391,13 @@ void transform(treenode_t **tree) {
     } while (found);
 }
 
-/* Insert a node in a list, keeping alphabetical order */
+/*
+ * -- insert_node, add_node
+ *
+ * Insert a node in a list, keeping alphabetical order
+ *
+ */
+
 listnode_t *insert_node(listnode_t *list, char *text) {
     listnode_t *prev, *cur;
     listnode_t *newnode;
@@ -329,8 +423,6 @@ listnode_t *insert_node(listnode_t *list, char *text) {
     }
     else return newnode;
 }
-
-/* Create a string that represents a filter in CNF form */
 
 char *make_string(treenode_t *);
 
@@ -367,6 +459,12 @@ listnode_t *add_node(listnode_t *list, int ntype, treenode_t *tree) {
     return insert_node(list, s);
 }
 
+/* 
+ * -- make_string
+ *
+ * Create a string that represents a filter in CNF form
+ *
+ */
 char *make_string(treenode_t *tree) {
     char *s = NULL;
     listnode_t *list = NULL;
