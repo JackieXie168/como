@@ -1,0 +1,130 @@
+#
+# Copyright (c) 2004 Universitat Politecnica de Catalunya
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+# $Id$
+#
+# Author: Diego Amores Lopez
+#
+# Description:
+#   
+# Rules file for the Snort module
+#
+# Each rule must be written in a separate line.
+# Lines starting with the '#' character are comments and will be ignored
+# by the parser.
+# 
+# It's possible to use variables in this file to define IP addresses, ports,
+# and groups of IP addresses or ports.
+# 
+# Each rule is divided in two main parts: the header and the body.
+#
+# The rule header contains the following info:
+#  - action: this keyword indicates what kind of action will be performed by the
+#    module when a rule is fired by a packet. The possible actions are:
+#        - ALERT (output a text with general info about the rule and the event
+#          that fired it).
+#        - LOG the entire packet (in our case, this will depend on the sniffer,
+#          as the Snort module can only log the packet provided by it).
+#        - ACTIVATE another rule, or wait until another rule activates this one.
+#          (the latter are called DYNAMIC rules)
+#        - drop the packet and don't continue matching it against other rules.
+#          (using the PASS keyword)
+#  - protocol: only IP, TCP, UDP and ICMP are supported.
+#  - IPs and ports: they can be written in various ways, negation can be used,
+#     lists of IPs and groups of ports can be defined, etc.
+#  - direction: rules may be applied only in one direction (using the -> symbol)
+#    or they can be bidirectional (<>).
+#
+# The rule body contains the options of the rule:
+#  - The options are the most important part of a Snort rule. They basically
+#    allow the user to look into the packet payload and match its content in
+#    various ways, including pattern matching using a Boyer-Moore algorithm,
+#    PCRE expressions, offsets and depth inside the packet... 
+#    Apart from the payload, most other fields in a packet can also be checked,
+#    like TTL, TOS, flags, etc.
+#
+# For a more detailed explanation of how Snort rules are written, please check
+# the Snort online manual at
+# http://www.snort.org/docs/snort_htmanuals/htmanual_2.4/node14.html
+#
+# Notes:
+#
+# - Due to some limitations with the rules parser, two separate keywords have to
+#   be used instead of Snort's "any": anyip for IP addresses and anyport for ports.
+#
+# - The following Snort options are not implemented in the Snort module for CoMo.
+#   Some of them are unnecessary or unimportant, others are related to the use of
+#   preprocessors which are not yet implemented in CoMo.
+#   - rawbytes
+#   - uricontent
+#   - ftpbounce
+#   - regex (obsoleted by pcre)
+#   - content-list (broken and not used in Snort)
+#   - flow
+#   - flowbits
+#   - all the post-detection options in Snort
+#
+# The following are rule examples. They only demonstrate how to write rules and do not
+# correspond to a real scenario. Please modify them before using the Snort module
+# Visit http://www.snort.org to get the official Snort rule lists.
+#
+# Variables definition
+#var HOMENET 62.57.0.0/16
+var HOMENET 147.83.130.0/24
+#var WEBSERVERS 62.57.214.14/32
+var WEBSERVERS 147.83.130.30/32
+#var DNSSERVER 62.57.214.224/32
+var DNSSERVER 147.83.130.130/32
+var VULNERABLEPORTS 21:80
+#
+# Alert on any tcp traffic directed to our web servers
+alert tcp anyip anyport -> $WEBSERVERS 80 (msg:"incoming web traffic";)
+#
+# Log all incoming/outgoing icmp traffic in our home network
+log icmp anyip anyport <> $HOMENET anyport (msg:"incoming/outgoing ICMP traffic";)
+#
+# Log all udp packets with a time-to-live greater than 100 hops and directed to a "vulnerable" port
+log udp anyip anyport -> $HOMENET $VULNERABLEPORTS (msg:"UDP traffic with large TTL"; ttl:>100;)
+#
+# The following rules apply to traffic going out of our home network to a web server (port 80)
+#
+# Search the packets payload for the string "abcdef", and make sure that there is payload data 100 bytes after this string
+# Ignore all the packets that match this rule
+pass tcp $HOMENET anyport -> anyip 80 (msg:"content search"; content:abcdef; isdataat:100,relative;)
+#
+# Search the packet payload for the "get" string using a case insensitive search, and then look for the
+# "HTTP" string at least 100 bytes further than the "get" string
+# Alert when a packet matches this rule
+alert tcp $HOMENET anyport -> anyip 80 (msg:"content search 2"; content:get; nocase; content:HTTP; distance:100;)
+#
+# Search the packet payload for the "abcdef" string, and then do a case insensitive search of a perl-compatible
+# regular expression, with a start point just after the "abcdef" string.
+# Alert when a packet matches this rule
+alert tcp $HOMENET anyport -> anyip 80 (msg:"content search 3"; content:abcdef; pcre:/gh.+jkl/iR;)
+#
+# Alert when UDP traffic is sent to our DNS server, and log the next 5 packets that go out from our home network
+# and are directed to a web server (port 80)
+dynamic tcp $HOMENET anyport -> anyip 80 (msg:"web traffic after DNS query"; activated-by:1; count:5;)
+activate udp $HOMENET anyport -> $DNSSERVER anyport (msg:"DNS traffic"; activates:1;)
