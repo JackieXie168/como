@@ -26,15 +26,31 @@
  * $Id$ 
  */
 
+/*
+ * Author: Diego Amores Lopez (damores@ac.upc.edu)
+ * 
+ * Description:
+ * ------------
+ *  
+ * Filter parsing for CoMo - lexic file
+ *
+ * Here we define the tokens that can appear in a CoMo filter.
+ * GNU Flex turns this file into a C program that can get one token at a time
+ * from the input and send them to the Bison-generated parser.
+ */
+
 %{
 
 /* C Declarations */
 
 %}
 
+/* The tokens that can appear in a CoMo filter are not completely defined yet.
+   This section should be modified as they change */
+
 ALFANUMERIC     [a-zA-Z0-9]
 CONDITION       ALL|isIP
-MACROKW         COMOPKT|PROTO|proto|DIR|IFACE|CLASS_A|CLASS_B|CLASS_C|CLASS_D|MULTICAST|EXPERIMENTAL|BADCLASS|NET
+MACROKW         COMO|PROTO|proto|DIR|IFACE|CLASS_A|CLASS_B|CLASS_C|CLASS_D|MULTICAST|EXPERIMENTAL|BADCLASS|NET
 MACRO           {MACROKW}\(({ALFANUMERIC}+\,)*{ALFANUMERIC}+\)
 
 %option noyywrap
