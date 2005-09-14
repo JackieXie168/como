@@ -493,7 +493,9 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
                 rec_t * x;
 
                 /* allocate a new record */
-                x = new_mem(mdl->ca_hashtable->mem, mdl->callbacks.ca_recordsize, "new");
+                x = new_mem(mdl->ca_hashtable->mem,
+                            mdl->callbacks.ca_recordsize + sizeof(rec_t),
+                            "new");
 		if (x == NULL) {
 		    mdl->unreported_local_drops++;
 		    continue;
