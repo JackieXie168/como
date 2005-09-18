@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004 Intel Corporation
- * All rights reserved.
+ * All r ghts reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,6 +41,7 @@
 #include <string.h>		/* bcopy */
 #include <stdio.h>		/* fprintf, stderr */
 #include <net/ethernet.h>	/* ether_addr, ether_ntoa */
+#include <pcap.h>		/* bpf_int32, etc. */
 
 #include "como.h"
 #include "module.h"
@@ -151,12 +152,13 @@ load(char * buf, size_t len, timestamp_t * ts)
 }
 
 
+
 /*
  * utility function used to pretty print tcp's control bits status
  */
-
 static char*
-print_tcp_flags(uint8_t flags) {
+print_tcp_flags(uint8_t flags) 
+{
     static char s[7];
     size_t i;
     
@@ -192,18 +194,62 @@ print_tcp_flags(uint8_t flags) {
 }
 
 
+/* 
+ * some constants and structures needed to 
+ * generate a pcap trace file 
+ */
+#define TCPDUMP_MAGIC   0xa1b2c3d4
+
+struct pcap_timeval {
+    bpf_int32 tv_sec;           /* seconds */
+    bpf_int32 tv_usec;          /* microseconds */
+};   
+    
+struct pcap_packet {
+    struct pcap_timeval ts;     /* time stamp */
+    bpf_u_int32 caplen;         /* length of portion present */
+    bpf_u_int32 len;            /* length of this packet (off wire) */
+    char payload[0]; 		/* packet payload */
+};
+
+
+#define PRETTYFMT 		0
+#define PCAPFMT			1
+
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
-    static char s[2048]; 
+    static char s[65536]; 
+    static int fmt; 
+    struct pcap_file_header * fhdr; 
+    struct pcap_packet * x; 
     pkt_t p, *pkt; 
     int hh, mm, ss; 
     uint32_t addr; 
+    int n; 
 
     if (buf == NULL && args != NULL) { 
 	/* first call, process the arguments */
-	*len = 0; 
-        return s; 
+        for (n = 0; args[n]; n++) {
+            if (!strcmp(args[n], "format=pcap")) {
+		fhdr = (struct pcap_file_header *) s; 
+		fhdr->magic = TCPDUMP_MAGIC;
+		fhdr->version_major = PCAP_VERSION_MAJOR;
+		fhdr->version_minor = PCAP_VERSION_MINOR;
+		fhdr->thiszone = 0; 
+		fhdr->snaplen = 65535; 		
+		fhdr->sigfigs = 0; 
+		fhdr->linktype = 1;
+   
+		*len = sizeof(struct pcap_file_header);
+                fmt = PCAPFMT;
+		return s; 
+            }
+        }
+
+	*len = 0;
+	fmt = PRETTYFMT;
+	return s;
     } 
 
     if (buf == NULL && args == NULL) { 
@@ -211,7 +257,7 @@ print(char *buf, size_t *len, char * const args[])
         *len = 0; 
         return s; 
     } 
-    
+
     /* copy the packet CoMo header, converting 
      * the fields in host-byte order 
      */
@@ -228,6 +274,21 @@ print(char *buf, size_t *len, char * const args[])
 
     /* now we are ready to process this packet */
     pkt = (pkt_t *) &p; 
+
+    if (fmt == PCAPFMT) { 
+        x = (struct pcap_packet *) s; 
+	x->ts.tv_sec = TS2SEC(COMO(ts)); 
+	x->ts.tv_usec = TS2USEC(COMO(ts)); 
+	x->len = COMO(len); 
+	x->caplen = COMO(caplen); 
+	memcpy(x->payload, pkt->payload, COMO(caplen)); 
+        *len = COMO(caplen) + sizeof(struct pcap_packet); 
+	return s; 
+    } 
+	
+    /* 
+     * if not PCAP, the format is PRETTYFMT... 
+     */
     
     /* print timestamp (hh:mm:ss.us) */
     hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
