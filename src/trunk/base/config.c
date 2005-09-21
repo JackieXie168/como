@@ -508,6 +508,7 @@ parse_size(const char *arg)
     return res;
 }
 
+
 /*
  * -- do_config
  *
@@ -639,17 +640,9 @@ do_config(int argc, char *argv[])
     case TOK_ARGS:
         mdl->args = safe_calloc(argc, sizeof(char *));
         for (i = 1; i < argc; i++) {
-#ifdef linux
-	    /* XXX this part of code uses getline(). This is not available
-	     *     under FreeBSD. Needs fixing but right now dont have time 
-	     *     for that... so we just use this code when running under
-	     *     Linux. 
-	     */
             if (argv[i][0] == '$') {
 		FILE *auxfp;
-		ssize_t readbytes;
-		size_t length;
-		char *line = NULL;
+		char line[256];
 
                 /* The arg must be read from an auxiliar file */
                 
@@ -660,17 +653,19 @@ do_config(int argc, char *argv[])
                 /* Dump its content into a string */
                 mdl->args[i-1] = safe_calloc(1, sizeof(char));
                 strncpy(mdl->args[i-1], "\0", 1);
-                while((readbytes = getline(&line, &length, auxfp)) != -1) {
-                    mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], strlen(mdl->args[i-1]) + readbytes + 1);
-                    strncat(mdl->args[i-1], line, readbytes);
+                while(fgets(line, sizeof(line), auxfp)) {
+		    int sz; 
+
+		    sz = strlen(mdl->args[i-1]) + strlen(line) + 1; 
+                    mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], sz); 
+                    strncat(mdl->args[i-1], line, strlen(line));
                 }
-                free(line);
             } else 
-#else
 		safe_dup(&(mdl->args[i-1]), argv[i]);
-#endif 
         }
-        /* Last position is set to null to be able to know
+
+        /* 
+	 * Last position is set to null to be able to know
          * when args finish from the modules
          */
         mdl->args[i-1] = NULL;
