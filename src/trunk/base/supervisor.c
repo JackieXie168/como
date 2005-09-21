@@ -345,7 +345,9 @@ supervisor_mainloop(int accept_fd)
 			    strerror(errno));
 		}
 
-		logmsg(LOGQUERY, "query from %s\n", inet_ntoa(addr.sin_addr)); 
+		logmsg(LOGQUERY, 
+		       "query from %s on fd %d\n", 
+		       inet_ntoa(addr.sin_addr), cd); 
 
 		/* fork a process to serve the query */
 		pid = fork(); 	
@@ -358,7 +360,6 @@ supervisor_mainloop(int accept_fd)
 			if (i != cd)
 			    close(i);
 		    query_ondemand(cd); 
-		    close(cd);
 		    exit(EXIT_SUCCESS); 
 		} else	/* parent */
 		    close(cd);
@@ -366,8 +367,10 @@ supervisor_mainloop(int accept_fd)
 	    }
 
 	    /* echo message on stdout */
-	    if (echo_log_msgs(i) != 0)
+	    if (echo_log_msgs(i) != 0) { 
+		close(i); 
 		del_fd(i, &valid_fds, max_fd);
+	    } 
 	}
 	handle_children();
     } 
