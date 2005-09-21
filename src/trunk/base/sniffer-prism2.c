@@ -79,6 +79,36 @@ struct _snifferinfo {
 }; 
     
 
+#ifdef linux
+
+/* 
+ * under Linux we use the Wireless Extensions as they do in iwconfig. 
+ * all the values for the ioctl() are different than in FreeBSD.
+ * other OSes are supposed to behave like FreeBSD. 
+ */
+
+struct iw_freq { 
+    int32_t m;
+    int16_t e;
+    uint8_t i;
+    uint8_t flags; 
+}; 
+
+struct wlan_req { 
+    char name[16]; 
+    union {
+        struct iw_freq  freq;
+        uint32_t mode; 
+    } u; 
+};
+
+#define SET_OPERATIONMODE	0x8B06
+#define SET_CHANNEL		0x8B04
+#define MONITOR_MODE		0x06 
+#define FIXED_CHANNEL		0x01
+
+#else 
+
 /* 
  * ioctl request to set the interface in 
  * monitor mode. 
@@ -89,10 +119,12 @@ struct wlan_req {
     u_int16_t	    val[512];
 };
 
-#define SIOCSPRISM2DEBUG        _IOW('i', 137, struct ifreq)
-#define SIOCGPRISM2DEBUG        _IOWR('i', 138, struct ifreq)
-#define PRISM_MONITOR_MODE      0x0B
-#define PRISM_SET_CHANNEL       0x08
+#define SET_OPERATIONMODE	_IOW('i', 137, struct ifreq)
+#define SET_CHANNEL		_IOW('i', 137, struct ifreq)
+#define MONITOR_MODE 		0x0B
+#define FIXED_CHANNEL	        0x08
+
+#endif
 
 
 /* 
@@ -101,15 +133,25 @@ struct wlan_req {
  * ioctl to configure interface 
  */
 void 
-send_ioctl(struct ifreq * ifr) 
+send_ioctl(char * device, struct wlan_req * req, int request) 
 {
+    struct ifreq ifr; 
     int s; 
+
+#ifdef linux
+    strcpy(req->name, device);
+    bcopy(req, &ifr, sizeof(ifr)); 
+#else 
+    bzero((char *)&ifr, sizeof(ifr));
+    strcpy(ifr.ifr_name, device);
+    ifr.ifr_data = (caddr_t) req;
+#endif
 
     s = socket(AF_INET, SOCK_DGRAM, 0);
     if (s == -1)
-	panic("socket %s", ifr->ifr_name); 
-    if (ioctl(s, SIOCSPRISM2DEBUG, ifr) == -1)
-	panic("ioclt %s", ifr->ifr_name); 
+	panic("socket %s", ifr.ifr_name); 
+    if (ioctl(s, request, &ifr) == -1)
+	panic("ioclt %s (0x%x)", ifr.ifr_name, request); 
     close(s); 
 }
 
@@ -135,7 +177,6 @@ sniffer_start(source_t * src)
     sniff_pcap_datalink sp_link; 
     sniff_pcap_close sp_close; 
     struct wlan_req wreq;
-    struct ifreq ifr;
 
     if (src->args) { 
 	/* process input arguments */
@@ -171,27 +212,30 @@ sniffer_start(source_t * src)
      * set the interface in monitor mode
      */
     bzero((char *)&wreq, sizeof(wreq));
-    wreq.type = PRISM_MONITOR_MODE; 
+#ifdef linux
+    wreq.u.mode = MONITOR_MODE; 
+#else 
+    wreq.type = MONITOR_MODE; 
     wreq.len = 0;
-
-    bzero((char *)&ifr, sizeof(ifr));
-    strcpy(ifr.ifr_name, src->device);
-    ifr.ifr_data = (caddr_t) &wreq;
-    send_ioctl(&ifr); 
+#endif
+    send_ioctl(src->device, &wreq, SET_OPERATIONMODE); 
 
     /* 
      * fix the channel, if requested 
      */
     if (channel != 0) { 
 	bzero((char *)&wreq, sizeof(wreq));
-	wreq.type = PRISM_SET_CHANNEL; 
+#ifdef linux
+        wreq.u.freq.m = 0; 
+        wreq.u.freq.e = 0; 
+        wreq.u.freq.i = channel; 
+        wreq.u.freq.flags = FIXED_CHANNEL; 
+#else
+	wreq.type = FIXED_CHANNEL; 
 	wreq.len = 1; 
 	wreq.val[0] = channel; 
-
-	bzero((char *)&ifr, sizeof(ifr));
-	strcpy(ifr.ifr_name, src->device);
-	ifr.ifr_data = (caddr_t) &wreq;
-	send_ioctl(&ifr); 
+#endif
+	send_ioctl(src->device, &wreq, SET_CHANNEL); 
     } 
 
     /* 
