@@ -38,8 +38,8 @@
 #include "como.h"
 #include "module.h"
 
-#define TOPN        20		/* Top-10 destinations */
-#define EXPORT_IVL  300		/* export interval (seconds) */
+#define TOPN        20		/* Top-20 destinations */
+#define EXPORT_IVL  3600	/* export interval (seconds) */
 
 #define FLOWDESC	struct _ca_topdest
 #define EFLOWDESC	FLOWDESC

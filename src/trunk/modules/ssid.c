@@ -213,6 +213,7 @@ store(void *rp, char *buf, size_t len)
     for (i = 0; i < x->len; i++) 
 	PUTH8(buf, x->ssid[i]); 
 
+#if 0 
     /* XXX for debugging... */
     {
 	time_t t; 
@@ -230,6 +231,7 @@ store(void *rp, char *buf, size_t len)
 	           x->channel, sig, noise, x->samples); 
 #undef PRETTYFMT
     }
+#endif 
 
     return 12 + x->len;
 }

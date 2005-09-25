@@ -43,7 +43,7 @@
 #define FLOWDESC    struct _counters
 FLOWDESC {
     timestamp_t ts;
-    uint64_t    byts;
+    uint64_t    bytes;
     uint64_t    pkts;
 };
 
@@ -73,11 +73,11 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 
     if (isnew) {
 	x->ts = pkt->ts;
-        x->byts = 0;
+        x->bytes = 0;
         x->pkts = 0;
     }
 
-    x->byts += pkt->len; 
+    x->bytes += pkt->len; 
     x->pkts++;
 
     return 0;
@@ -92,7 +92,7 @@ store(void *rp, char *buf, size_t len)
 	return -1; 
 
     PUTH64(buf, x->ts);
-    PUTH64(buf, x->byts/meas_ivl);
+    PUTH64(buf, x->bytes/meas_ivl);
     PUTH64(buf, x->pkts/meas_ivl);
 
     return sizeof(FLOWDESC);
@@ -141,29 +141,40 @@ print(char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt; 
+    static int granularity = 1; 
+    static int no_records = 0; 
+    static uint64_t bytes = 0;
+    static uint64_t pkts = 0;
     FLOWDESC *x; 
     timestamp_t ts;
     time_t t; 
     int n; 
 
     if (buf == NULL && args != NULL) { 
+	/* by default, pretty print */
+	*len = sprintf(s, PRETTYHDR);  
+	fmt = PRETTYFMT; 
+
 	/* first call of print, process the arguments and return */
 	for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
 		fmt = PLAINFMT;
-		return s; 
 	    } 
 	    if (!strcmp(args[n], "format=gnuplot")) {
 		*len = sprintf(s, GNUPLOTHDR); 
 		fmt = GNUPLOTFMT;
-		return s; 
+	    } 
+	    if (!strncmp(args[n], "granularity=", 10)) {
+		char * val = index(args[n], '=') + 1;
+
+		/* aggregate multiple records into one to reduce 
+		 * communication messages. 
+		 */
+		granularity = atoi(val) / meas_ivl;
 	    } 
 	} 
 
-	/* by default, pretty print */
-	*len = sprintf(s, PRETTYHDR);  
-	fmt = PRETTYFMT; 
 	return s; 
     } 
 
@@ -178,20 +189,31 @@ print(char *buf, size_t *len, char * const args[])
     ts = NTOHLL(x->ts);
     t = (time_t) TS2SEC(ts); 
 
+    /* aggregate records if needed */
+    pkts += NTOHLL(x->pkts);
+    bytes += NTOHLL(x->bytes);
+    no_records++;
+    if (no_records % granularity != 0) { 
+	*len = 0;
+	return s; 
+    } 
+
+    bytes /= granularity; 
+    pkts /= granularity;
+
     /* print according to the requested format */
     if (fmt == PRETTYFMT) {
 	*len = sprintf(s, fmt, 
-	    asctime(localtime(&t)), TS2SEC(ts), TS2USEC(ts), 
-	    NTOHLL(x->byts), NTOHLL(x->pkts));
+	               asctime(localtime(&t)), TS2SEC(ts), TS2USEC(ts), 
+		       bytes, pkts); 
     } else if (fmt == GNUPLOTFMT) {
-	float mbps;
-	mbps = 8.0 * (float) NTOHLL(x->byts) / 1000000.0; 
-	*len = sprintf(s, fmt, (long int)t, mbps, NTOHLL(x->pkts));
+	float mbps = 8.0 * (float) bytes / 1000000.0; 
+	*len = sprintf(s, fmt, (long int)t, mbps, pkts);
     } else {
-	*len = sprintf(s, fmt, 
-			(long int)t, ts, NTOHLL(x->byts), NTOHLL(x->pkts));
+	*len = sprintf(s, fmt, (long int)t, ts, bytes, pkts); 
     } 
 	
+    pkts = bytes = 0;
     return s;
 }
 

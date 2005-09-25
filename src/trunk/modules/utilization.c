@@ -162,8 +162,8 @@ load(char *buf, size_t len, timestamp_t *ts)
 
 
 #define PRETTYFMT  	"%.24s %10u %10u\n"
-#define PLAINFMT  	"%12ld %10u %10u\n"
-#define GNUPLOTFMT      "%ld %.2f %.2f\n"
+#define PLAINFMT  	"%12u %10u %10u\n"
+#define GNUPLOTFMT      "%u %.2f %.2f\n"
 
 #define PRETTYHDR  	"Date                     Bytes      HighWaterMark\n"
 
@@ -187,9 +187,10 @@ print(char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt; 
+    static int granularity = 1;
+    static int no_records = 0;
+    static EFLOWDESC values;
     EFLOWDESC *x; 
-    time_t ts; 
-    int ratio; 
     int n;
 
     if (buf == NULL && args != NULL) { 
@@ -198,13 +199,21 @@ print(char *buf, size_t *len, char * const args[])
                 *len = 0; 
                 fmt = PLAINFMT; 
 		return s; 
-            } 
-            if (!strcmp(args[n], "format=gnuplot")) {
+            } else if (!strcmp(args[n], "format=gnuplot")) {
                 *len = sprintf(s, GNUPLOTHDR); 
                 fmt = GNUPLOTFMT;
                 return s; 
+            } else if (!strncmp(args[n], "granularity=", 10)) {
+                char * val = index(args[n], '=') + 1;
+
+                /* aggregate multiple records into one to reduce 
+                 * communication messages. 
+                 */
+                granularity = atoi(val);
             } 
 	} 
+
+	bzero(&values, sizeof(EFLOWDESC));
 
 	*len = sprintf(s, PRETTYHDR);  
 	fmt = PRETTYFMT; 
@@ -219,22 +228,35 @@ print(char *buf, size_t *len, char * const args[])
     } 
 
     x = (EFLOWDESC *) buf; 
-    ts = (time_t) ntohl(x->ts);
-    ratio = TIME2TS(1,0) / WATERMARK_IVL; 
+
+    /* aggregate records if needed */
+    values.ts = ntohl(x->ts);
+    values.bytes += ntohl(x->bytes);
+    if (ntohl(x->hi_watermark) > values.hi_watermark) 
+	values.hi_watermark = ntohl(x->hi_watermark); 
+
+    no_records++;
+    if (no_records % granularity != 0) { 
+        *len = 0;
+        return s; 
+    } 
+
+    values.bytes /= granularity; 
+    values.hi_watermark *= (FLUSH_IVL / WATERMARK_IVL); 
 
     if (fmt == PRETTYFMT) { 
-	*len = sprintf(s, fmt, (char *) asctime(localtime(&ts)), 
-		   (uint) ntohl(x->bytes), 
-		   (uint) ntohl(x->hi_watermark) * ratio);
-    } else if (fmt == GNUPLOTFMT) { 
-	*len = sprintf(s, fmt, (long int) ts, 
-		   (float) ntohl(x->bytes) * 8.0 /1000000, 
-		   (float) ntohl(x->hi_watermark) * ratio * 8.0 / 1000000);
-    } else {
 	*len = sprintf(s, fmt, 
-		   (long int) ts, (uint) ntohl(x->bytes), 
-		   (uint) ntohl(x->hi_watermark) * ratio);
+                       (char *) asctime(localtime((time_t *) &values.ts)), 
+		       values.bytes, values.hi_watermark); 
+    } else if (fmt == GNUPLOTFMT) { 
+	*len = sprintf(s, fmt, values.ts, 
+		   (float) values.bytes * 8.0 /1000000, 
+		   (float) values.hi_watermark * 8.0 / 1000000);
+    } else {
+	*len = sprintf(s, fmt, values.ts, values.bytes, values.hi_watermark);
     } 
+
+    bzero(&values, sizeof(EFLOWDESC));
     return s;
 }
 
