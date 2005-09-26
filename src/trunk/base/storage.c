@@ -630,7 +630,7 @@ handle_open(int s, csmsg_t * in)
      * first check if we have too many active clients. 
      */
     if (cs_state.client_count == CS_MAXCLIENTS) { 
-	logmsg(LOGSTORAGE, "out: OPEN - too many active clients\n"); 
+	logmsg(LOGWARN, "too many clients (%d)\n", cs_state.client_count); 
 	senderr(s, in->id, EMFILE);
 	return; 
     }
@@ -641,13 +641,18 @@ handle_open(int s, csmsg_t * in)
      * QUERY process asks for opening a bytestream). in that case 
      * we just add a client.
      */ 
-    for (bs = cs_state.bs; bs; bs = bs->next)
-	if (strcmp(bs->name, in->name) == 0)	/* found it */
+    for (bs = cs_state.bs; bs; bs = bs->next) {
+	if (strcmp(bs->name, in->name) == 0) { 	/* found it */
+	    logmsg(LOGSTORAGE, "file [%s] found, clients %d, wfd %d\n", 
+		   in->name, bs->client_count, bs->wfd); 
 	    break;
-    if (bs == NULL) {
+        } 
+    }
+
+    if (bs == NULL) {	/* not found */
 	bs = new_bytestream(in);
 	if (bs == NULL) { 
-	    logmsg(LOGSTORAGE, "out: OPEN - cannot allocate bytestream\n"); 
+	    logmsg(LOGWARN, "cannot allocate bytestream [%s]\n", in->name); 
 	    senderr(s, in->id, EMFILE);
 	    return; 
 	}
@@ -659,7 +664,7 @@ handle_open(int s, csmsg_t * in)
      * if opened in write mode, fail if there is already a writer 
      */
     if (in->arg == CS_WRITER && bs->the_writer != NULL) {
-	logmsg(LOGSTORAGE, "out: OPEN - one writer already there\n"); 
+	logmsg(LOGWARN, "two writers not allowed [%s]\n", in->name); 
 	senderr(s, in->id, EPERM);
 	return;
     }
@@ -670,7 +675,7 @@ handle_open(int s, csmsg_t * in)
      * The id for the new client is generated in new_csclient();
      */
     cl = new_csclient(bs, in->arg);
-
+    logmsg(LOGSTORAGE, "new client for [%s], id %d\n", in->name, cl->id);
 
     /* 
      * if this is a writer, link it to the bytestream, 
@@ -879,7 +884,7 @@ handle_seek(int s, csmsg_t * in)
     csclient_t * cl;
     csfile_t * cf;
 
-    logmsg(V_LOGSTORAGE, "SEEK: %d %d %lld\n", in->id, in->arg, in->ofs);
+    logmsg(LOGSTORAGE, "SEEK: %d %d %lld\n", in->id, in->arg, in->ofs);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
 	logmsg(LOGWARN, "close: invalid id (%d)\n", in->id); 
@@ -1337,7 +1342,7 @@ handle_region(int s, csmsg_t * in)
 {
     csclient_t * cl;
 
-    logmsg(V_LOGSTORAGE, "S_REGION: id %d; ofs %12lld; size %7d;\n", 
+    logmsg(LOGSTORAGE, "S_REGION: id %d; ofs %12lld; size %7d;\n", 
 	in->id, in->ofs, in->size);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
@@ -1560,6 +1565,7 @@ storage_mainloop(int accept_fd)
 		logmsg(LOGWARN, "storage reading fd[%d] got %d (%s)\n", 
 			i, ret, strerror(errno));
 		del_fd(i);
+		close(i);
 		continue;
 	    }
 	    logmsg(V_LOGSTORAGE, "message from fd[%d] (%d bytes)\n", i, ret);

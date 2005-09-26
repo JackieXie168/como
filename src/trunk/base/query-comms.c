@@ -92,8 +92,9 @@ urldecode(char *s)
 }
 
 
-/**
- * query_parse()
+/*
+ * -- query_parse()
+ * 
  * Takes an http-like request and formats a message in the standard format
  * GET ?module=xxx&start=xxx&end=xxx&other HTTP/1.x
  */
@@ -101,24 +102,26 @@ static qreq_t *
 query_parse(char *buf)
 {
     static qreq_t q; 
-    int nargs;
+    int max_args, nargs;
     char *p, *p1, *end;
     struct timeval t;
 
     /* 
      * do a first pass to figure out how much space we need
      * to store all the request parameters (i.e. args strings)
-     * NOTE: nargs will always be at least one.
+     * 
+     * NOTE: max_args will always be at least one (i.e., the NULL entry
+     *       to indicate end of the arguments). 
      */
-    nargs = 0; 
+    max_args = 0; 
     p = buf; 
     do { 
 	p = strchr(p+1, '&'); 
-	nargs++; 
+	max_args++; 
     } while (p != NULL && strlen(p) > 1);
 
     /* allocate a new request data structures */
-    q.args = safe_calloc(nargs, sizeof(char *)); 
+    q.args = safe_calloc(max_args, sizeof(char *)); 
     nargs = 0;
 
     /* provide some default values */
@@ -202,8 +205,10 @@ query_parse(char *buf)
 	    logmsg(V_LOGQUERY, "custom argument: %s\n", p1);
 	    q.args[nargs] = strdup(p1); 
 	    nargs++;
+	    assert(nargs < max_args);
 	}
     }
+
     return &q;
 }
 

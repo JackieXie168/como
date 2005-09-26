@@ -86,9 +86,9 @@ send_status(__unused qreq_t * req, int client_fd)
 	    "Build date: %s\n"
 	    "Build time: %s\n"
 	    "Speed: %s\n"
-	    "Delay: %d\n",
+	    "Delay: %u\n",
 	    map.name, map.location, COMO_VERSION, __DATE__, __TIME__,
-	    map.linkspeed, map.stats->delay); 
+	    map.linkspeed, TS2SEC(map.stats->delay)); 
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
 	panic("sending status to the client");   
@@ -204,6 +204,10 @@ printrecord(module_t * mdl, char * ptr, char * args[], int client)
 {
     char * out; 
     size_t len; 
+    int i; 
+
+    for (i = 0; args != NULL && args[i] != NULL; i++) 
+	logmsg(V_LOGQUERY, "print arg #%d: %s\n", i, args[i]); 
 
     out = mdl->callbacks.print(ptr, &len, args); 
     if (out == NULL) 
@@ -214,7 +218,7 @@ printrecord(module_t * mdl, char * ptr, char * args[], int client)
 	int ret = como_writen(client, out, len);
 	if (ret < 0) 
 	    panic("sending data to the client"); 
-	logmsg(V_LOGQUERY, "print: %s\n", out); 
+	logmsg(V_LOGDEBUG, "print: %s\n", out); 
     }
 }
 
