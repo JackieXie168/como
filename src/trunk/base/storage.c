@@ -781,6 +781,7 @@ handle_close(__unused int s, csmsg_t * in)
     cs_state.clients[in->id] = NULL;
     cs_state.client_count--;
     bs = cl->bs;
+    bs->client_count--;
 
     /*
      * If this client was a writer move its block to the write buffer,
@@ -898,8 +899,8 @@ handle_seek(int s, csmsg_t * in)
         senderr(s, in->id, EINVAL);
 	return; 
     } 
-    if (cl->mode != CS_READER) {
-	logmsg(LOGWARN, "seek: client does not exists (id: %d)\n", in->id); 
+    if (cl->mode == CS_WRITER) {
+	logmsg(LOGWARN, "seek: writers should not seek (id: %d)\n", in->id); 
         senderr(s, in->id, EINVAL);
 	return; 
     }
