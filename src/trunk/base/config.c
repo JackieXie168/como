@@ -81,7 +81,8 @@ enum tokens {
     TOK_LINKSPEED,
     TOK_COMMENT,
     TOK_DROPFILE,
-    TOK_DROPLOGSIZE
+    TOK_DROPLOGSIZE,
+    TOK_MAXFILESIZE
 };
 
 
@@ -109,8 +110,8 @@ enum tokens {
 struct _keyword {
     char const *str;    /* keyword */
     int action;         /* related token */
-    int nargs;          /* arguments */
-    int scope;          /* specific scope */
+    int nargs;          /* number of required arguments */
+    int scope;          /* scope of the keyword */
 };
 
 typedef struct _keyword keyword_t;
@@ -141,6 +142,7 @@ keyword_t keywords[] = {
     { "comment",     TOK_COMMENT,     2, CTX_GLOBAL},
     { "drop-log",    TOK_DROPFILE,    2, CTX_GLOBAL},
     { "drop-log-size",TOK_DROPLOGSIZE,2, CTX_GLOBAL},
+    { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL},
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -328,11 +330,11 @@ check_module(module_t *mdl)
 
     /* update(), store() and load() should definitely be there */
     if (cb->update == NULL)
-	panic("source: module %s misses update()\n", mdl->name);
+	panicx("module %s misses update()\n", mdl->name);
     if (cb->store == NULL)
-	panic("source: module %s misses store()\n", mdl->name);
+	panicx("module %s misses store()\n", mdl->name);
     if (cb->load == NULL)
-	panic("source: module %s misses load()\n", mdl->name);
+	panicx("module %s misses load()\n", mdl->name);
 
     /* 
      * either both or none of action() and export() are required 
@@ -343,17 +345,15 @@ check_module(module_t *mdl)
 	 * action(), ematch() and compare().
 	 */
 	if (cb->action || cb->ematch || cb->compare )
-	    panic("source: module %s has %s%s%s without export()\n",
-			mdl->name,
-			cb->action ? "action() " : "",
-			cb->ematch ? "ematch() " : "",
-			cb->compare ? "compare() " : ""
-		);
+	    panicx("module %s has %s%s%s without export()\n",
+		   mdl->name,
+		   cb->action ? "action() " : "",
+		   cb->ematch ? "ematch() " : "",
+		   cb->compare ? "compare() " : "");
 
     } else {
 	if (cb->action == NULL) /* export() requires action() too */
-	    panic("source: module %s has export() w/out action()\n", 
-		mdl->name);
+	    panicx("module %s has export() w/out action()\n", mdl->name);
     }
 
     mdl->ca_hashsize = mdl->ex_hashsize; 
@@ -378,14 +378,13 @@ check_module(module_t *mdl)
 
     /* initialize module */
     if (cb->init != NULL && cb->init(mdl->mem, mdl->msize, mdl->args) != 0)
-	panic("could not initialize %s\n", mdl->name); 
+	panicx("could not initialize %s\n", mdl->name); 
 
-    logmsg(LOGUI, "... loaded module \"%s\"\n", mdl->name); 
+    logmsg(LOGUI, "... module %-16s ", mdl->name); 
     if (mdl->description != NULL) 
-	logmsg(LOGUI,"     Description: %s\n", mdl->description); 
-    logmsg(LOGUI,"     Filter: %s\n", mdl->filter); 
-    logmsg(LOGUI,"     Output: %s\n", mdl->output); 
-    logmsg(LOGUI,"     Streamsize: %llu\n", mdl->streamsize); 
+	logmsg(LOGUI,"[%s]", mdl->description); 
+    logmsg(LOGUI, "\n    - filter %s; out %s (max %uMB)\n", 
+	   mdl->filter, mdl->output, mdl->streamsize / (1024*1024)); 
 
     mdl->status = MDL_ACTIVE; 
     return 1;
@@ -560,7 +559,6 @@ do_config(int argc, char *argv[])
          * on context to make sure that all mandatory fields are there
          * and set default values
          */
-	check_module(mdl);
 	scope = CTX_GLOBAL;
         break;
 
@@ -635,6 +633,15 @@ do_config(int argc, char *argv[])
 
     case TOK_STREAMSIZE: 
 	mdl->streamsize = parse_size(argv[1]);
+	break;
+
+    case TOK_MAXFILESIZE: 
+	map.maxfilesize = parse_size(argv[1]); 
+	if (map.maxfilesize > 1024*1024*1024) { 
+	    map.maxfilesize = DEFAULT_FILESIZE; 
+	    logmsg(LOGWARN, "'filesize' should be < 1GB --> set to %dMB\n", 
+		   map.maxfilesize / (1024*1024));
+	} 
 	break;
 
     case TOK_ARGS:
@@ -958,7 +965,7 @@ extern const char *MALLOC_OPTS;
 int
 parse_cmdline(int argc, char *argv[])
 {
-    int c;
+    int c, i;
     DIR *d;
 
     /*
@@ -966,7 +973,9 @@ parse_cmdline(int argc, char *argv[])
      * string as well...
      */
     static const char * usage =
-    "usage: %s [-c config_file] [-D basedir] [-L libdir] [-M module] [-m memsize] [-v logflags] [-x debug_opts] [-s sniffer] [-p query_port]\n";
+ 	   "usage: %s [-c config_file] [-D basedir] [-L libdir] "
+	   "[-M module] [-m memsize] [-v logflags] [-x debug_opts] "
+	   "[-s sniffer] [-p query_port]\n";
 
     /* flag to be set if we parsed a configuration file */
     static const char *opts = "c:D:L:M:m:p:s:v:x:";
@@ -1023,10 +1032,7 @@ parse_cmdline(int argc, char *argv[])
 	    break;
 
 	case 'M':	/* module */
-	    {
-	    module_t *mdl = new_module(optarg);
-	    check_module(mdl);
-	    }
+	    new_module(optarg);
 	    break;
 
 	case 'p':
@@ -1068,5 +1074,13 @@ parse_cmdline(int argc, char *argv[])
 	createdir(map.basedir); 
     else 
 	closedir(d);
+
+    /* the last step is to make sure that all modules are configure
+     * correctly and report any other errors in the config file or 
+     * command line. we browse the list of modules and check them 
+     * one by one. 
+     */
+    for (i = 0; i < map.module_count; i++) 
+	check_module(&map.modules[i]);
     return 0;
 }
