@@ -108,21 +108,17 @@ urldecode(char *s)
  * 
  */
 uint32_t
-parse_timestr(char * str, time_t base) 
+parse_timestr(char * str, struct timeval * base) 
 {
     struct tm timeinfo; 
     char * wh; 
     size_t len;
     int adding; 
 
-    /* if no base, use current time */
-    if (base == 0) { 
-	struct timeval now; 
-	gettimeofday(&now, NULL); 
-	base = (time_t) now.tv_sec; 
-    } 
+    assert(str != NULL); 
+    assert(base != NULL); 
 
-    gmtime_r(&base, &timeinfo); 
+    gmtime_r((time_t *) &base->tv_sec, &timeinfo); 
 
     /* look if this is a start or end */
     wh = index(str, ':'); 
@@ -157,9 +153,10 @@ parse_timestr(char * str, time_t base)
 		
 	if (len > 0) {
 	    logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
-	    return (uint32_t) timegm(&timeinfo); 
+	    return base->tv_sec; 
 	} 
 
+	base->tv_sec = timegm(&timeinfo); 
 	break; 
 	
     case '+': 		/* relative timestamp (after current time) */
@@ -322,13 +319,15 @@ query_parse(char *buf)
         } else if (strstr(p1, "status") == p1) {
 	    q.format = Q_STATUS;
         } else if (strstr(p1, "time=") == p1) {
+	    struct timeval now; 
 	    char * str; 
 	
+	    gettimeofday(&now, NULL); 
             str = index(p1, '=') + 1; 
-	    q.start = parse_timestr(str, 0); 
+	    q.start = parse_timestr(str, &now); 
 
 	    str = index(p1, ':') + 1; 
-	    q.end = parse_timestr(str, q.start);
+	    q.end = parse_timestr(str, &now);
 	} else {
 	    logmsg(V_LOGQUERY, "custom argument: %s\n", p1);
 	    q.args[nargs] = strdup(p1); 
