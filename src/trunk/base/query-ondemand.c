@@ -327,6 +327,11 @@ query_ondemand(int client_fd)
 	return; 
     } 
 
+    logmsg(V_LOGQUERY,
+        "got query (%d bytes); mdl: %s filter: %s\n",  
+        ntohs(req->len), req->module, req->filter); 
+    logmsg(0, "    from %d to %d\n", req->start, req->end); 
+
     if (req->format == Q_STATUS) { 
 	/* 
 	 * status queries can always be answered. send 
@@ -347,10 +352,21 @@ query_ondemand(int client_fd)
 	return; 
     } 
 
-    logmsg(V_LOGQUERY,
-        "got query (%d bytes); mdl: %s filter: %s\n",  
-        ntohs(req->len), req->module, req->filter); 
-    logmsg(0, "    from %d to %d\n", req->start, req->end); 
+    if (req->start > req->end) { 
+	/* 
+	 * start time is after end time, return error message 
+	 */  
+	logmsg(LOGWARN, 
+	       "query start time (%d) after end time (%d)\n", 
+	       req->start, req->end); 
+
+	ret = como_writen(client_fd, 
+		  "HTTP/1.0 405 Method Not Allowed\n"
+		  "Content-Type: text/plain\n\n"
+		  "Query start time after end time\n", 0); 
+	close(client_fd);
+	return; 
+    } 
 
     /* 
      * check if the module is running using the same filter 
