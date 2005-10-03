@@ -37,7 +37,6 @@
 #include "como.h"
 #include "sniffers.h"
 #include "sniffer-list.h"
-#include "timers.h"
 
 /* poll time (in usec) */
 #define POLL_WAIT   1000
