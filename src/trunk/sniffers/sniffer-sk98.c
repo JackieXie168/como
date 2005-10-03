@@ -100,7 +100,7 @@ discard_packets(struct sk98_map_area_header * m)
  * Calibrate the packet timestamps 
  *
  */
-void 
+static void 
 calibrate(struct _snifferinfo * info)
 {
     struct sk98_map_area_header * m = info->m; 

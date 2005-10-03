@@ -37,12 +37,13 @@
 #include "como.h"
 #include "sniffers.h"
 #include "sniffer-list.h"
+#include "timers.h"
 
 /* poll time (in usec) */
 #define POLL_WAIT   1000
 
 /* packet buffer */
-#define PKT_BUFFER 	8192		
+#define PKT_BUFFER 	256		
  
 /* flush and freeze/unfreeze thresholds */
 #define MB(m)				((m)*1024*1024)
@@ -510,9 +511,11 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
                 /* we moved cand to the front, now is x */
                 mdl->ca_hashtable->bucket[bucket] = x;
 
-                /* done. new empty record ready. */
-                /* NOTE: we do not increment mdl->ca_hashtable->records here because we count
-	 	 *       this just as a variable size record. */
+                /* done. new empty record ready.
+                 * 
+		 * NOTE: we do not increment mdl->ca_hashtable->records here 
+		 *       because we count this just as a variable size record. 
+		 */
 
 		new_record = 1;
 		cand = x;
@@ -641,18 +644,30 @@ get_sniffer_delay(timestamp_t last_ts)
  *
  */
 void
-capture_mainloop(int export_fd)
+capture_mainloop(int accept_fd)
 {
     filter_fn * filter;		/* filter function */
     memlist_t * flush_map;	/* freed blocks in the flow tables */
     tailq_t expired;		/* expired flow tables */
     pkt_t pkts[PKT_BUFFER]; 	/* packet buffer */
     int sniffers_left;		/* how many sniffers are left ? */
-    int sent2export;		/* message sent to export */
+    int sent2export;		/* message sent to EXPORT */
+    int export_fd; 		/* descriptor used to talk to EXPORT */
     timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     source_t *src;
+    fd_set valid_fds;
+    int max_fd;
 
-    /* we only get a socketpair to the export process */
+    /* get ready to accept requests from EXPORT process(es) */
+    max_fd = 0;
+    FD_ZERO(&valid_fds);
+    max_fd = add_fd(accept_fd, &valid_fds, max_fd);
+    export_fd = -1; 
+
+    /* initialize the timers */
+    map.stats->ca_loop_timer = new_tsctimer("loop"); 
+    map.stats->ca_pkts_timer = new_tsctimer("pkts"); 
+    map.stats->ca_filter_timer = new_tsctimer("filter"); 
 
     /*
      * load the filter in. if no object has been provided, then
@@ -684,6 +699,8 @@ capture_mainloop(int export_fd)
 	} 
 	sniffers_left++;
 	assert(src->flags != 0); 
+	if (src->fd >= 0 && (src->flags & SNIFF_SELECT)) 
+	    max_fd = add_fd(src->fd, &valid_fds, max_fd);
         
 	/*
 	 * now we browse the list of modules to make sure that 
@@ -710,14 +727,6 @@ capture_mainloop(int export_fd)
      */
     flush_map = new_memlist(32);
 
-    logmsg(LOGUI, "--- Capture configuration: %d MB, %d sniffers ---\n",
-		map.mem_size, sniffers_left);
-    for (src = map.sources; src; src = src->next) {
-        if (src->fd < 0)
-            continue;
-        logmsg(LOGUI, "\tsniffer [%s] %s\n", src->cb->name, src->device);
-    }
-
     /* init expired flow tables queue */
     TQ_HEAD(&expired) = NULL;
     map.stats->table_queue = 0; 
@@ -729,42 +738,32 @@ capture_mainloop(int export_fd)
      * The loop terminates when all sniffers are closed and there is
      * no pending communication with export.
      */
-    sent2export = 0;	
     for (;;) {
-	fd_set r;
-	int i, maxfd = 0;
+	fd_set r; 
+	int n_ready; 
 	struct timeval tout = {1, 0}; 
 
         errno = 0;
 
 	if (sniffers_left == 0 && !sent2export && TQ_HEAD(&expired) == NULL)
 	    break;	/* nothing more to do */
-
-	FD_ZERO(&r);
 	
-	if (sent2export) {	/* talked to export. listen for reply */
-	    FD_SET(export_fd, &r);
-	    maxfd = export_fd;
-	}
-
 	/* 
-	 * add all descriptors for sniffers that support select().
-	 * we will deal with the others later on. 
+	 * update the polling interval for sniffer that use polling. 
 	 */
 	for (src = map.sources; src; src = src->next) {
-	    if (src->flags & SNIFF_INACTIVE) 
-		continue;	/* do not select() on this one */
+	    if (src->flags & SNIFF_INACTIVE)
+		continue; 		/* go to next one */
 
 	    /* 
 	     * if this sniffer uses polling, set the timeout for 
 	     * the select() instead of adding the file descriptor to FD_SET 
 	     */  
-	    if (src->fd < 0 || (src->flags & SNIFF_POLL)) {
+	    if (src->flags & SNIFF_POLL) {
 		if (src->polling < TIME2TS(tout.tv_sec, tout.tv_usec)) {
 		    tout.tv_sec = TS2SEC(src->polling); 
 		    tout.tv_usec = TS2USEC(src->polling); 
 		} 
-		continue;	/* do not select() on this one */
 	    }
 
 	    /* 
@@ -772,25 +771,41 @@ capture_mainloop(int export_fd)
 	     * file, stop processing packets. this will give EXPORT
 	     * some time to process the tables and free memory.  
 	     */
-	    if ((src->flags & SNIFF_FILE) && 
-		map.stats->mem_usage_cur > FLUSH_THRESHOLD(map.mem_size)) {
-		continue;	/* do not select() on this one */
+	    if (src->flags & SNIFF_FILE) { 
+		if (map.stats->mem_usage_cur > FLUSH_THRESHOLD(map.mem_size)) { 
+		    src->flags |= SNIFF_FROZEN; 
+		    if (src->flags & SNIFF_SELECT) 
+			max_fd = del_fd(src->fd, &valid_fds, max_fd); 
+		} else if (src->flags & SNIFF_FROZEN) { 
+		    /* defreeze the sniffer */
+		    src->flags &= ~SNIFF_FROZEN;
+		    if (src->flags & SNIFF_SELECT) 
+			max_fd = add_fd(src->fd, &valid_fds, max_fd); 
+		} 
 	    } 
-
-	    FD_SET(src->fd, &r);
-	    if (src->fd > maxfd)
-		maxfd = src->fd;
 	}
 
 	/* wait for messages, sniffers or up to the polling interval */
-	i = select(maxfd+1, &r, NULL, NULL, &tout);
-	if (i < 0)
+	r = valid_fds;
+	n_ready = select(max_fd, &r, NULL, NULL, &tout);
+	if (n_ready < 0)
 	    panic("select"); 
 
-        if (FD_ISSET(export_fd, &r)) {	/* export replies to our message */
+	start_tsctimer(map.stats->ca_loop_timer); 
+
+        if (FD_ISSET(accept_fd, &r)) { 
+	    /* EXPORT process wants to connect */
+	    export_fd = accept(accept_fd, NULL, NULL);
+	    if (export_fd < 0)
+		panic("accepting export process"); 
+	    max_fd = add_fd(export_fd, &valid_fds, max_fd);
+	}
+
+        if (export_fd >= 0 && FD_ISSET(export_fd, &r)) {
 	    int ret;
 	    msg_t reply;
 
+	    /* EXPORT replies to a message */
 	    errno = 0;	/* reset */
 	    ret = read(export_fd, &reply, sizeof(reply));
 	    if (ret != 0 && errno != EAGAIN) {
@@ -830,8 +845,8 @@ capture_mainloop(int export_fd)
 	    int count = 0;
 	    int old_drops;
 
-	    if (src->flags & SNIFF_INACTIVE)
-		continue;	/* inactive device */
+	    if (src->flags & (SNIFF_INACTIVE|SNIFF_FROZEN))
+		continue;	/* inactive/frozen devices */
 
 	    if ((src->flags & SNIFF_SELECT) && !FD_ISSET(src->fd, &r))
 		continue;	/* nothing to read here. */
@@ -846,8 +861,10 @@ capture_mainloop(int export_fd)
 		continue;
 
             if (count < 0) {
-                src->cb->sniffer_stop(src);
+		if (src->flags & SNIFF_SELECT) 
+		    max_fd = del_fd(src->fd, &valid_fds, max_fd); 
 		src->flags |= SNIFF_INACTIVE; 
+                src->cb->sniffer_stop(src);
 		sniffers_left--;
                 continue;
             }
@@ -855,7 +872,9 @@ capture_mainloop(int export_fd)
 	    logmsg(V_LOGCAPTURE, "received %d packets from sniffer\n", count);
 	    map.stats->pkts += count; 
 
+	    start_tsctimer(map.stats->ca_pkts_timer); 
 	    last_ts = capture_pkts(pkts, count, filter, &expired);
+	    end_tsctimer(map.stats->ca_pkts_timer); 
         }
 
 	/* compute delay from real time */
@@ -922,9 +941,13 @@ capture_mainloop(int export_fd)
 	if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size))
 	    freeze_module(); 
 #endif
+	end_tsctimer(map.stats->ca_loop_timer);
     }
 
     logmsg(LOGWARN, "Capture: no sniffers left, terminating.\n");
+    logmsg(LOGTIMER, "%s\n", print_tsctimer(map.stats->ca_loop_timer)); 
+    logmsg(LOGTIMER, "%s\n", print_tsctimer(map.stats->ca_pkts_timer)); 
+	   
     return;
 }
 /* end of file */

@@ -40,7 +40,6 @@
 
 #include "como.h"
 #include "sniffers.h"
-#include "filter.h"
 
 /* global data structure that contains all
  * configuration information
@@ -195,6 +194,7 @@ set_flags(uint32_t flags, char *arg)
 	{ "st",		0,	LOGSTORAGE	},
 	{ "qu",		0,	LOGQUERY	},
 	{ "sniff",	0,	LOGSNIFFER	},
+	{ "timer",	0,	LOGTIMER	},
 	{ "debug",	0,	LOGDEBUG	},
 	{ "all",	0,	LOGALL		},
 	{ NULL,		0,	0		}
@@ -270,16 +270,6 @@ add_char(char *buf, int c, uint *dst, uint *len)
     return buf;
 }
 
-/*
- * makes a malloc'ed copy of src into *dst, freeing the previous one if any
- */
-static void
-safe_dup(char **dst, char *src)
-{
-    if (*dst)
-	free(*dst);
-    *dst = strdup(src);
-}
 
 /*
  * Check the configuration of a module, supply default values,

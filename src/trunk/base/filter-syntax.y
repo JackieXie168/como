@@ -66,7 +66,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "filter.h"
 #include "como.h"
 
 /* Node types */
@@ -91,24 +90,6 @@ typedef struct listnode
 
 int yflex(void);
 void yferror(char const *);
-
-/*
- * -- safe_dup
- *
- * Makes a malloc'ed copy of src into *dst, freeing the previous one if any.
- * Taken from base/config.c
- *
- */
-static void
-safe_dup(char **dst, char *src)
-{
-    if (*dst)
-	free(*dst);
-    *dst = strdup(src);
-    if (*dst == NULL)
-        panic("out of memory");
-}
-
 
 /* Variable where the final string will be stored after parsing the filter */
 char **parsedstring;

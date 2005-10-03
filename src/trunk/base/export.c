@@ -463,8 +463,9 @@ do_drop(struct drop_record *dr, int storage_fd)
  * the action() callback tells us to do (save, discard, etc.).
  */
 void
-export_mainloop(int capture_fd)
+export_mainloop(__unused int fd)
 {
+    int capture_fd; 
     int storage_fd;
     int	max_fd;
     int idx; 
@@ -473,6 +474,7 @@ export_mainloop(int capture_fd)
     mcheck(NULL);
 
     storage_fd = create_socket("storage.sock", NULL);
+    capture_fd = create_socket("capture.sock", NULL);
 
     /* 
      * open the output files of all the modules 
@@ -541,7 +543,7 @@ export_mainloop(int capture_fd)
 	     */
 	    ret = read(capture_fd, &x, sizeof(x));
 	    if (ret != sizeof(x)) 
-		panic("error reading capture_fd, got %d\n", ret);
+		panic("error reading capture_fd");
 
 	    /*
 	     * process the tables that have been received

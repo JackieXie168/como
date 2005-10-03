@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005 Universitat Politecnica de Catalunya
+ * Copyright (c) 2004 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,17 +23,66 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id$ 
+ * $Id$
+ *
+ * Debugging and various utility functions.
  */
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h> 			/* va_start */
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>     
+#include <dlfcn.h>
+#include <sys/types.h>			/* inet_ntop */
+#include <assert.h>
+
+#include "como.h"
+
+
+/* 
+ * keeps reading until complete. 
+ */
+int
+como_readn(int fd, char *buf, size_t nbytes)
+{
+    int n = 0;
+    
+    while (n < (int) nbytes) {
+        int ret = read(fd, buf + n, nbytes - n);
+        if (ret == -1)
+            return -1;
+        if (ret == 0) /* EOF */
+            break;
+        
+        n += ret;
+    }
+    
+    return n; /* <= nbytes */
+}
 
 /*
- * Author: Diego Amores Lopez (damores@ac.upc.edu)
- * 
- * Description:
- * ------------
- *  
- * Filter parsing for CoMo - header file
- * 
+ * keeps writing until complete. If nbytes = 0, we assume it is
+ * a string and do a strlen here.
  */
+int
+como_writen(int fd, const char *buf, size_t nbytes)
+{
+    size_t n = 0;
 
-int parse_filter(char *, char **);
+    if (nbytes == 0)
+	nbytes = strlen(buf);
+    while (n < nbytes) {
+	int ret = write(fd, buf + n, nbytes - n);
+
+	if (ret == -1)
+	    return -1;
+
+        n += ret;
+    }
+   
+    return n; /* == nbytes */
+}
+

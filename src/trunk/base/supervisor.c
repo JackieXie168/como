@@ -116,41 +116,6 @@ start_child(char *name, char *procname, void (*mainloop)(int fd), int fd)
 }
 
 
-/**
- * -- add_fd
- *
- * add a file descriptor to the interesting range;
- * return maxfd value to be used in select().
- */ 
-static __inline__ int
-add_fd(int i, fd_set * fds, int max_fd)
-{
-    FD_SET(i, fds);
-    return (i >= max_fd)? i + 1 : max_fd; 
-}
-       
-
-/**
- * -- del_fd
- *
- * delete a file descriptor to the interesting range;
- * return maxfd value to be used in select().
- */ 
-static __inline__ int
-del_fd(int i, fd_set * fds, int max_fd)
-{
-    FD_CLR(i, fds);
-    if (i < max_fd - 1)
-        return max_fd;
-
-    /* we deleted the highest fd, so need to recompute the max */
-    for (i = max_fd - 1; i >= 0; i--)
-        if (FD_ISSET(i, fds))
-            break;
-    return i + 1; 
-}
-
-
 /*
  * -- echo_log_msgs()
  *

@@ -36,7 +36,7 @@
 
 #include <stdio.h>
 #include <time.h>
-#include <netinet/in.h>		/* IPPROTO_??? */
+#include <netinet/in.h>		/* IPPROTO_* */
 
 #include "como.h"
 #include "module.h"

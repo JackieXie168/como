@@ -32,6 +32,7 @@
 #include <sys/time.h>   /* struct timeval */
 
 #include "comotypes.h"
+#include "comofunc.h"
 #include "sniffers.h"
 
 /*
@@ -104,77 +105,6 @@ struct drop_ring {
     struct drop_record data[NR_DROP_RECORDS];
 };
 
-/*---  Prototypes -----*/
-
-/*
- * config.c
- *
- */
-int parse_cmdline(int argc, char *argv[]);
-
-/*
- * memory.c
- */
-void dump_alloc(void);
-int mem_merge_maps(memlist_t *dst, memlist_t *m);
-void *new_mem(memlist_t *m, uint size, char *msg); 
-void mfree_mem(memlist_t *m, void *p, uint size); 
-void memory_init(uint size_mb);     
-void memory_clear(void);        
-uint memory_usage(void);
-uint memory_peak(void);
-memlist_t *new_memlist(uint entries); 
-
-/*
- * capture.c
- */
-void capture_mainloop(int fd);
-
-/*
- * export.c
- */
-void export_mainloop(int fd);
-
-/*
- * supervisor.c
- */
-void supervisor_mainloop(int fd);
-pid_t start_child(char *name, char *procname, void (*mainloop)(int fd), int fd);
-int get_sp_fd(char *name);
-
-/*
- * util.c
- */
-int create_socket(const char *name, char **arg);
-int como_readn(int fd, char *buf, size_t len);
-int como_writen(int fd, const char *buf, size_t len);
-void logmsg(int flags, const char *fmt, ...);
-void rlimit_logmsg(unsigned interval, int flags, const char *fmt, ...);
-char * loglevel_name(int flags); 
-char * getprotoname(int proto); 
-
-/*
- * panic() and panicx() are a printf-like function to print a panic message
- * and terminate.
- */
-void _epanic(const char * file, const int line, const char *fmt, ...);
-#define panic(...) _epanic(__FILE__, __LINE__, __VA_ARGS__)
-void _epanicx(const char * file, const int line, const char *fmt, ...);
-#define panicx(...) _epanicx(__FILE__, __LINE__, __VA_ARGS__)
-
-/*
- * If possible, do not call malloc(),  calloc() and realloc() directly.
- * Instead use safe_malloc(), safe_calloc() and safe_realloc() which provide
- * wrappers to check the arguments and panic if necessary.
- */
-void *_smalloc(const char * file, const int line, size_t sz); 
-#define safe_malloc(...) _smalloc(__FILE__, __LINE__, __VA_ARGS__) 
-void *_scalloc(const char * file, const int line, int n, size_t sz); 
-#define safe_calloc(...) _scalloc(__FILE__, __LINE__, __VA_ARGS__) 
-void *_srealloc(const char * file, const int line, void * ptr, size_t sz); 
-#define safe_realloc(...) _srealloc(__FILE__, __LINE__, __VA_ARGS__) 
-
-void *load_object(char *base_name, char *symbol);
 
 /* log flags. The high bits are only set for verbose logging */
 #define	LOGUI		0x0001	/* normal warning msgs			*/
@@ -186,10 +116,11 @@ void *load_object(char *base_name, char *symbol);
 #define	LOGSTORAGE	0x0040
 #define	LOGQUERY	0x0080
 #define	LOGSNIFFER	0x0100	/* sniffers debugging 			*/
+#define LOGTIMER	0x0200	/* print timing information 		*/
 #define	LOGDEBUG	0x8000
 #define	LOGALL		(LOGUI|LOGWARN|LOGMEM|LOGCONFIG|LOGCAPTURE| \
 				LOGEXPORT|LOGSTORAGE|LOGQUERY|LOGDEBUG| \
-				LOGSNIFFER)
+				LOGSNIFFER|LOGTIMER)
 
 #define	V_LOGUI		(LOGUI << 16) 
 #define	V_LOGWARN	(LOGWARN << 16)
@@ -200,6 +131,7 @@ void *load_object(char *base_name, char *symbol);
 #define	V_LOGSTORAGE	(LOGSTORAGE << 16)
 #define	V_LOGQUERY	(LOGQUERY << 16)
 #define	V_LOGSNIFFER	(LOGSNIFFER << 16)
+#define	V_LOGTIMER	(LOGTIMER << 16)
 #define	V_LOGDEBUG	(LOGDEBUG << 16)
 
 /*

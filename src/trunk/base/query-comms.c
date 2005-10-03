@@ -38,7 +38,6 @@
 
 #include "como.h"
 #include "query.h"
-#include "filter.h"
 
 /*
  * Communication support for the query modules.

@@ -126,9 +126,9 @@ int
 main(int argc, char *argv[])
 {
     pid_t pid;
+    int capture_fd; 
     int storage_fd;
     int supervisor_fd;
-    int ca_ex[2];	/* socketpairs for capture-export */
 
     mcheck(NULL); 	
 
@@ -197,18 +197,16 @@ main(int argc, char *argv[])
 
     /*
      * Prepare to start processes.
-     * First create unix-domain socket for storage (which will be
-     * inherited by the children) and for the supervisor.
-     * Then create a socketpair to connect capture-export.
+     * Create unix-domain socket for storage and capture (they will be
+     * inherited by the children), and for the supervisor (that is what 
+     * this process will become).
      */
+    capture_fd = create_socket("S:capture.sock", NULL); 
     storage_fd = create_socket("S:storage.sock", NULL);
     supervisor_fd = create_socket("S:supervisor.sock", NULL);
 
-    if (socketpair(AF_UNIX, SOCK_DGRAM, 0, ca_ex))
-	panic("error creating socket pair\n");
-
-    /* now start the CAPTURE process */
-    pid = start_child("CAPTURE", "ca", capture_mainloop, ca_ex[0]);
+    /* start the CAPTURE process */
+    pid = start_child("CAPTURE", "ca", capture_mainloop, capture_fd); 
 
     /* 
      * memory map not needed any more, get rid of it. 
@@ -216,11 +214,11 @@ main(int argc, char *argv[])
      * memory. CAPTURE is now in charge of allocating and freeing memory
      * in the shared memory region. however, all processes can still see,
      * read, and write in the shared memory if CAPTURE tell them where 
-     * to look.... 
+     * to look... 
      */
     memory_clear();
 
-    /* now start the STORAGE process */
+    /* start the STORAGE process */
     pid = start_child("STORAGE", "st", storage_mainloop, storage_fd);
 
     /*
@@ -228,7 +226,7 @@ main(int argc, char *argv[])
      * SUPERVISOR is not really forked, so right before going to it
      * we call 'atexit' to register a handler.
      */
-    pid = start_child("EXPORT", "ex", export_mainloop, ca_ex[1]);
+    pid = start_child("EXPORT", "ex", export_mainloop, -1); 
 
     signal(SIGINT, exit);
     atexit(cleanup);

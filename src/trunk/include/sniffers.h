@@ -99,9 +99,10 @@ struct _source {
 #define	SNIFF_POLL	0x0002	/* device must be polled */
 #define	SNIFF_FILE	0x0004	/* device reads from file */
 #define SNIFF_INACTIVE	0x0008	/* sniffer is inactive */
+#define SNIFF_FROZEN	0x0010	/* sniffer is frozen (only for SNIFF_FILE) */
 
 
-/* some functions and variables */
+/* generic function used by sniffer-*.c */
 void updateofs(pkt_t * pkt, int type);
 
  

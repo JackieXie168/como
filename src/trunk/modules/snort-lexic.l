@@ -78,7 +78,7 @@ COMMENT         "#"(.)*
 %option noyywrap
 %option nounput
 /* This should work with Flex version >= 2.5.11 */
-%option noyyalloc noyyfree noyyrealloc
+option noyyalloc noyyfree noyyrealloc
 
 %%
 

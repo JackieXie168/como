@@ -493,43 +493,6 @@ new_csclient(csbytestream_t *bs, int mode)
 
 
 /**
- * -- add_fd
- * 
- * delete a file descriptor to the interesting range;
- * return maxfd value to be used in select().
- */
-static int
-add_fd(int i)
-{
-    FD_SET(i, &cs_state.valid_fds);
-    if (i >= cs_state.max_fd)
-	cs_state.max_fd = i+1;
-    return cs_state.max_fd;
-}
-
-
-/**
- * -- del_fd
- * 
- * delete a file descriptor to the interesting range;
- * return maxfd value to be used in select().
- */
-static int
-del_fd(int i)
-{
-    FD_CLR(i, &cs_state.valid_fds);
-    if (i < cs_state.max_fd - 1)
-	return cs_state.max_fd;
-    /* we deleted the highest fd, so need to recompute the max */
-    for (i= cs_state.max_fd - 1; i >= 0; i--)
-	if (FD_ISSET(i, &cs_state.valid_fds))
-	    break;
-    cs_state.max_fd = i + 1;
-    return cs_state.max_fd;
-}
-
-
-/**
  * -- append_to_wb 
  *
  * appends a region to the bytestream write buffer.
@@ -1512,7 +1475,7 @@ storage_mainloop(int accept_fd)
      * init data structures, mainly file descriptors  
      */
     bzero(&cs_state, sizeof(cs_state)); 
-    add_fd(accept_fd);
+    cs_state.max_fd = add_fd(accept_fd, &cs_state.valid_fds, cs_state.max_fd);
 
     /*
      * The real main loop.
@@ -1553,7 +1516,8 @@ storage_mainloop(int accept_fd)
 		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n", 
 			i, x, strerror(errno));
 		} else {
-		    add_fd(x);
+ 		    cs_state.max_fd = add_fd(x, &cs_state.valid_fds, 
+					     cs_state.max_fd);
 		    logmsg(V_LOGDEBUG, "accept fd[%d] ok new desc %d\n", i, x);
 		}
 		continue;
@@ -1565,7 +1529,8 @@ storage_mainloop(int accept_fd)
 	    if (ret <= 0) {	/* end of file on a socket ? */
 		logmsg(LOGWARN, "storage reading fd[%d] got %d (%s)\n", 
 			i, ret, strerror(errno));
-		del_fd(i);
+		cs_state.max_fd = del_fd(i, &cs_state.valid_fds,
+                                         cs_state.max_fd);
 		close(i);
 		continue;
 	    }

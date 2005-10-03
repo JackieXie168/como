@@ -4,6 +4,8 @@
 # see toplevel como.gmk for more information on the build system
 
 BASEDIR = ..
+EXTRADIR = $(BASEDIR)/extra
+SNIFFDIR = $(BASEDIR)/sniffers
 
 PROGS = como	# list of program names
 
@@ -24,12 +26,16 @@ SRCS_como := \
 	query-ondemand.c \
 	pippo.c \
 	supervisor.c \
-	util.c \
+	logging.c \
+	util-io.c \
+	util-safe.c \
+	util-misc.c \
+	util-socket.c \
+	util-timers.c \
 	export.c \
 	storage.c \
 	storage-client.c \
 	heap.c \
-	sniffers.c \
 	os.c
 
 ifdef HAVE_FLEX_AND_BISON
@@ -88,11 +94,12 @@ ifdef USE_PRISM2
 endif
 
 # add sniffers  
-x=$(SNIFFERS:%=sniffer-%.c)
+x=$(SNIFFERS:%=$(SNIFFDIR)/sniffer-%.c)
+x += $(SNIFFDIR)/sniffers.c
 SRCS_como += $(x)
 
 # add extras 
-x=$(EXTRAS:%=$(BASEDIR)/extra/%)
+x=$(EXTRAS:%=$(EXTRADIR)/%)
 SRCS_como += $(x)
 
 capture.o:	build-sniffer-list

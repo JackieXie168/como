@@ -46,6 +46,7 @@ typedef struct _capture_table   ctable_t;       /* capture hash table */
 typedef struct _export_table    etable_t;       /* export hash table */
 typedef struct _export_array    earray_t;       /* export record array */
 
+typedef struct _tsc		tsc_t; 		/* timers (using TSC) */
 typedef struct _statistics	stats_t; 	/* statistic counters */
 
 typedef struct _como_pktdesc    pktdesc_t;      /* Packet description */
@@ -378,6 +379,18 @@ struct _export_array {
 
 
 /* 
+ * timers (using TSC) 
+ */
+struct _tsc {
+    char * name;                /* timer name */
+    int n;                      /* number of samples */
+    u_int64_t value;            /* latest value */
+    u_int64_t min;              /* min value */
+    u_int64_t max;              /* max value */
+    u_int64_t total;            /* sum of all values */
+};
+
+/* 
  * statistic counters 
  */
 struct _statistics { 
@@ -389,6 +402,11 @@ struct _statistics {
     uint64_t pkts; 		/* sniffed packets so far */
     int drops; 			/* global packet drop counter */
     timestamp_t delay;	 	/* packet capture delay */
+
+    /* we define here a set of timers that use TSC */
+    tsc_t * ca_loop_timer; 	/* capture mainloop */
+    tsc_t * ca_pkts_timer; 	/* capture process pkts */
+    tsc_t * ca_filter_timer;	/* capture filter */
 };
     
 
