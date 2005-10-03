@@ -43,7 +43,7 @@
 #define POLL_WAIT   1000
 
 /* packet buffer */
-#define PKT_BUFFER 	256		
+#define PKT_BUFFER 	8192		
  
 /* flush and freeze/unfreeze thresholds */
 #define MB(m)				((m)*1024*1024)
@@ -693,8 +693,8 @@ capture_mainloop(int accept_fd)
          * start the sniffer
 	 */
 	if (src->cb->sniffer_start(src) < 0) { 
-	    logmsg(LOGWARN, "failure to open capture device %s (%s)\n",
-		src->cb->name, src->device);
+	    logmsg(LOGWARN, "sniffer %s (%s): %s\n",
+		src->cb->name, src->device, strerror(errno));
 	    continue; 
 	} 
 	sniffers_left++;
