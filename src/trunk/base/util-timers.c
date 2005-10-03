@@ -92,7 +92,9 @@ void
 reset_tsctimer(tsc_t * t)
 {
     assert(t != NULL); 
-    bzero(t, sizeof(tsc_t)); 
+    t->n = 0; 
+    t->total = 0;
+    t->max = 0; 
     t->min = ~0; 
 }
 
@@ -177,9 +179,8 @@ print_tsctimer(tsc_t *t)
 { 
     static char str[1024]; 
 
-    sprintf(str, "%s - tot: %llu n: %d min: %llu avg: %llu max: %llu", 
-	t->name, t->total, t->n, 
-	get_min_sample(t), get_avg_sample(t), get_max_sample(t)); 
+    sprintf(str, "%s n %d min %llu avg %llu max %llu", 
+	t->name, t->n, get_min_sample(t), get_avg_sample(t), get_max_sample(t)); 
 
     return str; 
 }
