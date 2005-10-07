@@ -73,7 +73,7 @@ create_filter_template()
     fp = fopen(filename, "w");
     if (fp == NULL)
 	panic("cannot create stdpkt.h %s\n", filename);
-    fprintf(fp, stdpkt);
+    fprintf(fp, "%s", stdpkt);
     fclose(fp);
     free(filename);
 
@@ -81,7 +81,7 @@ create_filter_template()
     fp = fopen(filename, "w");
     if (fp == NULL)
 	panic("cannot create filter template %s\n", filename);
-    fprintf(fp, template);
+    fprintf(fp, "%s", template);
     fclose(fp);
     free(filename);
 
