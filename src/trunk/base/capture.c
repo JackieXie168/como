@@ -650,7 +650,7 @@ capture_mainloop(int accept_fd)
     tailq_t expired;		/* expired flow tables */
     pkt_t pkts[PKT_BUFFER]; 	/* packet buffer */
     int sniffers_left;		/* how many sniffers are left ? */
-    int sent2export;		/* message sent to EXPORT */
+    int sent2export = 0;	/* message sent to EXPORT */
     int export_fd; 		/* descriptor used to talk to EXPORT */
     timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     source_t *src;
