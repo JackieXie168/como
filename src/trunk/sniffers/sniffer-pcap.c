@@ -56,6 +56,7 @@
 /* sniffer specific information */
 #define BUFSIZE (1024*1024) 
 struct _snifferinfo { 
+    uint32_t type; 	 /* CoMo packet type */
     char buf[BUFSIZE];   /* base of the capture buffer */
     int nbytes;      	 /* valid bytes in buffer */
 };
@@ -72,6 +73,8 @@ struct _snifferinfo {
 static int
 sniffer_start(source_t * src) 
 {
+    struct _snifferinfo * info; 
+    uint32_t type; 
     uint32_t hdr[6];
     int rd;
     int fd;
@@ -89,7 +92,25 @@ sniffer_start(source_t * src)
 	return -1; 
     } 
 
-    if (hdr[5] != DLT_EN10MB) { 
+    switch (hdr[5]) { 
+    case DLT_EN10MB: 
+	logmsg(LOGSNIFFER, "sniffer: datalink Ethernet (%d)\n", hdr[5]); 
+	type = COMOTYPE_ETH; 
+	break; 
+
+    case DLT_IEEE802_11: 
+	logmsg(LOGSNIFFER, "sniffer: datalink 802.11 (%d)\n", hdr[5]); 
+	type = COMOTYPE_WLAN;
+	break;
+
+
+    case DLT_PRISM_HEADER: 
+	logmsg(LOGSNIFFER, "sniffer: datalink 802.11 with Prism header (%d)\n"
+								, hdr[5]); 
+	type = COMOTYPE_PRISM_LNX;
+	break;
+
+    default: 
 	logmsg(LOGWARN, "pcap sniffer: unrecognized datalink (%d)\n", hdr[5]); 
 	close(fd);
 	return -1; 
@@ -99,6 +120,8 @@ sniffer_start(source_t * src)
     src->flags = SNIFF_FILE; 
     src->polling = 0; 
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
+    info = (struct _snifferinfo *) src->ptr; 
+    info->type = type; 
     return 0;
 }
 
@@ -167,7 +190,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
-        updateofs(pkt, COMOTYPE_ETH); 
+        updateofs(pkt, info->type); 
 
         /* increment the number of processed packets */
         base += sizeof(pcap_hdr_t) + ph->caplen; 

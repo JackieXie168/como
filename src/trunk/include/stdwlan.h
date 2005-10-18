@@ -47,7 +47,58 @@
 /* 
  * add a como packet type 
  */
-#define COMOTYPE_PRISM 		0x0005  /* IEEE 802.11 w/Prism2 radio */
+
+
+/*
+ * 802.11 management header
+ *
+ * from the IEEE 802.11 standard 
+ *
+ */
+
+struct _como_wlan_mgmt_hdr {
+    uint16_t	fc;
+    uint16_t 	duration;
+    uint8_t	da[6];
+    uint8_t 	sa[6];
+    uint8_t 	bssid[6];
+    uint16_t 	seq_ctrl;
+};
+
+/*
+ * Prism2 header with 802.11 header tagged on
+ *
+ * frame format derived from linux-wlan-ng codebase
+ * 
+ */
+struct _como_prismhdr_lnx {
+  uint32_t 	version;
+  uint32_t      length;
+  uint64_t      mactime;
+  uint64_t	hosttime;
+  uint32_t	phytype;
+  uint32_t	channel;
+  uint32_t	datarate;
+  uint32_t 	antenna;
+  uint32_t 	priority;
+  uint32_t	ssi_type;
+  int32_t 	ssi_signal;
+  int32_t	ssi_noise;
+  uint32_t	preamble;
+  uint32_t	encoding;
+
+
+				/* IEEE 802.11 management frame header */
+                                /* need support for control & data frames */ 
+  uint16_t	fc;
+  uint16_t 	duration;
+  uint8_t	da[6];
+  uint8_t 	sa[6];
+  uint8_t 	bssid[6];
+  uint16_t 	seq_ctrl;
+
+};
+
 
 /*  
  * Prism2 header (also known as Hermes header) 
@@ -55,6 +106,7 @@
  * the content has been derived from /usr/include/dev/wi/if_wavelan_ieee.h
  * 
  */
+
 struct _como_prismhdr { 
     uint16_t	status;
 #define PRISM_BADCRC		0x0001
@@ -78,15 +130,16 @@ struct _como_prismhdr {
 #define WLAN_MGMT_BEACON	0x80
 
     uint16_t    id;
-    char        addr1[6];
-    char        addr2[6];
-    char        addr3[6];
+    uint8_t     addr1[6];
+    uint8_t    addr2[6];
+    uint8_t     addr3[6];
     uint16_t    seq;
-    char	addr4[6];
+    uint8_t	addr4[6];
     uint16_t    data_len;	/* frame length */
-    char	dst[6];		/* same as addr1 */
-    char	src[6];		/* same as addr2 */
-    uint16_t    len;		/* same as data_len but big-endian */
+    uint8_t	dst[6];		/* same as addr1 */
+    uint8_t	src[6]; 	/* same as addr2 */
+    uint16_t    len;	/* same as data_len but big-endian */
+
 };
 
 
@@ -109,23 +162,35 @@ struct _como_wlanbeacon {
  * these are useful to access directly the relevant fields 
  * in the various packet headers 
  */
+
 #define PRISM(field)            				\
     (((struct _como_prismhdr *) pkt->payload)->field)
+
+#define PRISM_LNX(field)            				\
+    (((struct _como_prismhdr_lnx *) pkt->payload)->field)
+
+
+/*
+ *   Macros are specific to 64 byte prism header
+ *
+ */
+
 #define WLANBEACON(field)					\
    (((struct _como_wlanbeacon *) 				\
-	pkt->payload + sizeof(struct _como_prismhdr))->field)
+	pkt->payload + sizeof(struct _como_prism_hdr_lnx))->field)
 
-
-/* 
- * packet-related frequently asked questions...
- */
-#define WLANTYPE	(PRISM(frame_ctl) & WLAN_TYPE_MASK) 
-#define WLANSUBTYPE	(PRISM(frame_ctl) & WLAN_SUBTYPE_MASK) 
+#define WLANTYPE	(PRISM_LNX(fc) & WLAN_TYPE_MASK) 
+#define WLANSUBTYPE	(PRISM_LNX(fc) & WLAN_SUBTYPE_MASK) 
 
 #define isWLANDATA	(WLANTYPE == WLAN_DATA)
-#define isWLANWEP	(isWLANDATA && (PRISM(frame_ctl) & WLAN_WEP))
+#define isWLANWEP	(isWLANDATA && (PRISM_LNX(fc) & WLAN_WEP))
 #define isWLANMGMT	(WLANTYPE == WLAN_MGMT) 
 #define isWLANCTL	(WLANTYPE == WLAN_CTL) 
 #define isWLANBEACON	(isWLANMGMT && (WLANSUBTYPE == WLAN_MGMT_BEACON))
 
+
+
+
 #endif /* _COMO_STDWLAN_H */
+
+

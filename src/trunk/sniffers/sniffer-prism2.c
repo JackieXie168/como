@@ -355,19 +355,36 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr)
 	if (count == 0) 
 	    break;
 
-	if (PRISM(status) & PRISM_BADCRC) { 
+#if 0
+	if (PRISM(status) & PRISM_BADCRC) {
 	    /* bad CRC, need to skip this packet. */
 	    logmsg(V_LOGSNIFFER, "packet with bad CRC, skipping it\n"); 
 	    continue; 
 	} 
-        
+#endif
+
 	/*
 	 * determine what type of packet this is. if this is 
 	 * an IP packet we also populate the l3type, l3ofs, and l4ofs 
  	 * information. right now we do not do anything to help navigate
 	 * thru the 802.11 headers (mgmt, ctl, data, etc.).
 	 */
-        pkt->l2type = COMOTYPE_PRISM; 
+        
+#if 0   /* work in progress... -kevin */
+        switch (hdr[5]) {
+        case DLT_IEEE802_11:
+            pkt->l2type = COMOTYPE_WLAN;
+            break;
+    
+        case DLT_PRISM_HEADER:*/
+            pkt->l2type = COMOTYPE_PRISM_LNX;
+            break;
+        default:
+            return -1;
+       }
+#else 
+    pkt->l2type = COMOTYPE_PRISM_LNX;
+#endif
 
 	nbytes += pkt->caplen; 
 	npkts++; 

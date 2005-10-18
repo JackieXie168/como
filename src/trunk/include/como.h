@@ -159,6 +159,10 @@ struct drop_ring {
 
    mfence would also work, but isn't actually that much faster and
    isn't available on all processors. */
+#ifndef USE_STARGATE
 #define mb() asm volatile ("lock;addl $0,0(%%esp)\n":::"memory")
+#else 
+#define mb()
+#endif
 
 #endif /* _COMO_COMO_H */

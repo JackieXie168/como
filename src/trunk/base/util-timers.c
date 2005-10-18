@@ -48,7 +48,11 @@ static __inline__ uint64_t
 rdtsc(void)
 {
     u_int64_t rv;
+#if USE_STARGATE == 1
+    rv = 0; 
+#else
     __asm __volatile(".byte 0x0f, 0x31" : "=A" (rv));
+#endif
     return (rv);
 }
 

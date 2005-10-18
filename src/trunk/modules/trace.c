@@ -41,7 +41,11 @@
 #include <string.h>		/* bcopy */
 #include <stdio.h>		/* fprintf, stderr */
 #include <net/ethernet.h>	/* ether_addr, ether_ntoa */
+#if USE_STARGATE == 1
+#include "pcap-stargate.h"
+#else
 #include <pcap.h>		/* bpf_int32, etc. */
+#endif
 
 #include "como.h"
 #include "module.h"

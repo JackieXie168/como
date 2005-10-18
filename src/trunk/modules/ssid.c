@@ -32,11 +32,13 @@
  * This module parses the 802.11 management frames to find beacon messages
  * and stores all the SSIDs it observes together with the SNR information. 
  *
+ *
  */
 
 #include <stdio.h>
 #include <time.h>
 #include "module.h"
+#include "como.h"
 
 
 /* 
@@ -46,19 +48,20 @@
 #define FLOWDESC    struct _ssid
 FLOWDESC {
     timestamp_t ts;
-    uint32_t	signal; 
-    uint32_t	noise; 
+    int32_t	signal; 
+    int32_t	noise; 
     uint8_t	samples; 
     int8_t 	channel;
     uint8_t	wepmode;
     uint8_t	len; 
-    char 	ssid[32]; 
+    char 	ssid[33]; 
 };
 
 
 /* 
  * beacon packet format... 
  */ 
+
 struct wlanbeacon { 
     uint64_t ts; 
     uint16_t ivl; 
@@ -66,10 +69,11 @@ struct wlanbeacon {
     char variable[0];
 };
 
+
 struct wlanssid { 
     uint8_t id; 	/* must be 0 */
     uint8_t len; 	/* length of SSID */
-    char ssid[32]; 	/* actual ssid */
+    char ssid[33]; 	/* actual ssid */
 };
 
 struct wlands { 
@@ -81,7 +85,7 @@ struct wlands {
 struct wlanrates { 
     uint8_t id; 	/* must be 1 */
     uint8_t len; 	/* no. of rates */
-    uint8_t rates[8]; 	/* rates values */
+    uint8_t rates[7]; 	/* rates values */
 };
 
 static int meas_ivl = 1;     /* measurement granularity */
@@ -111,7 +115,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static int
 check(pkt_t * pkt) 
 {
-    if ((pkt->l2type != COMOTYPE_PRISM) || isWLANWEP || !isWLANBEACON) 
+    if ((pkt->l2type != COMOTYPE_PRISM_LNX) || isWLANWEP || !isWLANBEACON) 
 	return 0; 
     return 1; 
 }
@@ -126,7 +130,8 @@ match(pkt_t * pkt, void * fh)
     int ch = -1; 
     int skip; 
 
-    bcn = (struct wlanbeacon *) (pkt->payload + sizeof(struct _como_prismhdr)); 
+    bcn = (struct wlanbeacon *) (pkt->payload + 
+					sizeof(struct _como_prismhdr_lnx)); 
 
     ssidinfo = (struct wlanssid *) bcn->variable; 
     skip = x->len + 2;				/* skipping ssid info element */
@@ -155,16 +160,19 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntry)
 	struct wlands * dsinfo; 
 	int skip;
 
+
 	x->ts = pkt->ts - pkt->ts % TIME2TS(meas_ivl, 0);
 	x->channel = -1; 
 	x->signal = x->noise = x->samples = 0; 
 
+        
 	/* now find the information in the management frame */
 	bcn = (struct wlanbeacon *) (pkt->payload + 
-					sizeof(struct _como_prismhdr)); 
+					sizeof(struct _como_prismhdr_lnx)); 
 
 	/* get to the privacy bit to find out if wep is used */
 	x->wepmode = (bcn->cap & WLAN_CAPINFO_PRIVACY)? 1 : 0;
+
 
 	/* get to the SSID information element */
 	ssidinfo = (struct wlanssid *) bcn->variable; 
@@ -188,8 +196,8 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntry)
     } 
 
     x->samples++; 
-    x->signal += (uint32_t) PRISM(signal); 
-    x->noise += (uint32_t) PRISM(silence); 
+    x->signal +=  PRISM_LNX(ssi_signal); 
+    x->noise +=  PRISM_LNX(ssi_noise); 
     return 0;		/* records are never full */
 }
 
@@ -199,10 +207,8 @@ store(void *rp, char *buf, size_t len)
 {
     FLOWDESC *x = F(rp);
     int i; 
-
     if (len < sizeof(FLOWDESC)) 
-	return -1; 
-
+    
     PUTH64(buf, x->ts);
     PUTH32(buf, x->signal);
     PUTH32(buf, x->noise);
@@ -213,7 +219,7 @@ store(void *rp, char *buf, size_t len)
     for (i = 0; i < x->len; i++) 
 	PUTH8(buf, x->ssid[i]); 
 
-#if 0 
+#if 1 
     /* XXX for debugging... */
     {
 	time_t t; 
@@ -233,19 +239,20 @@ store(void *rp, char *buf, size_t len)
     }
 #endif 
 
-    return 12 + x->len;
+    return 20 + x->len;
 }
 
 static size_t
 load(char * buf, size_t len, timestamp_t * ts)
 {
+
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
         return 0;
     }
 
     *ts = NTOHLL(((FLOWDESC *)buf)->ts);
-    return sizeof(FLOWDESC);
+    return 20 + (((FLOWDESC *)buf)->len);
 }
 
 

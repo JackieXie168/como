@@ -123,14 +123,15 @@ struct _como_pkt {
 /* 
  * Known layer2 types 
  */
-#define COMOTYPE_NONE	0x0000	/* no layer2 (e.g., replayed data) */
-#define COMOTYPE_ETH	0x0001	/* Ethernet */
-#define COMOTYPE_HDLC	0x0002	/* Cisco HDLC */
-#define COMOTYPE_VLAN	0x0003	/* 802.1q packet */
-#define COMOTYPE_ISL	0x0004	/* Cisco ISL */
-#define COMOTYPE_PRISM	0x0005  /* IEEE 802.11 with Prism header */
-#define COMOTYPE_NF	0x0006	/* Flow records (NetFLow v5 info) */
-
+#define COMOTYPE_NONE		0x0000	/* no layer2 (e.g., replayed data) */
+#define COMOTYPE_ETH		0x0001	/* Ethernet */
+#define COMOTYPE_HDLC		0x0002	/* Cisco HDLC */
+#define COMOTYPE_VLAN		0x0003	/* 802.1q packet */
+#define COMOTYPE_ISL		0x0004	/* Cisco ISL */
+#define COMOTYPE_PRISM          0x0005  /* IEEE 802.11 with Prism header */
+#define COMOTYPE_NF		0x0006	/* Flow records (NetFLow v5 info) */
+#define COMOTYPE_WLAN   	0x0007  /* IEEE 802.11 header */
+#define COMOTYPE_PRISM_LNX 	0x0008  /* IEEE 802.11 with Prism header */
 
 /* 
  * Ethernet framing 

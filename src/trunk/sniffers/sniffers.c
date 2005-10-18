@@ -45,6 +45,10 @@ static size_t como_l2_len[] = {
     4,          // COMOTYPE_HDLC
     18,         // COMOTYPE_VLAN
     40,         // COMOTYPE_ISL
+    0,		// COMOTYPE_PRISM
+    0,          // COMOTYPE_NF
+    24,         // COMOTYPE_WLAN
+    88,         // COMOTYPE_PRISM_LNX
 };
 
 /* 
