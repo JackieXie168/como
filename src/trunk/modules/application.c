@@ -373,7 +373,7 @@ print(char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce
                  * communication messages.
                  */
-                granularity = atoi(val) / meas_ivl;   
+                granularity = MAX(atoi(val) / meas_ivl, 1);   
             }
 
         } 

@@ -544,10 +544,12 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 
 	    new_record = 1;
 	}
+	start_tsctimer(map.stats->ca_updatecb_timer); 
 	cand->full = mdl->callbacks.update(pkt, cand, new_record,
 					   mdl->unreported_local_drops +
 					   (unsigned)(map.stats->drops -
 						      mdl->reported_global_drops));
+	end_tsctimer(map.stats->ca_updatecb_timer); 
 	mdl->reported_global_drops = map.stats->drops;
 	if (mdl->unreported_local_drops)
 	    do_drop_record(map.dr, mdl->index, mdl->unreported_local_drops);
@@ -576,7 +578,9 @@ capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter, tailq_t *expired)
     logmsg(V_LOGCAPTURE, 
 	   "calling filter with pkts %p, n_pkts %d, n_out %d\n", 
 	   pkts, count, map.module_count); 
+    start_tsctimer(map.stats->ca_filter_timer); 
     which = filter(pkts, count, map.module_count);
+    end_tsctimer(map.stats->ca_filter_timer); 
 
     /*
      * Now browse through the classifiers and perform the capture
@@ -596,7 +600,9 @@ capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter, tailq_t *expired)
 	       "sending %d packets to module %s for processing",
 	       count, map.modules[idx].name);
 
+	start_tsctimer(map.stats->ca_module_timer); 
 	last_ts = capture_pkt(&map.modules[idx], pkts, count, which, expired);
+	end_tsctimer(map.stats->ca_module_timer); 
 	which += count; /* next module, new list of packets */
     }
     return last_ts;
@@ -656,6 +662,7 @@ capture_mainloop(int accept_fd)
     source_t *src;
     fd_set valid_fds;
     int max_fd;
+    uint table_sent; 
 
     /* get ready to accept requests from EXPORT process(es) */
     max_fd = 0;
@@ -664,9 +671,13 @@ capture_mainloop(int accept_fd)
     export_fd = -1; 
 
     /* initialize the timers */
+    map.stats->ca_full_timer = new_tsctimer("full"); 
     map.stats->ca_loop_timer = new_tsctimer("loop"); 
     map.stats->ca_pkts_timer = new_tsctimer("pkts"); 
     map.stats->ca_filter_timer = new_tsctimer("filter"); 
+    map.stats->ca_module_timer = new_tsctimer("modules"); 
+    map.stats->ca_updatecb_timer = new_tsctimer("update"); 
+    map.stats->ca_sniff_timer = new_tsctimer("sniffer"); 
 
     /*
      * load the filter in. if no object has been provided, then
@@ -741,6 +752,8 @@ capture_mainloop(int accept_fd)
 	fd_set r; 
 	int n_ready; 
 	struct timeval tout = {1, 0}; 
+
+	start_tsctimer(map.stats->ca_full_timer); 
 
         errno = 0;
 
@@ -834,6 +847,7 @@ capture_mainloop(int accept_fd)
             TQ_HEAD(&expired) = NULL;   /* we are done with this. */
 	    map.stats->table_queue = 0; /* reset counter */
             sent2export = 1;            /* wait response from export */
+	    table_sent = 1; 
         }
 
         /*
@@ -851,8 +865,10 @@ capture_mainloop(int accept_fd)
 		continue;	/* nothing to read here. */
 
 	    old_drops = map.stats->drops;
+	    start_tsctimer(map.stats->ca_sniff_timer); 
 	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER,
 					  &map.stats->drops);
+	    end_tsctimer(map.stats->ca_sniff_timer); 
 	    if (map.stats->drops != old_drops)
 		do_drop_record(map.dr, -1, map.stats->drops - old_drops);
 
@@ -941,11 +957,29 @@ capture_mainloop(int accept_fd)
 	    freeze_module(); 
 #endif
 	end_tsctimer(map.stats->ca_loop_timer);
+	end_tsctimer(map.stats->ca_full_timer);
+
+	if (table_sent) {
+	    logmsg(LOGTIMER, "timing after %llu packets\n", map.stats->pkts); 
+	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_full_timer)); 
+	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_loop_timer)); 
+	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_sniff_timer)); 
+	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_pkts_timer)); 
+	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_filter_timer)); 
+	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_module_timer)); 
+	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_updatecb_timer)); 
+	    reset_tsctimer(map.stats->ca_full_timer); 
+	    reset_tsctimer(map.stats->ca_loop_timer); 
+	    reset_tsctimer(map.stats->ca_sniff_timer); 
+	    reset_tsctimer(map.stats->ca_pkts_timer); 
+	    reset_tsctimer(map.stats->ca_filter_timer); 
+	    reset_tsctimer(map.stats->ca_module_timer); 
+	    reset_tsctimer(map.stats->ca_updatecb_timer); 
+	    table_sent = 0; 
+ 	} 
     }
 
     logmsg(LOGWARN, "Capture: no sniffers left, terminating.\n");
-    logmsg(LOGTIMER, "%s\n", print_tsctimer(map.stats->ca_loop_timer)); 
-    logmsg(LOGTIMER, "%s\n", print_tsctimer(map.stats->ca_pkts_timer)); 
 	   
     return;
 }

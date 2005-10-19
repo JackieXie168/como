@@ -126,7 +126,7 @@ start_child(char *name, char *procname, void (*mainloop)(int fd), int fd)
  *
  */
 static int 
-echo_log_msgs(int fd) 
+echo_log_msgs(int fd, FILE * logfile) 
 {
     static char buf[4097];
     int overflow = 0;
@@ -159,8 +159,11 @@ echo_log_msgs(int fd)
          * buffer because we added an extra byte at the end
          * of the buffer. 
 	 */
-        for (pos = 0; pos <= nread; pos += strlen(buf + pos) + 1)
+        for (pos = 0; pos <= nread; pos += strlen(buf + pos) + 1) {
             logmsg(LOGUI, "%s", buf + pos);
+	    if (logfile != NULL) 
+		fprintf(logfile, "%s", buf + pos); 
+	} 
 
         /* Did we chop a log message in half? */
         overflow = (pos == nread);
@@ -227,7 +230,15 @@ supervisor_mainloop(int accept_fd)
     int max_fd;
     int client_fd;	/* for http queries */
     char *buf;
+    FILE * logfile;
     
+    /* 
+     * open log file 
+     */
+    logfile = fopen("/tmp/como.log", "w"); 
+    if (logfile == NULL)
+	panic("opening /tmp/como.log"); 
+
     /* 
      * Start listening for query requests.
      */
@@ -332,7 +343,7 @@ supervisor_mainloop(int accept_fd)
 	    }
 
 	    /* echo message on stdout */
-	    if (echo_log_msgs(i) != 0) { 
+	    if (echo_log_msgs(i, logfile) != 0) { 
 		close(i); 
 		del_fd(i, &valid_fds, max_fd);
 	    } 

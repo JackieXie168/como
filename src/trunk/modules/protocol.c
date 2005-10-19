@@ -195,7 +195,7 @@ do_header(char * const args[], char * s, int * fmt,
 	    /* aggregate multiple records into one to reduce
 	     * communication messages.
 	     */
-	    *granularity = atoi(val) / meas_ivl;
+	    *granularity = MAX(atoi(val) / meas_ivl,1);
 	}
     }
 

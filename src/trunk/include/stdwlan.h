@@ -139,7 +139,6 @@ struct _como_prismhdr {
     uint8_t	dst[6];		/* same as addr1 */
     uint8_t	src[6]; 	/* same as addr2 */
     uint16_t    len;	/* same as data_len but big-endian */
-
 };
 
 

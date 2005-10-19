@@ -39,7 +39,6 @@
 #include "como.h"       /* logmsg */
 
 #define ASIZE 256       /* anything that can be represented with a char */
-#define MAX(a,b) (a > b) ? a : b
 #define OUTPUT(x) logmsg(LOGUI, "SNORT: string match position = %d\n", x) 
 
 /*

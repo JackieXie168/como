@@ -111,6 +111,8 @@ export_record(module_t * mdl, rec_t * rp)
     uint32_t hash;
     int isnew; 
 
+    start_tsctimer(map.stats->ex_export_timer); 
+
     /* 
      * get the right bucket in the hash table. we do not need to 
      * compute a new hash but we use the same that was used in CAPTURE, 
@@ -161,6 +163,8 @@ export_record(module_t * mdl, rec_t * rp)
         cand->next->prev = cand;
     cand->prev = NULL; 
     et->bucket[hash] = cand;
+
+    end_tsctimer(map.stats->ex_export_timer); 
     return 0;		// XXX just to have same prototype of call_store
 }
 
@@ -178,6 +182,8 @@ call_store(module_t * mdl, rec_t *rp)
     char *dst;
     int ret; 
 
+    start_tsctimer(map.stats->ex_mapping_timer); 
+
     dst = csmap(mdl->file, mdl->offset, &mdl->bsize); 
     if (dst == NULL)
 	panic("fail csmap for module %s", mdl->name);
@@ -188,6 +194,8 @@ call_store(module_t * mdl, rec_t *rp)
 	logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
     else
 	mdl->offset += ret;
+
+    end_tsctimer(map.stats->ex_mapping_timer); 
     return ret;
 }
 
@@ -426,6 +434,7 @@ do_drop(struct drop_record *dr, int storage_fd)
 	    return;
 	}
 	free(b);
+	off_in_file = csgetofs(fd); 
     }
     /* Note that this only works because sizeof(*dr) is a small power
        of two (think what happens near page boundaries) */
@@ -470,11 +479,20 @@ export_mainloop(__unused int fd)
     int	max_fd;
     int idx; 
     fd_set rx;
+    uint pkt_thresh;
 
     mcheck(NULL);
 
     storage_fd = create_socket("storage.sock", NULL);
     capture_fd = create_socket("capture.sock", NULL);
+
+    /* allocate the timers */
+    map.stats->ex_full_timer = new_tsctimer("full"); 
+    map.stats->ex_loop_timer = new_tsctimer("loop"); 
+    map.stats->ex_table_timer = new_tsctimer("table"); 
+    map.stats->ex_export_timer = new_tsctimer("export"); 
+    map.stats->ex_store_timer = new_tsctimer("store"); 
+    map.stats->ex_mapping_timer = new_tsctimer("mapping"); 
 
     /* 
      * open the output files of all the modules 
@@ -512,14 +530,19 @@ export_mainloop(__unused int fd)
      * receive from the CAPTURE process, then look at the export 
      * tables to see if any action is required.
      */
+    pkt_thresh = 100000;
     for (;;) {
 	fd_set r = rx;
 	int ret;
+
+	start_tsctimer(map.stats->ex_full_timer); 
 
 	mcheck(NULL);
 	ret = select(max_fd + 1, &r, NULL, NULL, NULL);
 	if (ret < 0 && errno != EINTR) 
 	    panic("error in the select (%s)\n", strerror(errno)); 
+
+	start_tsctimer(map.stats->ex_loop_timer); 
 
 	while (map.dr->prod_ptr != map.dr->cons_ptr) {
 	    unsigned p;
@@ -554,11 +577,15 @@ export_mainloop(__unused int fd)
 
 		mcheck(NULL);
 		/* process capture table and update export table */
+		start_tsctimer(map.stats->ex_table_timer); 
 		process_table(x.ft, x.m);
+		end_tsctimer(map.stats->ex_table_timer); 
 		mcheck(NULL);
 
 		/* process export table, storing/discarding records */
+		start_tsctimer(map.stats->ex_store_timer); 
 		store_records(x.ft->module, x.ft->ts); 
+		end_tsctimer(map.stats->ex_store_timer); 
 		mcheck(NULL);
 
 		/* free the capture table and move to next */
@@ -573,6 +600,22 @@ export_mainloop(__unused int fd)
 	     */
 	    write(capture_fd, &x, sizeof(x));
 	}
+
+	end_tsctimer(map.stats->ex_loop_timer); 
+	end_tsctimer(map.stats->ex_full_timer); 
+
+	logmsg(LOGTIMER, "\t%s\n", print_tsctimer(map.stats->ex_full_timer));
+	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_loop_timer));
+	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_table_timer));
+	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_store_timer));
+	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_mapping_timer));
+	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_export_timer));
+	reset_tsctimer(map.stats->ex_full_timer);
+	reset_tsctimer(map.stats->ex_loop_timer);
+	reset_tsctimer(map.stats->ex_table_timer);
+	reset_tsctimer(map.stats->ex_store_timer);
+	reset_tsctimer(map.stats->ex_mapping_timer);
+	reset_tsctimer(map.stats->ex_export_timer);
 
 	/*
 	 * Received a message from supervisor

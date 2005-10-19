@@ -404,9 +404,20 @@ struct _statistics {
     timestamp_t delay;	 	/* packet capture delay */
 
     /* we define here a set of timers that use TSC */
+    tsc_t * ca_full_timer; 	/* capture entire mainloop */
     tsc_t * ca_loop_timer; 	/* capture mainloop */
     tsc_t * ca_pkts_timer; 	/* capture process pkts */
     tsc_t * ca_filter_timer;	/* capture filter */
+    tsc_t * ca_module_timer;	/* capture modules */
+    tsc_t * ca_updatecb_timer;	/* capture updatecb */
+    tsc_t * ca_sniff_timer;	/* capture sniffer */
+
+    tsc_t * ex_full_timer; 	/* export entire mainloop */
+    tsc_t * ex_loop_timer; 	/* export mainloop */
+    tsc_t * ex_table_timer; 	/* export process table */
+    tsc_t * ex_store_timer;	/* export store table */
+    tsc_t * ex_export_timer;	/* export export()/store() callbacks */
+    tsc_t * ex_mapping_timer;	/* export export()/store() callbacks */
 };
     
 

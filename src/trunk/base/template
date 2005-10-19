@@ -49,6 +49,8 @@
 #define or              ||
 #define ALL             1
 
+#define SRC(x)		    (H32(IP(src_ip)) == x)
+#define DST(x)		    (H32(IP(dst_ip)) == x)
 #define PROTO(x)            (IP(proto) == IPPROTO_ ## x)
 #define proto(x)            PROTO(x)
 #define CLASS_A(sd)         IN_CLASSA(H32(IP(sd ## _ip)))

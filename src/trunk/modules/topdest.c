@@ -39,7 +39,7 @@
 #include "module.h"
 
 #define TOPN        20		/* Top-20 destinations */
-#define EXPORT_IVL  3600	/* export interval (seconds) */
+#define EXPORT_IVL  5		/* export interval (seconds) */
 
 #define FLOWDESC	struct _ca_topdest
 #define EFLOWDESC	FLOWDESC
