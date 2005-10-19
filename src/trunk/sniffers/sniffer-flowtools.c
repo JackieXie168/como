@@ -455,7 +455,8 @@ sniffer_start(source_t * src)
     N16(p->udph.src_port) = 0xffff;
     N16(p->udph.dst_port) = 0xffff;
     
-    src->flags = SNIFF_FILE; 		/* this sniffer operates on files */
+    /* this sniffer operates on file and uses a select()able descriptor */
+    src->flags = SNIFF_FILE|SNIFF_SELECT; 
     src->polling = 0; 
     return 0; 
 }

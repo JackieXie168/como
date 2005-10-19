@@ -117,7 +117,7 @@ sniffer_start(source_t * src)
     }
 
     src->fd = fd; 
-    src->flags = SNIFF_FILE; 
+    src->flags = SNIFF_FILE|SNIFF_SELECT; 
     src->polling = 0; 
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
