@@ -952,6 +952,7 @@ handle_read(int s, csmsg_t * in, csclient_t *cl)
      */
     if (in->ofs < bs->file_first->bs_offset) {	/* before first byte */
 	senderr(s, in->id, ENODATA); 
+	return; 
     } else if (in->ofs >= bs->file_first->bs_offset + bs->size) { 
 	/* 
 	 * After current data; if a writer exists, wait for new data;
