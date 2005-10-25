@@ -105,38 +105,45 @@ void preBmGs(char *x, int m, int bmGs[]) {
       bmGs[m - 1 - suff[i]] = m - 1 - i;
 }
  
+
 /*
- * -- BM
+ * -- BM()
  *
  * Boyer-Moore pattern search
- * Given a string, a pattern to search, their respective sizes, and precomputed
- * data, this function returns the first appearance of the pattern in the string
- * (or 0 if the pattern is not found)
+ * 
+ * Given a string, a pattern to search, their respective sizes, 
+ * and precomputed data, this function returns the first appearance 
+ * of the pattern in the string (or 0 if the pattern is not found).
  *
  */
-int BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], unsigned int *found) {
-   int i, j;
+int 
+BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], uint *found) 
+{
+    int i, j, k;
    
-   /* Searching */
-   j = 0;
-   while (j <= n - m) {
-      /* Compare the pattern and the window backwards
-       * and starting from their rightmost position 
-       */
-      for (i = m - 1; i >= 0 && x[i] == y[i + j]; --i);
+    *found = 0;
+
+    j = 0;
+    while (j <= n - m) {
+	/* 
+	 * Compare the pattern and the window backwards
+	 * and starting from their rightmost position 
+	 */
+	for (i = m - 1; i >= 0 && x[i] == y[i + j]; --i);
       
-      if (i < 0) {
-         /* The pattern was found */
-         *found = j;
-         return 1;
-      }
-      else
-         /* The pattern was not found. The following shift
-          * will be the maximum between the shifts in the 
-          * two precomputed tables
-          */
-         j += MAX(bmGs[i], bmBc[(unsigned int)y[i + j]] - m + 1 + i);
-   }
-   *found = 0;
-   return 0;
+	if (i < 0) { /* found! */
+	    *found = j;
+	    return 1; 
+	} 
+
+	/* 
+	 * The pattern was not found. The following shift
+	 * will be the maximum between the shifts in the 
+	 * two precomputed tables
+	 */
+	k = bmBc[(uint) y[i + j]] - m + 1 + i; 
+	j += (bmGs[i] > k)? bmGs[i] : k; 
+    }
+
+    return 0;
 }
