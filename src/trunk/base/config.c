@@ -311,7 +311,7 @@ check_module(module_t *mdl)
 
     cb = load_object(clname, "callbacks");
     if (cb == NULL)
-	panic("could not load library %s: %s\n", clname, strerror(errno)); 
+	panicx("could not load library %s", clname); 
     free(clname);
 
     /* store the callbacks */

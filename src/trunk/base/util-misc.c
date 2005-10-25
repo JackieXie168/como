@@ -59,13 +59,13 @@ load_object(char *base_name, char *symbol)
 
     handle = dlopen(base_name, RTLD_NOW);
     if (handle == NULL) {
-        logmsg(LOGCONFIG, "dlopen(%s, RTLD_NOW) error [%s]\n",
+        logmsg(LOGWARN, "dlopen(%s, RTLD_NOW) error [%s]\n",
                 base_name, dlerror());
         return NULL;
     }
     sym = dlsym(handle, symbol);
     if (sym == NULL) {
-        logmsg(LOGCONFIG, "module %s missing '%s' (%s)\n",
+        logmsg(LOGWARN, "module %s missing '%s' (%s)\n",
                 base_name, symbol, dlerror());
         dlclose(handle);
         return NULL;
