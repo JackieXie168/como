@@ -41,6 +41,11 @@
  * config.c
  */
 int parse_cmdline(int argc, char *argv[]);
+void configure(int argc, char *argv[]);
+void reconfigure(void);
+int load_callbacks(module_t *mdl);
+module_t *load_module(module_t *mdl, int idx);
+void remove_module(module_t *mdl);
 
 
 /*
@@ -61,6 +66,7 @@ memlist_t *new_memlist(uint entries);
  * capture.c
  */
 void capture_mainloop(int fd);
+char *create_filter(module_t * mdl, int count, char *template, char *workdir);
 
 
 /*
@@ -115,6 +121,8 @@ int como_writen(int fd, const char *buf, size_t len);
  */
 char * getprotoname(int proto); 
 void *load_object(char *base_name, char *symbol);
+void *load_object_h(char *base_name, char *symbol, void **handle);
+void unload_object(void *handle);
 
 
 /*
@@ -150,5 +158,24 @@ char * print_tsctimer(tsc_t *);
 uint64_t get_avg_tscsample(tsc_t *);
 uint64_t get_max_tscsample(tsc_t *);
 uint64_t get_min_tscsample(tsc_t *);
+
+/*
+ * ipc.c
+ */
+void ipc_init(void);
+void register_ipc_fd(int fd);
+void unregister_ipc_fd(int fd);
+void sup_send_new_modules(void);
+void sup_send_module_status(void);
+void recv_message(int fd, proc_callbacks_t *callbacks);
+int  sup_recv_message(int fd);
+void sup_wait_for_ack(int fd);
+
+/*
+ * res-mgmt.c
+ */
+void resource_mgmt_init(void);
+char *resource_usage_report(void);
+void schedule(void);
 
 #endif /* _COMO_FUNC_H */

@@ -80,6 +80,7 @@ typedef struct {
         e->link_field = NULL;                           \
     } while (0);
 
+tailq_t expired_tables;  /* expired flow tables */
 
 /*
  * -- match_desc
@@ -132,52 +133,77 @@ match_desc(pktdesc_t *req, pktdesc_t *bid)
  * which reside in the working directory.
  * The function returns the full pathname of the shared object.
  *
+ * This function is also used by supervisor to compile new filter
+ * functions in runtime.
  */
-static char *
+char *
 create_filter(module_t * mdl, int count, char * template, char *workdir)
 {
+    char *src;  /* generated .c file */
+    char *out;  /* compiled .so file */
     char *buf;
     FILE * fp;
     int ret;
     int idx; 
+    extern char builddefs[]; /* generated at compile time, contains all
+                                definitions needed for como to build */
 
-    asprintf(&buf, "%s/my_filter", workdir);
-    fp = fopen(buf, "w");
+    asprintf(&src, "%s/filter_XXXXXX", workdir);
+    src = mktemp(src);
+    if (src == NULL)
+        panic("cannot create tmp filter file\n");
+    asprintf(&out, "%s.so", src);
+
+    fp = fopen(src, "w");
     if (fp == NULL)
-        panic("cannot open temp file %s", buf);
-    free(buf);
+        panic("cannot open temp file %s\n", src);
 
     fprintf(fp, "#define MODULE_COUNT %d\n", count);
+
+    /*
+     * build filters of modules
+     */
     fprintf(fp, "#define USERFILTER \\\n");
-
-    for (idx = 0; idx < count; idx++) 
-         fprintf(fp, "\touts[%d][i] = (%s);\\\n", idx, mdl[idx].filter);
-
-    fprintf(fp,"\n");
-
+    for (idx = 0; idx < count; idx++) {
+        /*
+         * 1st check the module is not disabled
+         */
+        fprintf(fp, "\touts[%d][i] = (modules[%d].status == %d) && ",
+                idx, idx, MDL_ACTIVE);
+        /*
+         * then check the filter
+         */
+        fprintf(fp, "(%s);\\\n", mdl[idx].filter);
+    }
+    fprintf(fp, "\n");
     fclose(fp);
 
     /*
      * Invoke the compiler with the appropriate flags.
      */
 #define	BUILD_FLAGS "-g -I- -I . -shared -Wl,-x,-S"
-    asprintf(&buf,
-        "(cd %s; cc %s \\\n"
-        "\t\t-o my_filter.so -include my_filter %s )",
-	workdir, BUILD_FLAGS, template);
+    asprintf(&buf, 
+             "(cd %s; cc %s %s\\\n"
+             "\t\t-o %s -include %s %s)",
+             workdir, BUILD_FLAGS, builddefs,
+             out, src, template);
 #undef BUILD_FLAGS
 
     logmsg(LOGCAPTURE, "compiling filter \n\t%s\n", buf);
     ret = system(buf);
     free(buf);
+    free(src);
     if (ret != 0) {
-	logmsg(LOGWARN, "compile failed with error %d\n", ret);
-	return NULL;
+	    logmsg(LOGWARN, "compile failed with error %d\n", ret);
+        free(out);
+	    return NULL;
     }
-    asprintf(&buf, "%s/my_filter.so", workdir);
-    return buf;
+    return out;
 }
 
+
+#define SHMEM_USAGE(mdl) \
+    map.stats->mdl_stats[(mdl)->index].mem_usage_shmem
 
 /* 
  * -- create_table 
@@ -194,6 +220,9 @@ create_table(module_t * mdl, timestamp_t ts)
     ct = new_mem(NULL, len, "new_flow_table");
     if (ct == NULL)
 	return NULL;
+
+    SHMEM_USAGE(mdl) += len;
+    ct->bytes += len;
 
     ct->size = mdl->ca_hashsize;
     ct->first_full = ct->size;      /* all records are empty */
@@ -393,6 +422,9 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
     timestamp_t max_ts; 
     int i;
     int new_record;
+    int record_size; /* effective record size */
+
+    record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
 
     if (mdl->ca_hashtable == NULL)
 	mdl->ca_hashtable = create_table(mdl, pkt->ts); 
@@ -493,13 +525,15 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
                 rec_t * x;
 
                 /* allocate a new record */
-                x = new_mem(mdl->ca_hashtable->mem,
-                            mdl->callbacks.ca_recordsize + sizeof(rec_t),
-                            "new");
+                x = new_mem(mdl->ca_hashtable->mem, record_size, "new");
 		if (x == NULL) {
 		    mdl->unreported_local_drops++;
 		    continue;
 		}
+
+                SHMEM_USAGE(mdl) += record_size;
+                mdl->ca_hashtable->bytes += record_size;
+
                 x->hash = hash;
                 x->next = cand->next;
 
@@ -517,6 +551,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 		 */
 
 		new_record = 1;
+        mdl->ca_hashtable->filled_records++;
 		cand = x;
 	    } else {
 		new_record = 0;
@@ -527,13 +562,14 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	     * create a new record, update table stats
 	     * and link it to the bucket.
 	     */
-	    cand = new_mem(mdl->ca_hashtable->mem,
-			   mdl->callbacks.ca_recordsize + sizeof(rec_t), 
-			   "new");
+	    cand = new_mem(mdl->ca_hashtable->mem, record_size, "new");
 	    if (cand == NULL) {
 		mdl->unreported_local_drops++;
 		continue;
 	    }
+            SHMEM_USAGE(mdl) += record_size;
+            mdl->ca_hashtable->bytes += record_size;
+
 	    cand->hash = hash;
 	    cand->next = mdl->ca_hashtable->bucket[bucket];
 
@@ -559,9 +595,156 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
     return max_ts; 
 }
 
+/*
+ * callbacks of the capture process
+ */
+
+filter_fn *filter; /* filter functions */
+void *filter_h; /* identifiers to later unload_objects */
+
+/**
+ * -- load_filter
+ *
+ */
+static void
+load_filter(char *filter_file)
+{
+    /*
+     * unload old filter function
+     */
+    if (filter_h)
+        unload_object(filter_h);
+    /*
+     * then load new one
+     */
+    filter = load_object_h(filter_file, "filter", &filter_h);
+    /*
+     * after having linked the shared object we can 
+     * remove it from disk
+     */
+    //unlink(filter_file);
+}
+
+/*
+ * -- initialize_module
+ *
+ * Do capture-specific initialization of a module.
+ * Make sure module is compatible with current sniffers and
+ * initialize capture hashsize.
+ */
+static void
+ca_init_module(module_t *mdl)
+{
+    source_t *src;
+
+    /*
+     * we browse the list of sniffers to make sure that this module
+     * understands the packets coming them. to do so, we compare the
+     * indesc defined in the module callbacks data structure
+     * with the output descriptor defined in the source.
+     * if there is a mismatch, the module is shut down.
+     */
+    for (src = map.sources; src != NULL; src = src->next) {
+        if (!match_desc(mdl->callbacks.indesc, src->output)) {
+            logmsg(LOGWARN, "module %s does not get %s packets\n",
+                mdl->name, src->cb->name);
+            mdl->status = MDL_INCOMPATIBLE;
+            map.stats->modules_active--;
+            break;
+        }
+    }
+
+    /* XXX we would like to make the capture hashsize adaptive. 
+     *     in general it is going to be much smaller than the 
+     *     one used in export. 
+     */
+    mdl->ca_hashsize = mdl->ex_hashsize;
+}
+
+/*
+ * -- drop table
+ *
+ * Free all memory in a table, and update memory counters.
+ */
+static void
+drop_table(ctable_t *ct, module_t *mdl)
+{
+    int record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
+
+    for (; ct->first_full < ct->size; ct->first_full++) {
+        rec_t *rec = ct->bucket[ct->first_full]; 
+        while (rec != NULL) {
+            rec_t *end = rec->next;
+
+            while (rec->prev)
+                rec = rec->prev;
+
+            while (rec != end) {
+                rec_t *p = rec->next;
+                mfree_mem(NULL, rec, 0);
+                SHMEM_USAGE(mdl) -= record_size;
+                rec = p;
+            }
+        }
+    }
+
+    SHMEM_USAGE(mdl) -= sizeof(ctable_t) + ct->size * sizeof(void *);
+    mfree_mem(NULL, ct, 0);
+}
+
+/*
+ * -- disable_module
+ *
+ * When a module is disabled, capture must drop its
+ * tables to free as much memory as possible
+ */
+static void
+ca_disable_module(module_t *mdl)
+{
+    ctable_t *ct, *prev, *head/*, *tail*/;
+
+    if (mdl->ca_hashtable)
+        drop_table(mdl->ca_hashtable, mdl);
+    mdl->ca_hashtable = NULL;
+
+    head = TQ_HEAD(&expired_tables);
+    ct = head;
+    prev = NULL;
+
+    while (ct != NULL) {
+        ctable_t *next = ct->next_expired;
+
+        if (ct->module->index != mdl->index)
+            prev = ct;
+
+        else { /* table belongs to module to be disabled */
+
+            if (prev == NULL) /* first table in the queue */
+                expired_tables.__head = next;
+            else              /* not the first table */
+                prev->next_expired = next;
+
+            if (next == NULL) /* last table in the queue */
+                expired_tables.__tail = prev;
+
+            drop_table(ct, mdl);
+        }
+        ct = next;
+    }
+}
+
+/* callbacks */
+static proc_callbacks_t capture_callbacks = {
+    load_filter,
+    ca_init_module,
+    NULL,   /* enable_module not needed because necessary structures
+               are allocated when necessary in capture. */
+    ca_disable_module, /* disable and remove are the same in capture */
+    ca_disable_module
+};
 
 static timestamp_t
-capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter, tailq_t *expired) 
+capture_pkts(pkt_t *pkts, unsigned count, tailq_t *expired) 
 {
     int * which;
     int idx;
@@ -579,7 +762,7 @@ capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter, tailq_t *expired)
 	   "calling filter with pkts %p, n_pkts %d, n_out %d\n", 
 	   pkts, count, map.module_count); 
     start_tsctimer(map.stats->ca_filter_timer); 
-    which = filter(pkts, count, map.module_count);
+    which = filter(pkts, count, map.module_count, map.modules);
     end_tsctimer(map.stats->ca_filter_timer); 
 
     /*
@@ -592,8 +775,13 @@ capture_pkts(pkt_t *pkts, unsigned count, filter_fn *filter, tailq_t *expired)
      *
      */
     for (idx = 0; idx < map.module_count; idx++) {
-	if (map.modules[idx].status != MDL_ACTIVE)
-	    continue;
+	if (map.modules[idx].status != MDL_ACTIVE) {
+	    /* Even if the module isn't active, we still must skip
+         * some bytes in which[]
+         */
+        which += count;
+        continue;
+    }
 
 	assert(map.modules[idx].name != NULL);
 	logmsg(V_LOGCAPTURE,
@@ -651,9 +839,7 @@ get_sniffer_delay(timestamp_t last_ts)
 void
 capture_mainloop(int accept_fd)
 {
-    filter_fn * filter;		/* filter function */
     memlist_t * flush_map;	/* freed blocks in the flow tables */
-    tailq_t expired;		/* expired flow tables */
     pkt_t pkts[PKT_BUFFER]; 	/* packet buffer */
     int sniffers_left;		/* how many sniffers are left ? */
     int sent2export = 0;	/* message sent to EXPORT */
@@ -663,6 +849,7 @@ capture_mainloop(int accept_fd)
     fd_set valid_fds;
     int max_fd;
     uint table_sent; 
+    int idx;
 
     /* get ready to accept requests from EXPORT process(es) */
     max_fd = 0;
@@ -689,7 +876,7 @@ capture_mainloop(int accept_fd)
         map.filter = create_filter(map.modules, map.module_count,
 		map.template, map.workdir);
 
-    filter = load_object(map.filter, "filter");
+    load_filter(map.filter);
 
     /* 
      * browse the list of sniffers and start them. also, make
@@ -697,8 +884,6 @@ capture_mainloop(int accept_fd)
      */
     sniffers_left = 0;
     for (src = map.sources; src; src = src->next) {
-	int idx; 
-
 	/*
          * start the sniffer
 	 */
@@ -711,25 +896,14 @@ capture_mainloop(int accept_fd)
 	assert(src->flags != 0); 
 	if (src->fd >= 0 && (src->flags & SNIFF_SELECT)) 
 	    max_fd = add_fd(src->fd, &valid_fds, max_fd);
-        
-	/*
-	 * now we browse the list of modules to make sure that 
-    	 * they understand the packets coming from the sniffers. 
-	 * to do so, we compare the indesc defined in the module callbacks
-	 * data structure with the output descriptor define in the source. 
-	 * if there is a mismatch, the module is shut down. 
-	 */
-	for (idx = 0; idx < map.module_count; idx++) {
-	    module_t * mdl = &map.modules[idx];
-
-            if (!match_desc(mdl->callbacks.indesc, src->output)) { 
-		logmsg(LOGWARN, "module %s incompatible with sniffer-%s\n", 
-		    mdl->name, src->cb->name);
-		mdl->status = MDL_INCOMPATIBLE; 
-		map.stats->modules_active--;
-	    } 
-        }
     }
+    /*
+     * initialize the modules and make sure they
+     * support the sniffers we use.
+     */
+    for (idx = 0; idx < map.module_count; idx++)
+        ca_init_module(&map.modules[idx]);
+ 
 
     /*
      * allocate memory used to pass flow tables
@@ -738,7 +912,7 @@ capture_mainloop(int accept_fd)
     flush_map = new_memlist(32);
 
     /* init expired flow tables queue */
-    TQ_HEAD(&expired) = NULL;
+    TQ_HEAD(&expired_tables) = NULL;
     map.stats->table_queue = 0; 
 
     /*
@@ -757,9 +931,12 @@ capture_mainloop(int accept_fd)
 
         errno = 0;
 
-	if (sniffers_left == 0 && !sent2export && TQ_HEAD(&expired) == NULL)
+	if (sniffers_left == 0 && !sent2export &&
+        TQ_HEAD(&expired_tables) == NULL)
 	    break;	/* nothing more to do */
 	
+    /* always listen to supervisor */
+    max_fd = add_fd(map.supervisor_fd, &valid_fds, max_fd);
 	/* 
 	 * update the polling interval for sniffer that use polling. 
 	 */
@@ -829,27 +1006,48 @@ capture_mainloop(int accept_fd)
 
 		/* ok, export freed memory into the map for us */
 		mem_merge_maps(NULL, flush_map);
+	
+        /* and update memory counters */
+        for (idx = 0; idx < map.module_count; idx++) {
+            module_t *mdl = &map.modules[idx];
+            MDL_STATS(mdl)->mem_usage_shmem -=
+                MDL_STATS(mdl)->mem_usage_shmem_f;
+            MDL_STATS(mdl)->mem_usage_shmem_f = 0;
+        }
+        /* XXX Here we can update the
+         * export temporary counter safely
+         */
+
+        /* finally update memory counters (see below) */
+#if 0
+        for (i = 0; i < size; i++)
+            map.stats->mdl_stats[i].mem_usage_shmem -=
+                mem_freed[i];
+        free(mem_freed);
+#endif
 		sent2export = 0;   /* mark no pending jobs */
 	    }
         }
 
         /* need to write and have no pending jobs from export */
-        if (!sent2export && (TQ_HEAD(&expired)) != NULL) {
+        if (!sent2export && (TQ_HEAD(&expired_tables)) != NULL) {
 	    msg_t x;	/* message to EXPORT */
 	    int ret; 
 
             x.m  = flush_map;
-            x.ft = TQ_HEAD(&expired);
+            x.ft = TQ_HEAD(&expired_tables);
             ret = write(export_fd, &x, sizeof(x)); 
             if (ret != sizeof(x))
                 panic("error writing export_fd got %d", ret);  
 
-            TQ_HEAD(&expired) = NULL;   /* we are done with this. */
+            TQ_HEAD(&expired_tables) = NULL;   /* we are done with this. */
 	    map.stats->table_queue = 0; /* reset counter */
             sent2export = 1;            /* wait response from export */
 	    table_sent = 1; 
         }
 
+        if (FD_ISSET(map.supervisor_fd, &r))
+            recv_message(map.supervisor_fd, &capture_callbacks);
         /*
 	 * check sniffers for packet reception (both the ones that use 
 	 * select() and the ones that don't)
@@ -888,7 +1086,7 @@ capture_mainloop(int accept_fd)
 	    map.stats->pkts += count; 
 
 	    start_tsctimer(map.stats->ca_pkts_timer); 
-	    last_ts = capture_pkts(pkts, count, filter, &expired);
+	    last_ts = capture_pkts(pkts, count, &expired_tables);
 	    end_tsctimer(map.stats->ca_pkts_timer); 
         }
 
@@ -900,14 +1098,12 @@ capture_mainloop(int accept_fd)
 	 * no more packets will be received. 
 	 */
 	if (sniffers_left == 0) { 
-	    int idx;
-
 	    for (idx = 0; idx < map.module_count; idx++) {
 		module_t * mdl = &map.modules[idx];
 		ctable_t *ct = mdl->ca_hashtable;
 
 		if (ct && ct->records)  
-		    flush_table(mdl, &expired);
+		    flush_table(mdl, &expired_tables);
 	    }
 	} 
 
@@ -929,8 +1125,6 @@ capture_mainloop(int accept_fd)
 	map.stats->mem_usage_cur = memory_usage(); 
 	map.stats->mem_usage_peak = memory_peak(); 
 	if (map.stats->mem_usage_cur > FLUSH_THRESHOLD(map.mem_size)) {
-	    int idx; 
-
 	    /*
 	     * flush all tables respecting the min flush time if set. 
 	     */
@@ -945,7 +1139,7 @@ capture_mainloop(int accept_fd)
 		if (ct && ct->records && 
 			last_ts > ct->ts + mdl->min_flush_ivl) {
 		    logmsg(0, "    flushing table for %s\n", mdl->name); 
-		    flush_table(mdl, &expired); 
+		    flush_table(mdl, &expired_tables); 
 		}
 	    } 
 	}

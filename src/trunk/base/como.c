@@ -61,6 +61,8 @@ struct _como map;
 
 extern char template[];	/* dynamically filled in pippo.o */
 extern char stdpkt[];	/* dynamically filled in pippo.o */
+extern char comotypes[]; /* dynamically filled */
+extern char sniffers[]; /* dynamically filled */
 static char * 
 create_filter_template()
 {
@@ -74,6 +76,22 @@ create_filter_template()
     if (fp == NULL)
 	panic("cannot create stdpkt.h %s\n", filename);
     fprintf(fp, "%s", stdpkt);
+    fclose(fp);
+    free(filename);
+
+    asprintf(&filename, "%s/comotypes.h", map.workdir);
+    fp = fopen(filename, "w");
+    if (fp == NULL)
+	panic("cannot create comotypes.h %s\n", filename);
+    fprintf(fp, "%s", comotypes);
+    fclose(fp);
+    free(filename);
+
+    asprintf(&filename, "%s/sniffers.h", map.workdir);
+    fp = fopen(filename, "w");
+    if (fp == NULL)
+	panic("cannot create sniffers.h %s\n", filename);
+    fprintf(fp, "%s", sniffers);
     fclose(fp);
     free(filename);
 
@@ -140,6 +158,7 @@ main(int argc, char *argv[])
     /* set default values */
     memset(&map, 0, sizeof(map));
     map.procname = "su";    		/* supervisor */
+    map.supervisor_fd = -1;
     map.logflags = DEFAULT_LOGFLAGS; 
     map.mem_size = DEFAULT_MEMORY; 
     map.maxfilesize = DEFAULT_FILESIZE; 
@@ -167,7 +186,10 @@ main(int argc, char *argv[])
     logmsg(LOGUI, "-- Workdir is %s ---\n", map.workdir);
     logmsg(LOGUI, "-- Loading configuration:\n\n"); 
 
-    parse_cmdline(argc, argv);
+    /*
+     * parse command line and configuration files
+     */
+    configure(argc, argv);
 
     logmsg(V_LOGUI, "log level: %s\n", loglevel_name(map.logflags)); 
 
@@ -184,13 +206,15 @@ main(int argc, char *argv[])
      * We do not have any locking mechanisms on the counters. 
      * They are written by one process and read by SUPERVISOR. They 
      * do not need to be 100% reliable. 
+     * We allocate the stats_t and one mdl_stats_t per module.
      */
-    map.stats = new_mem(NULL, sizeof(stats_t), "stats data");
+    map.stats = new_mem(NULL, sizeof(stats_t) +
+            map.module_max * sizeof(mdl_stats_t), "stats data");
     map.dr = new_mem(NULL, sizeof(struct drop_ring), "drop ring");
 
     map.dr->cons_ptr = map.dr->prod_ptr = 0;
 
-    /* initialize some stast */
+    /* initialize some stats */
     bzero(map.stats, sizeof(stats_t)); 
     gettimeofday(&map.stats->start, NULL); 
     map.stats->modules_active = map.module_count; 

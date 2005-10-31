@@ -75,6 +75,7 @@ enum tokens {
     TOK_ARGS,
     TOK_MIN_FLUSH,
     TOK_MAX_FLUSH,
+    TOK_PRIORITY,
     TOK_NAME,   
     TOK_LOCATION,
     TOK_LINKSPEED,
@@ -84,13 +85,31 @@ enum tokens {
     TOK_MAXFILESIZE
 };
 
+/*
+ * We can be configuring for the first time or
+ * configuring in runtime (reconfiguring).
+ */
+enum cfg_states {
+    CFGSTATE_CONFIG,
+    CFGSTATE_RECONFIG
+};
+
+int cfg_state;
+
+
+
 
 /*
  * in the configuration file there are different scopes, or contexts.
  * the scope of a configuration variable could be global (i.e., default
  * values that affect all objects), or related to a specific module.
+ *
+ * special context CTX_NONE will get a variable ignored. this will
+ * be useful because depending of configuration state, we will silently
+ * ignore some keywords. 
  */
 #define CTX_ANY         0xff
+#define CTX_NONE        0x00
 #define CTX_GLOBAL      0x01
 #define CTX_MODULE      0x02
 
@@ -104,45 +123,50 @@ enum tokens {
  * The search routines are match_token() and match_value().
  * Often, an element with x=0 contains an error string.
  *
+ * We also store the contexts where the keyword is acceptable,
+ * which changes if configuring or reconfiguring.
+ *
  */
 
 struct _keyword {
     char const *str;    /* keyword */
     int action;         /* related token */
     int nargs;          /* number of required arguments */
-    int scope;          /* scope of the keyword */
+    int cfg_scope;      /* scope of the keyword when configuring */
+    int recfg_scope;    /* scope of the keyword when reconfiguring */
 };
 
 typedef struct _keyword keyword_t;
 
 keyword_t keywords[] = {
-    { "basedir",     TOK_BASEDIR,     2, CTX_GLOBAL},
-    { "librarydir",  TOK_LIBRARYDIR,  2, CTX_GLOBAL},
-    { "logflags",    TOK_LOGFLAGS,    2, CTX_GLOBAL},
-    { "module",      TOK_MODULE,      2, CTX_GLOBAL},
-    { "module-limit",TOK_MODULE_MAX,  2, CTX_GLOBAL},
-    { "query-port",  TOK_QUERYPORT,   2, CTX_GLOBAL},
-    { "sniffer",     TOK_SNIFFER,     3, CTX_GLOBAL},
-    { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL|CTX_MODULE},
-    { "output",      TOK_OUTPUT,      2, CTX_MODULE},
-    { "blocksize",   TOK_BLOCK_SIZE,  2, CTX_MODULE},
-    { "hashsize",    TOK_HASHSIZE,    2, CTX_MODULE},
-    { "source",      TOK_SOURCE,      2, CTX_MODULE},
-    { "filter",      TOK_FILTER,      2, CTX_GLOBAL|CTX_MODULE},
-    { "description", TOK_DESCRIPTION, 2, CTX_MODULE},
-    { "end",         TOK_END,         1, CTX_MODULE},
-    { "streamsize",  TOK_STREAMSIZE,  2, CTX_MODULE},
-    { "args",        TOK_ARGS,        2, CTX_MODULE},
-    { "min-flush",   TOK_MIN_FLUSH,   2, CTX_MODULE},
-    { "max-flush",   TOK_MAX_FLUSH,   2, CTX_MODULE},
-    { "name",        TOK_NAME,        2, CTX_GLOBAL},
-    { "location",    TOK_LOCATION,    2, CTX_GLOBAL},
-    { "linkspeed",   TOK_LINKSPEED,   2, CTX_GLOBAL},
-    { "comment",     TOK_COMMENT,     2, CTX_GLOBAL},
-    { "drop-log",    TOK_DROPFILE,    2, CTX_GLOBAL},
-    { "drop-log-size",TOK_DROPLOGSIZE,2, CTX_GLOBAL},
-    { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL},
-    { NULL,          0,               0, 0 }    /* terminator */
+    { "basedir",     TOK_BASEDIR,     2, CTX_GLOBAL, CTX_NONE },
+    { "librarydir",  TOK_LIBRARYDIR,  2, CTX_GLOBAL, CTX_NONE },
+    { "logflags",    TOK_LOGFLAGS,    2, CTX_GLOBAL, CTX_NONE },
+    { "module",      TOK_MODULE,      2, CTX_GLOBAL, CTX_GLOBAL },
+    { "module-limit",TOK_MODULE_MAX,  2, CTX_GLOBAL, CTX_NONE },
+    { "query-port",  TOK_QUERYPORT,   2, CTX_GLOBAL, CTX_NONE },
+    { "sniffer",     TOK_SNIFFER,     3, CTX_GLOBAL, CTX_NONE },
+    { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL|CTX_MODULE, CTX_MODULE },
+    { "output",      TOK_OUTPUT,      2, CTX_MODULE, CTX_MODULE },
+    { "blocksize",   TOK_BLOCK_SIZE,  2, CTX_MODULE, CTX_MODULE },
+    { "hashsize",    TOK_HASHSIZE,    2, CTX_MODULE, CTX_MODULE },
+    { "source",      TOK_SOURCE,      2, CTX_MODULE, CTX_MODULE },
+    { "filter",      TOK_FILTER,      2, CTX_GLOBAL|CTX_MODULE, CTX_MODULE },
+    { "description", TOK_DESCRIPTION, 2, CTX_MODULE, CTX_MODULE },
+    { "end",         TOK_END,         1, CTX_MODULE, CTX_MODULE },
+    { "streamsize",  TOK_STREAMSIZE,  2, CTX_MODULE, CTX_MODULE },
+    { "args",        TOK_ARGS,        2, CTX_MODULE, CTX_MODULE },
+    { "min-flush",   TOK_MIN_FLUSH,   2, CTX_MODULE, CTX_MODULE },
+    { "max-flush",   TOK_MAX_FLUSH,   2, CTX_MODULE, CTX_MODULE },
+    { "priority",    TOK_PRIORITY,    1, CTX_MODULE, CTX_MODULE },
+    { "name",        TOK_NAME,        2, CTX_GLOBAL, CTX_NONE },
+    { "location",    TOK_LOCATION,    2, CTX_GLOBAL, CTX_NONE },
+    { "linkspeed",   TOK_LINKSPEED,   2, CTX_GLOBAL, CTX_NONE },
+    { "comment",     TOK_COMMENT,     2, CTX_GLOBAL, CTX_NONE },
+    { "drop-log",    TOK_DROPFILE,    2, CTX_GLOBAL, CTX_NONE },
+    { "drop-log-size",TOK_DROPLOGSIZE,2, CTX_GLOBAL, CTX_NONE },
+    { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL, CTX_NONE },
+    { NULL,          0,               0, 0, 0 }    /* terminator */
 };
 
 
@@ -270,61 +294,94 @@ add_char(char *buf, int c, uint *dst, uint *len)
     return buf;
 }
 
+/**
+ * -- load_callbacks
+ *
+ */
+int
+load_callbacks(module_t *mdl)
+{
+    callbacks_t *cb;
+    char *clname;
+    void *handle;
+
+    logmsg(LOGWARN, "Callbacks loaded for module '%s'\n", mdl->name);
+
+    /* load the library */
+    if (!map.libdir || mdl->source[0] == '/')
+        clname = strdup(mdl->source);
+    else
+        asprintf(&clname, "%s/%s", map.libdir, mdl->source);
+
+    cb = load_object_h(clname, "callbacks", &handle);
+
+    if (cb == NULL) {
+        if (cfg_state == CFGSTATE_CONFIG)
+            panicx("could not load library %s: %s\n", clname, strerror(errno)); 
+        warnx("could not load library %s: %s\n", clname, strerror(errno));
+        free(clname);
+        return 0;
+    }
+    free(clname);
+
+    /* store the callbacks */
+    mdl->callbacks = *cb;
+    mdl->cb_handle = handle;
+
+    return 1;
+}
 
 /*
- * Check the configuration of a module, supply default values,
- * and load/initialize whatever we need for the module to run.
+ * Check the configuration of a module, supply default values.
  */
 static int
 check_module(module_t *mdl)
 {
-    int len;
-    char *clname;
     callbacks_t *cb;
+    int idx;
 
-    if (mdl->filter == NULL)
-	asprintf(&mdl->filter, "ALL");
-    if (mdl->output == NULL)
-	mdl->output = strdup(mdl->name);
+    for (idx = 0; idx < map.module_count; idx++) { /* name is unique */
+        if (! strcmp(map.modules[idx].name, mdl->name)) {
+            logmsg(LOGWARN, "config: module name '%s' already present\n",
+                    mdl->name);
+            return 0;
+        }
+    }
+
     if (map.basedir && mdl->output[0] != '/') { /* prepend basedir */
 	char *p = mdl->output;
 	asprintf(&mdl->output, "%s/%s", map.basedir, p);
 	free(p);
     }
-    if (mdl->source == NULL)
-	asprintf(&mdl->source, "%s.so", mdl->name);
-    if (mdl->ex_hashsize == 0)
-	panic("config: module %s needs a hash size\n", mdl->name);
 
-    if (mdl->streamsize < 2 * map.maxfilesize) {
+    if (mdl->ex_hashsize == 0) { /* hash size */
+	logmsg(LOGWARN, "config: module %s needs a hash size\n", mdl->name);
+        return 0;
+    }
+
+    if (mdl->streamsize < 2 * map.maxfilesize) { /* filesize */
 	mdl->streamsize = 2*map.maxfilesize; 
 	logmsg(LOGWARN, 
 	    "module %s streamsize too small. set to %dMB\n", 
 	    mdl->name, mdl->streamsize/(1024*1024)); 
     } 
 
-    /* load the library */
-    if (!map.libdir || mdl->source[0] == '/')
-	clname = strdup(mdl->source);
-    else
-	asprintf(&clname, "%s/%s", map.libdir, mdl->source);
-
-    cb = load_object(clname, "callbacks");
-    if (cb == NULL)
-	panicx("could not load library %s", clname); 
-    free(clname);
-
-    /* store the callbacks */
-    mdl->callbacks = *cb;
     /* perform some checks on the callbacks */
+    cb = &mdl->callbacks;
 
     /* update(), store() and load() should definitely be there */
-    if (cb->update == NULL)
-	panicx("module %s misses update()\n", mdl->name);
-    if (cb->store == NULL)
-	panicx("module %s misses store()\n", mdl->name);
-    if (cb->load == NULL)
-	panicx("module %s misses load()\n", mdl->name);
+    if (cb->update == NULL) {
+	logmsg(LOGWARN, "module %s misses update()\n", mdl->name);
+        return 0;
+    }
+    if (cb->store == NULL) {
+	logmsg(LOGWARN, "module %s misses store()\n", mdl->name);
+        return 0;
+    }
+    if (cb->load == NULL) {
+	logmsg(LOGWARN, "module %s misses load()\n", mdl->name);
+        return 0;
+    }
 
     /* 
      * either both or none of action() and export() are required 
@@ -334,33 +391,60 @@ check_module(module_t *mdl)
 	 * no export(), then we we don't want
 	 * action(), ematch() and compare().
 	 */
-	if (cb->action || cb->ematch || cb->compare )
-	    panicx("module %s has %s%s%s without export()\n",
-		   mdl->name,
-		   cb->action ? "action() " : "",
-		   cb->ematch ? "ematch() " : "",
-		   cb->compare ? "compare() " : "");
+	if (cb->action || cb->ematch || cb->compare ) {
+	    logmsg(LOGWARN, "module %s has %s%s%s without export()\n",
+			mdl->name,
+			cb->action ? "action() " : "",
+			cb->ematch ? "ematch() " : "",
+			cb->compare ? "compare() " : ""
+		);
+            return 0;
+        }
 
     } else {
-	if (cb->action == NULL) /* export() requires action() too */
-	    panicx("module %s has export() w/out action()\n", mdl->name);
+	if (cb->action == NULL) { /* export() requires action() too */
+	    logmsg(LOGWARN, "module %s has export() w/out action()\n", 
+		mdl->name);
+            return 0;
+        }
     }
 
+    logmsg(LOGDEBUG, "module %s checks ok\n");
+    return 1;
+}
+
+/*
+ * initialize the module and store it into map.modules[].
+ * assumes callbacks are already loaded. assumes module
+ * is already checked with check_module().
+ *
+ * returns the new location of the module.
+ */
+module_t *
+load_module(module_t *mdl, int idx)
+{
+#if 0
     mdl->ca_hashsize = mdl->ex_hashsize; 
     /* XXX we would like to make the capture hashsize adaptive. 
      *     in general it is going to be much smaller than the 
      *     one used in export. 
+     *
+     * XXX move to capture.c?
      */
+#endif
 
-    /* allocate hash table */
-    len = sizeof(etable_t) + mdl->ex_hashsize * sizeof(void *);
-    mdl->ex_hashtable = safe_calloc(1, len); 
-    mdl->ex_hashtable->size = mdl->ex_hashsize; 
+    /* 
+     * copy the module into the array and free the allocated module_t
+     */
+    bcopy(mdl, &map.modules[idx], sizeof(module_t));
+    free(mdl); 
 
-    /* allocate record array */
-    len = sizeof(earray_t) + mdl->ex_hashsize * sizeof(void *);
-    mdl->ex_array = safe_calloc(1, len); 
-    mdl->ex_array->size = mdl->ex_hashsize; 
+    mdl = &map.modules[idx];
+    mdl->index = idx;
+    if (idx == map.module_count)
+        map.module_count++;
+
+    callbacks_t *cb = &mdl->callbacks;
 
     /* allocate module's private memory, if any */
     if (mdl->msize)
@@ -370,14 +454,39 @@ check_module(module_t *mdl)
     if (cb->init != NULL && cb->init(mdl->mem, mdl->msize, mdl->args) != 0)
 	panicx("could not initialize %s\n", mdl->name); 
 
-    logmsg(LOGUI, "... module %-16s ", mdl->name); 
-    if (mdl->description != NULL) 
-	logmsg(LOGUI,"[%s]", mdl->description); 
-    logmsg(LOGUI, "\n    - filter %s; out %s (max %uMB)\n", 
-	   mdl->filter, mdl->output, mdl->streamsize / (1024*1024)); 
+    return mdl;
+}
 
-    mdl->status = MDL_ACTIVE; 
-    return 1;
+/**
+ * -- remove_module
+ *
+ */
+void
+remove_module(module_t *mdl)
+{
+    char *arg;
+    int i;
+
+    free(mdl->name);
+    free(mdl->description);
+    free(mdl->output);
+    free(mdl->source);
+    free(mdl->mem);
+    if (mdl->args) {
+        i = 0;
+        arg = mdl->args[i];
+        while (arg != NULL) {
+            free(arg);
+            i++;
+            arg = mdl->args[i];
+        }
+        free(mdl->args);
+    }
+    unload_object(mdl->cb_handle);
+    bzero(mdl, sizeof(mdl));
+    /* XXX if possible, decrease module_count */
+    mdl->name = strdup("");
+    mdl->status = MDL_UNUSED;
 }
 
 /*
@@ -439,9 +548,10 @@ new_module(char *name)
 {
     module_t * mdl; 
 
-    mdl = &map.modules[map.module_count]; 
-    mdl->index = map.module_count;
+    /* allocate new module */
+    mdl = safe_calloc(1, sizeof(module_t));
     mdl->name = strdup(name);
+    mdl->description = strdup("");
     mdl->status = MDL_UNUSED; 
 
     /* set some default values */
@@ -451,8 +561,11 @@ new_module(char *name)
     mdl->streamsize = DEFAULT_STREAMSIZE; 
     mdl->ex_hashsize = mdl->ca_hashsize = 1; 
     mdl->args = NULL;
+    mdl->priority = 5;
+    mdl->filter = strdup("ALL");
+    mdl->output = strdup(mdl->name);
+    asprintf(&mdl->source, "%s.so", mdl->name);
 
-    map.module_count++;
     return mdl;
 }
 
@@ -510,22 +623,58 @@ do_config(int argc, char *argv[])
 {
     static int scope = CTX_GLOBAL;      /* scope of current keyword */
     static module_t * mdl = NULL;       /* module currently open */
+    static int module_is_new = 1;       /* is the module new? */
     keyword_t *t;
-    int i;
+    int i, st;
+
+    /*
+     * if configuring, we will panic, but during reconfiguration
+     * just warn the user and try to continue
+     */
+#define warn_fn(...) \
+    (cfg_state == CFGSTATE_CONFIG ? panic(__VA_ARGS__) : warnx(__VA_ARGS__))
 
     /*
      * run some checks on the token (i.e., that it exists
      * and that we have all the arguments it needs).
      */
     t = match_token(argv[0], keywords);
-    if (t == NULL)
-        panic("unknown token \"%s\"\n", argv[0]);
+    if (t == NULL) {
+        warn_fn("unknown token \"%s\"\n", argv[0]);
+        return;
+    }
 
-    if (argc < t->nargs)
-        panic("\"%s\" requires at least %d arguments\n", argv[0], t->nargs);
-    if (!(t->scope & scope))
-        panic("\"%s\" out of scope\n", argv[0]);
+    if (argc < t->nargs) {
+	warn_fn("\"%s\", requires at least %d arguments\n", argv[0],
+	      t->nargs);
+        return;
+    }
 
+    /*
+     * Check if the keyword is ok in the current scope.
+     */
+    st = (cfg_state == CFGSTATE_CONFIG ? t->cfg_scope : t->recfg_scope);
+
+    if (st == CTX_NONE)
+        return; /* ignore this token */
+
+    if (!(st & scope)) {
+	warn_fn("\"%s\" out of scope\n", argv[0]);
+        return;
+    }
+
+    /*
+     * If we are configuring a module, and this module is not
+     * new, we will ignore all tokens but TOK_END. This is 
+     * because we want to ignore module options for known
+     * modules.
+     */
+    if (!module_is_new && scope == CTX_MODULE && t->action != TOK_END)
+        return;
+
+    /*
+     * configuration actions
+     */
     switch (t->action) {
     case TOK_BASEDIR:
 	safe_dup(&map.basedir, argv[1]);
@@ -544,13 +693,55 @@ do_config(int argc, char *argv[])
 	break;
 
     case TOK_END:
-        /*
-         * "end" of a module configuration.  run some checks depending 
-         * on context to make sure that all mandatory fields are there
-         * and set default values
-         */
-	scope = CTX_GLOBAL;
-        break;
+	/*
+	 * "end" of a module configuration.  run some checks depending 
+	 * on context to make sure that all mandatory fields are there
+	 * and set default values
+	 */
+        if (module_is_new) {
+            if (! load_callbacks(mdl))
+                warn_fn("cannot load callbacks of module '%s'\n", mdl->name);
+            else if (! check_module(mdl))
+                warn_fn("module '%s' incorrectly configured\n", mdl->name);
+            else {
+                /*
+                 * locate first unused entry in map.modules.
+                 */
+                int idx = map.module_count;
+                for (i = 0; i < idx; i++) {
+                    if (map.modules[i].status == MDL_UNUSED) {
+                        idx = i;
+                        break;
+                    }
+                }
+                /*
+                 * load module in that index
+                 */
+                mdl = load_module(mdl, idx);
+
+                /*
+                 * MDL_LOADING is a special temporary status that is used by
+                 * reconfigure() to recognize new modules in the modules
+                 * array.
+                 */
+                if (cfg_state == CFGSTATE_RECONFIG) {
+                    mdl->status = MDL_LOADING;
+                    printf("MODULE %s STATUS = MDL_LOADING\n", mdl->name);
+                }
+                else
+                    mdl->status = MDL_ACTIVE;
+                mdl->seen = 1;
+
+                logmsg(LOGUI, "... module %-16s ", mdl->name); 
+                if (mdl->description != NULL) 
+	                logmsg(LOGUI,"[%s]", mdl->description); 
+                logmsg(LOGUI, "\n    - prio %d; filter %s; out %s (max %uMB)\n", 
+	                mdl->priority, mdl->filter, mdl->output, mdl->streamsize / (1024*1024));
+    
+            }
+        }
+        scope = CTX_GLOBAL;
+	break;
 
     case TOK_FILTER:
 	if (scope == CTX_MODULE) {
@@ -597,11 +788,50 @@ do_config(int argc, char *argv[])
         break;
 
     case TOK_MODULE:
-	if (map.module_count == map.module_max) 
-	    panic("too many modules. current limit is %d\n", map.module_max); 
+        /*
+         * If configuring, create a new module.
+         * Otherwise, check if the module is already there.
+         * If so, mark as seen, otherwise create a new module.
+         *
+         */
+        if (cfg_state == CFGSTATE_CONFIG) { /* configuration */
 
-        /* new module. need to allocate a new module element */
-        mdl = new_module(argv[1]);
+            if (map.module_count == map.module_max)
+                panic("too many modules. current limit is %d\n",
+                        map.module_max); 
+
+            mdl = new_module(argv[1]);
+            module_is_new = 1;
+
+        } else { /* reconfiguration */
+            int idx;
+
+            /*
+             * check if this module name is known
+             */
+            for (idx = 0; idx < map.module_count; idx++) {
+                if (! strcmp(map.modules[idx].name, argv[1]))
+                    break;
+            }
+
+            if (idx == map.module_count) { /* mdl not found */
+
+                if (map.module_count == map.module_max) { /* too many modules */
+                    warn_fn("too many modules. current limit is %d\n",
+                            map.module_max); 
+                    module_is_new = 0;
+
+                } else { /* new module */
+                    mdl = new_module(argv[1]);
+                    module_is_new = 1;
+                }
+
+            } else { /* not a new module */
+                map.modules[idx].seen = 1;
+                mdl = &map.modules[idx];
+                module_is_new = 0;
+            }
+        }
 
         /* change scope */
         scope = CTX_MODULE;
@@ -614,7 +844,7 @@ do_config(int argc, char *argv[])
         break;
 
     case TOK_OUTPUT:
-	mdl->output = strdup(argv[1]);
+        safe_dup(&mdl->output, argv[1]);
 	break;
 
     case TOK_SNIFFER:
@@ -678,6 +908,10 @@ do_config(int argc, char *argv[])
 		TIME2TS(atoi(argv[1])/1000,(atoi(argv[1])%1000)*1000);
 	break; 
 
+    case TOK_PRIORITY: 
+        mdl->priority = atoi(argv[1]);
+	break; 
+
     case TOK_NAME: 
         safe_dup(&map.name, argv[1]);
 	break; 
@@ -706,6 +940,7 @@ do_config(int argc, char *argv[])
 	logmsg(LOGWARN, "unknown keyword %s\n", argv[0]);
 	break;
     }
+#undef warn_fn
 }
 
 
@@ -939,15 +1174,21 @@ const char *MALLOC_OPTS;	/* other systems don't have it */
 extern const char *MALLOC_OPTS;
 
 /*
+ * tells if we need to parse the default cfg file.
+ * set by configure().
+ */
+static int need_default_cfgfile;
+
+
+/*
  * -- parse_cmdline
  *
  * parses the command line options and fills in the "map" (global)
  * data structure.
- * The function does two passes on the arguments: in the first pass
- * checks if a config file has been specified -- if not, it assumes we
- * want the default one _before_ the rest of the command line.
- * In the second pass does the actual processing, in the order specified
- * by the command line.
+ * The function first checks if a config file has been specified.
+ * If not, it assumes we want the default one _before_ the rest of
+ * the command line. Then it does the actual processing, in the order
+ * specified by the command line.
  * This allows us to process multiple config files and override options
  * from either the command line or the config file.
  *
@@ -955,7 +1196,7 @@ extern const char *MALLOC_OPTS;
 int
 parse_cmdline(int argc, char *argv[])
 {
-    int c, i;
+    int c;
     DIR *d;
 
     /*
@@ -964,21 +1205,20 @@ parse_cmdline(int argc, char *argv[])
      */
     static const char * usage =
  	   "usage: %s [-c config_file] [-D basedir] [-L libdir] "
-	   "[-M module] [-m memsize] [-v logflags] [-x debug_opts] "
+	   "[-M module] [-O keyword[=value]]..].. [-m memsize] [-v logflags] [-x debug_opts] "
 	   "[-s sniffer] [-p query_port]\n";
 
     /* flag to be set if we parsed a configuration file */
-    static const char *opts = "c:D:L:M:m:p:s:v:x:";
+    static const char *opts = "c:D:L:M:O:m:p:s:v:x:";
 
-    while ((c = getopt(argc, argv, opts)) != -1) {
-	if (c == 'c')	/* we have a valid config file */
-	    break;
-	else if (c == '?')
-            errx(EXIT_FAILURE, usage, argv[0]);
-    }
+    /* tells wether we are configuring a module or not */
+    int mod_conf = 0;
 
-    if (c != 'c') /* no config, get the default one */
-	parse_cfgfile(DEFAULT_CFGFILE);
+    /*
+     * if needed, parse the default config file first
+     */
+    if (need_default_cfgfile)
+        parse_cfgfile(DEFAULT_CFGFILE);
 
     opterr = 0;
     optind = 1;
@@ -992,6 +1232,9 @@ parse_cmdline(int argc, char *argv[])
     optreset = 1;
 #endif
 
+    /*
+     * parse command line options
+     */
     while ((c = getopt(argc, argv, opts)) != -1) {
         switch(c) {
 	case 'x':
@@ -1022,7 +1265,68 @@ parse_cmdline(int argc, char *argv[])
 	    break;
 
 	case 'M':	/* module */
-	    new_module(optarg);
+	    {
+		/* To define a module from command line, we use do_config().
+		 *
+		 * We need to start and end module configuration like done while
+		 * parsing a configuration file, for do_config() to get all the
+		 * context changes it expects.
+		 *
+		 * When we have -M, start a module definition.
+		 */
+		char *conf_argv[2];
+
+		if (mod_conf) {
+		    /* we were configuring a module, so notify end of module
+		     * configuration before starting with the next */
+		    static char *argv_end[] = { "end" };
+		    do_config(1, argv_end);
+		}
+
+		/* prepare the arguments for do_config() */
+		conf_argv[0] = "module";
+		conf_argv[1] = optarg;
+
+		do_config(2, conf_argv);	/* call do_config() */
+
+		mod_conf = 1;	/* we are configuring a module */
+	    }
+	    break;
+
+	case 'O':		/* module option. */
+	    {
+		/* To pass options to module configuration, we make sure
+		 * we are in mod_conf, then set some argv to make do_config()
+		 * do the actual work.
+		 *
+		 * XXX can only handle 1 arg now
+		 */
+		char *arg, *keyword, *conf_argv[3];
+		int conf_argc;
+
+		if (!mod_conf) {	/* we must be configuring a module */
+		    logmsg(LOGWARN,
+			   "cannot use -O before -M (ignoring)\n");
+		    break;
+		}
+
+		/* prepare args for do_config() */
+		keyword = optarg;
+		arg = index(optarg, '=');	/* arg begins with first '=', if any */
+
+		if (arg != NULL) {	/* if '=' found */
+		    *arg = 0;	/* split keyword and arg */
+		    arg++;	/* arg begins at the next character */
+		    conf_argc = 2;	/* we have 1 keyword + 1 arg */
+		} else
+		    conf_argc = 1;	/* otherwise, we have 1 keyword and no arg */
+
+		conf_argv[0] = keyword;
+		conf_argv[1] = arg;	/* might be null */
+
+		/* call do_config() */
+		do_config(conf_argc, conf_argv);
+	    }
 	    break;
 
 	case 'p':
@@ -1034,10 +1338,14 @@ parse_cmdline(int argc, char *argv[])
             break;
 
         case 'm':   /* capture/export memory usage */
-            map.mem_size = atoi(optarg);
-            if (map.mem_size <= 0 || map.mem_size > 512)
-                panic("invalid memory size %d, range is 1-256\n", map.mem_size);
-            break;
+            {
+            int size = atoi(optarg);
+	    if (size <= 0 || size > 512)
+		warnx("ignoring invalid memory size %d, range is 1..512", size);
+            else 
+	        map.mem_size = size;
+            }
+	    break;
 
         case 'v':   /* verbose */
             // map.logflags |= (map.logflags << 16);
@@ -1057,6 +1365,12 @@ parse_cmdline(int argc, char *argv[])
             errx(EXIT_FAILURE, usage, argv[0]);
         }
     }
+    /* if we were doing module configuration, end it */
+    if (mod_conf) {
+	static char *argv_end[] = { "end" };
+	do_config(1, argv_end);
+    }
+    /* open basedir */
     if (map.basedir == NULL)
 	panic("missing basedir");
     d = opendir(map.basedir);
@@ -1065,12 +1379,180 @@ parse_cmdline(int argc, char *argv[])
     else 
 	closedir(d);
 
-    /* the last step is to make sure that all modules are configure
-     * correctly and report any other errors in the config file or 
-     * command line. we browse the list of modules and check them 
-     * one by one. 
-     */
-    for (i = 0; i < map.module_count; i++) 
-	check_module(&map.modules[i]);
+    /* XXX Do we need to check the modules configuration here ? */
     return 0;
 }
+
+/*
+ * we will save argc and argv here
+ */
+static int como_argc;
+static char **como_argv;
+
+/*
+ * saved mtimes of config files
+ */
+typedef struct _cfgfile {
+    char *file;
+    time_t mtime;
+    struct _cfgfile *next;
+} cfgfile_t;
+
+static cfgfile_t *cfg_files = NULL;
+
+/*
+ * -- save_mtime
+ *
+ */
+static void
+save_mtime(char *file)
+{
+
+    cfgfile_t *cfg;
+    struct stat st;
+    int ret;
+    
+    cfg = safe_calloc(1, sizeof(cfgfile_t));
+    cfg->file = file;
+    cfg->next = cfg_files;
+
+    ret = stat(file, &st);
+
+    if (ret)
+        cfg->mtime = 0; /* failed stat() */
+    else
+        cfg->mtime = st.st_mtime; /* save mtime */
+
+    cfg_files = cfg;
+}
+
+/*
+ * -- configure
+ *
+ * Save mtimes of relevant configure file(s) then call parse_cmdline,
+ * which will parse both the command line and cfgfiles.
+ *
+ */
+void
+configure(int argc, char **argv)
+{
+    char c;
+
+    cfg_state = CFGSTATE_CONFIG; /* configuring for the 1st time */
+
+    como_argc = argc; /* save argc and argv */
+    como_argv = argv;
+
+    /*
+     * save mtimes of config files
+     */
+    opterr = 0;
+    while ((c = getopt(argc, argv, "c:")) != -1)
+        if (c == 'c')
+            save_mtime(optarg);
+
+    need_default_cfgfile = (cfg_files == NULL);
+
+    if (need_default_cfgfile)
+        save_mtime(DEFAULT_CFGFILE);
+
+    parse_cmdline(argc, argv);
+
+    cfg_state = CFGSTATE_RECONFIG; /* from now on we will be
+                                      reconfiguring */
+}
+
+/*
+ * -- reconfigure
+ *
+ * Re-configures if config files have changed.
+ *
+ */
+void
+reconfigure(void)
+{
+    int idx, need_parse, have_new_modules;
+    cfgfile_t *cfg;
+
+    need_parse = 0;
+    for (cfg = cfg_files; cfg != NULL; cfg = cfg->next) {
+        struct stat st;
+
+        if (stat(cfg->file, &st)) {
+            /*
+             * stop here. Continuing can be dangerous
+             * because of some config file missing, so
+             * we'll keep going with current configuration.
+             */
+            return;
+        }
+
+        if (cfg->mtime != st.st_mtime) {
+            need_parse = 1;           /* need to re-parse cmdline */
+            cfg->mtime = st.st_mtime; /* save new mtime */
+        }
+    }
+
+    if (!need_parse)
+        return;
+
+    /*
+     * mark modules as unseen. during parsing of cfgfiles,
+     * modules will be marked seen.
+     */
+    for (idx = 0; idx < map.module_count; idx++)
+        map.modules[idx].seen = 0;
+
+    /*
+     * do the actual re-parsing
+     */
+    parse_cmdline(como_argc, como_argv);
+
+    /*
+     * first check what modules must be removed
+     * and if we have new modules.
+     * new modules are those whose status is MDL_LOADING.
+     */
+    have_new_modules = 0;
+    for (idx = 0; idx < map.module_count; idx++) {
+        module_t *mdl = &map.modules[idx];
+
+        if (mdl->status == MDL_LOADING)
+            have_new_modules = 1;
+
+        if (mdl->seen == 0 && mdl->status != MDL_UNUSED) {
+            logmsg(LOGUI, "... removing module '%s'\n", mdl->name);
+            if (mdl->status == MDL_ACTIVE)
+                map.stats->modules_active--;
+            mdl->status = MDL_UNUSED;
+            sup_send_module_status(); /* TODO do only one send_module_status() */
+            remove_module(mdl);
+        }
+    }
+
+    /*
+     * if no new modules, we are done
+     */
+    if (! have_new_modules)
+        return;
+
+    /*
+     * tell processes to load the new modules.
+     */
+    sup_send_new_modules();
+
+    /*
+     * modules that were in MDL_LOADING status
+     * are now active.
+     */
+    for (idx = 0; idx < map.module_count; idx++) {
+        module_t *mdl = &map.modules[idx];
+
+        if (mdl->status == MDL_LOADING) {
+            mdl->status = MDL_ACTIVE;
+            printf("modules_active++\n"); /* XXX XXX */
+            map.stats->modules_active++;
+        }
+    }
+}
+

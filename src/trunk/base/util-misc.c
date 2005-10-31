@@ -55,19 +55,33 @@
 void *
 load_object(char *base_name, char *symbol)
 {
-    void *handle, *sym;
+    void *handle;
+    return load_object_h(base_name, symbol, &handle);
+}
 
-    handle = dlopen(base_name, RTLD_NOW);
-    if (handle == NULL) {
+/**
+ * -- load_object_h
+ *
+ * dynamically links a library, and also stores the handle for a later
+ * library unlink using unload_object()
+ *
+ */
+void *
+load_object_h(char *base_name, char *symbol, void **handle)
+{
+    void *sym;
+
+    *handle = dlopen(base_name, RTLD_NOW);
+    if (*handle == NULL) {
         logmsg(LOGWARN, "dlopen(%s, RTLD_NOW) error [%s]\n",
                 base_name, dlerror());
         return NULL;
     }
-    sym = dlsym(handle, symbol);
+    sym = dlsym(*handle, symbol);
     if (sym == NULL) {
         logmsg(LOGWARN, "module %s missing '%s' (%s)\n",
                 base_name, symbol, dlerror());
-        dlclose(handle);
+        dlclose(*handle);
         return NULL;
     }
     logmsg(LOGCONFIG, "loaded shared object %s\n", base_name);
@@ -75,6 +89,21 @@ load_object(char *base_name, char *symbol)
     return (void *) sym;
 }
 
+/**
+ * -- unload_object
+ *
+ * unlinks the shared library referenced by the handled
+ * returned from load_object.
+ *
+ */
+void
+unload_object(void *handle)
+{
+    if (dlclose(handle))
+        logmsg(LOGCONFIG, "unknown error unloading shared library\n");
+    else
+        logmsg(LOGCONFIG, "unloaded shared object\n");
+}
 
 /* 
  * -- getprotoname

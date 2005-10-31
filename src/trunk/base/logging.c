@@ -69,7 +69,6 @@ loglevel_name(int flags)
     return s;
 }
 
-
 static void
 _logmsg(int flags, const char *fmt, va_list ap)
 {
@@ -90,7 +89,10 @@ _logmsg(int flags, const char *fmt, va_list ap)
         asprintf(&fmt1, "%s", fmt);
     vasprintf(&buf, fmt1, ap);
     if (map.supervisor_fd >= 0) {
-	como_writen(map.supervisor_fd, buf, 0);
+	//como_writen(map.supervisor_fd, buf, 0);
+        /* XXX */
+        void send_string(char *str);
+        send_string(buf);
     } else {
 	fprintf(stdout, "%s", buf);
 	fflush(stdout);
@@ -111,7 +113,7 @@ void
 logmsg(int flags, const char *fmt, ...)
 {
     va_list ap;
-
+    
     va_start(ap, fmt);
     _logmsg(flags, fmt, ap);
     va_end(ap);

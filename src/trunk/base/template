@@ -38,6 +38,8 @@
 #include <netinet/in.h> /* some macro definitions */
 
 #include "stdpkt.h"
+#include "comotypes.h"
+#include "sniffers.h"
 
 
 /*
@@ -78,7 +80,7 @@ net (char *net, uint plen, uint32_t addr)
 
 
 int *
-filter(pkt_t *pkt, int n_packets, int n_out)
+filter(pkt_t *pkt, int n_packets, int n_out, module_t *modules)
 {
     static int *which;
     static uint size;

@@ -51,6 +51,8 @@
 
 extern struct _como map;	/* Global state structure */
 
+int storage_fd;                 /* socket to storage */
+
 
 /**
  * -- create_record
@@ -76,6 +78,10 @@ create_record(module_t * mdl, uint32_t hash)
 
 	len = sizeof(earray_t) + et->records * 2 * sizeof(rec_t *);
 	ea = safe_realloc(ea, len); 
+
+        map.stats->mdl_stats[mdl->index].mem_usage_export += 
+            len - ea->size;
+
 	ea->size = et->records * 2; 
 
 	mdl->ex_array = ea;
@@ -83,6 +89,8 @@ create_record(module_t * mdl, uint32_t hash)
 
     /* allocate the new record */
     rp = safe_calloc(1, mdl->callbacks.ex_recordsize + sizeof(rec_t));
+    map.stats->mdl_stats[mdl->index].mem_usage_export += 
+        mdl->callbacks.ex_recordsize + sizeof(rec_t);
     ea->record[et->records] = rp;
     et->records++;
     if (et->bucket[hash] == NULL) 
@@ -220,6 +228,7 @@ process_table(ctable_t * ct, memlist_t * mem)
 {
     module_t *mdl = ct->module;
     int (*record_fn)(module_t *, rec_t *);
+    int record_size = ct->module->callbacks.ca_recordsize + sizeof(rec_t);
     
     /*
      * call export() if available, otherwise just store() and
@@ -268,6 +277,9 @@ process_table(ctable_t * ct, memlist_t * mem)
 		/* store or export this record */
                 record_fn(mdl, rec);
 
+                /* update the memory counters */
+                MDL_STATS(ct->module)->mem_usage_shmem_f += record_size;
+
 		mfree_mem(mem, rec, 0);	/* done, free this record */
 		rec = p;		/* move to the next one */
 	    }
@@ -285,6 +297,31 @@ process_table(ctable_t * ct, memlist_t * mem)
 	mdl->ex_hashtable->ts = ct->ivl; 
 }
 
+/**
+ * -- ignore_capture_table
+ *
+ * Walk through a capture table and just free its contents
+ * and update memory counters.
+ */
+static void
+ignore_capture_table(ctable_t * ct, memlist_t * mem)
+{
+    int record_size = ct->module->callbacks.ca_recordsize + sizeof(rec_t);
+
+    for (; ct->first_full < ct->size; ct->first_full++) {
+        rec_t *rec = ct->bucket[ct->first_full];
+        while(rec != NULL) {
+            rec_t *end  = rec->next;
+
+            while (rec != end) {
+                rec_t *p = rec->next;
+                mfree_mem(mem, rec, 0);
+                MDL_STATS(ct->module)->mem_usage_shmem_f += record_size;
+                rec = p;
+            }
+        }
+    }
+}
 
 /** 
  * -- destroy_record
@@ -321,6 +358,8 @@ destroy_record(int i, module_t * mdl)
     ea->record[ea->first_full] = NULL;
     ea->first_full++;
 	
+    map.stats->mdl_stats[mdl->index].mem_usage_export -= 
+        mdl->callbacks.ex_recordsize + sizeof(rec_t);
     free(rp);
 }
 
@@ -414,9 +453,130 @@ store_records(module_t * mdl, timestamp_t ts)
     mcheck(NULL);
 }
 
+/**
+ * -- init_export_tables
+ *
+ * Allocate the hash table and record array.
+ */
+static void
+init_export_tables(module_t *mdl)
+{
+    /* allocate hash table */
+    int len;
+    len = sizeof(etable_t) + mdl->ex_hashsize * sizeof(void *);
+    mdl->ex_hashtable = safe_calloc(1, len);
+    mdl->ex_hashtable->size = mdl->ex_hashsize;
+
+    /* allocate record array */
+    len = sizeof(earray_t) + mdl->ex_hashsize * sizeof(void *);
+    mdl->ex_array = safe_calloc(1, len);
+    mdl->ex_array->size = mdl->ex_hashsize;
+
+    mcheck(NULL);
+    map.stats->mdl_stats[mdl->index].mem_usage_export += 
+        sizeof(etable_t) + sizeof(earray_t) +
+        2 * mdl->ex_hashsize * sizeof(void *);
+
+}
+
+/**
+ * -- init_module
+ *
+ * Do export-specific module initialization of a module. 
+ */
+static void
+ex_init_module(module_t *mdl)
+{
+    char * nm; 
+    /*
+     * initialize hash table and record array
+     */
+    init_export_tables(mdl);
+    /*
+     * open output file
+     */
+    logmsg(V_LOGEXPORT, "module %s: opening file\n", mdl->name);
+    asprintf(&nm, "%s", mdl->output);
+    mdl->file = csopen(nm, CS_WRITER, mdl->streamsize, storage_fd);
+    if (mdl->file < 0) 
+        panic("cannot open file %s for %s (%s)\n", 
+            nm, mdl->name, strerror(errno));
+    free(nm);
+    mdl->offset = csgetofs(mdl->file);
+}
+
+/**
+ * -- ex_disable_module
+ *
+ * Free all memory used by a module.
+ */
+static void
+ex_disable_module(module_t *mdl)
+{
+    etable_t * et = mdl->ex_hashtable;
+    earray_t * ea = mdl->ex_array;
+    uint32_t i, rec_size;
+    mdl_stats_t *stats;
+
+    stats = &map.stats->mdl_stats[mdl->index];
+    rec_size = sizeof(rec_t) + mdl->callbacks.ex_recordsize;
+
+    /*
+     * drop export hash table
+     */
+    stats->mem_usage_export -= sizeof(etable_t) + et->size * sizeof(void *);
+    free(et);
+    mdl->ex_hashtable = NULL;
+    /*
+     * drop records 
+     */
+    for (i = 0; i < ea->size; i++) {
+        if (ea->record[i]) {
+            free(ea->record[i]);
+            stats->mem_usage_export -= rec_size;
+            ea->record[i] = NULL;
+        }
+    }
+    /*
+     * drop export array
+     */
+    stats->mem_usage_export -= sizeof(earray_t) + ea->size * sizeof(void *);
+    free(ea);
+    mdl->ex_array = NULL;
+}
+
+/*
+ * -- ex_remove_module
+ *
+ * Free all memory used by a module and close its
+ * output file. Forget about that module.
+ */
+static void
+ex_remove_module(module_t *mdl)
+{
+    logmsg(LOGWARN, "mdl->file = %d\n", mdl->file);
+
+    if (mdl->status != MDL_DISABLED)
+        ex_disable_module(mdl);
+
+    csclose(mdl->file);
+}
+
+/*
+ * callbacks of the export process
+ */
+static proc_callbacks_t export_callbacks = {
+    NULL,                   /* ignore new filter functions */
+    ex_init_module,         /* initialize a module */
+    init_export_tables,     /* enable a module */
+    ex_disable_module,      /* disable a module */
+    ex_remove_module        /* remove a module */
+};
+
+
 #define MAP_SIZE 8192
 static void
-do_drop(struct drop_record *dr, int storage_fd)
+do_drop(struct drop_record *dr/*, int storage_fd*/)
 {
     static int fd = -1;
     static unsigned used_in_map;
@@ -475,7 +635,6 @@ void
 export_mainloop(__unused int fd)
 {
     int capture_fd; 
-    int storage_fd;
     int	max_fd;
     int idx; 
     fd_set rx;
@@ -497,25 +656,8 @@ export_mainloop(__unused int fd)
     /* 
      * open the output files of all the modules 
      */
-    for (idx = 0; idx < map.module_count; idx++) { 
-	module_t * mdl = &map.modules[idx]; 
-	char * nm; 
-
-	mcheck(NULL);
-
-	logmsg(V_LOGEXPORT, "module %s: opening file\n", mdl->name);
-
-	/*
-	 * EXPORT data file 
-	 */
-	asprintf(&nm, "%s", mdl->output);
-	mdl->file = csopen(nm, CS_WRITER, mdl->streamsize, storage_fd);
-	if (mdl->file < 0) 
-	    panic("cannot open file %s for %s (%s)\n", 
-		nm, mdl->name, strerror(errno));
-	free(nm);
-	mdl->offset = csgetofs(mdl->file);
-    }
+    for (idx = 0; idx < map.module_count; idx++)
+        ex_init_module(&map.modules[idx]);
 
     mcheck(NULL);
     /* find max fd for the select */
@@ -549,11 +691,21 @@ export_mainloop(__unused int fd)
 	    p = map.dr->prod_ptr;
 	    mb();
 	    while (p != map.dr->cons_ptr) {
-		do_drop(&map.dr->data[map.dr->cons_ptr % NR_DROP_RECORDS],
-			storage_fd);
+		do_drop(&map.dr->data[map.dr->cons_ptr % NR_DROP_RECORDS]/*, XXX XXX XXX
+			storage_fd*/);
 		map.dr->cons_ptr++;
 	    }
 	}
+
+	/*
+	 * Message from supervisor
+	 */
+	if (FD_ISSET(map.supervisor_fd, &r))
+            recv_message(map.supervisor_fd, &export_callbacks);
+
+        /*
+         * Message from capture
+         */
 
 	if (FD_ISSET(capture_fd, &r)) {
 	    msg_t x;
@@ -575,20 +727,30 @@ export_mainloop(__unused int fd)
 		ctable_t * next = x.ft->next_expired;
 		size_t sz = sizeof(ctable_t) + x.ft->size * sizeof(void *);
 
-		mcheck(NULL);
-		/* process capture table and update export table */
-		start_tsctimer(map.stats->ex_table_timer); 
-		process_table(x.ft, x.m);
-		end_tsctimer(map.stats->ex_table_timer); 
-		mcheck(NULL);
+        /*
+         * Process the table, if the module it belongs to is active.
+         */
+        if (x.ft->module->status == MDL_ACTIVE) {
+		    mcheck(NULL);
+		    /* process capture table and update export table */
+		    start_tsctimer(map.stats->ex_table_timer); 
+		    process_table(x.ft, x.m);
+		    end_tsctimer(map.stats->ex_table_timer); 
+		    mcheck(NULL);
 
-		/* process export table, storing/discarding records */
-		start_tsctimer(map.stats->ex_store_timer); 
-		store_records(x.ft->module, x.ft->ts); 
-		end_tsctimer(map.stats->ex_store_timer); 
-		mcheck(NULL);
+		    /* process export table, storing/discarding records */
+		    start_tsctimer(map.stats->ex_store_timer); 
+		    store_records(x.ft->module, x.ft->ts); 
+		    end_tsctimer(map.stats->ex_store_timer); 
+		    mcheck(NULL);
+        }
+        else
+            ignore_capture_table(x.ft, x.m);
 
-		/* free the capture table and move to next */
+        /* update memory counter */
+        MDL_STATS(x.ft->module)->mem_usage_shmem_f += sz;
+		
+        /* free the capture table and move to next */
 		mfree_mem(x.m, x.ft, sz);  
 		mcheck(NULL);
 		x.ft = next;
@@ -617,11 +779,5 @@ export_mainloop(__unused int fd)
 	reset_tsctimer(map.stats->ex_mapping_timer);
 	reset_tsctimer(map.stats->ex_export_timer);
 
-	/*
-	 * Received a message from supervisor
-	 */
-	if (FD_ISSET(map.supervisor_fd, &r)) {
-	    /* nothing to do here, yet! */
-	}
     }
 }

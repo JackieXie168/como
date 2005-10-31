@@ -309,7 +309,7 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
 	 * assume O_CREAT by default so we create it empty.
          */
 	if (mode == CS_READER) { 
-	    logmsg(LOGWARN, "get_fileinfo: file %s does not exists\n", name); 
+	    logmsg(LOGWARN, "get_fileinfo: file %s does not exist\n", name); 
 	    return EINVAL; 
 	} 
 	ret = mkdir(name, (mode_t) (S_IRWXU | S_IRWXG | S_IRWXO));
@@ -736,7 +736,7 @@ handle_close(__unused int s, csmsg_t * in)
 
     cl = cs_state.clients[in->id];
     if (cl == NULL) { 
-	logmsg(LOGWARN, "close: client does not exists (id: %d)\n", in->id); 
+	logmsg(LOGWARN, "close: client does not exist (id: %d)\n", in->id); 
 	return; 
     } 
 
@@ -773,6 +773,8 @@ handle_close(__unused int s, csmsg_t * in)
 	     * by setting the wfd file descriptor value 
 	     */
 	    cl->region->wfd = bs->wfd;
+        cl->region->file = cf; /* XXX can be moved to new_csregion() */
+
 	    append_to_wb(cl->region, bs);
 	} else { 
 	    /*
@@ -795,7 +797,7 @@ handle_close(__unused int s, csmsg_t * in)
 
     /* 
      * just a reader. unlink the client from the 
-     * file descritor and free the client descriptor.  
+     * file descriptor and free the client descriptor.  
      */ 
     client_unlink(cl); 
     free(cl); 
@@ -858,7 +860,7 @@ handle_seek(int s, csmsg_t * in)
 
     cl = cs_state.clients[in->id];
     if (cl == NULL) { 
-	logmsg(LOGWARN, "seek: client does not exists (id: %d)\n", in->id); 
+	logmsg(LOGWARN, "seek: client does not exist (id: %d)\n", in->id); 
         senderr(s, in->id, EINVAL);
 	return; 
     } 
@@ -1144,7 +1146,7 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
 
     /*
      * append the current region to the write buffer (the scheduler
-     * will take care of that. then, get a new region, add it to
+     * will take care of that). then, get a new region, add it to
      * the head of the list and mmap the region of file requested.
      */
     if (cl->region != NULL) 
@@ -1435,10 +1437,13 @@ scheduler(void)
 	    csbytestream_t *p, *q; 
 
 	    /* close all files */
-	    for (cf = bs->file_first; cf; cf = cf->next) {
-		if (cf->rfd >= 0) 
-		    close(cf->rfd); 
-		free(cf);
+        while (bs->file_first) {
+            cf = bs->file_first;
+            bs->file_first = cf->next;
+
+		    if (cf->rfd >= 0) 
+		        close(cf->rfd); 
+		    free(cf);
 	    } 
 	    
 	    /* remove the bytestream from the list */
@@ -1456,6 +1461,19 @@ scheduler(void)
 	bs = bs->next; 
     }
 }
+
+/*
+ * callbacks: none
+ */
+static proc_callbacks_t storage_callbacks = {
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
+
+
 
 
 /** 
@@ -1477,6 +1495,7 @@ storage_mainloop(int accept_fd)
      */
     bzero(&cs_state, sizeof(cs_state)); 
     cs_state.max_fd = add_fd(accept_fd, &cs_state.valid_fds, cs_state.max_fd);
+    cs_state.max_fd = add_fd(map.supervisor_fd, &cs_state.valid_fds, cs_state.max_fd);
 
     /*
      * The real main loop.
@@ -1507,6 +1526,12 @@ storage_mainloop(int accept_fd)
 		continue;
 
 	    n_ready--;
+
+	    if (i == map.supervisor_fd) {
+                recv_message(map.supervisor_fd, &storage_callbacks);
+		continue;
+	    }
+
 	    if (i == accept_fd) {
 		int x;
 

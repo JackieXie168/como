@@ -74,6 +74,8 @@ start_child(char *name, char *procname, void (*mainloop)(int fd), int fd)
     if (procname == NULL) {
 	/* i am the supervisor. */
 	pid = getpid();
+    /* Print log messages on the terminal */
+    map.supervisor_fd = -1;
 	logmsg(LOGWARN, "starting process %-20s pid %d\n", name, pid); 
 	my_children[i].pid = pid;
 	mainloop(fd);
@@ -116,6 +118,7 @@ start_child(char *name, char *procname, void (*mainloop)(int fd), int fd)
 }
 
 
+#if 0
 /*
  * -- echo_log_msgs()
  *
@@ -172,7 +175,7 @@ echo_log_msgs(int fd, FILE * logfile)
 
     return 0;
 }
-
+#endif
 
 /* 
  * -- handle_children
@@ -221,7 +224,7 @@ handle_children(void)
  * -- supervisor_mainloop
  * 
  * Basically mux incoming messages and show them to the console.
- * Also take care of processes dying.
+ * Also take care of processes dying. XXX update this comment
  */
 void
 supervisor_mainloop(int accept_fd)
@@ -229,6 +232,7 @@ supervisor_mainloop(int accept_fd)
     fd_set valid_fds;
     int max_fd;
     int client_fd;	/* for http queries */
+    int num_procs;
     char *buf;
     FILE * logfile;
     
@@ -249,13 +253,26 @@ supervisor_mainloop(int accept_fd)
     free(buf);
 
     max_fd = 0;
+    num_procs = 0;
     FD_ZERO(&valid_fds);
     max_fd = add_fd(accept_fd, &valid_fds, max_fd);
     max_fd = add_fd(client_fd, &valid_fds, max_fd);
+
+    /*
+     * initialize resource management and
+     * interprocess communication
+     */
+#ifdef RESOURCE_MANAGEMENT
+    resource_mgmt_init();
+#endif
+    ipc_init();
+
     for (;;) { 
         int secs, dd, hh, mm, ss;
 	struct timeval now;
-	struct timeval to = { 1, 0 }; /* fire every second */
+	//struct timeval to = { 1, 0 }; /* fire every second */
+	//struct timeval to = { 0, 100000 }; /* 0.1 sec */
+	struct timeval to = { 0, 50000 }; /* 0.05 sec */
 	int i, n_ready;
 	fd_set r = valid_fds;
 
@@ -298,6 +315,15 @@ supervisor_mainloop(int accept_fd)
 		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n",
 			    i, x, strerror(errno));
 		else {
+            if (num_procs < 3) {
+                /* XXX ugly hack. only add to proc_fds the first 3
+                 * processes that connect to supervisor. they will be
+                 * CA, EX or ST in no particular order. queries' fds
+                 * don't belong into proc_fds.
+                 */
+                num_procs++;
+                register_ipc_fd(x); //XXX XXX
+            }
 		    max_fd = add_fd(x, &valid_fds, max_fd);
 		    logmsg(V_LOGDEBUG, "accept fd[%d] ok new desc %d\n", i, x);
 		}
@@ -342,13 +368,30 @@ supervisor_mainloop(int accept_fd)
 		continue;
 	    }
 
-	    /* echo message on stdout */
-	    if (echo_log_msgs(i, logfile) != 0) { 
+	    /* receive & process messages */
+        if (sup_recv_message(i) < 0) {
+            close(i);
+            del_fd(i, &valid_fds, max_fd);
+            unregister_ipc_fd(i);
+        }
+        
+        /* echo message on stdout */
+	    /* XXX For now all messages are handled with sup_recv_message
+         * Should we change that ???
+         */
+        /* if (echo_log_msgs(i, logfile) != 0) { 
 		close(i); 
 		del_fd(i, &valid_fds, max_fd);
-	    } 
+	    } */
 	}
-	handle_children();
-    } 
+	handle_children(); /* handle dead children etc */
+
+        if (num_procs >= 3) {
+#ifdef RESOURCE_MANAGEMENT
+            schedule();    /* resource management */
+#endif
+            reconfigure(); /* if needed, reconfigure */
+        }
+    }
 }
 

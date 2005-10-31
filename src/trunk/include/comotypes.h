@@ -48,6 +48,9 @@ typedef struct _export_array    earray_t;       /* export record array */
 
 typedef struct _tsc		tsc_t; 		/* timers (using TSC) */
 typedef struct _statistics	stats_t; 	/* statistic counters */
+typedef struct _mdl_statistics	mdl_stats_t; 	/* statistic counters */
+
+typedef struct _proc_callbacks  proc_callbacks_t; /* callbacks of core procs */
 
 typedef struct _como_pktdesc    pktdesc_t;      /* Packet description */
 
@@ -55,11 +58,13 @@ typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
 typedef enum {
     MDL_INVALID, 			/* unused for debugging */
-    MDL_UNUSED,				/* just loaded */
+    MDL_UNUSED,				/* module removed, free entry */
+    MDL_LOADING,            /* module is being loaded */
     MDL_INCOMPATIBLE,			/* not compatible with sniffer */
     MDL_ACTIVE, 			/* active and processing packets */
     MDL_PASSIVE, 			/* passive waiting for queries */
-    MDL_FROZEN				/* temporary frozen */
+    MDL_FROZEN,				/* temporary frozen */
+    MDL_DISABLED            /* disabled due to resource mgmt */
 } state_t;				
 
 /*
@@ -249,10 +254,14 @@ struct _callbacks {
  * for each output, who is going to receive which packets.
  * The pointer to the matrix is returned by the function.
  *
+ * The function also needs the array of modules, to check if a module
+ * has been disabled (and if so, filter out all packets).
+ *
  * For the time being, the array is one of integers. Later it
  * will be packed to use bits.
  */
-typedef int *(filter_fn)(void *pkt_buf, int n_packets, int n_outputs);
+typedef int *(filter_fn)(void *pkt_buf, int n_packets, int n_outputs,
+        module_t *modules);
 
 
 /*
@@ -272,6 +281,7 @@ struct _module {
     void * mem;           	/* private memory for the classifier */
     size_t msize;          	/* size of private memory */
     callbacks_t callbacks;      /* callbacks (static, from the shared obj) */
+    void * cb_handle;           /* handle of module's dynamic libraries */
 
     state_t status; 		/* current module status */
     size_t memusage; 		/* current memory usage */
@@ -289,6 +299,13 @@ struct _module {
     size_t bsize;		/* block size */
     off_t streamsize;       	/* max bytestream size */
     off_t offset;		/* current offset in the export file */
+
+    int priority;               /* resource management priority, the lower
+                                 * the more important the module is */
+
+    int seen;                   /* used in config.c to find out what modules
+                                 * have been removed from cfg files
+                                 */
 
     unsigned reported_global_drops;    /* How many global drops have
 					  been reported to this
@@ -346,6 +363,8 @@ struct _capture_table {
     uint32_t records;		/* no. active records */
     uint32_t first_full;	/* index of first full slot */
     uint32_t live_buckets;	/* no. active buckets */
+    uint32_t filled_records;    /* no. records filled */
+    uint32_t bytes;             /* size of table and contents in memory */
     rec_t *bucket[0];           /* pointers to records -- actual hash table */
 };
 
@@ -390,11 +409,43 @@ struct _tsc {
     u_int64_t total;            /* sum of all values */
 };
 
+
+/*
+ * callbacks of core processes
+ */
+/* TODO document better */
+typedef void (filter_init_fn)(char *filter_file);
+typedef void (mdl_init_fn)(module_t *mdl);
+typedef void (mdl_enable_fn)(module_t *mdl);
+typedef void (mdl_disable_fn)(module_t *mdl);
+typedef void (mdl_remove_fn)(module_t *mdl);
+
+struct _proc_callbacks {
+    filter_init_fn * const filter_init;
+    mdl_init_fn * const module_init;
+    mdl_enable_fn * const module_enable;
+    mdl_disable_fn * const module_disable;
+    mdl_remove_fn * const module_remove;
+};
+
 /* 
  * statistic counters 
  */
+struct _mdl_statistics {
+    size_t mem_usage_shmem;     /* shared memory, only capture writes here */
+    size_t mem_usage_shmem_f;   /* shmem freed by export, periodically flushed
+                                 * into mem_usage_sh by capture. This is to
+                                 * avoid the need of semaphores.
+                                 */
+    size_t mem_usage_export;    /* memory used by modules in export */
+
+    /* in future, also store cpu usage, .. */
+};
+
 struct _statistics { 
     struct timeval start; 	/* CoMo start time */
+
+    /* XXX Pending: update correctly */
     int modules_active;		/* no. of modules processing packets */
     int table_queue; 		/* expired tables in capture->export queue */
     size_t mem_usage_cur; 	/* current shared memory usage */
@@ -418,7 +469,12 @@ struct _statistics {
     tsc_t * ex_store_timer;	/* export store table */
     tsc_t * ex_export_timer;	/* export export()/store() callbacks */
     tsc_t * ex_mapping_timer;	/* export export()/store() callbacks */
+    
+    mdl_stats_t mdl_stats[];   /* per-module stats */
 };
+
+#define MDL_STATS(mdl) \
+    (& map.stats->mdl_stats[(mdl)->index])
     
 
 /*
