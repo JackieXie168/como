@@ -270,9 +270,15 @@ supervisor_mainloop(int accept_fd)
     for (;;) { 
         int secs, dd, hh, mm, ss;
 	struct timeval now;
-	//struct timeval to = { 1, 0 }; /* fire every second */
-	//struct timeval to = { 0, 100000 }; /* 0.1 sec */
+    /* XXX Resource management needs this timer to be small so supervisor
+     * can wake up more frequently and look at the resources used, reacting
+     * in time to any sudden changes in resource usage.
+     */
+#ifdef RESOURCE_MANAGEMENT
 	struct timeval to = { 0, 50000 }; /* 0.05 sec */
+#else
+	struct timeval to = { 1, 0 }; /* fire every second */
+#endif
 	int i, n_ready;
 	fd_set r = valid_fds;
 
