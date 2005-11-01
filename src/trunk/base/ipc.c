@@ -402,6 +402,7 @@ sup_recv_message(int fd)
                 if (read_str(fd, str))
                     return -1;
                 logmsg(LOGUI, "%s", str);
+                free(str);
             }
             break;
         default:
