@@ -51,6 +51,24 @@
 #include "module.h"
 
 
+static const char *mgmt_subtypes[] = {
+  "association request",
+  "association response",
+  "reassociation request",
+  "reassociation response",
+  "probe request",
+  "probe response",
+  "reserved",
+  "reserved",
+  "beacon",
+  "atim",
+  "disassociation",
+  "authentication",
+  "deauthentication",
+  "reserved",
+  "reserved"
+};
+
 /* 
  * FLOWDESC just contains one packet. 
  * We will always match the record in the table so that CAPTURE will 
@@ -69,7 +87,7 @@ FLOWDESC {
  * bytes to capture in each packet. this includes layer2 header 
  * but does not include the CoMo header.  
  */
-static unsigned snaplen = 56; 
+static unsigned snaplen = 65535;
 
 /* 
  * description of the output trace for sniffer-como
@@ -220,6 +238,7 @@ struct pcap_packet {
 #define PRETTYFMT 		0
 #define PCAPFMT			1
 
+
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
@@ -231,8 +250,10 @@ print(char *buf, size_t *len, char * const args[])
     int hh, mm, ss; 
     uint32_t addr; 
     int n; 
+    
 
-    if (buf == NULL && args != NULL) { 
+
+   if (buf == NULL && args != NULL) { 
 	/* first call, process the arguments */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=pcap")) {
@@ -249,9 +270,8 @@ print(char *buf, size_t *len, char * const args[])
                 fmt = PCAPFMT;
 		return s; 
             }
-        }
-
-	*len = 0;
+       }
+        *len = 0;
 	fmt = PRETTYFMT;
 	return s;
     } 
@@ -294,18 +314,20 @@ print(char *buf, size_t *len, char * const args[])
      * if not PCAP, the format is PRETTYFMT... 
      */
     
-    /* print timestamp (hh:mm:ss.us) */
-    hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
-    mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
-    ss = TS2SEC(COMO(ts)) % 60; 
-    *len = sprintf(s, "%02d:%02d:%02d.%06d ", hh, mm, ss, TS2USEC(COMO(ts))); 
 
     /* 
      * depending on the l3 type we print different 
      * information 
      */
-    switch (COMO(l3type)) { 
-    case ETHERTYPE_IP: 
+      if(COMO(l3type) == ETHERTYPE_IP) { 
+
+        /* print timestamp (hh:mm:ss.us) */
+        hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
+        mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
+        ss = TS2SEC(COMO(ts)) % 60; 
+        *len = sprintf(s, "%02d:%02d:%02d.%06d ", 
+                                       hh, mm, ss, TS2USEC(COMO(ts))); 
+
         /* 
          * print IP header information 
          */
@@ -336,23 +358,39 @@ print(char *buf, size_t *len, char * const args[])
 			" %s seq %u ack %u win %u", 
 			print_tcp_flags(TCP(flags)), 
 			H32(TCP(seq)), H32(TCP(ack)), H16(TCP(win))); 
-	} 
+	}
+      } 
+      else { 
+        if ((FC_TYPE(COMO(l3type)) == WLANTYPE_MGMT)
+                   && (FC_SUBTYPE(COMO(l3type)) == MGMT_SUBTYPE_BEACON)) {
 
-	break; 
+
+          /* print timestamp (hh:mm:ss.us) */
+          hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
+          mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
+          ss = TS2SEC(COMO(ts)) % 60; 
  
-    default: 
-	*len += sprintf(s + *len, 
-                    "ethertype: 0x%04x --- print not supported", 
-		    COMO(l3type)); 
-	break;
-    }
+	  *len += sprintf(s + *len, 
+                    "%02d:%02d:%02d:%06d %s %-32s %2d %2d %d %s %s", 
+                    hh, mm, ss, TS2USEC(COMO(ts)), 
+                    mgmt_subtypes[FC_SUBTYPE(COMO(l3type)) >> 12], 
+                    MGMT_BODY(ssid.ssid), H32(PRISM_HDR(ssi_signal)), 
+                    H32(PRISM_HDR(ssi_noise)), MGMT_BODY(ds.ch),
+                    CAP_ESS(MGMT_BODY(cap)) ? "ESS" : "", 
+                    CAP_PRIVACY(MGMT_BODY(cap)) ? "privacy" : "");
 
-    *len += sprintf(s + *len, "\n"); 
+
+        }
+        else
+	  *len += sprintf(s + *len,
+                   "ieee 802.11 type not supported - work in progress"); 
+    }
+    *len += sprintf(s + *len, "\n");
     return s; 
 }
 
 
-static int
+static int  
 replay(char *buf, char *out, size_t * len)
 {
     pkt_t * pkt = (pkt_t *) buf; 

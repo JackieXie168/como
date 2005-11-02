@@ -48,8 +48,8 @@
 #define FLOWDESC    struct _ssid
 FLOWDESC {
     timestamp_t ts;
-    int32_t	signal; 
-    int32_t	noise; 
+    uint32_t	signal; 
+    uint32_t	noise; 
     uint8_t	samples; 
     int8_t 	channel;
     uint8_t	wepmode;
@@ -115,7 +115,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static int
 check(pkt_t * pkt) 
 {
-    if ((pkt->l2type != COMOTYPE_PRISM_LNX) || isWLANWEP || !isWLANBEACON) 
+    if ((pkt->l2type != COMOTYPE_WLAN_PRISM)) 
 	return 0; 
     return 1; 
 }
@@ -131,7 +131,8 @@ match(pkt_t * pkt, void * fh)
     int skip; 
 
     bcn = (struct wlanbeacon *) (pkt->payload + 
-					sizeof(struct _como_prismhdr_lnx)); 
+				sizeof(struct _como_wlan_prism2hdr) + 
+              		        sizeof(struct _como_wlan_mgmt_hdr)); 
 
     ssidinfo = (struct wlanssid *) bcn->variable; 
     skip = x->len + 2;				/* skipping ssid info element */
@@ -168,7 +169,8 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntry)
         
 	/* now find the information in the management frame */
 	bcn = (struct wlanbeacon *) (pkt->payload + 
-					sizeof(struct _como_prismhdr_lnx)); 
+					sizeof(struct _como_wlan_prism2hdr) +
+                                        sizeof(struct _como_wlan_mgmt_hdr)); 
 
 	/* get to the privacy bit to find out if wep is used */
 	x->wepmode = (bcn->cap & WLAN_CAPINFO_PRIVACY)? 1 : 0;
@@ -196,8 +198,8 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntry)
     } 
 
     x->samples++; 
-    x->signal +=  PRISM_LNX(ssi_signal); 
-    x->noise +=  PRISM_LNX(ssi_noise); 
+    x->signal += H32(PRISM_HDR(ssi_signal)); 
+    x->noise += H32(PRISM_HDR(ssi_noise)); 
     return 0;		/* records are never full */
 }
 
@@ -208,7 +210,7 @@ store(void *rp, char *buf, size_t len)
     FLOWDESC *x = F(rp);
     int i; 
     if (len < sizeof(FLOWDESC)) 
-    
+        return -1;   
     PUTH64(buf, x->ts);
     PUTH32(buf, x->signal);
     PUTH32(buf, x->noise);
@@ -219,7 +221,7 @@ store(void *rp, char *buf, size_t len)
     for (i = 0; i < x->len; i++) 
 	PUTH8(buf, x->ssid[i]); 
 
-#if 1 
+#if 1
     /* XXX for debugging... */
     {
 	time_t t; 

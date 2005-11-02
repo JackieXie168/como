@@ -98,6 +98,7 @@ endif
 # add sniffers  
 x=$(SNIFFERS:%=$(SNIFFDIR)/sniffer-%.c)
 x += $(SNIFFDIR)/sniffers.c
+x += $(SNIFFDIR)/ieee80211frames.c
 SRCS_como += $(x)
 
 # resource management

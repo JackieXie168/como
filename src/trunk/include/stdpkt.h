@@ -38,6 +38,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>          /* inet_ntop */
 
+
 /* typedefs for entries in network format. C99 types are used for native.
  * This makes the code a bit more boring to write, but safer in that
  * the compiler can catch error for us.
@@ -131,7 +132,7 @@ struct _como_pkt {
 #define COMOTYPE_PRISM          0x0005  /* IEEE 802.11 with Prism header */
 #define COMOTYPE_NF		0x0006	/* Flow records (NetFLow v5 info) */
 #define COMOTYPE_WLAN   	0x0007  /* IEEE 802.11 header */
-#define COMOTYPE_PRISM_LNX 	0x0008  /* IEEE 802.11 with Prism header */
+#define COMOTYPE_WLAN_PRISM	0x0008  /* IEEE 802.11 with Prism header */
 
 /* 
  * Ethernet framing 
@@ -288,6 +289,8 @@ struct _como_icmphdr {
 #define VLAN(field) __EXTRACT_L2_FIELD(COMOTYPE_VLAN, _como_vlan, field)
 #define HDLC(field) __EXTRACT_L2_FIELD(COMOTYPE_HDLC, _como_hdlc, field)
 #define ISL(field) __EXTRACT_L2_FIELD(COMOTYPE_ISL, _como_isl, field)
+
+
 
 #define IP(field)               \
     (pkt->l3type == ETHERTYPE_IP ?  \

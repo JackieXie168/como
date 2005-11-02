@@ -28,13 +28,19 @@
 
 #include <sys/types.h>
 #include <net/ethernet.h> 
-#include "stdpkt.h" 
+#include "comofunc.h"
+#include "stdwlan.h"
 
+
+#include "como.h"
 
 /* 
  * this file includes some inline helper functions to be 
  * shared among all sniffers. 
  */
+
+
+
 
 /* 
  * Layer 2 header lengths
@@ -48,7 +54,7 @@ static size_t como_l2_len[] = {
     0,		// COMOTYPE_PRISM
     0,          // COMOTYPE_NF
     24,         // COMOTYPE_WLAN
-    88,         // COMOTYPE_PRISM_LNX
+    88,         // COMOTYPE_WLAN_PRISM - value fixed: 64 + 24 (prism+mgmt hdrs)
 };
 
 /* 
@@ -80,12 +86,25 @@ isISL(pkt_t * pkt)
 static __inline__ void
 updatel4(pkt_t * pkt)
 {
-    pkt->layer3ofs = pkt->layer4ofs = como_l2_len[pkt->l2type];
-    if (pkt->l3type ==  ETHERTYPE_IP) {
-        pkt->layer4ofs += ((IP(vhl) & 0x0f) << 2);
-	pkt->l4type = IP(proto);
+     
+    if (pkt->l3type == ETHERTYPE_IP) {
+         pkt->layer3ofs = pkt->layer4ofs = como_l2_len[pkt->l2type];
+         pkt->layer4ofs += ((IP(vhl) & 0x0f) << 2);
+	 pkt->l4type = IP(proto);
+     }
+     else {
+       if ((FC_TYPE(pkt->l3type) == WLANTYPE_MGMT)
+                     && (FC_SUBTYPE(pkt->l3type) == MGMT_SUBTYPE_BEACON)) {
+              
+          pkt->layer3ofs = pkt->layer4ofs = PRISM_HDR_LEN;
+          pkt->layer4ofs += MGMT_HDR_LEN;
+        
+       }
+      /* else 
+          logmsg(LOGWARN, "ieee 802.11 type not supported");*/
     }
 }
+
 
 
 /*
@@ -99,7 +118,7 @@ updateofs(pkt_t * pkt, int type)
 {
     pkt->l2type = type; 
     switch (pkt->l2type) { 
-    case COMOTYPE_ETH: 
+      case COMOTYPE_ETH: 
         if (H16(ETH(type)) == ETHERTYPE_VLAN) {
             pkt->l2type = COMOTYPE_VLAN;
             pkt->l3type = H16(VLAN(ethtype));
@@ -110,12 +129,16 @@ updateofs(pkt_t * pkt, int type)
             pkt->l3type = H16(ETH(type));
         }
 	break; 
-
-    case COMOTYPE_HDLC: 
+    
+      case COMOTYPE_HDLC: 
 	pkt->l3type = H16(HDLC(type)); 
         break; 
+    
+      case COMOTYPE_WLAN_PRISM:
+        pkt->l3type = H16(MGMT_HDR(fc)); 
+        break;
 
-    default: 
+      default: 
 	pkt->l3type = 0; 
         break; 
     } 
