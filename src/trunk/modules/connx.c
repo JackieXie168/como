@@ -39,7 +39,6 @@
 #include "como.h"
 #include "module.h"
 
-#define IDLE_TIMEOUT	TIME2TS(60,0) 	/* idle timeout (in sec)   */
 
 #define FLOWDESC    struct _tuple_stat
 #define EFLOWDESC   FLOWDESC 
@@ -58,6 +57,24 @@ FLOWDESC {
     uint64_t pkts;
 };
 
+static timestamp_t idle_timeout = TIME2TS(60,0);     /* idle timeout (secs) */
+
+static int
+init(__unused void *mem, __unused size_t msize, char *args[])
+{
+    int i;
+
+    if (args == NULL)
+        return 0;
+
+    for (i = 0; args[i]; i++) {
+        if (strstr(args[i], "idle-timeout")) {
+            char * val = index(args[i], '=') + 1;
+            idle_timeout = TIME2TS(atoi(val), 0);
+        }
+    }
+    return 0;
+}
 
 static uint32_t
 hash(pkt_t *pkt)
@@ -117,15 +134,12 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 {
     FLOWDESC *x = F(fh);
 
-    if (pkt->l3type == ETHERTYPE_IP) {
-	if (isnew) {
-	    x->first = pkt->ts;
-	}
-	x->last = pkt->ts;
-	x->bytes += pkt->len;
-	x->pkts++;
-    } else {
-	if (isnew) {
+    if (isnew) {
+	x->first = pkt->ts;
+	x->bytes = 0;
+	x->pkts = 0;
+
+	if (isIP) { 
 	    x->src_ip = IP(src_ip);
 	    x->dst_ip = IP(dst_ip);
 
@@ -140,15 +154,12 @@ update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
 	    }
 
 	    x->proto = IP(proto);
-	    x->first = pkt->ts;
-	    x->bytes = 0;
-	    x->pkts = 0;
 	}
-
-	x->last = pkt->ts;
-	x->bytes += H16(IP(len));
-	x->pkts++;
     }
+
+    x->last = pkt->ts;
+    x->bytes += pkt->len;
+    x->pkts++;
 
     return 0;
 }
@@ -210,7 +221,7 @@ action(void *efh, timestamp_t current_time, __unused int count)
     if (efh == NULL) 
 	return ACT_GO;
 
-    if (current_time - ex->last > IDLE_TIMEOUT) 
+    if (current_time - ex->last > idle_timeout) 
         return (ACT_STORE | ACT_DISCARD);
 
     /* are LRU sorted, STOP when we found the first flow not expired */
@@ -295,21 +306,22 @@ print(char *buf, size_t *len, char * const args[])
 
 
 callbacks_t callbacks = {
-    sizeof(FLOWDESC),
-    sizeof(EFLOWDESC),
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    hash,
-    match,
-    update,
-    ematch,
-    export,
-    compare,
-    action,
-    store,
-    load,
-    print,
-    NULL
+    ca_recordsize: sizeof(FLOWDESC),
+    ex_recordsize: sizeof(EFLOWDESC),
+    indesc: NULL,
+    outdesc: NULL,
+    init: init,
+    check: NULL,
+    hash: hash,  
+    match: match,
+    update: update,
+    ematch: ematch,
+    export: export,
+    compare: compare,
+    action: action,
+    store: store,
+    load: load,
+    print: print,
+    replay: NULL 
 };
+
