@@ -45,6 +45,8 @@
 
 #include "como.h"
 #include "sniffers.h"
+#include "stdwlan.h"
+
 
 /*
  * SNIFFER  ---    pcap files 
@@ -59,6 +61,10 @@ struct _snifferinfo {
     uint32_t type; 	 /* CoMo packet type */
     char buf[BUFSIZE];   /* base of the capture buffer */
     int nbytes;      	 /* valid bytes in buffer */
+    char pktbuf[BUFSIZE];/* buffer for pre-processed packets 
+			  * (used only to deal with 802.11 frames)
+			  */
+    int pkt_nbytes; 	 /* valid bytes in pktbuf */
 };
 
 
@@ -107,7 +113,7 @@ sniffer_start(source_t * src)
     case DLT_PRISM_HEADER: 
 	logmsg(LOGSNIFFER, "sniffer: datalink 802.11 with Prism header (%d)\n"
 								, hdr[5]); 
-	type = COMOTYPE_PRISM_LNX;
+	type = COMOTYPE_WLAN_PRISM;
 	break;
 
     default: 
@@ -164,6 +170,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
     if (info->nbytes == 0)
         return -1;       /* end of file, nothing left to do */
 
+    info->pkt_nbytes = 0; 
     base = info->buf;
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
         pcap_hdr_t * ph = (pcap_hdr_t *) base ; 
@@ -177,21 +184,52 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
         if (left < (int) sizeof(pcap_hdr_t) + ph->caplen) 
             break;
 
-        /*      
-         * Now we have a packet: start filling a new pkt_t struct
-         * (beware that it could be discarded later on)
-         */
-        pkt->ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
-        pkt->len = ph->len;
-        pkt->caplen = ph->caplen; 
-        pkt->payload = base + sizeof(pcap_hdr_t); 
 
+
+
+	/*      
+	 * Now we have a packet: start filling a new pkt_t struct
+	 * (beware that it could be discarded later on)
+	 */
+	if (info->type == COMOTYPE_WLAN_PRISM ||
+	 			   info->type == COMOTYPE_WLAN) { 
+	  /*  char * wh; */
+	    int n; 
+
+	    /* 
+	     * point to memory region to receive pre-processed 802.11 
+	     * frame. this frame may be larger than original frame 
+	     * captured from the medium. (we do it this way for performance
+	     * reasons and to simplify the code in the modules)
+	     */
+/*	    wh = info->pktbuf + info->pkt_nbytes; */
+  
+            pkt->payload = info->pktbuf + info->pkt_nbytes;
+	    n = parse_80211_frame(pkt,base,info->type); 
+	    if (n == 0) 
+		break; 
+	    info->pkt_nbytes += n; 
+	} else {  
+	    pkt->ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
+	    pkt->len = ph->len;
+	    pkt->caplen = ph->caplen; 
+	    pkt->payload = base + sizeof(pcap_hdr_t); 
+            /* 
+             * update layer2 information and offsets of layer 3 and above. 
+             * this sniffer runs on ethernet frames
+             */
+            updateofs(pkt, info->type); 
+
+	} 
+
+#if 0
         /* 
          * update layer2 information and offsets of layer 3 and above. 
-         * this sniffer only runs on ethernet frames. 
+         * this sniffer runs on ethernet frames and 
+         * ieee 802.11 frames (experimental)
          */
         updateofs(pkt, info->type); 
-
+#endif
         /* increment the number of processed packets */
         base += sizeof(pcap_hdr_t) + ph->caplen; 
     }

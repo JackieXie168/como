@@ -51,7 +51,7 @@
 /* 
  * default values for libpcap 
  */
-#define LIBPCAP_DEFAULT_SNAPLEN 96		/* packet capture */
+#define LIBPCAP_DEFAULT_SNAPLEN 1500		/* packet capture */
 #define LIBPCAP_DEFAULT_TIMEOUT 0		/* timeout to serve packets */
 
 /* 
@@ -71,6 +71,7 @@ typedef int (*sniff_pcap_datalink)(pcap_t *);
 #define BUFSIZE		(1024 * 1024)
 struct _snifferinfo {
     void * handle;  			/* handle to libpcap.so */
+    uint32_t type; 
     sniff_pcap_dispatch dispatch;	/* ptr to pcap_dispatch function */
     pcap_t *pcap;			/* pcap handle */
     uint snaplen; 			/* capture length */
@@ -170,13 +171,15 @@ sniffer_start(source_t * src)
     struct _snifferinfo * info;
     uint snaplen = LIBPCAP_DEFAULT_SNAPLEN; 
     uint timeout = LIBPCAP_DEFAULT_TIMEOUT; 
-    uint channel = 0; 
+    uint channel = 0;
     sniff_pcap_open sp_open; 
     sniff_pcap_fileno sp_fileno;
     sniff_pcap_noblock sp_noblock; 
     sniff_pcap_datalink sp_link; 
     sniff_pcap_close sp_close; 
     struct wlan_req wreq;
+
+    uint32_t type;
 
     if (src->args) { 
 	/* process input arguments */
@@ -284,10 +287,28 @@ sniffer_start(source_t * src)
 	free(src->ptr);
         return -1;
     }
-    
+   
+   /* check datalink type.  support 802.11 DLT_ values */
+   switch (sp_link(info->pcap)) {
+     case DLT_PRISM_HEADER:
+       info->type = COMOTYPE_WLAN_PRISM;
+       break;
+#if 0
+     case DLT_IEEE802_11:
+       info->type = COMOTYPE_WLAN;
+       break;
+#endif
+
+    default:
+        logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
+        sp_close(info->pcap);
+        return -1;
+    }
+
     src->fd = sp_fileno(info->pcap);
     src->flags = SNIFF_SELECT; 
     src->polling = 0;
+    info->type = type;
     return 0; 		/* success */
 }
 
@@ -307,11 +328,9 @@ processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
     pkt->len = h->len;
     pkt->caplen = h->caplen;
 
-    /*
-     * copy the packet payload
-     */
     bcopy(buf, pkt->payload, pkt->caplen);
-}
+
+ }
 
 
 /*
@@ -351,11 +370,17 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr)
 	 * XXX check the cost of processing one packet at a time... 
 	 * 
 	 */
+
+
 	count = info->dispatch(info->pcap, 1, processpkt, (char *) pkt); 
 	if (count == 0) 
 	    break;
 
 #if 0
+        /*
+         * if BSD_PRISM_HDR do this, supporting AVS type header for now
+         */
+
 	if (PRISM(status) & PRISM_BADCRC) {
 	    /* bad CRC, need to skip this packet. */
 	    logmsg(V_LOGSNIFFER, "packet with bad CRC, skipping it\n"); 
@@ -367,24 +392,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr)
 	 * determine what type of packet this is. if this is 
 	 * an IP packet we also populate the l3type, l3ofs, and l4ofs 
  	 * information. right now we do not do anything to help navigate
-	 * thru the 802.11 headers (mgmt, ctl, data, etc.).
-	 */
-        
-#if 0   /* work in progress... -kevin */
-        switch (hdr[5]) {
-        case DLT_IEEE802_11:
-            pkt->l2type = COMOTYPE_WLAN;
-            break;
-    
-        case DLT_PRISM_HEADER:*/
-            pkt->l2type = COMOTYPE_PRISM_LNX;
-            break;
-        default:
-            return -1;
-       }
-#else 
-    pkt->l2type = COMOTYPE_PRISM_LNX;
-#endif
+	 * thru the 802.11 headers (mgmt, ctl, data, etc.)
+         */
 
 	nbytes += pkt->caplen; 
 	npkts++; 
@@ -415,4 +424,5 @@ sniffer_stop(source_t * src)
 
 struct _sniffer prism2_sniffer = { 
     "prism2", sniffer_start, sniffer_next, sniffer_stop
+
 };
