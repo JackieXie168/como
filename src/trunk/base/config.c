@@ -867,38 +867,39 @@ do_config(int argc, char *argv[])
 	break;
 
     case TOK_ARGS:
-        mdl->args = safe_calloc(argc, sizeof(char *));
-        for (i = 1; i < argc; i++) {
-            if (argv[i][0] == '$') {
-		FILE *auxfp;
-		char line[256];
+    mdl->args = safe_calloc(argc, sizeof(char *));
+    for (i = 1; i < argc; i++) {
+        if (argv[i][0] == '$') {
+		    FILE *auxfp;
+		    char line[512];
 
-                /* The arg must be read from an auxiliar file */
+            /* The arg must be read from an auxiliar file */
                 
-                /* Open the file */
-                if((auxfp = fopen(&argv[i][1], "r")) == NULL)
-                    panic("Error opening auxiliar file: %s\n", &argv[i][1]);
+            /* Open the file */
+            if((auxfp = fopen(&argv[i][1], "r")) == NULL)
+                panic("Error opening auxiliar file: %s\n", &argv[i][1]);
                 
-                /* Dump its content into a string */
-                mdl->args[i-1] = safe_calloc(1, sizeof(char));
-                strncpy(mdl->args[i-1], "\0", 1);
-                while(fgets(line, sizeof(line), auxfp)) {
-		    int sz; 
+            /* Dump its content into a string */
+            mdl->args[i-1] = safe_calloc(1, sizeof(char));
+            strncpy(mdl->args[i-1], "\0", 1);
+            while(fgets(line, sizeof(line), auxfp)) {
+		        int sz; 
+                sz = strlen(mdl->args[i-1]) + strlen(line) + 1; 
+                mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], sz); 
+                strncat(mdl->args[i-1], line, strlen(line));
+            }
+            /* Close the file */
+            fclose(auxfp);
+        } else 
+		    safe_dup(&(mdl->args[i-1]), argv[i]);
+    }
 
-		    sz = strlen(mdl->args[i-1]) + strlen(line) + 1; 
-                    mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], sz); 
-                    strncat(mdl->args[i-1], line, strlen(line));
-                }
-            } else 
-		safe_dup(&(mdl->args[i-1]), argv[i]);
-        }
-
-        /* 
+    /* 
 	 * Last position is set to null to be able to know
-         * when args finish from the modules
-         */
-        mdl->args[i-1] = NULL;
-        break;
+     * when args finish from the modules
+     */
+    mdl->args[i-1] = NULL;
+    break;
     
     case TOK_MIN_FLUSH: 
 	mdl->min_flush_ivl = 

@@ -49,16 +49,17 @@ DIGIT           [0-9]
 ACTION          alert|log|pass|activate|dynamic
 OPT_METADATA    msg|reference|sid|rev|classtype|priority
 OPT_PAYLOAD     content|nocase|depth|offset|distance|within|isdataat|pcre|byte_test|byte_jump
-OPT_NPAYLOAD    fragoffset|ttl|tos|id|ipopts|fragbits|dsize|flags|flow|flowbits|seq|ack|window|itype|icode|icmp_id|icmp_seq|rpc|ip_proto|sameip
+OPT_NPAYLOAD    fragoffset|ttl|tos|id|ipopts|flow|fragbits|dsize|flags|seq|ack|window|itype|icode|icmp_id|icmp_seq|rpc|ip_proto|sameip
 OPT_OTHER       activates|activated-by|count
+OPT_NOSUPPORT   rawbytes|uricontent|ftpbounce|regex|content-list|flowbits|logto|session|resp|react|tag|threshold
 KEYWORD         {OPT_METADATA}|{OPT_PAYLOAD}|{OPT_NPAYLOAD}|{OPT_OTHER}
+BADKEYWORD      {OPT_NOSUPPORT}
 COLON           ":"
 IPTOK           ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
 NETMASK         "/"({DIGIT}){1,2}
 COMMA           ","
 PORT            {DIGIT}+
-ANYIP           "anyip"
-ANYPORT         "anyport"
+ANY             "any"
 DIRECTION       "->"|"<>"
 NEGATION        "!"
 OPENSQBR        "["
@@ -130,17 +131,17 @@ option noyyalloc noyyfree noyyrealloc
                 strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(PROTO);                
                 }
-{CONTENT}       {
-                yslval.text = (char *)prv_alloc(strlen(yytext)-1);
-                if (yslval.text == NULL) return -1;
-                strncpy(yslval.text, yytext+1, strlen(yytext)-2);
-                strcat(yslval.text, "\0");
-                return(CONTENT);
-                }
 {QUOTEDCONTENT} {
                 yslval.text = (char *)prv_alloc(strlen(yytext)-3);
                 if (yslval.text == NULL) return -1; 
                 strncpy(yslval.text, yytext+2, strlen(yytext)-4);
+                strcat(yslval.text, "\0");
+                return(CONTENT);
+                }
+{CONTENT}       {
+                yslval.text = (char *)prv_alloc(strlen(yytext)-1);
+                if (yslval.text == NULL) return -1;
+                strncpy(yslval.text, yytext+1, strlen(yytext)-2);
                 strcat(yslval.text, "\0");
                 return(CONTENT);
                 }
@@ -150,15 +151,18 @@ option noyyalloc noyyfree noyyrealloc
                 strncpy(yslval.text, yytext, strlen(yytext)+1);
                 return(KEYWORD);
                 }
+{BADKEYWORD}    {
+                yslval.text = (char *)prv_alloc(strlen(yytext)+1);
+                if (yslval.text == NULL) return -1; 
+                strncpy(yslval.text, yytext, strlen(yytext)+1);
+                return(BADKEYWORD);
+                }
 {COLON}         { 
                 return(COLON); 
                 }
-{ANYIP}         {
-                return(ANYIP);
+{ANY}           {
+                return(ANY);
                 }
-{ANYPORT}       {
-                return(ANYPORT);
-                }    
 {NEGATION}      {
                 return(NEGATION);
                 }

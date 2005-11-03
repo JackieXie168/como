@@ -53,8 +53,6 @@
 #include <stdio.h>      /* snprintf */
 #include "snort.h"      /* yserror */
 
-#define MIN(a,b) (a < b) ? a : b
-
 typedef long align_t;
 
 union header {
@@ -84,7 +82,8 @@ extern size_t prv_memsize;
  *
  */
 
-void prv_free(void *ap)
+void
+prv_free(void *ap)
 {
     header_t *bp, *p;
     bp = (header_t *)ap - 1; /* point to block header */
@@ -104,18 +103,17 @@ void prv_free(void *ap)
     freep = p;
 }
 
-static header_t *morecore(unsigned nunits)
+static header_t *
+morecore(unsigned nunits)
 {
     header_t *up;
     size_t nbytes;
-    char error[ERROR_SIZE];
     
     nbytes = nunits * sizeof(header_t);
     prv_actualsize += nbytes;
     if (prv_actualsize > prv_memsize) {
-        snprintf(error, ERROR_SIZE, "Not enough private memory %d/%d",
-                 prv_actualsize, prv_memsize);
-        yserror(error);
+        yserror("Not enough private memory %d/%d",
+                prv_actualsize, prv_memsize);
         return NULL;
     }
     prv_mem += nbytes;
@@ -172,10 +170,11 @@ prv_realloc(void *ptr, unsigned int nbytes)
 {
     header_t *bp;
     void *p;
-    unsigned int size;
+    unsigned int size, k;
     
     bp = (header_t *)ptr - 1;
-    size = MIN(((bp->s.size - 1) * sizeof(header_t)), nbytes); 
+    k = (bp->s.size - 1) * sizeof(header_t);
+    size = (k < nbytes)? k : nbytes;
     p = prv_alloc(nbytes);
     memcpy(p, ptr, size);
     prv_free(ptr);

@@ -46,9 +46,8 @@
 
 #include "stdpkt.h" /* pkt_t */
 
-#define MAX_RULES       50
+#define MAX_RULES       2000
 #define MAX_PORT        65535
-#define ERROR_SIZE      128
 #define MAX_STR_SIZE    255
 
 #define ASIZE 256    /* anything that can be represented with a char 
@@ -137,6 +136,20 @@ enum snort_tokens {
     SNTOK_ACTIVATES,
     SNTOK_ACTVBY,
     SNTOK_COUNT,
+    // Tokens for unsupported rule options
+    SNTOK_RAWBYTES,
+    SNTOK_URICNT,
+    SNTOK_FTPBOUNCE,
+    SNTOK_REGEX,
+    SNTOK_CNTLIST,
+    SNTOK_FLOW,
+    SNTOK_FLOWBITS,
+    SNTOK_LOGTO,
+    SNTOK_SESSION,
+    SNTOK_RESP,
+    SNTOK_REACT,
+    SNTOK_TAG,    
+    SNTOK_THRESHOLD,
     // Tokens for rule options' content
     SNTOK_HIGHPRIO,
     SNTOK_MEDPRIO,
@@ -292,6 +305,7 @@ typedef union _varvalue varvalue_t;
 struct _varinfo {
     struct _varinfo *next;
     char *name;
+    unsigned int namelen;
     uint8_t type; /* 0 = ip, 1 = port */
     varvalue_t value;
 };
@@ -303,7 +317,7 @@ struct _dyn {
 };
 typedef struct _dyn dyn_t;
 
-void yserror(char *);
+void yserror(char *, ...);
 
 /* Used to allocate memory in the module's private region */
 void *prv_alloc(unsigned int);
