@@ -53,7 +53,7 @@ void preBmBc(char *x, int m, int bmBc[]) {
    for (i = 0; i < ASIZE; ++i)
       bmBc[i] = m;
    for (i = 0; i < m - 1; ++i)
-      bmBc[(unsigned int)x[i]] = m - i - 1;
+      bmBc[(unsigned char)x[i]] = m - i - 1;
 }
  
 /*

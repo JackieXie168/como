@@ -12,7 +12,7 @@ PROGS = como	# list of program names
 # OBJS_como_DEPS = como.h comotypes.h
 DEPS_como := ../include/como.h
 
-ifdef HAVE_FLEX_AND_BISON
+ifdef USE_FILTER_PARSER
         OTHER = filter-lexic.c
         DEPS_como += filter-lexic.c
 endif
@@ -40,7 +40,7 @@ SRCS_como := \
     ipc.c \
     res_mgmt.c
 
-ifdef HAVE_FLEX_AND_BISON
+ifdef USE_FILTER_PARSER
         SRCS_como += filter-syntax.c
 endif
 
@@ -66,8 +66,8 @@ endif
 
 # Flex/Bison support for filter expressions
 #
-ifdef HAVE_FLEX_AND_BISON
-        CFLAGS += -DHAVE_FLEX_AND_BISON
+ifdef USE_FILTER_PARSER
+        CFLAGS += -DUSE_FILTER_PARSER
 endif
 
 # Endace DAG cards.

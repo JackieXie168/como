@@ -296,7 +296,7 @@ query_parse(char *buf)
 	    char * s = strchr(p1, '=');
 	    asprintf(&q.module, "%s", s + 1); 
 	} else if (strstr(p1, "filter=") == p1) {
-#ifdef HAVE_FLEX_AND_BISON
+#ifdef USE_FILTER_PARSER
             char * s;
             parse_filter(strchr(p1, '=') + 1, &s);
             asprintf(&q.filter, "%s", s);

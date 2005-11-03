@@ -244,6 +244,7 @@ FLOWDESC {
 /* We save the info that we get from the Snort rules file
  * into these structures */
 unsigned int nrules = 0;        /* number of rules */
+unsigned int nrules_read = 0;   /* number of rules read */
 ruleinfo_t *ri = NULL;          /* rules info */
 varinfo_t *vi[VAR_HASHSIZE];    /* variables info */
 dyn_t *dr[MAX_RULES];           /* dynamic rules info */
@@ -904,7 +905,8 @@ init(void *mem, size_t msize, char *args[])
     /* Check and initialize the module's private memory region
      * where the info from the rules will be stored */
     if (msize < 100000) {
-	logmsg(LOGWARN, "SNORT: need 100 Kbytes of private memory, have just %d\n", msize);
+	logmsg(LOGWARN, "SNORT: need at least 100 Kbytes"
+           " of private memory, have just %d\n", msize);
 	return ENOMEM; 
     } 
     memset(mem, 0, msize);
@@ -928,6 +930,9 @@ init(void *mem, size_t msize, char *args[])
     
     if (nrules == 0)
         logmsg(LOGWARN, "SNORT: parsing rules: empty rules file\n");
+    
+    logmsg(LOGUI, "SNORT: rules loaded = %d / rules read = %d\n",
+           nrules, nrules_read);
     
     return 0;
 }
@@ -1270,42 +1275,22 @@ create_alert_str(struct timeval *t, pkt_t *pkt, opt_t *opt, char *s)
 #define ULOGFMT         3
 #define UALERTFMT       4
 #define COMOFMT         5
-#define GNUPLOTFMT1     6
-#define GNUPLOTFMT2     7
-#define DEBUGFMT      8
+#define GNUPLOTFMT      6
+#define DEBUGFMT        7
 
-/* GNUPLOT_PERCENT: 
- * If this is defined, the gnuplot output is the percentage of packets
- * per rule over the total packets that match any rule.
- * If not, the gnuplot output is the total of packets per rule */
-// #define GNUPLOT_PERCENT
-    
-#define GNUPLOTHDR1     						\
+#define GNUPLOTHDR						\
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
     "set grid;"								\
-    "set ylabel \"Percentage\";"					\
-    "set xlabel \"Time (HH:MM UTC)\";"					\
-    "set yrange [0:100];"						\
-    "set autoscale xfix;"						\
-    "set key outside;"							\
-    "set xdata time;"							\
-    "set timefmt \"%%s\";"						\
-    "set format x \"%%H:%%M\";"                                         \
-    "plot "
-
-#define GNUPLOTHDR2     						\
-    "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
-    "set grid;"								\
-    "set ylabel \"Packets\";"				                \
+    "set ylabel \"alerts\" textcolor lt 3;"				\
     "set xlabel \"Time (HH:MM UTC)\";"					\
     "set ytics nomirror;"						\
-    "set autoscale ymax;"						\
+    "set yrange [0:*];"							\
     "set autoscale xfix;"						\
-    "set key outside;"                                                  \
+    "set nokey;"							\
     "set xdata time;"							\
     "set timefmt \"%%s\";"						\
     "set format x \"%%H:%%M\";"						\
-    "plot "
+    "plot \"-\" using 1:2 axis x1y1 with lines lt 3\n"	\
 
 #define GNUPLOTFOOTER	"e\n"
 
@@ -1317,12 +1302,10 @@ print(char *buf, size_t *len, char * const args[])
     static unsigned int fmt, rule, rule_found = 0;
     char *rulestr;
     
-    /* CoMo-Live! counters */
-    unsigned int i;
-    static int count = 0;
-    static uint64_t pktssum[100];
-    ruleinfo_t *ruleptr;
-    opt_t *optptr;
+    /* CoMo-Live! */
+    timestamp_t ts;
+    time_t t;
+    static unsigned int nalerts = 0;
     
     /* Output file structs */
     /* file headers */
@@ -1370,11 +1353,7 @@ print(char *buf, size_t *len, char * const args[])
                 fmt_found = 1;
             }
             else if (!strcmp(args[n], "format=gnuplot")) {
-#ifdef GNUPLOT_PERCENT
-                fmt = GNUPLOTFMT1;
-#else
-                fmt = GNUPLOTFMT2;
-#endif
+                fmt = GNUPLOTFMT;
                 fmt_found = 1;
             }
             else if (!strcmp(args[n], "format=debug")) {
@@ -1441,46 +1420,10 @@ print(char *buf, size_t *len, char * const args[])
             *len = sizeof(uafhdr);
             return (char *)&uafhdr;
         }
-        else if (fmt == GNUPLOTFMT1) { /* CoMo-Live! format (percentage of packets per rule) */
-            for (i = 0; i < nrules; i++) pktssum[i] = 0;
-
-            *len = sprintf(s, GNUPLOTHDR1);
-            for (ruleptr = ri; ruleptr->next; ruleptr = ruleptr->next) {
-                for (optptr = ruleptr->opts; optptr; optptr = optptr->next) {
-                    *len += sprintf(s + *len, "\"-\" using 1:%d with filledcurve x1 title \"%s\",   ",
-                                    nrules - optptr->rule_id + 1, optptr->msg);
-                }
-            }
-            /* Last rule header */
-            for (optptr = ruleptr->opts; optptr->next; optptr = optptr->next) {
-                *len += sprintf(s + *len, "\"-\" using 1:%d with filledcurve x1 title \"%s\",   ",
-                                nrules - optptr->rule_id + 1, optptr->msg);
-            }
-            /* Last option header */
-            *len += sprintf(s + *len, "\"-\" using 1:%d with filledcurve x1 title \"%s\";\n",
-                            nrules - optptr->rule_id + 1, optptr->msg); 
+        else if (fmt == GNUPLOTFMT) { /* CoMo-Live! format (alerts per second) */
+        	*len = sprintf(s, GNUPLOTHDR);
             return s;
         }        
-        else if (fmt == GNUPLOTFMT2) { /* CoMo-Live! format (number of packets per rule) */
-            for (i = 0; i < nrules; i++) pktssum[i] = 0;
-            
-            *len = sprintf(s, GNUPLOTHDR2);
-            for (ruleptr = ri; ruleptr->next; ruleptr = ruleptr->next) {
-                for (optptr = ruleptr->opts; optptr; optptr = optptr->next) {
-                    *len += sprintf(s + *len, "\"-\" using 1:%d with lines title \"%s\",    ",
-                                    optptr->rule_id + 2, optptr->msg);
-                }
-            }            
-            /* Last rule header */
-            for (optptr = ruleptr->opts; optptr->next; optptr = optptr->next) {
-                *len += sprintf(s + *len, "\"-\" using 1:%d with lines title \"%s\",    ",
-                                optptr->rule_id + 2, optptr->msg);
-            }            
-            /* Last option header */
-            *len += sprintf(s + *len, "\"-\" using 1:%d with lines title \"%s\";\n",
-                            optptr->rule_id + 2, optptr->msg);
-            return s;
-        }
         else { /* Snort Fast Alert format / pkt_t format */
             /* Return an empty string because no headers are needed for these formats */
             *len = 0;
@@ -1490,7 +1433,7 @@ print(char *buf, size_t *len, char * const args[])
         
     if (buf == NULL && args == NULL) { 
 	/* Last print callback */
-        if (fmt == GNUPLOTFMT1 || fmt == GNUPLOTFMT2)
+        if (fmt == GNUPLOTFMT)
             /* CoMo-Live! needs a footer at the end */
             *len = sprintf(s, GNUPLOTFOOTER);
         else {
@@ -1504,6 +1447,11 @@ print(char *buf, size_t *len, char * const args[])
     
     pktinfo = (pktinfo_t *)buf; 
     pkt = &(pktinfo->pkt);
+
+    ts = pkt->ts;
+    t = (time_t) TS2SEC(ts);
+    if (pktinfo->opt->action == SNTOK_ALERT)
+        nalerts++;
     
     /* If we selected a Snort rule in the query, make sure that
      * the packet to output matches that rule. If it doesn't, return an
@@ -1518,55 +1466,10 @@ print(char *buf, size_t *len, char * const args[])
     tv.tv_sec = TS2SEC(pkt->ts);
     tv.tv_usec = TS2USEC(pkt->ts);
     
-    if (fmt == GNUPLOTFMT1) { /* CoMo-Live! format (percentage of packets per rule) */
-	/* 
-	 * Plot the percentage of packets matched by each rule. 
-	 * Compute them here and then output. 
-	 */
-	static uint64_t pktstotalsum = 0;
-        static uint64_t pkts = 0; 
-
-        *len = sprintf(s, "%12ld ", tv.tv_sec);
-        
-        pktssum[pktinfo->opt->rule_id]++;
-        pktstotalsum++;
-        
-        /* Only output every 100 alerts */
-        if (count++ < 100) {
-	    *len = 0; 
-	    return s;
-        }
-	
-	/* Now print the values */
-	for (i = 0; i < nrules; i++) { 
-            pkts += (100 * pktssum[i])/pktstotalsum; 
-            *len += sprintf(s + *len, "%8llu ", pkts);
-            pktssum[i] = 0;
-	}
-
-        *len += sprintf(s + *len, "\n");
-        
-        count = 0;
-        pkts = 0;
-        pktstotalsum = 0;
-        
+    if (fmt == GNUPLOTFMT) { /* CoMo-Live! format (number of alerts) */
+        *len = sprintf(s, "%ld %d\n", (long int)t, nalerts);
         return s;
     }
-    else if (fmt == GNUPLOTFMT2) { /* CoMo-Live! format (number of packets per rule) */
-        *len = sprintf(s, "%12ld ", tv.tv_sec);
-
-        pktssum[pktinfo->opt->rule_id]++;
-        
-        /* Now print the values */
-        for (i = 0; i < nrules; i++) {
-            *len += sprintf(s + *len, "%8llu ", pktssum[i]);
-        }
-
-        *len += sprintf(s + *len, "\n");
-        
-        return s;
-    }    
-
     else if (fmt == COMOFMT) { /* pkt_t format (default) */
         *len = sizeof(pkt_t) + pkt->caplen;
         return (char *)pkt;
