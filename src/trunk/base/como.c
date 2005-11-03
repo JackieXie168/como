@@ -206,18 +206,15 @@ main(int argc, char *argv[])
      * We do not have any locking mechanisms on the counters. 
      * They are written by one process and read by SUPERVISOR. They 
      * do not need to be 100% reliable. 
-     * We allocate the stats_t and one mdl_stats_t per module.
      */
-    map.stats = new_mem(NULL, sizeof(stats_t) +
-            map.module_max * sizeof(mdl_stats_t), "stats data");
-    map.dr = new_mem(NULL, sizeof(struct drop_ring), "drop ring");
-
-    map.dr->cons_ptr = map.dr->prod_ptr = 0;
-
-    /* initialize some stats */
+    map.stats = new_mem(NULL, sizeof(stats_t), "stats data");
     bzero(map.stats, sizeof(stats_t)); 
+    map.stats->mdl_stats = new_mem(NULL, map.module_max * sizeof(mdl_stats_t), "mdl stats");
     gettimeofday(&map.stats->start, NULL); 
     map.stats->modules_active = map.module_count; 
+
+    map.dr = new_mem(NULL, sizeof(struct drop_ring), "drop ring");
+    map.dr->cons_ptr = map.dr->prod_ptr = 0;
 
     /*
      * Prepare to start processes.
