@@ -423,6 +423,8 @@ check_module(module_t *mdl)
 module_t *
 load_module(module_t *mdl, int idx)
 {
+    callbacks_t *cb;
+
 #if 0
     mdl->ca_hashsize = mdl->ex_hashsize; 
     /* XXX we would like to make the capture hashsize adaptive. 
@@ -444,7 +446,7 @@ load_module(module_t *mdl, int idx)
     if (idx == map.module_count)
         map.module_count++;
 
-    callbacks_t *cb = &mdl->callbacks;
+    cb = &mdl->callbacks;
 
     /* allocate module's private memory, if any */
     if (mdl->msize)
