@@ -357,7 +357,9 @@ print(char *buf, size_t *len, char * const args[])
 	    *len += sprintf(s + *len, 
 			" %s seq %u ack %u win %u", 
 			print_tcp_flags(TCP(flags)), 
-			H32(TCP(seq)), H32(TCP(ack)), H16(TCP(win))); 
+			(uint32_t) H32(TCP(seq)), 
+			(uint32_t) H32(TCP(ack)), 
+		 	(uint16_t) H16(TCP(win))); 
 	}
       } 
       else { 
@@ -374,8 +376,8 @@ print(char *buf, size_t *len, char * const args[])
                     "%02d:%02d:%02d:%06d %s %-32s %2d %2d %d %s %s", 
                     hh, mm, ss, TS2USEC(COMO(ts)), 
                     mgmt_subtypes[FC_SUBTYPE(COMO(l3type)) >> 12], 
-                    MGMT_BODY(ssid.ssid), H32(PRISM_HDR(ssi_signal)), 
-                    H32(PRISM_HDR(ssi_noise)), MGMT_BODY(ds.ch),
+                    MGMT_BODY(ssid.ssid), (int32_t) H32(PRISM_HDR(ssi_signal)), 
+                    (int32_t) H32(PRISM_HDR(ssi_noise)), MGMT_BODY(ds.ch),
                     CAP_ESS(MGMT_BODY(cap)) ? "ESS" : "", 
                     CAP_PRIVACY(MGMT_BODY(cap)) ? "privacy" : "");
 

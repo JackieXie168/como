@@ -36,7 +36,11 @@
 
 #include <stdio.h>
 #include <time.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <netinet/in.h>		/* IPPROTO_* */
+#include <arpa/inet.h>
 
 #include "como.h"
 #include "module.h"
@@ -188,7 +192,7 @@ do_header(char * const args[], char * s, int * fmt,
 
 	    wh = index(args[n], '=') + 1; 
 	    proto[*num_proto] = atoi(wh); 
-	    *num_proto++;
+	    *num_proto = *num_proto + 1;
 	} else if (!strncmp(args[n], "granularity=", 12)) {
 	    char * val = index(args[n], '=') + 1;
 

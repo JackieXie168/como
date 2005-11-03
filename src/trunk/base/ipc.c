@@ -52,16 +52,16 @@ enum msg_ids {
  * The macros return 0 if ok, != 0 if error.
  */
 #define write_var(fd, var) \
-    (sizeof(var) != como_writen(fd, (char *) &(var), sizeof(var)))
+    (como_writen(fd, (char *) &(var), sizeof(var)))
 
 #define read_var(fd, var) \
-    (sizeof(var) != como_readn(fd, (char *) &(var), sizeof(var)))
+    (como_readn(fd, (char *) &(var), sizeof(var)))
 
 __inline__ static int
 write_str(int fd, char *str)
 {
     int len = (int) strlen(str) + 1;
-    if (write_var(fd, len))
+    if (sizeof(len) != write_var(fd, len))
         return -1; /* err */
     if (como_writen(fd, str, len) != len)
         return -1; /* err */
@@ -72,7 +72,7 @@ __inline__ static int
 read_str_(int fd, char **str)
 {
     int len;
-    if (read_var(fd, len))
+    if (sizeof(len) != read_var(fd, len))
         return -1; /* err */
     *str = safe_calloc(1, len);
     if (como_readn(fd, *str, len) != len)
@@ -90,7 +90,7 @@ read_str_(int fd, char **str)
 
 #define safe_read_var(fd, var)          \
     do {                                \
-        if (read_var(fd, var))          \
+        if (sizeof(var) != read_var(fd, var))          \
             panic(IPC_PANIC_REASON);    \
     } while(0);
 
@@ -108,7 +108,7 @@ read_str_(int fd, char **str)
 
 #define safe_write_var(fd, var)         \
     do {                                \
-        if (write_var(fd, var))         \
+        if (sizeof(var) != write_var(fd, var))         \
             panic(IPC_PANIC_REASON);    \
     } while(0);
 
@@ -296,13 +296,13 @@ sup_send_module_status(void)
         if (! is_registered_fd(i))
             continue;
 
-        if (write_var(i, msg_id)) {
+        if (sizeof(msg_id) != write_var(i, msg_id)) {
             logmsg(LOGWARN, "Lost communication to fd %d\n", i);
             unregister_ipc_fd(i);
             continue;
         }
 
-        if (write_var(i, map.module_count)) {
+        if (sizeof(map.module_count) != write_var(i, map.module_count)) {
             logmsg(LOGWARN, "Lost communication to fd %d\n", i);
             unregister_ipc_fd(i);
             continue;
@@ -313,13 +313,14 @@ sup_send_module_status(void)
             if (map.modules[idx].status == MDL_LOADING)
                 continue;
 
-            if (write_var(i, idx)) {
+            if (sizeof(idx) != write_var(i, idx)) {
                 logmsg(LOGWARN, "Lost communication to fd %d\n", i);
                 unregister_ipc_fd(i);
                 break;
             }
 
-            if (write_var(i, map.modules[idx].status)) {
+            if (sizeof(map.modules[idx].status) !=
+                    write_var(i, map.modules[idx].status)) {
                 logmsg(LOGWARN, "Lost communication to fd %d\n", i);
                 unregister_ipc_fd(i);
                 break;
@@ -388,7 +389,7 @@ sup_recv_message(int fd)
 
     logmsg(V_LOGDEBUG, "Receive message from fd %d\n", fd);
 
-    if (read_var(fd, msg_id))
+    if (sizeof(msg_id) != read_var(fd, msg_id))
         return -1;
 
     logmsg(V_LOGDEBUG, "Message type is %d\n", msg_id);

@@ -21,9 +21,9 @@ MODULES= \
 	application.so \
 	finddst.so \
 	protocol.so \
-	protocolv6.so \
         topAS.so \
         ssid.so 
+#	protocolv6.so \
 #	netflow.so \
 
 ifdef HAVE_FLEX_AND_BISON

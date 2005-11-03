@@ -201,7 +201,7 @@ print(char *buf, size_t *len, char * const args[])
     x = (struct diskrecord *) buf; 
     ts = (time_t) ntohl(x->ts);
     *len = sprintf(s, PRETTYFMT, asctime(localtime(&ts)), 
-	       ntohl(x->as), NTOHLL(x->bytes), NTOHLL(x->pkts));
+	       (int32_t) ntohl(x->as), NTOHLL(x->bytes), NTOHLL(x->pkts));
     return s;
 };
 

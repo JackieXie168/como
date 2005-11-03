@@ -1,9 +1,9 @@
 #include <strings.h>
 
+#include "como.h"
 #include "comofunc.h"
 #include "sniffers.h"
 #include "stdwlan.h"
-#include "como.h"
 
 
 /*
