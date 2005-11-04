@@ -747,7 +747,7 @@ do_config(int argc, char *argv[])
 
     case TOK_FILTER:
 	if (scope == CTX_MODULE) {
-#ifdef HAVE_FLEX_AND_BISON
+#ifdef USE_FILTER_PARSER
             char *s;
             parse_filter(argv[1], &s);
             safe_dup(&mdl->filter, s);
