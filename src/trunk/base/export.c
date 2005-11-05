@@ -313,6 +313,9 @@ ignore_capture_table(ctable_t * ct, memlist_t * mem)
         while(rec != NULL) {
             rec_t *end  = rec->next;
 
+            while (rec->prev) 
+	        rec = rec->prev;
+
             while (rec != end) {
                 rec_t *p = rec->next;
                 mfree_mem(mem, rec, 0);
