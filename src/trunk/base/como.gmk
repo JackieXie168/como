@@ -12,10 +12,7 @@ PROGS = como	# list of program names
 # OBJS_como_DEPS = como.h comotypes.h
 DEPS_como := ../include/como.h
 
-ifdef USE_FILTER_PARSER
-        OTHER = filter-lexic.c
-        DEPS_como += filter-lexic.c
-endif
+DEPS_como += filter-lexic.c filter-syntax.c
 
 SRCS_como := \
 	capture.c \
@@ -38,11 +35,8 @@ SRCS_como := \
 	heap.c \
 	os.c \
     ipc.c \
-    res_mgmt.c
-
-ifdef USE_FILTER_PARSER
-        SRCS_como += filter-syntax.c
-endif
+    res_mgmt.c \
+    filter-syntax.c
 
 LIBS = $(LIBDL) m		
 LIBDIRS = /usr/local/lib
@@ -64,10 +58,10 @@ ifeq ($(shell uname),FreeBSD)
 	SNIFFERS += bpf
 endif
 
-# Flex/Bison support for filter expressions
+# Disable Flex/Bison support for filter expressions
 #
-ifdef USE_FILTER_PARSER
-        CFLAGS += -DUSE_FILTER_PARSER
+ifdef DISABLE_FILTER_PARSER
+        CFLAGS += -DDISABLE_FILTER_PARSER
 endif
 
 # Endace DAG cards.

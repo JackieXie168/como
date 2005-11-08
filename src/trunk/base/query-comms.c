@@ -296,16 +296,16 @@ query_parse(char *buf)
 	    char * s = strchr(p1, '=');
 	    asprintf(&q.module, "%s", s + 1); 
 	} else if (strstr(p1, "filter=") == p1) {
-#ifdef USE_FILTER_PARSER
-            char * s;
-            parse_filter(strchr(p1, '=') + 1, &s);
-            asprintf(&q.filter, "%s", s);
-            free(s);
+        char *s;
+#ifdef DISABLE_FILTER_PARSER
+        s = strchr(p1, '=');
+        asprintf(&q.filter, "%s", s + 1);
 #else
-            char * s = strchr(p1, '=');
-            asprintf(&q.filter, "%s", s + 1);
+        parse_filter(strchr(p1, '=') + 1, &s);
+        asprintf(&q.filter, "%s", s);
+        free(s);
 #endif	
-        } else if (strstr(p1, "start=") == p1) {
+    } else if (strstr(p1, "start=") == p1) {
 	    q.start = atoi(p1+6);
 	} else if (strstr(p1, "end=") == p1) {
 	    q.end = atoi(p1+4);

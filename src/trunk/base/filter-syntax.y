@@ -47,15 +47,34 @@
  *    expression obtained from it.
  *
  * 2. Transform the tree to Conjunctive Normal Form:
- *      - Propagate negations inwards in the tree, until only literals
- *        (leaves of the tree) are negated. Also clean the unnecessary
- *        negations that this process leaves in the tree.
- *      - Propagate disjunctions inwards, using the logical rules that apply.
+ *      - Propagate negations inward the tree, until only literals
+ *        (leaves of the tree) are negated.
+ *      - Propagate conjunctions outward, using the logical rules that apply.
  *
- * 3. Traverse the tree in postorder and transform it into a string that can
+ * 3. Traverse the tree and transform it into a string that can
  * be used as a CoMo filter, using lexicographical order to assure that two
  * semantically equivalent filters always produce the same string.
- * 
+ *
+ *
+ * How to add new keywords to the filter parser:
+ * ---------------------------------------------
+ *
+ * 1. base/filter-lexic.l: add new tokens and their corresponding actions.
+ *    
+ *      - You can add variables at the beginning of the file, and use regular
+ *        expressions to define the new tokens.
+ *
+ * 2. base/filter-syntax.y: add new token declarations, and new data types
+ *    to the %union section
+ *
+ * 3. base/filter-syntax.y: extend the "expr" rule of the grammar as needed.
+ *
+ *      - You should always finish with a call to tree_make:
+ *              $$ = tree_make(Tpred, NULL, NULL, s);
+ *        where s is a string containing an expression that can be evaluated
+ *        to a boolean value (for example, you can use some of the macros in
+ *        include/stdpkt.h)
+ *
  */
  
 %{
@@ -65,443 +84,588 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h> 	/* va_start */
 
 #include "como.h"
 
+#define YYERROR_VERBOSE
+
 /* Node types */
-#define Tand  0
-#define Tor   1
-#define Tnot  2
-#define Tpred 3
+#define Tand   0
+#define Tor    1
+#define Tnot   2
+#define Tpred  3
+
+struct _ipaddr {
+    uint8_t direction;
+    uint32_t ip;
+    uint32_t nm;
+};
+typedef struct _ipaddr ipaddr_t;
+
+struct _portrange {
+    uint8_t proto;
+    uint8_t direction;
+    uint16_t lowport;
+    uint16_t highport;
+};
+typedef struct _portrange portrange_t;
 
 typedef struct treenode
 {
-    int             nodetype;
-    char            *text;
-    struct treenode  *left;
-    struct treenode  *right;
+    uint8_t type;
+    char *string;
+    struct treenode *left;
+    struct treenode *right;
 } treenode_t;
 
 typedef struct listnode
 {
-    char            *text;
+    char *string;
     struct listnode *next;
+    struct listnode *prev;
 } listnode_t;
 
 int yflex(void);
-void yferror(char const *);
+void yferror(char *fmt, ...);
 
-/* Variable where the final string will be stored after parsing the filter */
-char **parsedstring;
+/* Variable where the result string will be stored after parsing the filter */
+char **parsed_filter;
+
+/*
+ * -- parse_ip
+ *
+ * Dots and numbers notation -> Binary representation of an IP address
+ *
+ */
+static int
+parse_ip(char *ipstring, uint32_t *ip)
+{
+    struct in_addr inp;
+    
+    if (!inet_aton(ipstring, &inp)) {
+        yferror("Invalid IP address: %s", ipstring);
+        return -1;
+    }
+    *ip = inp.s_addr;
+    return 0;
+}
+
+uint32_t netmasks[33] = 
+    { 
+      0x0,
+      0x80000000,
+      0xC0000000,
+      0xE0000000,
+      0xF0000000,
+      0xF8000000,
+      0xFC000000,
+      0xFE000000,
+      0xFF000000,
+      0xFF800000,
+      0xFFC00000,
+      0xFFE00000,
+      0xFFF00000,
+      0xFFF80000,
+      0xFFFC0000,
+      0xFFFE0000,
+      0xFFFF0000,
+      0xFFFF8000,
+      0xFFFFC000,
+      0xFFFFE000,
+      0xFFFFF000,
+      0xFFFFF800,
+      0xFFFFFC00,
+      0xFFFFFE00,
+      0xFFFFFF00,
+      0xFFFFFF80,
+      0xFFFFFFC0,
+      0xFFFFFFE0,
+      0xFFFFFFF0,
+      0xFFFFFFF8,
+      0xFFFFFFFC,
+      0xFFFFFFFE,
+      0xFFFFFFFF 
+    };
+
+/*
+ * -- parse_nm
+ *
+ * CIDR notation -> integer representing the network mask
+ *
+ */
+static int
+parse_nm(int i, uint32_t *nm)
+{
+    if (i >= 0 && i <= 32) *nm = netmasks[i];
+    else {
+        yferror("Invalid CIDR netmask: %d", i);
+        return -1;
+    }
+    return 0;
+}
+
+/*
+ * -- append_string
+ *
+ */
+char *
+append_string(char *dest, char *src)
+{
+    dest = (char *)safe_realloc(dest, strlen(dest) + strlen(src) + 1);
+    strcat(dest, src);
+    return dest;
+}
 
 /* 
- * -- TreeMake
+ * -- tree_make
  * 
  * Create a new expression tree node
  *
  */
-treenode_t *TreeMake(int node, treenode_t *left, treenode_t *right, char *t)
+treenode_t *
+tree_make(uint8_t type, treenode_t *left,
+          treenode_t *right, char *string)
 {
-  treenode_t *s = (treenode_t *)malloc(sizeof(*s));
-  s->nodetype = node;
-  s->text = t;
-  s->right = right;
-  s->left = left;
-  return(s);
+    treenode_t *t;
+    
+    t = (treenode_t *)safe_malloc(sizeof(treenode_t));
+    t->type = type;
+    if (t->type == Tpred) {
+        t->string = safe_strdup(string);
+    }
+    t->right = right;
+    t->left = left;
+    
+    return(t);
 }
 
 /*
- * -- TreePrintIndent
+ * -- list_add
+ *
+ * Add an element to a sorted list
+ * XXX Insertion sort, quite inefficient
+ *
+ */
+listnode_t *
+list_add(listnode_t *list, char *s)
+{
+    listnode_t *laux;
+    
+    if (!list) {
+        list = (listnode_t *)safe_malloc(sizeof(listnode_t));
+        list->next = NULL;
+        list->prev = NULL;
+        list->string = safe_strdup(s);
+    }
+    else {
+        if (strcmp(s, list->string) <= 0) {
+            laux = (listnode_t *)safe_malloc(sizeof(listnode_t));
+            laux->string = safe_strdup(s);
+            laux->next = list;
+            laux->prev = list->prev;
+            list->prev = laux;
+            list = laux;
+        }
+        else {
+            laux = list_add(list->next, s);
+            list->next = laux;
+            laux->prev = list;
+        }
+    }
+
+    return list;
+}
+
+/*
+ * -- list_merge
+ *
+ * Insert the elements of a list into another list
+ *
+ */
+listnode_t *list_merge(listnode_t *l1, listnode_t *l2)
+{
+    listnode_t *laux;
+
+    for (laux = l2; laux; laux = laux->next)
+        l1 = list_add(l1, laux->string);
+    
+    return l1;
+}
+
+char *tree_to_string(treenode_t *);
+
+/*
+ * -- list_make
+ *
+ * Create a sorted list from an expression tree
+ *
+ */
+listnode_t *
+list_make(listnode_t *list, uint8_t type, treenode_t *tree)
+{
+    char *s;
+    
+    if (!tree) return NULL;
+
+    switch (tree->type) {
+    case Tnot:
+    case Tpred:
+        s = tree_to_string(tree);
+        list = list_add(list, s);
+        free(s);
+        break;
+    case Tand:
+    case Tor:
+        if (tree->type == type) {
+            list = list_make(list, type, tree->left);
+            list = list_make(list, type, tree->right);
+        } else {
+            s = tree_to_string(tree);
+            list = list_add(list, s);
+            free(s);
+        }
+        break;
+    }
+
+    return list;
+}
+
+/*
+ * -- tree_to_string
+ *
+ */
+char *
+tree_to_string(treenode_t *tree)
+{
+    char *s;
+    listnode_t *list, *laux;
+    
+    if (!tree) return NULL;
+    
+    switch (tree->type) {
+    case Tand:
+        list = list_make(NULL, Tand, tree->left);
+        list = list_merge(list, list_make(NULL, Tand, tree->right));
+        s = safe_strdup("(");
+        for (laux = list; laux->next; laux = laux->next) {
+            s = append_string(s, laux->string);
+            s = append_string(s, " && ");
+        }
+        s = append_string(s, laux->string);
+        s = append_string(s, ")");
+        /* free the list */
+        do {
+            laux = list->next;
+            free(list->string);
+            free(list);
+            list = laux;
+        } while (laux);
+        break;
+	case Tor:
+        list = list_make(NULL, Tor, tree->left);
+        list = list_merge(list, list_make(NULL, Tor, tree->right));
+        s = safe_strdup("(");
+        for (laux = list; laux->next; laux = laux->next) {
+            s = append_string(s, laux->string);
+            s = append_string(s, " || ");
+        }
+        s = append_string(s, laux->string);
+        s = append_string(s, ")");
+        /* free the list */
+        do {
+            laux = list->next;
+            free(list->string);
+            free(list);
+            list = laux;
+        } while (laux);
+        break;
+	case Tnot:
+        s = safe_strdup("!");
+        s = append_string(s, tree_to_string(tree->left));
+        break;
+    case Tpred:
+        s = safe_strdup(tree->string);
+        break;
+    }
+    
+    return s;
+}
+
+/*
+ * -- tree_print_indent
  *
  * Print an expression tree with indentation
  * (only used for debug purposes)
  *
  */
-void TreePrintIndent(treenode_t *tree, int indent)
+void
+tree_print_indent(treenode_t *tree, int indent)
 {
-  int i;
+    int i;
 
-  if (!tree) return;
-  printf("\n");
-  printf("     ");
-  for (i = 1; i <= indent; i++) printf("   ");
-  switch (tree->nodetype)
-    {
-	case Tand:  printf("and"); break;
-	case Tor:   printf("or");  break;
-	case Tnot:  printf("not"); break;
+    if (!tree) return;
+    printf("\n");
+    printf("     ");
+    for (i = 1; i <= indent; i++) printf("   ");
+    switch (tree->type) {
+    case Tand:
+        printf("and");
+        break;
+	case Tor:
+        printf("or");
+        break;
+	case Tnot:
+        printf("not");
+        break;
+    case Tpred:
+        printf("%s", tree->string);
+        break;
     }
-  printf("%s", tree->text);
-  TreePrintIndent(tree->left, indent + 1);
-  TreePrintIndent(tree->right, indent + 1);
+    tree_print_indent(tree->left, indent + 1);
+    tree_print_indent(tree->right, indent + 1);
 }
 
 /*
- * -- TreePrint
+ * -- tree_print
  *
  * Print an expression tree
  * (only used for debug purposes)
  *
  */
-void TreePrint(treenode_t *tree)
+void
+tree_print(treenode_t *tree)
 {
-  if (tree)
-    {
-      printf("\n\n\nLogical Expression Tree: \n\n");
-      TreePrintIndent(tree, 0);
-      printf("\n\n\n\n");
-    }
-  else
-    printf("\n\n\nLogical Expression Tree is empty!\n\n");
+    if (tree) {
+        printf("\n\n\nLogical Expression Tree: \n\n");
+        tree_print_indent(tree, 0);
+        printf("\n\n\n\n");
+    } else
+        printf("\n\n\nLogical Expression Tree is empty!\n\n");
 }
 
-#define T (*tree)
+treenode_t *negate(treenode_t *);
 
-void negate(treenode_t **);
-
-void propagate(treenode_t *);
-
-/* 
- * -- negate_and
+/*
+ * -- prop_negs
  *
- * Propagate a negation inwards through an AND node
+ * Propagate the negations of a tree inward with the following rules:
+ *      not(not(A)) => A
+ *      not(A and B) => not(A) or not(B)
+ *      not(A or B) => not(A) and not(B)
  *
  */
-void negate_and(treenode_t **tree) {
-    if (!T) return;
-    if (T->nodetype == Tand) {
-        T->nodetype = Tor;
-        negate_and(&(T->left));
-        negate_and(&(T->right));
+treenode_t *
+prop_negs(treenode_t *t)
+{
+    switch(t->type) {
+    case Tnot:
+        t = negate(t->left);
+        break;
+    case Tand:
+    case Tor:
+        prop_negs(t->left);
+        prop_negs(t->right);
+        break;
     }
-    else
-        negate(tree);
+
+    return t;
 }
 
 /*
- * -- negate_or
+ * -- negate
  *
- * Propagate a negation inwards through an OR node
+ * Negate a node of a tree
  *
  */
-void negate_or(treenode_t **tree) {
-    if (!T) return;
-    if (T->nodetype == Tor) {
-        T->nodetype = Tand;
-        negate_or(&(T->left));
-        negate_or(&(T->right));
+treenode_t *
+negate(treenode_t *t)
+{
+    switch(t->type) {
+    case Tpred:
+        /* Negate the node */
+        t = tree_make(Tnot, t, NULL, NULL);
+        break;
+    case Tnot:
+        /* Double negation, get rid of it */
+        t = prop_negs(t->left);
+        break;
+    case Tand:
+        /* not(A and B) => not(A) or not(B) */
+        t->type = Tor;
+        t->left = negate(t->left);
+        t->right = negate(t->right);
+        break;
+    case Tor:
+        /* not(A or B) => not(A) and not(B) */
+        t->type = Tand;
+        t->left = negate(t->left);
+        t->right = negate(t->right);
+        break;
     }
-    else
-        negate(tree);
+
+    return t;
 }
 
 /*
- * -- negate, propagate
+ * -- tree_copy
  *
- * Propagate negations inwards until only the leaves of the tree
- * can be negated
- *
- */
-
-void negate(treenode_t **tree) {
-    if (!T) return;
-    /* Make the negation */
-    switch (T->nodetype) {
-        case Tpred:
-            T = TreeMake(Tnot, T, NULL, "");
-            break;
-        case Tnot:
-            if (T->left->nodetype == Tpred)
-                T = TreeMake(Tnot, T, NULL, "");
-            else propagate(T->left);
-            break;
-        case Tand:
-            T->nodetype = Tor;
-            negate_and(&(T->left));
-            negate_and(&(T->right));
-            break;
-        case Tor:
-            T->nodetype = Tand;
-            negate_or(&(T->left));
-            negate_or(&(T->right));
-            break;
-    }
-}
-
-void propagate(treenode_t *tree) {
-    if (!tree) return;
-    switch (tree->nodetype) {
-        case Tnot:
-            if (tree->left->nodetype != Tpred)
-                negate(&(tree->left));
-            break;
-        case Tand:
-            propagate(tree->left);
-            propagate(tree->right);
-            break;
-        case Tor:
-            propagate(tree->left);
-            propagate(tree->right);
-            break;
-    }            
-}
-
-/*
- * -- clean_neg
- *
- * Clean unnecessary and residual negations from a tree
+ * Duplicate a tree and return a pointer to the new copy
  *
  */
-void clean_neg(treenode_t **tree) {
-    treenode_t *aux;
+treenode_t *
+tree_copy(treenode_t *t)
+{
+    treenode_t *taux;
+
+    if (!t)
+        return NULL;
     
-    if (!T) return;
-    if (T->nodetype == Tnot) {
-        /* Double negation */
-        if (T->left->nodetype == Tnot) {
-            aux = T;
-            T = TreeMake(T->left->left->nodetype, T->left->left->left, 
-                         T->left->left->right, T->left->left->text);
-            free(aux->left->left);
-            free(aux->left);
-            free(aux);
-        }
-        /* Negated AND/OR */
-        else if (T->left->nodetype == Tand || T->left->nodetype == Tor) {
-            aux = T;
-            T = TreeMake(T->left->nodetype, T->left->left, T->left->right,
-                         T->left->text);
-            free(aux->left);
-            free(aux);
-        }
-    }
-    clean_neg(&(T->left));
-    clean_neg(&(T->right));
+    taux = (treenode_t *)safe_malloc(sizeof(treenode_t));
+    taux->type = t->type;
+    if (taux->type == Tpred)
+        taux->string = safe_strdup(t->string);
+    taux->left = tree_copy(t->left);
+    taux->right = tree_copy(t->right);
+
+    return taux;
 }
 
 /*
- * -- get_text
+ * -- or_and
  *
- * Get the text of a tree leaf
- *
- */
-char *get_text(treenode_t *n) {
-    char *s;
-    if (n->nodetype == Tpred)
-        s = n->text;
-    else if (n->nodetype == Tnot)
-        s = n->left->text;
-    else safe_dup(&s, "");
-    return s;
-}
-
-int found;
-
-/*
- * -- cnf, disjunct
- *
- * Propagate disjunctions inwards
+ * Propagate conjunctions outward with the following rule:
+ *      A or (B and C) => (A or B) and (A or C)
  *
  */
-
-void cnf(treenode_t **);
-
-void disjunct(treenode_t **tree) {
-    treenode_t *disj1, *disj2;
+treenode_t *
+or_and(treenode_t *t)
+{
+    treenode_t *taux;
+    uint8_t type;
     
-    if (!T) return;
-    if (T->left->nodetype == Tand) {
-        found = 1;
-        disj1 = TreeMake(Tor, T->right, T->left->left, "");
-        disj2 = TreeMake(Tor, T->right, T->left->right, "");
-        free(T->left);
-        free(T);
-        T = TreeMake(Tand, disj1, disj2, "");
-        cnf(&(T->left));
-        cnf(&(T->right));
-    }
-    else if (T->right->nodetype == Tand) {
-        found = 1;
-        disj1 = TreeMake(Tor, T->left, T->right->left, "");
-        disj2 = TreeMake(Tor, T->left, T->right->right, "");
-        free(T->right);
-        free(T);
-        T = TreeMake(Tand, disj1, disj2, "");
-        cnf(&(T->left));
-        cnf(&(T->right));
-    }
-    else {
-        cnf(&(T->left));
-        cnf(&(T->right));
-    }
-}
-
-void cnf(treenode_t **tree) {
-    if (!T) return;
-    switch (T->nodetype) {
-        case Tnot:
-            cnf(&(T->left));
-            cnf(&(T->right));
+    switch(t->left->type) {
+        case Tor:
+            type = t->left->type;
+            t->left = or_and(t->left);
+            if (t->left->type != type) {
+                t = or_and(t);
+                /* No need to check the right child */
+                return t;
+            }
             break;
         case Tand:
-            cnf(&(T->left));
-            cnf(&(T->right));
-            break;
-        case Tor:
-            disjunct(tree);
+            /* Apply the rule ... */
+            t->type = Tand;
+            t->left->type = Tor;
+            taux = t->left->right;
+            t->left->right = t->right;
+            t->right = tree_make(Tor, taux, tree_copy(t->left->right), NULL);
+            
+            t->left = or_and(t->left);
+            t->right = or_and(t->right);
+            
+            /* No need to check the right child */
+            return t;
+            
             break;
     }
+
+    switch(t->right->type) {
+        case Tor:
+            type = t->right->type;
+            t->right = or_and(t->right);
+            if (t->right->type != type)
+                t = or_and(t);
+            break;
+        case Tand:
+            /* Apply the rule ... */
+            t->type = Tand;
+            t->right->type = Tor;
+            taux = t->right->left;
+            t->right->left = t->left;
+            t->left = tree_make(Tor, tree_copy(t->right->left), taux, NULL);
+            
+            t->left = or_and(t->left);
+            t->right = or_and(t->right);
+            
+            break;
+    }    
+    
+    return t;
 }
 
 /*
- * -- transform
+ * -- prop_conjs
  *
- * Transform a tree into a Conjunctive Normal Form expression
+ * Propagate conjunctions outward with the following rule:
+ *      A or (B and C) => (A or B) and (A or C)
  *
  */
-void transform(treenode_t **tree) {
-    if (!T) return;
+treenode_t *
+prop_conjs(treenode_t *t)
+{
+    switch(t->type) {
+    case Tnot:
+        prop_conjs(t->left);
+        break;
+    case Tand:
+        prop_conjs(t->left);
+        prop_conjs(t->right);
+        break;
+    case Tor:
+        t = or_and(t);
+        break;
+    }
+
+    return t;
+}
+
+/*
+ * -- cnf
+ *
+ * Transform an expression tree to Conjunctive Normal Form
+ *
+ */
+treenode_t *
+cnf(treenode_t *t)
+{
     /* 1. Propagate negations inward */
-    propagate(T);
-    /* 2. Clean the unnecessary negations that are left in the tree */
-    clean_neg(tree);
-    /* 3. Take care of conjunctions and disjunctions */
-    do {
-        found = 0;
-        cnf(tree);
-    } while (found);
+    t = prop_negs(t);
+    /* 2. Propagate conjunctions outward */
+    t = prop_conjs(t);
+    
+    return t;
 }
 
-/*
- * -- insert_node, add_node
- *
- * Insert a node in a list, keeping alphabetical order
- *
- */
-
-listnode_t *insert_node(listnode_t *list, char *text) {
-    listnode_t *prev, *cur;
-    listnode_t *newnode;
-    
-    if (!list) {
-        list = (listnode_t *)safe_malloc(sizeof(listnode_t));
-        list->text = text;
-        list->next = NULL;
-        return list;
-    }
-    prev = NULL;
-    cur = list;
-    while (cur && strcmp(cur->text, text) <= 0) {
-        prev = cur;
-        cur = cur->next;
-    }
-    newnode = (listnode_t *)safe_malloc(sizeof(listnode_t));
-    newnode->text = text;
-    newnode->next = cur;
-    if (prev) {
-        prev->next = newnode;
-        return list;
-    }
-    else return newnode;
-}
-
-char *make_string(treenode_t *);
-
-listnode_t *add_node(listnode_t *list, int ntype, treenode_t *tree) {
-    char *s, *sleft, *sright;
-    
-    if (!tree) return NULL;
-    if (tree->nodetype == Tpred)
-        return insert_node(list, get_text(tree));
-    if (tree->nodetype == Tnot) {
-        s = (char *)safe_malloc(strlen(get_text(tree)) + 5);
-        sprintf(s, "not(%s)", get_text(tree));
-        return insert_node(list, s);
-    }
-    if (tree->nodetype == ntype) {
-        list = add_node(list, ntype, tree->left);
-        list = add_node(list, ntype, tree->right);
-        return list;
-    }
-    sleft = make_string(tree->left);
-    sright = make_string(tree->right);
-    if (tree->nodetype == Tand) {
-        s = (char *)safe_malloc(strlen(sleft) + strlen(sright) + 7);
-        if (strcmp(sleft, sright) <= 0)
-            sprintf(s, "(%s and %s)", sleft, sright);
-        else sprintf(s, "(%s and %s)", sright, sleft);
-    }
-    else if (tree->nodetype == Tor) {
-        s = (char *)safe_malloc(strlen(sleft) + strlen(sright) + 6);
-        if (strcmp(sleft, sright) <= 0)
-            sprintf(s, "(%s or %s)", sleft, sright);
-        else sprintf(s, "(%s or %s)", sright, sleft);
-    }
-    return insert_node(list, s);
-}
-
-/* 
- * -- make_string
- *
- * Create a string that represents a filter in CNF form
- *
- */
-char *make_string(treenode_t *tree) {
-    char *s = NULL;
-    listnode_t *list = NULL;
-    
-    /* We traverse the tree in postorder */
-    
-    if (!tree) return NULL;
-    if (tree->nodetype == Tpred) {
-        safe_dup(&s, tree->text);
-    }
-    if (tree->nodetype == Tnot) {
-        s = (char *)safe_malloc(strlen(tree->left->text) + 5);
-        sprintf(s, "not(%s)", tree->left->text);
-    }
-    if (tree->nodetype == Tand) {
-        list = add_node(list, Tand, tree->left);
-        list = add_node(list, Tand, tree->right);
-        safe_dup(&s, "(");
-        for (; list->next; list = list->next) {
-            s = (char *)safe_realloc(s, strlen(s) + strlen(list->text) + 6);
-            strcat(s, list->text); 
-            strcat(s, " and ");
-        }
-        s = (char *)safe_realloc(s, strlen(s) + strlen(list->text) + 2);
-        strcat(s, list->text);
-        strcat(s, ")");
-    }
-    if (tree->nodetype == Tor) {
-        list = add_node(list, Tor, tree->left);
-        list = add_node(list, Tor, tree->right);
-        safe_dup(&s, "(");
-        for (; list->next; list = list->next) {
-            s = (char *)safe_realloc(s, strlen(s) + strlen(list->text) + 5);
-            strcat(s, list->text);            
-            strcat(s, " or ");
-        }
-        s = (char *)safe_realloc(s, strlen(s) + strlen(list->text) + 2);
-        strcat(s, list->text);
-        strcat(s, ")");
-    }
-    return s;
-}
+char *s = NULL;
+char *direction = NULL;
+char *proto = NULL;
 
 %}
 
 %union {
-    char *text;
+    char *string;
+    uint8_t byte;
+    uint16_t word;
+    uint32_t dword;
     treenode_t *tree;
+    ipaddr_t ipaddr;
+    portrange_t portrange;
 }
 
 /* Data types and tokens used by the parser */
 
-%token <text> CONDITION MACRO
-%token NOT AND OR OPENBR CLOSEBR
-%left NOT AND OR
-%type <tree> filter expr
+%token NOT AND OR OPENBR CLOSEBR COLON ALL
+%left NOT AND OR /* Order of precedence */
+%token <byte> DIRECTION PROTO
+%token <word> PORT
+%token <dword> NETMASK
+%token <string> IPADDR 
+%type <string> filter
+%type <tree> expr
+%type <ipaddr> ip
+%type <portrange> port
 %start filter
 
 %%
@@ -509,32 +673,166 @@ char *make_string(treenode_t *tree) {
 /* Grammar rules and actions */
 
 filter: expr
-        { $$ = $1;
-          transform(&$$);
-          *parsedstring = make_string($$); }
+        {
+        $1 = cnf($1);
+        *parsed_filter = tree_to_string($1);
+        }
+      | ALL
+        {
+        *parsed_filter = safe_strdup("ALL");
+        }
           
-expr: expr AND expr { $$ = TreeMake(Tand, $1, $3, ""); } |
-      OPENBR expr AND expr CLOSEBR { $$ = TreeMake(Tand, $2, $4, ""); } |
-      expr OR expr { $$ = TreeMake(Tor, $1, $3, ""); } |
-      OPENBR expr OR expr CLOSEBR { $$ = TreeMake(Tor, $2, $4, ""); } |
-      NOT expr { $$ = TreeMake(Tnot, $2, NULL, ""); } | 
-      NOT OPENBR expr CLOSEBR { $$ = TreeMake(Tnot, $3, NULL, ""); } | 
-      CONDITION { $$ = TreeMake(Tpred, NULL, NULL, $1); } |
-      MACRO { $$ = TreeMake(Tpred, NULL, NULL, $1); }
+expr: expr AND expr
+      {
+        $$ = tree_make(Tand, $1, $3, NULL);
+      }
+    | OPENBR expr AND expr CLOSEBR
+      {
+        $$ = tree_make(Tand, $2, $4, NULL);
+      }
+    | expr OR expr
+      {
+        $$ = tree_make(Tor, $1, $3, NULL);
+      }
+    | OPENBR expr OR expr CLOSEBR
+      {
+        $$ = tree_make(Tor, $2, $4, NULL);
+      }
+    | NOT expr
+      {
+        $$ = tree_make(Tnot, $2, NULL, NULL);
+        
+      }
+    | NOT OPENBR expr CLOSEBR
+      {
+        $$ = tree_make(Tnot, $3, NULL, NULL);
+      }
+    | ip
+      {
+        if ($1.direction == 0)
+            asprintf(&s, "(N32(IP(src_ip)) == %d)", $1.ip & $1.nm);
+        else
+            asprintf(&s, "(N32(IP(dst_ip)) == %d)", $1.ip & $1.nm);
+        
+        $$ = tree_make(Tpred, NULL, NULL, s);
+        free(s);
+      }
+    | port
+      {
+        if ($1.proto == IPPROTO_TCP)
+            proto = safe_strdup("TCP");
+        else if ($1.proto == IPPROTO_UDP)
+            proto = safe_strdup("UDP");
+        else {
+            yferror("Invalid protocol number: %d, using TCP instead",
+                    $1.proto);
+            proto = safe_strdup("TCP");
+        }
+        
+        if ($1.direction == 0)
+            direction = safe_strdup("src");
+        else
+            direction = safe_strdup("dst");
+        
+        if ($1.lowport == $1.highport)
+            asprintf(&s, "(H16(%s(%s_port)) == %d)",
+                     proto, direction, $1.lowport);
+        else
+            asprintf(&s, "((H16(%s(%s_port)) >= %d) && "
+                     "(H16(%s(%s_port)) <= %d))", proto, direction, $1.lowport,
+                     proto, direction, $1.highport);
+        
+        $$ = tree_make(Tpred, NULL, NULL, s);
+        free(s);
+        free(direction);
+        free(proto);
+      }
+    | PROTO
+      {
+        /* XXX Should we use the "isIP, isTCP, isUDP" helper macros ??? */
+        switch($1) {
+        case IPPROTO_IP:
+            asprintf(&s, "(COMO(l3type) == ETHERTYPE_IP)");
+            break;
+        case IPPROTO_TCP:
+            asprintf(&s, "(COMO(l4type) == IPPROTO_TCP)");
+            break;
+        case IPPROTO_UDP:
+            asprintf(&s, "(COMO(l4type) == IPPROTO_UDP)");
+            break;
+        case IPPROTO_ICMP:
+            asprintf(&s, "(COMO(l4type) == IPPROTO_ICMP)");
+            break;
+        }
+        $$ = tree_make(Tpred, NULL, NULL, s);
+        free(s);
+      }
+
+ip: DIRECTION IPADDR
+    {
+        $$.direction = $1;
+        if (parse_ip($2, &($$.ip)) == -1)
+            YYABORT;
+        /* Assume it's a host IP address if we don't have a netmask */
+        $$.nm = netmasks[32];
+    }
+  | DIRECTION IPADDR NETMASK
+    {
+        $$.direction = $1;
+        if (parse_ip($2, &($$.ip)) == -1)
+            YYABORT;
+        if (parse_nm($3, &($$.nm)) == -1)
+            YYABORT;
+    }
+
+port: PROTO DIRECTION PORT
+      {
+        $$.proto = $1;
+        $$.direction = $2;
+        $$.lowport = $3;
+        $$.highport = $3;
+      } 
+    | PROTO DIRECTION PORT COLON
+      {
+        $$.proto = $1;
+        $$.direction = $2;
+        $$.lowport = $3;
+        $$.highport = 65535;
+      }
+    | PROTO DIRECTION COLON PORT
+      {
+        $$.proto = $1;
+        $$.direction = $2;
+        $$.lowport = 1;
+        $$.highport = $4;
+      }
+    | PROTO DIRECTION PORT COLON PORT
+      {
+        $$.proto = $1;
+        $$.direction = $2;
+        $$.lowport = $3;
+        $$.highport = $5;
+      }
 
 %%
 
 #include "filter-lexic.c"
 
-void yferror(char const *error)
+void yferror(char *fmt, ...)
 { 
-    printf("FILTER: Error parsing filter: %s\n", error);
+    va_list ap;
+    char error[255];
+    
+    va_start(ap, fmt);
+    vsnprintf(error, sizeof(error), fmt, ap);
+    logmsg(LOGWARN, "Filter parser error: %s\n", error);
+    va_end(ap);
 }
 
 int 
-parse_filter(char *filter, char **string)
+parse_filter(char *filter, char **result)
 {
-    parsedstring = string;
+    parsed_filter = result;
     yf_scan_string(filter);
     return yfparse();
 }
