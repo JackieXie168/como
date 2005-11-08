@@ -191,16 +191,24 @@ struct _como_isl {
  * NetFlow-like record 
  * It contains some information that can be derived from 
  * NetFlow or cflowd records...
+ * Currently the fields reflect V5 NetFlow
  * 
  * XXX still under development. we may want to add information 
- *     that is present in the various versions of NetFLow. 
+ *     that is present in the various versions of NetFlow. 
  */
 struct _como_nf { 
-    uint8_t src_mask;	/* source prefix mask */
-    uint8_t dst_mask; 	/* destination prefix mask */
-    uint16_t padding; 	/* padding to make it word-aligned */
-    n16_t src_as;	/* source AS (could be peer AS or origin AS) */
-    n16_t dst_as; 	/* destination AS (peer AS or origin AS for dst IP) */
+    uint8_t src_mask;	  /* source prefix mask */
+    uint8_t dst_mask; 	  /* destination prefix mask */
+    uint8_t padding; 	  /* padding to make it word-aligned */
+    n16_t src_as;	  /* source AS (could be peer AS or origin AS) */
+    n16_t dst_as; 	  /* destination AS (peer AS or origin AS for dst IP) */
+    n32_t exaddr;         /* Exporter IP Address */
+    n32_t nexthop;        /* Next hop router's IP Address */
+    uint8_t engine_type;  /* Type of flow switching engine (RP,VIP,etc.) */
+    uint8_t engine_id;    /* Slot number of the flow switching engine) */
+    uint8_t tcp_flags;    /* OR of TCP header bits */
+    n16_t input; 	  /* Input interface index */
+    n16_t output; 	  /* Output interface index */
 };
  
 
