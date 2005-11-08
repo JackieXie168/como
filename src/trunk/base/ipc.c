@@ -441,7 +441,7 @@ sup_wait_for_ack(int fd)
 static void
 recv_new_modules(int fd, proc_callbacks_t *callbacks)
 {
-    logmsg(LOGWARN, "Loading new modules / filter function\n");
+    logmsg(LOGDEBUG, "Loading new modules / filter function\n");
 
     free(map.filter);
     safe_read_str(fd, map.filter);
@@ -486,7 +486,7 @@ recv_new_modules(int fd, proc_callbacks_t *callbacks)
         if (callbacks->module_init)
             callbacks->module_init(mdl);
 
-        logmsg(LOGWARN, "module loaded: '%s'\n", mdl->name);
+        logmsg(LOGDEBUG, "module loaded: '%s'\n", mdl->name);
     }
 }
 

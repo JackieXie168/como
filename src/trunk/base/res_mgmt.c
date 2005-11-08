@@ -208,11 +208,11 @@ get_usage(resource_t *res)
  * -- election
  *
  * Select a module for removal, given a limiting resource.
- * XXX explicar estrategia
+ * XXX document the algorithm
  *
  */
 static module_t *
-election(resource_t *limiting) /* XXX XXX limiting!!? */
+election(resource_t *limiting)
 {
     module_t *elected = NULL;
     double elected_points = 0;
