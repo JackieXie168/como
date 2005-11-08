@@ -138,10 +138,18 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow)
     pkt->payload = flow->payload; 
 
     /* NetFlow header */
-    NF(src_mask) = f->src_mask;  
-    NF(dst_mask) = f->dst_mask;  
-    N16(NF(src_as)) = htons(f->src_as);  
-    N16(NF(dst_as)) = htons(f->dst_as);  
+    NF(src_mask) = f->src_mask;
+    NF(dst_mask) = f->dst_mask;
+    N16(NF(src_as)) = htons(f->src_as);
+    N16(NF(dst_as)) = htons(f->dst_as);
+    N32(NF(exaddr)) = htonl(f->exaddr);
+    N32(NF(nexthop)) = htonl(f->nexthop);
+    NF(engine_type) = f->engine_type;
+    NF(engine_id) = f->engine_id;
+    NF(tcp_flags) = f->tcp_flags;
+    N16(NF(input)) = htons(f->input);
+    N16(NF(output)) = htons(f->output);
+
 
     /* IP header */
     IP(vhl) = 0x45; 
