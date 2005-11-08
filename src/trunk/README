@@ -27,9 +27,10 @@ There are five options supported so far:
   It requires a driver that can be found at:
   http://www.cl.cam.ac.uk/Research/SRG/netos/nprobe/downloads/sk98lin.tar.bz2 
 
-* USE_SNORT_MODULE and USE_FILTER_PARSER, needed respectively to run the Snort
-  module and to use the Flex/Bison parser for CoMo filters.
-  Bison v1.875 or higher is required. 
+* USE_SNORT_MODULE, needed to run the Snort module.
+  Bison v1.875 or higher required. 
+
+* DISABLE_FILTER_PARSER, to disable the Flex/Bison parser for CoMo filters.
 
 * HAVE_PCRE, needed to use the Perl-Compatible Regular Expressions support
   in the Snort module. It requires that libpcre is installed.

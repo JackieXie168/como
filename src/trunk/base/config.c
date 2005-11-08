@@ -772,17 +772,17 @@ do_config(int argc, char *argv[])
 
     case TOK_FILTER:
 	if (scope == CTX_MODULE) {
-#ifdef USE_FILTER_PARSER
-            char *s;
-            parse_filter(argv[1], &s);
-            safe_dup(&mdl->filter, s);
-            free(s);
+#ifdef DISABLE_FILTER_PARSER
+        safe_dup(&mdl->filter, argv[1]);
 #else
-            safe_dup(&mdl->filter, argv[1]);
+        char *s;
+        parse_filter(argv[1], &s);
+        safe_dup(&mdl->filter, s);
+        free(s);
 #endif	
-        } else if (scope == CTX_GLOBAL) {
+    } else if (scope == CTX_GLOBAL) {
 	    safe_dup(&map.filter, argv[1]);
-        }
+    }
 	break;
 
     case TOK_HASHSIZE:

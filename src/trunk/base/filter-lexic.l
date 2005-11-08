@@ -45,30 +45,78 @@
 
 %}
 
-/* The tokens that can appear in a CoMo filter are not completely defined yet.
-   This section should be modified as they change */
+/* Tokens for the filter parser:
+ * The tokens that can appear in a CoMo filter are not completely defined yet.
+ * This section should be modified as they change
+ */
 
+DIGIT           [0-9]
 ALFANUMERIC     [a-zA-Z0-9]
-CONDITION       ALL|isIP
-MACROKW         COMO|PROTO|proto|DIR|IFACE|CLASS_A|CLASS_B|CLASS_C|CLASS_D|MULTICAST|EXPERIMENTAL|BADCLASS|NET
-MACRO           {MACROKW}\(({ALFANUMERIC}+\,)*{ALFANUMERIC}+\)
+DIRECTION       src|dst
+IPADDR          ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
+NETMASK         "/"({DIGIT}){1,2}
+PORT            {DIGIT}+
+PROTO           ip|tcp|udp
 
 %option noyywrap
 %option nounput
 
+/* Actions to be executed when a token is found:
+ * 
+ * Here we need to specify, for each possible token, what is the information
+ * that we want to pass to the syntactic parser.
+ *
+ * Variables that are available in this section:
+ *
+ * - yytext is the string read from the input
+ * - yyleng contains yytext length
+ * - yflval is the value that will be passed to the syntactic parser.
+ *   new data types can be added to it in base/filter-syntax.y (%union section)
+ */
+
 %%
 
-{CONDITION}     { yflval.text = (char *)malloc(yyleng + 1);
-                  strncpy(yflval.text, yytext, strlen(yytext) + 1);
-                  return(CONDITION); }
-{MACRO}         { yflval.text = (char *)malloc(yyleng + 1);
-                  strncpy(yflval.text, yytext, strlen(yytext) + 1);
-                  return(MACRO); }
+{DIRECTION}     {
+                if (!strcmp(yytext, "src"))
+                    yflval.byte = 0;
+                else /* dst */
+                    yflval.byte = 1;
+                return(DIRECTION);
+                }
+{IPADDR}        { 
+                /* Copy the dots and numbers notation string */
+                yflval.string = safe_strdup(yytext);
+                return(IPADDR); 
+                }
+{NETMASK}       { 
+                /* Copy the netmask number, get rid of the slash */ 
+                yflval.dword = atoi(yytext + 1);
+                return(NETMASK); 
+                }
+{PORT}          {
+                /* Copy the port number */
+                yflval.word = atoi(yytext);
+                return(PORT); 
+                }
+{PROTO}         {
+                if (!strcmp(yytext, "ip"))
+                    yflval.byte = IPPROTO_IP;
+                else if (!strcmp(yytext, "tcp"))
+                    yflval.byte = IPPROTO_TCP;
+                else if (!strcmp(yytext, "udp"))
+                    yflval.byte = IPPROTO_UDP;
+                else /* icmp */
+                    yflval.byte = IPPROTO_ICMP;
+                return(PROTO);
+                }
 and             { return(AND); }
 or              { return(OR); }
 not             { return(NOT); }
 \(              { return(OPENBR); }
 \)              { return(CLOSEBR); }
+":"             { return(COLON); }
+
+all             { return(ALL); }
 
 [ \t\n]+
 
