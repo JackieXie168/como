@@ -382,7 +382,7 @@ supervisor_mainloop(int accept_fd)
         }
         
         /* echo message on stdout */
-	    /* XXX For now all messages are handled with sup_recv_message
+        /* XXX For now all messages are handled with sup_recv_message
          * Should we change that ???
          */
         /* if (echo_log_msgs(i, logfile) != 0) { 

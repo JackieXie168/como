@@ -557,8 +557,6 @@ ex_disable_module(module_t *mdl)
 static void
 ex_remove_module(module_t *mdl)
 {
-    logmsg(LOGWARN, "mdl->file = %d\n", mdl->file);
-
     if (mdl->status != MDL_DISABLED)
         ex_disable_module(mdl);
 
@@ -579,7 +577,7 @@ static proc_callbacks_t export_callbacks = {
 
 #define MAP_SIZE 8192
 static void
-do_drop(struct drop_record *dr/*, int storage_fd*/)
+do_drop(struct drop_record *dr)
 {
     static int fd = -1;
     static unsigned used_in_map;
@@ -639,7 +637,6 @@ export_mainloop(__unused int fd)
 {
     int capture_fd; 
     int	max_fd;
-    int idx; 
     fd_set rx;
     uint pkt_thresh;
 
@@ -655,12 +652,6 @@ export_mainloop(__unused int fd)
     map.stats->ex_export_timer = new_tsctimer("export"); 
     map.stats->ex_store_timer = new_tsctimer("store"); 
     map.stats->ex_mapping_timer = new_tsctimer("mapping"); 
-
-    /* 
-     * open the output files of all the modules 
-     */
-    for (idx = 0; idx < map.module_count; idx++)
-        ex_init_module(&map.modules[idx]);
 
     mcheck(NULL);
     /* find max fd for the select */
@@ -694,8 +685,7 @@ export_mainloop(__unused int fd)
 	    p = map.dr->prod_ptr;
 	    mb();
 	    while (p != map.dr->cons_ptr) {
-		do_drop(&map.dr->data[map.dr->cons_ptr % NR_DROP_RECORDS]/*, XXX XXX XXX
-			storage_fd*/);
+		do_drop(&map.dr->data[map.dr->cons_ptr % NR_DROP_RECORDS]);
 		map.dr->cons_ptr++;
 	    }
 	}

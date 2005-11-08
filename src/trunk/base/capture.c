@@ -600,7 +600,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
  */
 
 filter_fn *filter; /* filter functions */
-void *filter_h; /* identifiers to later unload_objects */
+void *filter_h; /* identifier for later unload_object */
 
 /**
  * -- load_filter
@@ -777,11 +777,11 @@ capture_pkts(pkt_t *pkts, unsigned count, tailq_t *expired)
     for (idx = 0; idx < map.module_count; idx++) {
 	if (map.modules[idx].status != MDL_ACTIVE) {
 	    /* Even if the module isn't active, we still must skip
-         * some bytes in which[]
-         */
-        which += count;
-        continue;
-    }
+             * some bytes in which[]
+             */
+            which += count;
+            continue;
+        }
 
 	assert(map.modules[idx].name != NULL);
 	logmsg(V_LOGCAPTURE,
@@ -866,21 +866,8 @@ capture_mainloop(int accept_fd)
     map.stats->ca_updatecb_timer = new_tsctimer("update"); 
     map.stats->ca_sniff_timer = new_tsctimer("sniffer"); 
 
-    /*
-     * load the filter in. if no object has been provided, then
-     * the filter must be compiled on the fly. we will write the
-     * filter on a temporary file, call the compiler and finally
-     * link in the new shared object.
-     */
-    if (!map.filter)
-        map.filter = create_filter(map.modules, map.module_count,
-		map.template, map.workdir);
-
-    load_filter(map.filter);
-
     /* 
-     * browse the list of sniffers and start them. also, make
-     * sure the modules support the sniffers we use. 
+     * browse the list of sniffers and start them
      */
     sniffers_left = 0;
     for (src = map.sources; src; src = src->next) {
@@ -897,13 +884,6 @@ capture_mainloop(int accept_fd)
 	if (src->fd >= 0 && (src->flags & SNIFF_SELECT)) 
 	    max_fd = add_fd(src->fd, &valid_fds, max_fd);
     }
-    /*
-     * initialize the modules and make sure they
-     * support the sniffers we use.
-     */
-    for (idx = 0; idx < map.module_count; idx++)
-        ca_init_module(&map.modules[idx]);
- 
 
     /*
      * allocate memory used to pass flow tables
@@ -935,8 +915,9 @@ capture_mainloop(int accept_fd)
         TQ_HEAD(&expired_tables) == NULL)
 	    break;	/* nothing more to do */
 	
-    /* always listen to supervisor */
-    max_fd = add_fd(map.supervisor_fd, &valid_fds, max_fd);
+        /* always listen to supervisor */
+        max_fd = add_fd(map.supervisor_fd, &valid_fds, max_fd);
+
 	/* 
 	 * update the polling interval for sniffer that use polling. 
 	 */
@@ -1007,24 +988,14 @@ capture_mainloop(int accept_fd)
 		/* ok, export freed memory into the map for us */
 		mem_merge_maps(NULL, flush_map);
 	
-        /* and update memory counters */
-        for (idx = 0; idx < map.module_count; idx++) {
-            module_t *mdl = &map.modules[idx];
-            MDL_STATS(mdl)->mem_usage_shmem -=
-                MDL_STATS(mdl)->mem_usage_shmem_f;
-            MDL_STATS(mdl)->mem_usage_shmem_f = 0;
-        }
-        /* XXX Here we can update the
-         * export temporary counter safely
-         */
+                /* update memory counters */
+                for (idx = 0; idx < map.module_count; idx++) {
+                    module_t *mdl = &map.modules[idx];
+                    MDL_STATS(mdl)->mem_usage_shmem -=
+                        MDL_STATS(mdl)->mem_usage_shmem_f;
+                    MDL_STATS(mdl)->mem_usage_shmem_f = 0;
+                }
 
-        /* finally update memory counters (see below) */
-#if 0
-        for (i = 0; i < size; i++)
-            map.stats->mdl_stats[i].mem_usage_shmem -=
-                mem_freed[i];
-        free(mem_freed);
-#endif
 		sent2export = 0;   /* mark no pending jobs */
 	    }
         }
@@ -1084,6 +1055,9 @@ capture_mainloop(int accept_fd)
 
 	    logmsg(V_LOGCAPTURE, "received %d packets from sniffer\n", count);
 	    map.stats->pkts += count; 
+
+            if (map.module_count == 0) /* no modules, ignore packets */
+                continue;
 
 	    start_tsctimer(map.stats->ca_pkts_timer); 
 	    last_ts = capture_pkts(pkts, count, &expired_tables);
