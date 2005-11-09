@@ -49,7 +49,7 @@
 
 #include "como.h"
 #include "module.h"
-
+#include "ieee80211.h"
 
 static const char *mgmt_subtypes[] = {
   "association request",
@@ -67,6 +67,17 @@ static const char *mgmt_subtypes[] = {
   "deauthentication",
   "reserved",
   "reserved"
+};
+
+
+static const char *data_subtypes[] = {
+"data",
+"data + cf-ack",
+"data + cf-poll",
+"data + cf-ack + cf-poll",
+"null function (no data)",
+"cf-ack (no data)",
+"cf-ack + cf-poll (no data)"
 };
 
 /* 
@@ -252,8 +263,7 @@ print(char *buf, size_t *len, char * const args[])
     int n; 
     
 
-
-   if (buf == NULL && args != NULL) { 
+    if (buf == NULL && args != NULL) { 
 	/* first call, process the arguments */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=pcap")) {
@@ -319,9 +329,9 @@ print(char *buf, size_t *len, char * const args[])
      * depending on the l3 type we print different 
      * information 
      */
-      if(COMO(l3type) == ETHERTYPE_IP) { 
+    if(COMO(l3type) == ETHERTYPE_IP) { 
 
-        /* print timestamp (hh:mm:ss.us) */
+	/* print timestamp (hh:mm:ss.us) */
         hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
         mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
         ss = TS2SEC(COMO(ts)) % 60; 
@@ -361,36 +371,67 @@ print(char *buf, size_t *len, char * const args[])
 			(uint32_t) H32(TCP(ack)), 
 		 	(uint16_t) H16(TCP(win))); 
 	}
-      } 
-      else { 
-        if ((FC_TYPE(COMO(l3type)) == WLANTYPE_MGMT)
-                   && (FC_SUBTYPE(COMO(l3type)) == MGMT_SUBTYPE_BEACON)) {
-
-
-          /* print timestamp (hh:mm:ss.us) */
-          hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
-          mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
-          ss = TS2SEC(COMO(ts)) % 60; 
- 
-	  *len += sprintf(s + *len, 
-                    "%02d:%02d:%02d:%06d %s %-32s %2d %2d %d %s %s", 
-                    hh, mm, ss, TS2USEC(COMO(ts)), 
-                    mgmt_subtypes[FC_SUBTYPE(COMO(l3type)) >> 12], 
-                    MGMT_BODY(ssid.ssid), (int32_t) H32(PRISM_HDR(ssi_signal)), 
-                    (int32_t) H32(PRISM_HDR(ssi_noise)), MGMT_BODY(ds.ch),
-                    CAP_ESS(MGMT_BODY(cap)) ? "ESS" : "", 
-                    CAP_PRIVACY(MGMT_BODY(cap)) ? "privacy" : "");
-
-
-        }
-        else
-	  *len += sprintf(s + *len,
-                   "ieee 802.11 type not supported - work in progress"); 
+    } else {
+	hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
+	mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
+	ss = TS2SEC(COMO(ts)) % 60; 
+	    
+	switch(FC_TYPE(COMO(l3type))) {
+	case WLANTYPE_MGMT:
+	    *len += sprintf(s + *len, 
+		"%02d:%02d:%02d:%06d %s", hh, mm, ss, TS2USEC(COMO(ts)), 
+		mgmt_subtypes[FC_SUBTYPE(COMO(l3type)) >> 12]); 
+	    break;
+	case WLANTYPE_CTRL:
+	    switch(FC_SUBTYPE(COMO(l3type))) {
+	    case CTRL_SUBTYPE_PS_POLL:
+		*len += sprintf(s + *len, 
+		    "%02d:%02d:%02d:%06d power save-poll", 
+		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		break;
+	    case CTRL_SUBTYPE_RTS:
+		*len += sprintf(s + *len, 
+		    "%02d:%02d:%02d:%06d request to send", 
+		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		break;
+	    case CTRL_SUBTYPE_CTS:
+		*len += sprintf(s + *len, 
+		    "%02d:%02d:%02d:%06d clear to send", 
+		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		break;
+	    case CTRL_SUBTYPE_ACK:
+		*len += sprintf(s + *len, 
+		    "%02d:%02d:%02d:%06d acknowledgment", 
+		    hh, mm, ss, TS2USEC(COMO(ts)));
+		break;
+	    case CTRL_SUBTYPE_CF_END:
+		*len += sprintf(s + *len, 
+		    "%02d:%02d:%02d:%06d cf-end", 
+		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		break;
+	    case CTRL_SUBTYPE_END_ACK:
+		*len += sprintf(s + *len, 
+		    "%02d:%02d:%02d:%06d cf-end + cf-ack", 
+		    hh, mm, ss, TS2USEC(COMO(ts))); 
+	       break;
+	    default:
+	       break;
+	    }
+	    break;
+	case WLANTYPE_DATA:
+	    *len += sprintf(s + *len, 
+		"%02d:%02d:%02d:%06d %s", hh, mm, ss, TS2USEC(COMO(ts)), 
+		data_subtypes[FC_SUBTYPE(COMO(l3type)) >> 12]); 
+	    break;
+	default:
+	    *len += sprintf(s + *len,
+		"ieee802.11 type not supported - work in progress");
+	    break;
+	}
     }
     *len += sprintf(s + *len, "\n");
     return s; 
 }
-
 
 static int  
 replay(char *buf, char *out, size_t * len)
