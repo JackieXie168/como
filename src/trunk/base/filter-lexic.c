@@ -302,15 +302,16 @@ static void yy_fatal_error YY_PROTO(( yyconst char msg[] ));
 	*yy_cp = '\0'; \
 	yy_c_buf_p = yy_cp;
 
-#define YY_NUM_RULES 14
-#define YY_END_OF_BUFFER 15
-static yyconst short int yy_accept[51] =
+#define YY_NUM_RULES 15
+#define YY_END_OF_BUFFER 16
+static yyconst short int yy_accept[52] =
     {   0,
-        0,    0,   15,   14,   13,    9,   10,   14,    4,   11,
-       14,   14,   14,   14,   14,   14,   14,   14,   13,    3,
-        0,    4,    0,    0,    0,    5,    0,    7,    0,    0,
-        0,    3,    0,    4,   12,    6,    1,    8,    0,    0,
-        4,    0,    0,    0,    0,    2,    0,    2,    2,    0
+        0,    0,   16,   15,   14,   10,   11,   15,    4,   12,
+       15,   15,   15,   15,   15,   15,   15,   15,   14,    3,
+        0,    4,    0,    0,    0,    5,    0,    8,    0,    0,
+        0,    3,    0,    4,   13,    7,    1,    9,    6,    0,
+        0,    4,    0,    0,    0,    0,    2,    0,    2,    2,
+        0
     } ;
 
 static yyconst int yy_ec[256] =
@@ -351,48 +352,50 @@ static yyconst int yy_meta[21] =
         1,    1,    1,    1,    1,    1,    1,    1,    1,    1
     } ;
 
-static yyconst short int yy_base[51] =
+static yyconst short int yy_base[52] =
     {   0,
         0,    0,   63,   64,   60,   64,   64,   54,   16,   64,
        11,   42,   43,   43,   40,   39,   45,   43,   51,   45,
        44,   21,   37,   38,   29,   64,   28,   64,   36,   29,
-       28,   64,   22,   25,   64,   64,   64,   64,   36,   26,
-       35,   29,   36,   33,   30,   32,   33,   15,   64,   64
+       28,   64,   22,   25,   64,   64,   64,   64,   64,   36,
+       26,   35,   29,   36,   33,   30,   32,   33,   15,   64,
+       64
     } ;
 
-static yyconst short int yy_def[51] =
+static yyconst short int yy_def[52] =
     {   0,
-       50,    1,   50,   50,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50,   50,   50,   50,   50,   50,    0
+       51,    1,   51,   51,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51,   51,   51,   51,   51,   51,   51,
+        0
     } ;
 
 static yyconst short int yy_nxt[85] =
     {   0,
         4,    5,    6,    7,    4,    8,    9,   10,   11,    4,
        12,   13,    4,   14,   15,    4,    4,   16,   17,   18,
-       21,   49,   22,   23,   24,   21,   39,   34,   40,   21,
-       39,   41,   43,   44,   44,   45,   47,   44,   48,   46,
-       39,   41,   42,   26,   26,   37,   38,   37,   36,   35,
+       21,   50,   22,   23,   24,   21,   40,   34,   41,   21,
+       40,   42,   44,   45,   45,   46,   48,   45,   49,   47,
+       40,   42,   43,   39,   39,   37,   38,   37,   36,   35,
        33,   32,   19,   31,   30,   29,   28,   27,   26,   25,
-       20,   19,   50,    3,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50
+       20,   19,   51,    3,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51
     } ;
 
 static yyconst short int yy_chk[85] =
     {   0,
         1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
         1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
-        9,   48,    9,   11,   11,   22,   33,   22,   33,   34,
-       40,   34,   40,   42,   45,   42,   45,   47,   46,   44,
-       43,   41,   39,   31,   30,   29,   27,   25,   24,   23,
+        9,   49,    9,   11,   11,   22,   33,   22,   33,   34,
+       41,   34,   41,   43,   46,   43,   46,   48,   47,   45,
+       44,   42,   40,   31,   30,   29,   27,   25,   24,   23,
        21,   20,   19,   18,   17,   16,   15,   14,   13,   12,
-        8,    5,    3,   50,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50,   50,   50,   50,   50,   50,   50,
-       50,   50,   50,   50
+        8,    5,    3,   51,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51,   51,   51,   51,   51,   51,   51,
+       51,   51,   51,   51
     } ;
 
 static yy_state_type yy_last_accepting_state;
@@ -618,7 +621,7 @@ YY_DECL
 	register char *yy_cp = NULL, *yy_bp = NULL;
 	register int yy_act;
 
-#line 77 "filter-lexic.l"
+#line 78 "filter-lexic.l"
 
 
 
@@ -671,7 +674,7 @@ yy_match:
 			while ( yy_chk[yy_base[yy_current_state] + yy_c] != yy_current_state )
 				{
 				yy_current_state = (int) yy_def[yy_current_state];
-				if ( yy_current_state >= 51 )
+				if ( yy_current_state >= 52 )
 					yy_c = yy_meta[(unsigned int) yy_c];
 				}
 			yy_current_state = yy_nxt[yy_base[yy_current_state] + (unsigned int) yy_c];
@@ -705,7 +708,7 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 79 "filter-lexic.l"
+#line 80 "filter-lexic.l"
 {
                 if (!strcmp(yytext, "src"))
                     yflval.byte = 0;
@@ -716,7 +719,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 86 "filter-lexic.l"
+#line 87 "filter-lexic.l"
 { 
                 /* Copy the dots and numbers notation string */
                 yflval.string = safe_strdup(yytext);
@@ -725,7 +728,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 91 "filter-lexic.l"
+#line 92 "filter-lexic.l"
 { 
                 /* Copy the netmask number, get rid of the slash */ 
                 yflval.dword = atoi(yytext + 1);
@@ -734,7 +737,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 96 "filter-lexic.l"
+#line 97 "filter-lexic.l"
 {
                 /* Copy the port number */
                 yflval.word = atoi(yytext);
@@ -743,62 +746,69 @@ YY_RULE_SETUP
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 101 "filter-lexic.l"
+#line 102 "filter-lexic.l"
 {
-                if (!strcmp(yytext, "ip"))
-                    yflval.byte = IPPROTO_IP;
-                else if (!strcmp(yytext, "tcp"))
-                    yflval.byte = IPPROTO_TCP;
-                else if (!strcmp(yytext, "udp"))
-                    yflval.byte = IPPROTO_UDP;
-                else /* icmp */
-                    yflval.byte = IPPROTO_ICMP;
-                return(PROTO);
+                /* For now there is only the IP protocol */
+                yflval.word = ETHERTYPE_IP;
+                return(LEVEL3);
                 }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 112 "filter-lexic.l"
-{ return(AND); }
+#line 107 "filter-lexic.l"
+{
+                if (!strcmp(yytext, "tcp"))
+                    yflval.word = IPPROTO_TCP;
+                else if (!strcmp(yytext, "udp"))
+                    yflval.word = IPPROTO_UDP;
+                else /* icmp */
+                    yflval.word = IPPROTO_ICMP;
+                return(LEVEL4);
+                }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 113 "filter-lexic.l"
-{ return(OR); }
+#line 116 "filter-lexic.l"
+{ return(AND); }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 114 "filter-lexic.l"
-{ return(NOT); }
+#line 117 "filter-lexic.l"
+{ return(OR); }
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 115 "filter-lexic.l"
-{ return(OPENBR); }
+#line 118 "filter-lexic.l"
+{ return(NOT); }
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 116 "filter-lexic.l"
-{ return(CLOSEBR); }
+#line 119 "filter-lexic.l"
+{ return(OPENBR); }
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 117 "filter-lexic.l"
-{ return(COLON); }
+#line 120 "filter-lexic.l"
+{ return(CLOSEBR); }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 119 "filter-lexic.l"
-{ return(ALL); }
+#line 121 "filter-lexic.l"
+{ return(COLON); }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 121 "filter-lexic.l"
-
+#line 123 "filter-lexic.l"
+{ return(ALL); }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 123 "filter-lexic.l"
+#line 125 "filter-lexic.l"
+
+	YY_BREAK
+case 15:
+YY_RULE_SETUP
+#line 127 "filter-lexic.l"
 ECHO;
 	YY_BREAK
 case YY_STATE_EOF(INITIAL):
@@ -1092,7 +1102,7 @@ static yy_state_type yy_get_previous_state()
 		while ( yy_chk[yy_base[yy_current_state] + yy_c] != yy_current_state )
 			{
 			yy_current_state = (int) yy_def[yy_current_state];
-			if ( yy_current_state >= 51 )
+			if ( yy_current_state >= 52 )
 				yy_c = yy_meta[(unsigned int) yy_c];
 			}
 		yy_current_state = yy_nxt[yy_base[yy_current_state] + (unsigned int) yy_c];
@@ -1127,11 +1137,11 @@ yy_state_type yy_current_state;
 	while ( yy_chk[yy_base[yy_current_state] + yy_c] != yy_current_state )
 		{
 		yy_current_state = (int) yy_def[yy_current_state];
-		if ( yy_current_state >= 51 )
+		if ( yy_current_state >= 52 )
 			yy_c = yy_meta[(unsigned int) yy_c];
 		}
 	yy_current_state = yy_nxt[yy_base[yy_current_state] + (unsigned int) yy_c];
-	yy_is_jam = (yy_current_state == 50);
+	yy_is_jam = (yy_current_state == 51);
 
 	return yy_is_jam ? 0 : yy_current_state;
 	}
@@ -1682,5 +1692,5 @@ int main()
 	return 0;
 	}
 #endif
-#line 123 "filter-lexic.l"
+#line 127 "filter-lexic.l"
 
