@@ -56,7 +56,8 @@ DIRECTION       src|dst
 IPADDR          ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
 NETMASK         "/"({DIGIT}){1,2}
 PORT            {DIGIT}+
-PROTO           ip|tcp|udp
+LEVEL3          ip
+LEVEL4          tcp|udp
 
 %option noyywrap
 %option nounput
@@ -98,16 +99,19 @@ PROTO           ip|tcp|udp
                 yflval.word = atoi(yytext);
                 return(PORT); 
                 }
-{PROTO}         {
-                if (!strcmp(yytext, "ip"))
-                    yflval.byte = IPPROTO_IP;
-                else if (!strcmp(yytext, "tcp"))
-                    yflval.byte = IPPROTO_TCP;
+{LEVEL3}        {
+                /* For now there is only the IP protocol */
+                yflval.word = ETHERTYPE_IP;
+                return(LEVEL3);
+                }
+{LEVEL4}        {
+                if (!strcmp(yytext, "tcp"))
+                    yflval.word = IPPROTO_TCP;
                 else if (!strcmp(yytext, "udp"))
-                    yflval.byte = IPPROTO_UDP;
+                    yflval.word = IPPROTO_UDP;
                 else /* icmp */
-                    yflval.byte = IPPROTO_ICMP;
-                return(PROTO);
+                    yflval.word = IPPROTO_ICMP;
+                return(LEVEL4);
                 }
 and             { return(AND); }
 or              { return(OR); }

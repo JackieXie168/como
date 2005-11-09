@@ -658,14 +658,15 @@ char *proto = NULL;
 
 %token NOT AND OR OPENBR CLOSEBR COLON ALL
 %left NOT AND OR /* Order of precedence */
-%token <byte> DIRECTION PROTO
-%token <word> PORT
+%token <byte> DIRECTION
+%token <word> PORT LEVEL3 LEVEL4
 %token <dword> NETMASK
 %token <string> IPADDR 
 %type <string> filter
 %type <tree> expr
 %type <ipaddr> ip
 %type <portrange> port
+%type <word> proto
 %start filter
 
 %%
@@ -747,11 +748,11 @@ expr: expr AND expr
         free(direction);
         free(proto);
       }
-    | PROTO
+    | proto
       {
         /* XXX Should we use the "isIP, isTCP, isUDP" helper macros ??? */
         switch($1) {
-        case IPPROTO_IP:
+        case ETHERTYPE_IP:
             asprintf(&s, "(COMO(l3type) == ETHERTYPE_IP)");
             break;
         case IPPROTO_TCP:
@@ -785,34 +786,44 @@ ip: DIRECTION IPADDR
             YYABORT;
     }
 
-port: PROTO DIRECTION PORT
+port: LEVEL4 DIRECTION PORT
       {
         $$.proto = $1;
         $$.direction = $2;
         $$.lowport = $3;
         $$.highport = $3;
       } 
-    | PROTO DIRECTION PORT COLON
+    | LEVEL4 DIRECTION PORT COLON
       {
         $$.proto = $1;
         $$.direction = $2;
         $$.lowport = $3;
         $$.highport = 65535;
       }
-    | PROTO DIRECTION COLON PORT
+    | LEVEL4 DIRECTION COLON PORT
       {
         $$.proto = $1;
         $$.direction = $2;
         $$.lowport = 1;
         $$.highport = $4;
       }
-    | PROTO DIRECTION PORT COLON PORT
+    | LEVEL4 DIRECTION PORT COLON PORT
       {
         $$.proto = $1;
         $$.direction = $2;
         $$.lowport = $3;
         $$.highport = $5;
       }
+
+proto: LEVEL3
+       {
+        $$ = $1;
+       }
+     | LEVEL4
+       {
+        $$ = $1;
+       }
+        
 
 %%
 
