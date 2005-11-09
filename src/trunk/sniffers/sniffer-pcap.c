@@ -155,9 +155,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
     struct _snifferinfo * info; 
     pkt_t *pkt;                 /* CoMo record structure */
     char * base;                /* current position in input buffer */
-    int npkts;                 /* processed pkts */
+    char * pl;                  /* position in buffer for processed packets */
+    int npkts;                  /* processed pkts */
     int rd;
-
+  
     info = (struct _snifferinfo *) src->ptr; 
 
     /* read pcap records from fd */
@@ -184,8 +185,9 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
         if (left < (int) sizeof(pcap_hdr_t) + ph->caplen) 
             break;
 
-
-
+        pkt->ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
+        pkt->len = ph->len;
+        pkt->caplen = ph->caplen; 
 
 	/*      
 	 * Now we have a packet: start filling a new pkt_t struct
@@ -193,7 +195,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
 	 */
 	if (info->type == COMOTYPE_WLAN_PRISM ||
 	 			   info->type == COMOTYPE_WLAN) { 
-	  /*  char * wh; */
 	    int n; 
 
 	    /* 
@@ -202,38 +203,23 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
 	     * captured from the medium. (we do it this way for performance
 	     * reasons and to simplify the code in the modules)
 	     */
-/*	    wh = info->pktbuf + info->pkt_nbytes; */
-  
             pkt->payload = info->pktbuf + info->pkt_nbytes;
-	    n = parse_80211_frame(pkt,base,info->type); 
+            pl =  pkt->payload;
+	    n = parse80211_frame(pkt,base,pl,info->type); 
 	    if (n == 0) 
 		break; 
 	    info->pkt_nbytes += n; 
 	} else {  
-	    pkt->ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
-	    pkt->len = ph->len;
-	    pkt->caplen = ph->caplen; 
 	    pkt->payload = base + sizeof(pcap_hdr_t); 
             /* 
              * update layer2 information and offsets of layer 3 and above. 
              * this sniffer runs on ethernet frames
              */
             updateofs(pkt, info->type); 
-
 	} 
-
-#if 0
-        /* 
-         * update layer2 information and offsets of layer 3 and above. 
-         * this sniffer runs on ethernet frames and 
-         * ieee 802.11 frames (experimental)
-         */
-        updateofs(pkt, info->type); 
-#endif
         /* increment the number of processed packets */
-        base += sizeof(pcap_hdr_t) + ph->caplen; 
+	base += sizeof(pcap_hdr_t) + ph->caplen; 
     }
-
     info->nbytes -= (base - info->buf);
     bcopy(base, info->buf, info->nbytes);
     return npkts;

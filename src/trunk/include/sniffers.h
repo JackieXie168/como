@@ -105,12 +105,8 @@ struct _source {
 /* generic function used by sniffer-*.c */
 void updateofs(pkt_t * pkt, int type);
 
-
-
 /* function used by sniffer-*.c to parse the 802.11 frames */
-int parse_80211_frame(pkt_t *pkt, char *buf, uint32_t type);
+int parse80211_frame(pkt_t *pkt, char *buf, char *pl, uint32_t type);
 
-/* function used by sniffer-*.c to parse the 802.11 managment frames */
-int parse_80211_mgmt_frame(pkt_t *pkt, char *buf);
- 
+
 #endif /* _COMO_SNIFFERS_H */

@@ -31,7 +31,7 @@
 #include "como.h"
 #include "comofunc.h"
 #include "stdwlan.h"
-
+#include "ieee80211.h"
 
 
 /* 
@@ -54,7 +54,6 @@ static size_t como_l2_len[] = {
     0,		// COMOTYPE_PRISM
     0,          // COMOTYPE_NF
     24,         // COMOTYPE_WLAN
-    88,         // COMOTYPE_WLAN_PRISM - value fixed: 64 + 24 (prism+mgmt hdrs)
 };
 
 /* 
@@ -86,25 +85,26 @@ isISL(pkt_t * pkt)
 static __inline__ void
 updatel4(pkt_t * pkt)
 {
-     
     if (pkt->l3type == ETHERTYPE_IP) {
-         pkt->layer3ofs = pkt->layer4ofs = como_l2_len[pkt->l2type];
-         pkt->layer4ofs += ((IP(vhl) & 0x0f) << 2);
-	 pkt->l4type = IP(proto);
-     }
-     else {
-       if ((FC_TYPE(pkt->l3type) == WLANTYPE_MGMT)
-                     && (FC_SUBTYPE(pkt->l3type) == MGMT_SUBTYPE_BEACON)) {
-              
-          pkt->layer3ofs = pkt->layer4ofs = PRISM_HDR_LEN;
-          pkt->layer4ofs += MGMT_HDR_LEN;
-        
-       }
-      /* else 
-          logmsg(LOGWARN, "ieee 802.11 type not supported");*/
+	pkt->layer3ofs = pkt->layer4ofs = como_l2_len[pkt->l2type];
+	pkt->layer4ofs += ((IP(vhl) & 0x0f) << 2);
+	pkt->l4type = IP(proto);
+    } else {
+	switch(FC_TYPE(pkt->l3type)) { /* determine 802.11 frame type */
+	case WLANTYPE_MGMT:
+	    pkt->layer4ofs = pkt->layer3ofs + MGMT_HDR_LEN;
+	    break;
+	case WLANTYPE_CTRL:
+            break;
+	case WLANTYPE_DATA:
+	    pkt->layer4ofs = pkt->layer3ofs + DATA_HDR_LEN;
+            break;
+         default:
+            logmsg(LOGWARN, "ieee802.11 type not supported");
+	    break;
+	}
     }
 }
-
 
 
 /*
@@ -118,8 +118,8 @@ updateofs(pkt_t * pkt, int type)
 {
     pkt->l2type = type; 
     switch (pkt->l2type) { 
-      case COMOTYPE_ETH: 
-        if (H16(ETH(type)) == ETHERTYPE_VLAN) {
+    case COMOTYPE_ETH: 
+	if (H16(ETH(type)) == ETHERTYPE_VLAN) {
             pkt->l2type = COMOTYPE_VLAN;
             pkt->l3type = H16(VLAN(ethtype));
         } else if (isISL(pkt)) { 
@@ -129,20 +129,20 @@ updateofs(pkt_t * pkt, int type)
             pkt->l3type = H16(ETH(type));
         }
 	break; 
-    
-      case COMOTYPE_HDLC: 
+    case COMOTYPE_HDLC: 
 	pkt->l3type = H16(HDLC(type)); 
         break; 
-    
-      case COMOTYPE_WLAN_PRISM:
-        pkt->l3type = H16(MGMT_HDR(fc)); 
+    case COMOTYPE_WLAN:
+        pkt->l3type = H16(IEEE80211_HDR(fc));
         break;
-
-      default: 
+    case COMOTYPE_WLAN_PRISM:
+        /* 802.11 + 64 byte capture header */
+        pkt->l3type = H16(IEEE80211_HDR(fc));
+        break;
+    default: 
 	pkt->l3type = 0; 
         break; 
     } 
-
     updatel4(pkt); 
 }
 

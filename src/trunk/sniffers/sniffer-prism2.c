@@ -288,17 +288,14 @@ sniffer_start(source_t * src)
         return -1;
     }
    
-   /* check datalink type.  support 802.11 DLT_ values */
-   switch (sp_link(info->pcap)) {
-     case DLT_PRISM_HEADER:
-       info->type = COMOTYPE_WLAN_PRISM;
-       break;
-#if 0
-     case DLT_IEEE802_11:
-       info->type = COMOTYPE_WLAN;
-       break;
-#endif
-
+    /* check datalink type.  support 802.11 DLT_ values */
+    switch (sp_link(info->pcap)) {
+    case DLT_PRISM_HEADER:
+	info->type = COMOTYPE_WLAN_PRISM;
+	break;
+    case DLT_IEEE802_11:
+	info->type = COMOTYPE_WLAN;
+	break;
     default:
         logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
         sp_close(info->pcap);
