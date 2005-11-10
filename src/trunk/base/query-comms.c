@@ -301,9 +301,13 @@ query_parse(char *buf)
         s = strchr(p1, '=');
         asprintf(&q.filter, "%s", s + 1);
 #else
-        parse_filter(strchr(p1, '=') + 1, &s);
-        asprintf(&q.filter, "%s", s);
-        free(s);
+        char *input;
+        input = strchr(p1, '=') + 1;
+        if (parse_filter(input, &s) == 0) {
+            asprintf(&q.filter, "%s", s);
+            free(s);
+        } else
+            asprintf(&q.filter, "%s", input);
 #endif	
     } else if (strstr(p1, "start=") == p1) {
 	    q.start = atoi(p1+6);

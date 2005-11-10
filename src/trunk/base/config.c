@@ -776,9 +776,10 @@ do_config(int argc, char *argv[])
         safe_dup(&mdl->filter, argv[1]);
 #else
         char *s;
-        parse_filter(argv[1], &s);
-        safe_dup(&mdl->filter, s);
-        free(s);
+        if (parse_filter(argv[1], &s) == 0) {
+            safe_dup(&mdl->filter, s);
+            free(s);
+        }
 #endif	
     } else if (scope == CTX_GLOBAL) {
 	    safe_dup(&map.filter, argv[1]);
