@@ -1480,6 +1480,7 @@ configure(int argc, char **argv)
 void
 reconfigure(void)
 {
+    static int first_reconfig = 1;
     int idx, need_parse, have_new_modules;
     cfgfile_t *cfg;
 
@@ -1498,6 +1499,10 @@ reconfigure(void)
             return;
         }
 
+        /*
+         * update mtimes of config files. If some mtime differs,
+         * will need to re-parse.
+         */
         if (cfg->mtime != st.st_mtime) {
             need_parse = 1;           /* need to re-parse cmdline */
             cfg->mtime = st.st_mtime; /* save new mtime */
@@ -1506,6 +1511,8 @@ reconfigure(void)
 
     if (!need_parse)
         return;
+
+    logmsg(LOGDEBUG, "Reconfiguration: re-parsing cfgfile\n");
 
     /*
      * mark modules as unseen. during parsing of cfgfiles,
@@ -1542,10 +1549,15 @@ reconfigure(void)
     }
 
     /*
-     * if no new modules, we are done
+     * if no new modules, we are done, except if this is
+     * the first reconfiguration. At first reconfiguration
+     * we send the new modules anyway, because CA needs
+     * loading them before entering its mainloop.
      */
-    if (! have_new_modules)
+    if ((! have_new_modules) && (! first_reconfig)) {
+        logmsg(LOGDEBUG, "Reconfiguration: No new modules are found\n");
         return;
+    }
 
     /*
      * tell processes to load the new modules.
@@ -1564,5 +1576,7 @@ reconfigure(void)
             map.stats->modules_active++;
         }
     }
+
+    first_reconfig = 0;
 }
 

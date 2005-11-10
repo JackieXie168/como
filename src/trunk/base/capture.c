@@ -896,6 +896,13 @@ capture_mainloop(int accept_fd)
     map.stats->table_queue = 0; 
 
     /*
+     * The first message from supervisor contain the
+     * modules and filter function.
+     */
+    logmsg(LOGDEBUG, "wait for 1st msg from SU\n");
+    recv_message(map.supervisor_fd, &capture_callbacks);
+
+    /*
      * This is the actual main loop where we monitor the various
      * sniffers and the sockets to communicate with other processes.
      * If a sniffer's data stream is complete or fails, we close it.
@@ -1055,9 +1062,6 @@ capture_mainloop(int accept_fd)
 
 	    logmsg(V_LOGCAPTURE, "received %d packets from sniffer\n", count);
 	    map.stats->pkts += count; 
-
-            if (map.module_count == 0) /* no modules, ignore packets */
-                continue;
 
 	    start_tsctimer(map.stats->ca_pkts_timer); 
 	    last_ts = capture_pkts(pkts, count, &expired_tables);

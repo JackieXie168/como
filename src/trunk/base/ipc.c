@@ -236,6 +236,7 @@ sup_send_new_modules(void)
         if (! is_registered_fd(i))
             continue;
 
+        logmsg(LOGDEBUG, "writing new modules to fd %d\n", i);
         write_var(i, msg_id);
         write_str(i, map.filter);
 
@@ -262,11 +263,15 @@ sup_send_new_modules(void)
             if (mdl->args)
                 for (narg = 0; mdl->args[narg] != NULL; narg++)
                     write_str(i, mdl->args[narg]);
+
+            logmsg(LOGDEBUG, "sent module '%s'\n", mdl->name);
         }
 
         idx = -1;
         write_var(i, idx); /* end of message */
     }
+
+    logmsg(LOGDEBUG, "sent new modules to all procs\n");
 }
 
 /**
@@ -428,6 +433,10 @@ sup_wait_for_ack(int fd)
     logmsg(V_LOGDEBUG, "Awaiting ack from fd %d\n", fd);
     do {
         msg_id = sup_recv_message(fd);
+        if (msg_id < 0) {
+            logmsg(V_LOGDEBUG, "sup_wait_for_ack fails");
+            return;
+        }
     } while (msg_id != MSG_ACK);
     logmsg(V_LOGDEBUG, "Ack from fd %d received\n", fd);
 }
