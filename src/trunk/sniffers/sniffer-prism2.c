@@ -37,7 +37,7 @@
 #include <sys/socket.h>	/* socket for monitor mode */
 #include <net/if.h>	/* struct ifr */
 
-#ifndef USE_STARGATE
+#ifndef BUILD_FOR_ARM
 #include <pcap.h>
 #else
 #include "pcap-stargate.h"
@@ -291,10 +291,10 @@ sniffer_start(source_t * src)
     /* check datalink type.  support 802.11 DLT_ values */
     switch (sp_link(info->pcap)) {
     case DLT_PRISM_HEADER:
-	info->type = COMOTYPE_WLAN_PRISM;
+	info->type = COMOTYPE_RADIO;
 	break;
     case DLT_IEEE802_11:
-	info->type = COMOTYPE_WLAN;
+	info->type = COMOTYPE_80211;
 	break;
     default:
         logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
@@ -303,7 +303,7 @@ sniffer_start(source_t * src)
     }
 
     src->fd = sp_fileno(info->pcap);
-    src->flags = SNIFF_SELECT; 
+    src->flags = SNIFF_TOUCHED|SNIFF_SELECT; 
     src->polling = 0;
     info->type = type;
     return 0; 		/* success */
@@ -345,7 +345,7 @@ processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr) 
+sniffer_next(source_t * src, pkt_t * out, int max_no) 
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
     pkt_t * pkt = out;
@@ -369,7 +369,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr)
 	 */
 
 
-	count = info->dispatch(info->pcap, 1, processpkt, (char *) pkt); 
+	count = info->dispatch(info->pcap, 1, processpkt, (u_char *) pkt); 
 	if (count == 0) 
 	    break;
 

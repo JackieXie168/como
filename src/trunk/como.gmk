@@ -31,10 +31,10 @@
 # See the example below.
 #
 
-ifdef USE_STARGATE
+ifdef BUILD_FOR_ARM
 	# we need a cross-platform compiler
 	CC = arm-linux-gcc
-	DEFS+=-DUSE_STARGATE 
+	DEFS+=-DBUILD_FOR_ARM 
 	WARNINGS?=-W -Wall -Werror -Wshadow 
 endif
 

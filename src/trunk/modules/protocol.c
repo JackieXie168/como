@@ -74,7 +74,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
+update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 

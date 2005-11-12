@@ -6,6 +6,7 @@
 BASEDIR = ..
 EXTRADIR = $(BASEDIR)/extra
 SNIFFDIR = $(BASEDIR)/sniffers
+INCDIRS = /usr/local/include 
 
 PROGS = como	# list of program names
 
@@ -34,12 +35,23 @@ SRCS_como := \
 	storage-client.c \
 	heap.c \
 	os.c \
-    ipc.c \
-    res_mgmt.c \
-    filter-syntax.c
+	ipc.c \
+	filter-syntax.c
 
 LIBS = $(LIBDL) m		
 LIBDIRS = /usr/local/lib
+
+# performance profiling
+ifdef DO_PROFILING
+	SRCS_como += profiling.c
+	DEFS += -DDO_PROFILING
+endif
+
+# resource management
+ifdef DO_RESOURCE_MANAGEMENT
+	SRCS_como += res_mgmt.c
+	DEFS += -DRESOURCE_MANAGEMENT
+endif
 
 # convention for sniffers:
 # filenames are sniffer-$(FOO).c
@@ -50,7 +62,7 @@ SNIFFERS = como
 
 # add pcap support
 ifneq ($(shell uname),CYGWIN_NT-5.1)
-	SNIFFERS += pcap libpcap 
+	SNIFFERS += pcap libpcap prism2
 endif
 
 # bpf, but Linux does not have bpf
@@ -80,13 +92,11 @@ ifdef USE_SK98
 	CFLAGS += -DUSE_SK98
 endif
 
-ifdef HAVE_FTLIB_AND_ZLIB 
+ifdef SUPPORT_NETFLOW_V5 
 	SNIFFERS += flowtools
 	LIBS += ft z
-endif
-
-ifdef USE_PRISM2
-	SNIFFERS += prism2
+	INCDIRS += /usr/local/netflow/include
+	LIBDIRS += /usr/local/netflow/lib
 endif
 
 # add sniffers  
@@ -94,11 +104,6 @@ x=$(SNIFFERS:%=$(SNIFFDIR)/sniffer-%.c)
 x += $(SNIFFDIR)/sniffers.c
 x += $(SNIFFDIR)/ieee80211frames.c
 SRCS_como += $(x)
-
-# resource management
-ifdef DO_RESOURCE_MANAGEMENT
-    DEFS += -DRESOURCE_MANAGEMENT
-endif
 
 # add extras 
 x=$(EXTRAS:%=$(EXTRADIR)/%)
@@ -163,6 +168,5 @@ pippo.o: $(BASEDIR)/include/stdpkt.h $(BASEDIR)/base/template $(BASEDIR)/include
 
 CFLAGS_como := -Dfoo
 
-INCDIRS = /usr/local/include 
 
 include ../como.gmk	# the top level makefile defs

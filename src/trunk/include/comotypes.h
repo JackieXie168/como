@@ -116,7 +116,7 @@ typedef int (match_fn)(pkt_t *pkt, void *fh);
  * not contemplated).
  * Mandatory.
  */
-typedef int (update_fn)(pkt_t *pkt, void *fh, int is_new, unsigned drop_cntr);
+typedef int (update_fn)(pkt_t *pkt, void *fh, int is_new);
 
 /**
  * ematch_fn() same as match_fn() but now it uses the current capture
@@ -334,13 +334,6 @@ struct _module {
     int seen;                   /* used in config.c to find out what modules
                                  * have been removed from cfg files
                                  */
-
-    unsigned reported_global_drops;    /* How many global drops have
-					  been reported to this
-					  module? */
-    unsigned unreported_local_drops;   /* How many local drops need to
-					  be reported to this
-					  module? */
 };
 
 
@@ -471,16 +464,17 @@ struct _mdl_statistics {
 };
 
 struct _statistics { 
-    struct timeval start; 	/* CoMo start time */
+    struct timeval start; 	/* CoMo start time (with gettimeofday)*/
 
     /* XXX Pending: update correctly */
+
+    timestamp_t ts;	 	/* timestamp last processed packet */
     int modules_active;		/* no. of modules processing packets */
     int table_queue; 		/* expired tables in capture->export queue */
     size_t mem_usage_cur; 	/* current shared memory usage */
     size_t mem_usage_peak; 	/* peak shared memory usage */
     uint64_t pkts; 		/* sniffed packets so far */
     int drops; 			/* global packet drop counter */
-    timestamp_t delay;	 	/* packet capture delay */
 
     /* we define here a set of timers that use TSC */
     tsc_t * ca_full_timer; 	/* capture entire mainloop */

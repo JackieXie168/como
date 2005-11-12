@@ -169,8 +169,6 @@ main(int argc, char *argv[])
     map.name = strdup("CoMo Node"); 
     map.location = strdup("Unknown"); 
     map.linkspeed = strdup("Unknown"); 
-    map.dropfile = strdup("drop_file");
-    map.dropfilesize = 1024 * 1024 * 1024; /* 1 gigabyte */
 
     /* create the filter template file */
     /* XXX check that we use the user-defined template */
@@ -209,12 +207,11 @@ main(int argc, char *argv[])
      */
     map.stats = new_mem(NULL, sizeof(stats_t), "stats data");
     bzero(map.stats, sizeof(stats_t)); 
-    map.stats->mdl_stats = new_mem(NULL, map.module_max * sizeof(mdl_stats_t), "mdl stats");
+    map.stats->mdl_stats = new_mem(NULL, 
+			           map.module_max * sizeof(mdl_stats_t), 
+				   "mdl stats");
     gettimeofday(&map.stats->start, NULL); 
     map.stats->modules_active = map.module_count; 
-
-    map.dr = new_mem(NULL, sizeof(struct drop_ring), "drop ring");
-    map.dr->cons_ptr = map.dr->prod_ptr = 0;
 
     /*
      * Prepare to start processes.

@@ -127,6 +127,8 @@ struct _p80211info {
     int  n;
 };
 
+#define is80211_MGMT	(FC_TYPE(pkt->l3type) == WLANTYPE_MGMT)
+#define is80211_BEACON	(FC_SUBTYPE(pkt->l3type) == MGMT_SUBTYPE_BEACON)
 
 /* function used by sniffer-*.c to parse the 802.11 frames */
 int

@@ -150,7 +150,7 @@ sniffer_start(source_t *src)
     }
 
     src->fd = fd; 
-    src->flags = SNIFF_SELECT; 
+    src->flags = SNIFF_SELECT|SNIFF_TOUCHED; 
     src->polling = 0; 
     src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
 
@@ -172,7 +172,7 @@ sniffer_start(source_t *src)
  *                                      plus alignment padding)
  */
 static int
-sniffer_next(source_t *src, pkt_t *out, int max_no, __unused int *dropcounter) 
+sniffer_next(source_t *src, pkt_t *out, int max_no) 
 {
     struct _snifferinfo * info; /* sniffer specific information */
     pkt_t * pkt; 		/* CoMo packet structure */

@@ -53,12 +53,12 @@ ieee80211_hdrlen(pkt_t *pkt, uint32_t type)
 {
     /* determine header type */
     switch(type) { 
-    case COMOTYPE_WLAN:
-	pkt->layer3ofs = 0;
+    case COMOTYPE_80211:
+	pkt->l3ofs = 0;
 	return 0;
 	break;
-    case COMOTYPE_WLAN_PRISM: /* AVS wlan monitoring header ??? */
-	pkt->layer3ofs = PRISM_HDR_LEN;
+    case COMOTYPE_RADIO: /* AVS wlan monitoring header ??? */
+	pkt->l3ofs = PRISM_HDR_LEN;
 	return PRISM_HDR_LEN;
 	break;
     /* 
@@ -240,9 +240,20 @@ parse80211_assoc_res(pkt_t *pkt, char * buf, char *pl, struct _p80211info *pi)
 {
     struct _ieee80211_assoc_res *stype;
     struct _como_wlan_mgmt_body *mgmt_body;
+    int hdrlen; 
 
-    mgmt_body = (struct _como_wlan_mgmt_body *) pl;
-    stype = (struct _ieee80211_assoc_res *) buf;
+    switch(pkt->type) {
+    case COMOTYPE_80211:
+         hdrlen =  MGMT_HDR_LEN;
+         break;
+    case COMOTYPE_RADIO:
+         hdrlen = PRISM_HDR_LEN + MGMT_HDR_LEN;
+         break;
+    default:
+         break;
+    }
+    bcopy(buf, pkt->payload, hdrlen);
+
     /*
      * fill management body structure with fixed fields
      */

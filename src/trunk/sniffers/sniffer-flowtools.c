@@ -44,7 +44,7 @@
  * SNIFFER  ---    Flow-tools files
  *
  * Flow-tools files. It requires the flow-tools and zlib library to be 
- * installed (i.e., HAVE_FTLIB_AND_ZLIB must be set to 1). 
+ * installed.
  *
  * It produces a packet stream that resembles the original packet 
  * stream. All information that cannot find space in the pkt_t data 
@@ -130,11 +130,11 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow)
     pkt->caplen = sizeof(struct _como_nf) + 
 		  sizeof(struct _como_iphdr) + 
 		  sizeof(struct _como_udphdr);
-    pkt->l2type = COMOTYPE_NF; 
+    pkt->type = COMOTYPE_NF; 
     pkt->l3type = ETHERTYPE_IP; 
     pkt->l4type = f->prot;
-    pkt->layer3ofs = sizeof(struct _como_nf); 
-    pkt->layer4ofs = pkt->layer3ofs + sizeof(struct _como_iphdr); 
+    pkt->l3ofs = sizeof(struct _como_nf); 
+    pkt->l4ofs = pkt->l3ofs + sizeof(struct _como_iphdr); 
     pkt->payload = flow->payload; 
 
     /* NetFlow header */
@@ -464,7 +464,7 @@ sniffer_start(source_t * src)
     N16(p->udph.dst_port) = 0xffff;
     
     /* this sniffer operates on file and uses a select()able descriptor */
-    src->flags = SNIFF_FILE|SNIFF_SELECT; 
+    src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_SELECT; 
     src->polling = 0; 
     return 0; 
 }
@@ -478,7 +478,7 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *dropcntr) 
+sniffer_next(source_t * src, pkt_t *out, int max_no) 
 {
     struct _snifferinfo * info; 
     pkt_t * pkt; 
@@ -517,13 +517,20 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *dropcntr)
 		     * message and sleep for 10 mins. 
 		     */
 		    assert(src->fd == -1); 
-		    logmsg(LOGWARN, "sniffing from %s\n", src->device);
+		    logmsg(V_LOGWARN, "sniffing from %s\n", src->device);
 		    logmsg(0, "   no more files to read, but want more\n");
 		    logmsg(0, "   going to sleed for 10minutes\n");
 		    src->polling = TIME2TS(600, 0);
+		    src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_POLL; 
 		    return npkts;	
 		} 
 		break;
+	    } else if (src->flags & SNIFF_POLL) { 
+		/* 
+		 * we have a new file but still in polling mode. 
+		 * switch to select() mode to run faster. 
+		 */
+	        src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_SELECT; 
 	    } 
 	}
 

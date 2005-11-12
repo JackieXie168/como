@@ -115,7 +115,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static int
 check(pkt_t * pkt) 
 {
-    if ((pkt->l2type != COMOTYPE_WLAN_PRISM)) 
+    if ((COMO(type) != COMOTYPE_RADIO)) 
 	return 0; 
     return 1; 
 }
@@ -151,7 +151,7 @@ match(pkt_t * pkt, void * fh)
 
 
 static int
-update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntry)
+update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 

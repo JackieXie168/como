@@ -173,6 +173,9 @@ error:
 __inline__ int
 add_fd(int i, fd_set * fds, int max_fd)
 {
+    if (i < 0) 
+	return max_fd; 
+
     FD_SET(i, fds);
     return (i >= max_fd)? i + 1 : max_fd; 
 }
@@ -187,6 +190,9 @@ add_fd(int i, fd_set * fds, int max_fd)
 __inline__ int
 del_fd(int i, fd_set * fds, int max_fd)
 {
+    if (i < 0) 
+	return max_fd; 
+
     FD_CLR(i, fds);
     if (i < max_fd - 1)
         return max_fd;

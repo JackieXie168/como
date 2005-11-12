@@ -33,7 +33,7 @@
 #include <errno.h>
 #include <dlfcn.h>	/* dlopen */
 
-#ifndef USE_STARGATE
+#ifndef BUILD_FOR_ARM
 #include <pcap.h>
 #else
 #include "pcap-stargate.h"
@@ -191,7 +191,7 @@ sniffer_start(source_t * src)
     }
     
     src->fd = sp_fileno(info->pcap);
-    src->flags = SNIFF_SELECT; 
+    src->flags = SNIFF_TOUCHED|SNIFF_SELECT; 
     src->polling = 0;
     return 0; 		/* success */
 }
@@ -234,7 +234,7 @@ processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr)
+sniffer_next(source_t * src, pkt_t * out, int max_no)
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
     pkt_t * pkt;
@@ -256,7 +256,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *drop_cntr)
 	 * XXX check the cost of processing one packet at a time? 
 	 * 
 	 */
-	count = info->dispatch(info->pcap, 1, processpkt, (char *) pkt); 
+	count = info->dispatch(info->pcap, 1, processpkt, (u_char *) pkt); 
 	if (count == 0) 
 	    break;
 

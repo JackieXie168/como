@@ -135,7 +135,7 @@ struct _ieee80211_hdr {
 };
 
 #define IEEE80211_HDR(field)         \
-    (((struct _ieee80211_hdr*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_hdr*)(pkt->payload + pkt->l3ofs))->field)
 
 
 /*
@@ -260,17 +260,17 @@ struct _ieee80211_ctrl_end_ack {
 
 
 #define CTRL_RTS(field)         \
-    (((struct _ieee80211_ctrl_rts*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_ctrl_rts*)(pkt->payload + pkt->l3ofs))->field)
 #define CTRL_CTS(field)         \
-    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->l3ofs))->field)
 #define CTRL_ACK(field)         \
-    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->l3ofs))->field)
 #define CTRL_PS_POLL(field)     \
-    (((struct _ieee80211_ctrl_ps_poll*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_ctrl_ps_poll*)(pkt->payload + pkt->l3ofs))->field)
 #define CTRL_END(field)         \
-    (((struct _ieee80211_ctrl_end*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_ctrl_end*)(pkt->payload + pkt->l3ofs))->field)
 #define CTRL_END_ACK(field)     \
-    (((struct _ieee80211_ctrl_end_ack*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_ctrl_end_ack*)(pkt->payload + pkt->l3ofs))->field)
 
 
 /*
