@@ -230,7 +230,7 @@ sniffer_start(source_t * src)
     discard_packets(info->m);
 
     src->fd = fd; 
-    src->flags = SNIFF_SELECT;
+    src->flags = SNIFF_TOUCHED|SNIFF_SELECT;
     src->polling = 0;
     return 0;	/* success */
 }
@@ -259,16 +259,16 @@ return_token(struct sk98_map_area_header * m, unsigned token)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no, int *drop_counter)
+sniffer_next(source_t * src, pkt_t *out, int max_no)
 {
+    static int max_pending;
+    static unsigned last_drop;
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
     pkt_t * pkt;
     int npkts;                 /* processed pkts */
     int pending;
-    static int max_pending;
-    static unsigned last_drop;
     int x;
-    unsigned new_drop;
+    unsigned new_drop, dropped;
 
     /* return all tokens of previous round */
     mb();
@@ -279,8 +279,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, int *drop_counter)
 
     npkts = 0;
     pkt = out;
+
     new_drop = info->m->drop_counter;
-    *drop_counter += new_drop - last_drop;
+    dropped = new_drop - last_drop;
+    src->drops = dropped;
     last_drop = new_drop;
 
     pending = info->m->k2u_prod - info->m->k2u_cons;
@@ -332,7 +334,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, int *drop_counter)
         pkt->ts = TIME2TS(tv.tv_sec, tv.tv_usec); 
         pkt->len = info->m->k2u_pipe[ind].len; 
         pkt->caplen = info->m->k2u_pipe[ind].len; 
-	pkt->payload = info->packet_pool[token].payload; 
+	pkt->payload = (char *) info->packet_pool[token].payload; 
+
+	pkt->dropped = (dropped < 0xffff)? (uint16_t) dropped : 0xffff; 
+	dropped = 0; 
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 

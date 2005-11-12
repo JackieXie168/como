@@ -192,7 +192,7 @@ call_store(module_t * mdl, rec_t *rp)
 
     start_tsctimer(map.stats->ex_mapping_timer); 
 
-    dst = csmap(mdl->file, mdl->offset, &mdl->bsize); 
+    dst = csmap(mdl->file, mdl->offset, (ssize_t *) &mdl->bsize); 
     if (dst == NULL)
 	panic("fail csmap for module %s", mdl->name);
 
@@ -575,50 +575,6 @@ static proc_callbacks_t export_callbacks = {
 };
 
 
-#define MAP_SIZE 8192
-static void
-do_drop(struct drop_record *dr)
-{
-    static int fd = -1;
-    static unsigned used_in_map;
-    static void *lmap;
-    static off_t off_in_file;
-    ssize_t temp;
-
-    if (fd < 0) {
-	char *b;
-	asprintf(&b, "%s/%s", map.basedir, map.dropfile);
-	fd = csopen(b, CS_WRITER, map.dropfilesize, storage_fd);
-	if (fd < 0) {
-	    rlimit_logmsg(1000, LOGWARN, "Cannot open %s\n", b);
-	    free(b);
-	    return;
-	}
-	free(b);
-	off_in_file = csgetofs(fd); 
-    }
-    /* Note that this only works because sizeof(*dr) is a small power
-       of two (think what happens near page boundaries) */
-    if (used_in_map + sizeof(*dr) >= MAP_SIZE) {
-	lmap = NULL;
-    }
-    if (!lmap) {
-	temp = MAP_SIZE;
-	lmap = csmap(fd, off_in_file, &temp);
-	if (!lmap) {
-	    rlimit_logmsg(1000, LOGWARN, "Cannot map drop file\n");
-	    return;
-	}
-	used_in_map = 0;
-    }
-    memcpy(lmap + used_in_map,
-	   dr,
-	   sizeof(*dr));
-    used_in_map += sizeof(*dr);
-    off_in_file += sizeof(*dr);
-}
-#undef MAP_SIZE
-
 /**
  * -- export_mainloop
  *
@@ -646,12 +602,7 @@ export_mainloop(__unused int fd)
     capture_fd = create_socket("capture.sock", NULL);
 
     /* allocate the timers */
-    map.stats->ex_full_timer = new_tsctimer("full"); 
-    map.stats->ex_loop_timer = new_tsctimer("loop"); 
-    map.stats->ex_table_timer = new_tsctimer("table"); 
-    map.stats->ex_export_timer = new_tsctimer("export"); 
-    map.stats->ex_store_timer = new_tsctimer("store"); 
-    map.stats->ex_mapping_timer = new_tsctimer("mapping"); 
+    init_timers();
 
     mcheck(NULL);
     /* find max fd for the select */
@@ -679,16 +630,6 @@ export_mainloop(__unused int fd)
 	    panic("error in the select (%s)\n", strerror(errno)); 
 
 	start_tsctimer(map.stats->ex_loop_timer); 
-
-	while (map.dr->prod_ptr != map.dr->cons_ptr) {
-	    unsigned p;
-	    p = map.dr->prod_ptr;
-	    mb();
-	    while (p != map.dr->cons_ptr) {
-		do_drop(&map.dr->data[map.dr->cons_ptr % NR_DROP_RECORDS]);
-		map.dr->cons_ptr++;
-	    }
-	}
 
 	/*
 	 * Message from supervisor
@@ -759,18 +700,8 @@ export_mainloop(__unused int fd)
 	end_tsctimer(map.stats->ex_loop_timer); 
 	end_tsctimer(map.stats->ex_full_timer); 
 
-	logmsg(LOGTIMER, "\t%s\n", print_tsctimer(map.stats->ex_full_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_loop_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_table_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_store_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_mapping_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_export_timer));
-	reset_tsctimer(map.stats->ex_full_timer);
-	reset_tsctimer(map.stats->ex_loop_timer);
-	reset_tsctimer(map.stats->ex_table_timer);
-	reset_tsctimer(map.stats->ex_store_timer);
-	reset_tsctimer(map.stats->ex_mapping_timer);
-	reset_tsctimer(map.stats->ex_export_timer);
-
+	/* store profiling information */
+	print_timers();
+	reset_timers();
     }
 }

@@ -80,29 +80,6 @@ struct _como {
     char * location; 
     char * linkspeed; 
     char * comment; 
-
-    /* Drop recording information */
-    struct drop_ring *dr; /* Allocated by supervisor; in
-			     export<->capture shared memory segment */
-    char *dropfile; /* Filename */
-    off_t dropfilesize; /* Maximum size; start rolling at this
-			 * point */
-};
-
-/* Note that drop timestamps are, by their nature, somewhat
- * imprecise. */
-/* sizeof(struct drop_record) must be a small power of two! */
-struct drop_record {
-    timestamp_t time;
-    int mdl;
-    unsigned npkts;
-};
-
-#define NR_DROP_RECORDS 256
-struct drop_ring {
-    unsigned prod_ptr;
-    unsigned cons_ptr;
-    struct drop_record data[NR_DROP_RECORDS];
 };
 
 
@@ -159,7 +136,7 @@ struct drop_ring {
 
    mfence would also work, but isn't actually that much faster and
    isn't available on all processors. */
-#ifndef USE_STARGATE
+#ifndef BUILD_FOR_ARM
 #define mb() asm volatile ("lock;addl $0,0(%%esp)\n":::"memory")
 #else 
 #define mb()

@@ -110,13 +110,12 @@ struct _como_pkt {
     uint64_t ts;		/* timestamp */
     uint32_t len;		/* length on the wire */
     uint32_t caplen;		/* capture length */
-    uint32_t l2type; 		/* layer2 type */
+    uint16_t type; 		/* packet type (COMOTYPE_*) */
+    uint16_t dropped;		/* dropped packets since last (max 0xffff) */ 
     uint16_t l3type; 		/* layer3 type using ethernet codes */
-    uint16_t l4type;            /* layer4 type using whatever codes
-				   are appropriate for the layer2 in
-				   use */
-    uint16_t layer3ofs;		/* offset where layer3 header starts */
-    uint16_t layer4ofs; 	/* offset where layer4 header starts */
+    uint16_t l4type;            /* layer4 type using layer3 specific codes */
+    uint16_t l3ofs;		/* offset where layer3 header starts */
+    uint16_t l4ofs; 		/* offset where layer4 header starts */
     char * payload; 		/* pointer to packet */ 
 };
 
@@ -124,15 +123,15 @@ struct _como_pkt {
 /* 
  * Known layer2 types 
  */
-#define COMOTYPE_NONE		0x0000	/* no layer2 (e.g., replayed data) */
+#define COMOTYPE_NONE		0x0000  /* CoMo-specific (e.g., replay()) */
 #define COMOTYPE_ETH		0x0001	/* Ethernet */
 #define COMOTYPE_HDLC		0x0002	/* Cisco HDLC */
 #define COMOTYPE_VLAN		0x0003	/* 802.1q packet */
 #define COMOTYPE_ISL		0x0004	/* Cisco ISL */
-#define COMOTYPE_PRISM          0x0005  /* IEEE 802.11 with Prism header */
-#define COMOTYPE_NF		0x0006	/* Flow records (NetFLow v5 info) */
-#define COMOTYPE_WLAN   	0x0007  /* IEEE 802.11 header */
-#define COMOTYPE_WLAN_PRISM	0x0008  /* IEEE 802.11 with Prism header */
+#define COMOTYPE_NF		0x0005	/* Flow records (NetFlow v5 info) */
+#define COMOTYPE_80211   	0x0006  /* IEEE 802.11 header */
+#define COMOTYPE_RADIO		0x0007  /* IEEE 802.11 with radio info */ 
+
 
 /* 
  * Ethernet framing 
@@ -302,25 +301,25 @@ struct _como_icmphdr {
 
 #define IP(field)               \
     (pkt->l3type == ETHERTYPE_IP ?  \
-     (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field) : \
+     (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field) : \
      (abort(),((struct _como_iphdr *)NULL)->field))
 #define TCP(field)              \
     (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_TCP ? \
-     (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
+     (((struct _como_tcphdr *) (pkt->payload + pkt->l4ofs))->field) : \
      (abort(),((struct _como_tcphdr *)NULL)->field))
 #define UDP(field)              \
     (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_UDP ? \
-     (((struct _como_udphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
+     (((struct _como_udphdr *) (pkt->payload + pkt->l4ofs))->field) : \
      (abort(), ((struct _como_udphdr *)NULL)->field))
 #define ICMP(field)             \
     (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_ICMP ? \
-     (((struct _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field) : \
+     (((struct _como_icmphdr *) (pkt->payload + pkt->l4ofs))->field) : \
      (abort(), ((struct _como_icmphdr *)NULL)->field))
 
 #define ETHP(pkt, field)        ETH(field)
 #define IPP(pkt, field)         \
     (pkt->l3type == ETHERTYPE_IP ?  \
-     (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field) : \
+     (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field) : \
      (abort(), ((struct _como_iphdr *)NULL)->field))
 
 #else		/* unsafe macros... */
@@ -336,17 +335,17 @@ struct _como_icmphdr {
 #define NF(field)               \
     (((struct _como_nf *) pkt->payload)->field)
 #define IP(field)               \
-    (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field)
+    (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field)
 #define TCP(field)              \
-    (((struct _como_tcphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (((struct _como_tcphdr *) (pkt->payload + pkt->l4ofs))->field)
 #define UDP(field)              \
-    (((struct _como_udphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (((struct _como_udphdr *) (pkt->payload + pkt->l4ofs))->field)
 #define ICMP(field)             \
-    (((struct _como_icmphdr *) (pkt->payload + pkt->layer4ofs))->field)
+    (((struct _como_icmphdr *) (pkt->payload + pkt->l4ofs))->field)
 
 #define ETHP(pkt, field)        ETH(field)
 #define IPP(pkt, field)         \
-    (((struct _como_iphdr *) (pkt->payload + pkt->layer3ofs))->field)
+    (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field)
 
 #endif
   
@@ -372,5 +371,7 @@ struct _como_icmphdr {
                          (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_TCP))
 #define isUDP           ((isIP && IP(proto) == IPPROTO_UDP) ||  \
                          (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_UDP))
+#define isICMP          ((isIP && IP(proto) == IPPROTO_ICMP) ||  \
+                         (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_ICMP))
 
 #endif/* _COMO_STDPKT_H */

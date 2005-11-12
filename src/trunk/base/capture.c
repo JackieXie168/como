@@ -82,6 +82,7 @@ typedef struct {
 
 tailq_t expired_tables;  /* expired flow tables */
 
+
 /*
  * -- match_desc
  * 
@@ -98,7 +99,7 @@ match_desc(pktdesc_t *req, pktdesc_t *bid)
     
     /* if req or bid are NULL they always match 
      * XXX this assumption could go away once we introduce meta-packet 
-     *     fields (e.g., AS number, anonymized addresses, etc.)
+     *     fields (e.g., anonymized addresses, etc.)
      */
     if (!req || !bid)
         return 1;
@@ -107,7 +108,8 @@ match_desc(pktdesc_t *req, pktdesc_t *bid)
     if (req->ts < bid->ts)
         return 0;
 
-    if (req->caplen > req->caplen) 
+    /* check if we are capturing enough bytes per packet */
+    if (req->caplen > bid->caplen) 
 	return 0; 
          
     a = (char *) req; 
@@ -143,15 +145,17 @@ create_filter(module_t * mdl, int count, char * template, char *workdir)
     char *out;  /* compiled .so file */
     char *buf;
     FILE * fp;
+    int fd; 
     int ret;
     int idx; 
     extern char builddefs[]; /* generated at compile time, contains all
                                 definitions needed for como to build */
 
     asprintf(&src, "%s/filter_XXXXXX", workdir);
-    src = mktemp(src);
-    if (src == NULL)
+    fd = mkstemp(src);		/* use mkstemp instead of mktemp for safety */
+    if (fd < 0) 
         panic("cannot create tmp filter file\n");
+    close(fd);
     asprintf(&out, "%s.so", src);
 
     fp = fopen(src, "w");
@@ -377,32 +381,6 @@ freeze_module(void)
 
 #endif
 
-/* 
- * -- do_drop_record 
- * 
- * stores the number of dropped packets in the array of 
- * drop values that are then stored on disk in the drop log file. 
- * 
- */
-static void
-do_drop_record(struct drop_ring *dr, int mdl, unsigned nr_pkts)
-{
-    struct drop_record *d;
-    struct timeval now; 
-
-    gettimeofday(&now, NULL); 
-
-    d = &dr->data[dr->prod_ptr % NR_DROP_RECORDS];
-    d->time = TIME2TS(now.tv_sec, now.tv_usec);
-    d->npkts = nr_pkts;
-    d->mdl = mdl;
-    mb();
-    if (dr->prod_ptr >= dr->cons_ptr + NR_DROP_RECORDS)
-	rlimit_logmsg(1000, LOGWARN, "Losing drop records!\n");
-    dr->prod_ptr++;
-    mb();
-}
-
 
 /*
  * -- capture_pkt
@@ -446,20 +424,19 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 
         /* flush the current flow table, if needed */
 	if (mdl->ca_hashtable) {
-	    mdl->ca_hashtable->ts = pkt->ts; 
-	    if (mdl->ca_hashtable->ts >
-		mdl->ca_hashtable->ivl + mdl->max_flush_ivl &&
-		mdl->ca_hashtable->records) {  
+	    ctable_t * ct = mdl->ca_hashtable; 
+	
+	    ct->ts = pkt->ts; 
+	    if (ct->ts > ct->ivl + mdl->max_flush_ivl && ct->records) {  
 		flush_table(mdl, expired);
 		mdl->ca_hashtable = NULL;
 	    }
 	}
 	if (!mdl->ca_hashtable) {
 	    mdl->ca_hashtable = create_table(mdl, pkt->ts); 
-	    if (!mdl->ca_hashtable) {
-		mdl->unreported_local_drops++;
-		continue;
-	    }
+	    if (!mdl->ca_hashtable) 
+		continue;		/* XXX no memory, we keep going. 
+					 *     need better solution! */
 	}
 
 
@@ -526,10 +503,9 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 
                 /* allocate a new record */
                 x = new_mem(mdl->ca_hashtable->mem, record_size, "new");
-		if (x == NULL) {
-		    mdl->unreported_local_drops++;
-		    continue;
-		}
+		if (x == NULL)
+		    continue;		/* XXX no memory, we keep going. 
+					 *     need better solution! */
 
                 SHMEM_USAGE(mdl) += record_size;
                 mdl->ca_hashtable->bytes += record_size;
@@ -551,7 +527,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 		 */
 
 		new_record = 1;
-        mdl->ca_hashtable->filled_records++;
+		mdl->ca_hashtable->filled_records++;
 		cand = x;
 	    } else {
 		new_record = 0;
@@ -563,10 +539,8 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	     * and link it to the bucket.
 	     */
 	    cand = new_mem(mdl->ca_hashtable->mem, record_size, "new");
-	    if (cand == NULL) {
-		mdl->unreported_local_drops++;
+	    if (cand == NULL)
 		continue;
-	    }
             SHMEM_USAGE(mdl) += record_size;
             mdl->ca_hashtable->bytes += record_size;
 
@@ -581,15 +555,8 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	    new_record = 1;
 	}
 	start_tsctimer(map.stats->ca_updatecb_timer); 
-	cand->full = mdl->callbacks.update(pkt, cand, new_record,
-					   mdl->unreported_local_drops +
-					   (unsigned)(map.stats->drops -
-						      mdl->reported_global_drops));
+	cand->full = mdl->callbacks.update(pkt, cand, new_record);
 	end_tsctimer(map.stats->ca_updatecb_timer); 
-	mdl->reported_global_drops = map.stats->drops;
-	if (mdl->unreported_local_drops)
-	    do_drop_record(map.dr, mdl->index, mdl->unreported_local_drops);
-	mdl->unreported_local_drops = 0;
     }
 
     return max_ts; 
@@ -625,8 +592,9 @@ load_filter(char *filter_file)
     //unlink(filter_file);
 }
 
+
 /*
- * -- initialize_module
+ * -- ca_init_module
  *
  * Do capture-specific initialization of a module.
  * Make sure module is compatible with current sniffers and
@@ -653,12 +621,6 @@ ca_init_module(module_t *mdl)
             break;
         }
     }
-
-    /* XXX we would like to make the capture hashsize adaptive. 
-     *     in general it is going to be much smaller than the 
-     *     one used in export. 
-     */
-    mdl->ca_hashsize = mdl->ex_hashsize;
 }
 
 /*
@@ -743,12 +705,21 @@ static proc_callbacks_t capture_callbacks = {
     ca_disable_module
 };
 
+
+/* 
+ * -- process_batch 
+ * 
+ * take a batch of packets, run them thru the filter and 
+ * then call the capture_pkt function for each individual 
+ * module. return the last timestamp of the batch.
+ * 
+ */
 static timestamp_t
-capture_pkts(pkt_t *pkts, unsigned count, tailq_t *expired) 
+process_batch(pkt_t *pkts, unsigned count, tailq_t *expired) 
 {
+    timestamp_t last_ts;
     int * which;
     int idx;
-    timestamp_t last_ts;
 
     /*
      * Select which classifiers need to see which packets The filter()
@@ -793,36 +764,68 @@ capture_pkts(pkt_t *pkts, unsigned count, tailq_t *expired)
 	end_tsctimer(map.stats->ca_module_timer); 
 	which += count; /* next module, new list of packets */
     }
+
     return last_ts;
 }
 
 
-/*
- * -- get_sniffer_delay
+/* 
+ * -- setup_sniffers 
  * 
- * This function compares current time with the timestamp received 
- * from the sniffer. This is called delay (from current time) and reported
- * in the "status" query. This way a client may adjust the timestamps 
- * in the queries to offline como systems when asking for the most 
- * recent data or queries like "last hour", etc.
+ * Browse the list of sniffers to identify all the file descrptors 
+ * that need a select() and to set the appropriate polling interval. 
+ * We also switch off sniffers if needed. The function returns the 
+ * fd_set for the select, the max file descriptor and the timeout value. 
+ * 
  */
-timestamp_t
-get_sniffer_delay(timestamp_t last_ts)
+int 
+setup_sniffers(source_t *src, fd_set *fds, int *max_fd, struct timeval *tout) 
 {
-    struct timeval now;
-    timestamp_t ts;
+    source_t * p; 
+    int active; 
 
-    gettimeofday(&now, NULL);
-    ts = TIME2TS(now.tv_sec, now.tv_usec);
+    active = 0; 
+    tout->tv_sec = 3600; 
+    tout->tv_usec = 0; 
+    for (p = src; p != NULL; p = p->next) { 
+	/* reset the TOUCHED bit */
+	src->flags &= ~SNIFF_TOUCHED;
 
-    /*
-     * NOTE: if last_ts is larger than the current time we
-     *       return zero delay. this event can happen when packet
-     *       timestamps are done directly in the capture card (e.g.,
-     *       Endace DAG cards). The system is using NTP for synchronization
-     *       that may be different from what the card is using.
-     */
-    return (ts > last_ts)? ts - last_ts : 0;
+	/* 
+	 * remove the file descriptor from the list independently if 
+	 * it is a valid one or not. we will add it later if needed. 
+	 * del_fd() deals with invalid fd. 
+	 */
+	*max_fd = del_fd(src->fd, fds, *max_fd); 
+                
+	if (src->flags & SNIFF_INACTIVE)  
+	    continue;		/* go to next one */
+                
+	active++; 
+
+	if (src->flags & SNIFF_FROZEN) 
+	    continue; 		/* do nothing */
+
+	/*  
+	 * if this sniffer uses polling, check if the polling interval 
+	 * is lower than the current timeout.
+	 */
+	if (src->flags & SNIFF_POLL) {
+	    if (src->polling < TIME2TS(tout->tv_sec, tout->tv_usec)) {
+		tout->tv_sec = TS2SEC(src->polling);
+		tout->tv_usec = TS2USEC(src->polling);
+	    }
+	}
+
+	/* 
+	 * if this sniffer uses select(), add the file descriptor 
+	 * to the list of file descriptors. 
+	 */
+	if (src->flags & SNIFF_SELECT) 
+	    *max_fd = add_fd(src->fd, fds, *max_fd); 
+    }
+
+    return active; 
 }
 
 
@@ -839,51 +842,43 @@ get_sniffer_delay(timestamp_t last_ts)
 void
 capture_mainloop(int accept_fd)
 {
-    memlist_t * flush_map;	/* freed blocks in the flow tables */
     pkt_t pkts[PKT_BUFFER]; 	/* packet buffer */
-    int sniffers_left;		/* how many sniffers are left ? */
+    memlist_t * flush_map;	/* freed blocks in the flow tables */
+    int active_sniffers;	/* how many sniffers are left ? */
     int sent2export = 0;	/* message sent to EXPORT */
     int export_fd; 		/* descriptor used to talk to EXPORT */
     timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
+    struct timeval tout;
     source_t *src;
     fd_set valid_fds;
     int max_fd;
-    uint table_sent; 
+    int table_sent;
     int idx;
 
-    /* get ready to accept requests from EXPORT process(es) */
+    /* initialize select()able file descriptors */
     max_fd = 0;
     FD_ZERO(&valid_fds);
+
+    /* get ready to accept requests from EXPORT process(es) */
     max_fd = add_fd(accept_fd, &valid_fds, max_fd);
     export_fd = -1; 
 
     /* initialize the timers */
-    map.stats->ca_full_timer = new_tsctimer("full"); 
-    map.stats->ca_loop_timer = new_tsctimer("loop"); 
-    map.stats->ca_pkts_timer = new_tsctimer("pkts"); 
-    map.stats->ca_filter_timer = new_tsctimer("filter"); 
-    map.stats->ca_module_timer = new_tsctimer("modules"); 
-    map.stats->ca_updatecb_timer = new_tsctimer("update"); 
-    map.stats->ca_sniff_timer = new_tsctimer("sniffer"); 
+    init_timers(); 
 
     /* 
      * browse the list of sniffers and start them
      */
-    sniffers_left = 0;
     for (src = map.sources; src; src = src->next) {
-	/*
-         * start the sniffer
-	 */
 	if (src->cb->sniffer_start(src) < 0) { 
-	    logmsg(LOGWARN, "sniffer %s (%s): %s\n",
-		src->cb->name, src->device, strerror(errno));
+	    logmsg(LOGWARN, 
+		   "sniffer %s (%s): %s\n",
+		   src->cb->name, src->device, strerror(errno));
 	    continue; 
 	} 
-	sniffers_left++;
-	assert(src->flags != 0); 
-	if (src->fd >= 0 && (src->flags & SNIFF_SELECT)) 
-	    max_fd = add_fd(src->fd, &valid_fds, max_fd);
+	assert(src->flags & SNIFF_TOUCHED); 
     }
+    active_sniffers = 0;
 
     /*
      * allocate memory used to pass flow tables
@@ -912,55 +907,27 @@ capture_mainloop(int accept_fd)
     for (;;) {
 	fd_set r; 
 	int n_ready; 
-	struct timeval tout = {1, 0}; 
 
 	start_tsctimer(map.stats->ca_full_timer); 
 
         errno = 0;
 
-	if (sniffers_left == 0 && !sent2export &&
-        TQ_HEAD(&expired_tables) == NULL)
-	    break;	/* nothing more to do */
-	
-        /* always listen to supervisor */
-        max_fd = add_fd(map.supervisor_fd, &valid_fds, max_fd);
+	/* always listen to supervisor */
+	max_fd = add_fd(map.supervisor_fd, &valid_fds, max_fd);
 
 	/* 
-	 * update the polling interval for sniffer that use polling. 
+	 * browse the list of sniffers. if any of them have changed 
+  	 * the settings then go thru all of them to rebuild the list of 
+	 * descriptors to use in the select() as well as to set the 
+	 * correct polling interval. 
 	 */
 	for (src = map.sources; src; src = src->next) {
-	    if (src->flags & SNIFF_INACTIVE)
-		continue; 		/* go to next one */
-
-	    /* 
-	     * if this sniffer uses polling, set the timeout for 
-	     * the select() instead of adding the file descriptor to FD_SET 
-	     */  
-	    if (src->flags & SNIFF_POLL) {
-		if (src->polling < TIME2TS(tout.tv_sec, tout.tv_usec)) {
-		    tout.tv_sec = TS2SEC(src->polling); 
-		    tout.tv_usec = TS2USEC(src->polling); 
-		} 
-	    }
-
-	    /* 
-	     * if memory usage is high and this sniffer works from a 
-	     * file, stop processing packets. this will give EXPORT
-	     * some time to process the tables and free memory.  
-	     */
-	    if (src->flags & SNIFF_FILE) { 
-		if (map.stats->mem_usage_cur > FLUSH_THRESHOLD(map.mem_size)) { 
-		    src->flags |= SNIFF_FROZEN; 
-		    if (src->flags & SNIFF_SELECT) 
-			max_fd = del_fd(src->fd, &valid_fds, max_fd); 
-		} else if (src->flags & SNIFF_FROZEN) { 
-		    /* defreeze the sniffer */
-		    src->flags &= ~SNIFF_FROZEN;
-		    if (src->flags & SNIFF_SELECT) 
-			max_fd = add_fd(src->fd, &valid_fds, max_fd); 
-		} 
+	    if (src->flags & SNIFF_TOUCHED) { 
+		active_sniffers = setup_sniffers(map.sources, &valid_fds, 
+					 &max_fd, &tout); 
+		break;
 	    } 
-	}
+	} 
 
 	/* wait for messages, sniffers or up to the polling interval */
 	r = valid_fds;
@@ -1021,18 +988,18 @@ capture_mainloop(int accept_fd)
             TQ_HEAD(&expired_tables) = NULL;   /* we are done with this. */
 	    map.stats->table_queue = 0; /* reset counter */
             sent2export = 1;            /* wait response from export */
-	    table_sent = 1; 
+	    table_sent = 1; 		/* for profiling */
         }
 
         if (FD_ISSET(map.supervisor_fd, &r))
             recv_message(map.supervisor_fd, &capture_callbacks);
+
         /*
 	 * check sniffers for packet reception (both the ones that use 
 	 * select() and the ones that don't)
          */
 	for (src = map.sources; src; src = src->next) {
-	    int count = 0;
-	    int old_drops;
+	    int count;
 
 	    if (src->flags & (SNIFF_INACTIVE|SNIFF_FROZEN))
 		continue;	/* inactive/frozen devices */
@@ -1040,42 +1007,35 @@ capture_mainloop(int accept_fd)
 	    if ((src->flags & SNIFF_SELECT) && !FD_ISSET(src->fd, &r))
 		continue;	/* nothing to read here. */
 
-	    old_drops = map.stats->drops;
 	    start_tsctimer(map.stats->ca_sniff_timer); 
-	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER,
-					  &map.stats->drops);
+	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER);
 	    end_tsctimer(map.stats->ca_sniff_timer); 
-	    if (map.stats->drops != old_drops)
-		do_drop_record(map.dr, -1, map.stats->drops - old_drops);
 
 	    if (count == 0)
 		continue;
 
             if (count < 0) {
-		if (src->flags & SNIFF_SELECT) 
-		    max_fd = del_fd(src->fd, &valid_fds, max_fd); 
-		src->flags |= SNIFF_INACTIVE; 
+		src->flags |= SNIFF_INACTIVE|SNIFF_TOUCHED; 
                 src->cb->sniffer_stop(src);
-		sniffers_left--;
                 continue;
             }
+
+	    /* update drop statistics */
+	    map.stats->drops += src->drops;
 
 	    logmsg(V_LOGCAPTURE, "received %d packets from sniffer\n", count);
 	    map.stats->pkts += count; 
 
 	    start_tsctimer(map.stats->ca_pkts_timer); 
-	    last_ts = capture_pkts(pkts, count, &expired_tables);
+	    map.stats->ts = process_batch(pkts, count, &expired_tables);
 	    end_tsctimer(map.stats->ca_pkts_timer); 
         }
-
-	/* compute delay from real time */
-	map.stats->delay = get_sniffer_delay(last_ts); 
 
 	/* 
 	 * if no sniffers are left, flush all the tables given that
 	 * no more packets will be received. 
 	 */
-	if (sniffers_left == 0) { 
+	if (active_sniffers == 0) { 
 	    for (idx = 0; idx < map.module_count; idx++) {
 		module_t * mdl = &map.modules[idx];
 		ctable_t *ct = mdl->ca_hashtable;
@@ -1120,39 +1080,34 @@ capture_mainloop(int accept_fd)
 		    flush_table(mdl, &expired_tables); 
 		}
 	    } 
+
+	    /* 
+	     * also try stopping those sniffers that are reading from 
+	     * file. this will give EXPORT some time to process the 
+	     * tables and free memory.  
+	     */
+	    for (src = map.sources; src; src = src->next) {
+		if (src->flags & SNIFF_INACTIVE) 
+		    continue; 
+
+		if (src->flags & SNIFF_FILE) 
+		    src->flags |= SNIFF_FROZEN|SNIFF_TOUCHED; 
+	    } 
 	}
 
-#if 0		// not implemented yet!
-	if (map.stats->mem_usage_cur < UNFREEZE_THRESHOLD(map.mem_size))
-	    unfreeze_module(); 
-	if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size))
-	    freeze_module(); 
-#endif
 	end_tsctimer(map.stats->ca_loop_timer);
 	end_tsctimer(map.stats->ca_full_timer);
 
 	if (table_sent) {
-	    logmsg(LOGTIMER, "timing after %llu packets\n", map.stats->pkts); 
-	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_full_timer)); 
-	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_loop_timer)); 
-	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_sniff_timer)); 
-	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_pkts_timer)); 
-	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_filter_timer)); 
-	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_module_timer)); 
-	    logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_updatecb_timer)); 
-	    reset_tsctimer(map.stats->ca_full_timer); 
-	    reset_tsctimer(map.stats->ca_loop_timer); 
-	    reset_tsctimer(map.stats->ca_sniff_timer); 
-	    reset_tsctimer(map.stats->ca_pkts_timer); 
-	    reset_tsctimer(map.stats->ca_filter_timer); 
-	    reset_tsctimer(map.stats->ca_module_timer); 
-	    reset_tsctimer(map.stats->ca_updatecb_timer); 
+	    /* store profiling information every time 
+	     * tables are sent to EXPORT 
+	     */
+	    print_timers();
+	    reset_timers();
 	    table_sent = 0; 
  	} 
     }
 
     logmsg(LOGWARN, "Capture: no sniffers left, terminating.\n");
-	   
-    return;
 }
 /* end of file */

@@ -35,6 +35,7 @@
  * this file is included by como.h and can be ignored by all other 
  */
 
+#include "como.h"
 #include "comotypes.h"
 
 /*
@@ -149,6 +150,8 @@ void _sdup(const char * file, const int line, char ** dst, char * src);
 /* 
  * util-timers.c
  */
+#ifdef DO_PROFILING 
+
 tsc_t * new_tsctimer(char *);
 void destroy_tsctimer(tsc_t *);
 void reset_tsctimer(tsc_t *);
@@ -158,6 +161,21 @@ char * print_tsctimer(tsc_t *);
 uint64_t get_avg_tscsample(tsc_t *);
 uint64_t get_max_tscsample(tsc_t *);
 uint64_t get_min_tscsample(tsc_t *);
+
+#else 
+
+#define new_tsctimer(x)
+#define destroy_tsctimer(x)
+#define reset_tsctimer(x)
+#define start_tsctimer(x)
+#define end_tsctimer(x);
+#define print_tsctimer(x)
+#define get_avg_tscsample(x)
+#define get_max_tscsample(x)
+#define get_min_tscsample(x)
+
+#endif
+
 
 /*
  * ipc.c
@@ -174,8 +192,38 @@ void sup_wait_for_ack(int fd);
 /*
  * res-mgmt.c
  */
+#ifdef RESOURCE_MANAGEMENT
+
 void resource_mgmt_init(void);
 char *resource_usage_report(void);
 void schedule(void);
+
+#else 
+
+#define resource_mgmt_init(x)
+#define resource_usage_report(x)
+#define schedule(x)
+
+#endif
+
+
+/* 
+ * profiling.c 
+ */
+#ifdef DO_PROFILING 
+
+void init_timers(void); 
+void print_timers(void); 
+void reset_timers(void); 
+
+#else
+
+#define init_timers()
+#define print_timers()
+#define reset_timers()
+
+#endif
+
+
 
 #endif /* _COMO_FUNC_H */

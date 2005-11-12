@@ -94,7 +94,7 @@ sniffer_start(source_t * src)
     info->bottom = NULL;
 
     src->fd = fd; 
-    src->flags = SNIFF_POLL; 
+    src->flags = SNIFF_TOUCHED|SNIFF_POLL; 
     src->polling = TIME2TS(0, 1000); 
     return 0;		/* success */
 }
@@ -107,7 +107,7 @@ sniffer_start(source_t * src)
  * return the number of packets read. 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *dropcntr) 
+sniffer_next(source_t * src, pkt_t * out, int max_no) 
 {
     struct _snifferinfo * info; /* sniffer information */
     pkt_t *pkt;                 /* CoMo record structure */

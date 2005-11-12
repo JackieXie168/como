@@ -104,7 +104,7 @@ check(pkt_t *pkt)
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
+update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 

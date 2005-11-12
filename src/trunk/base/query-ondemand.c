@@ -86,9 +86,9 @@ send_status(__unused qreq_t * req, int client_fd)
 	    "Build date: %s\n"
 	    "Build time: %s\n"
 	    "Speed: %s\n"
-	    "Delay: %u\n",
+	    "Time: %u\n",
 	    map.name, map.location, COMO_VERSION, __DATE__, __TIME__,
-	    map.linkspeed, TS2SEC(map.stats->delay)); 
+	    map.linkspeed, TS2SEC(map.stats->ts)); 
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
 	panic("sending status to the client");   
@@ -152,9 +152,9 @@ send_status(__unused qreq_t * req, int client_fd)
  */
 #define	GR_LOSTSYNC	((void *)getrecord)
 static void *
-getrecord(int fd, off_t * ofs, load_fn *ld, size_t *len, timestamp_t *ts)
+getrecord(int fd, off_t * ofs, load_fn *ld, ssize_t *len, timestamp_t *ts)
 {
-    size_t sz; 
+    ssize_t sz; 
     char * ptr; 
 
     assert(ld != NULL); 

@@ -449,7 +449,7 @@ csmap(int fd, off_t ofs, ssize_t * sz)
 off_t
 csseek(int fd)
 {
-    size_t retval;
+    ssize_t retval;
 
     assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL); 
     _csmap(fd, 0, &retval, S_SEEK);
@@ -473,7 +473,7 @@ size_t
 csreadp(int fd, void ** buf, size_t sz)
 {
     csfile_t * cf; 
-    size_t realsz = sz; 
+    ssize_t realsz = sz; 
 
     assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL); 
 

@@ -80,8 +80,6 @@ enum tokens {
     TOK_LOCATION,
     TOK_LINKSPEED,
     TOK_COMMENT,
-    TOK_DROPFILE,
-    TOK_DROPLOGSIZE,
     TOK_MAXFILESIZE
 };
 
@@ -162,8 +160,6 @@ keyword_t keywords[] = {
     { "location",    TOK_LOCATION,    2, CTX_GLOBAL },
     { "linkspeed",   TOK_LINKSPEED,   2, CTX_GLOBAL },
     { "comment",     TOK_COMMENT,     2, CTX_GLOBAL },
-    { "drop-log",    TOK_DROPFILE,    2, CTX_GLOBAL },
-    { "drop-log-size",TOK_DROPLOGSIZE,2, CTX_GLOBAL },
     { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL },
     { NULL,          0,               0, 0 }    /* terminator */
 };
@@ -787,7 +783,7 @@ do_config(int argc, char *argv[])
 	break;
 
     case TOK_HASHSIZE:
-        mdl->ex_hashsize = atoi(argv[1]);
+        mdl->ex_hashsize = mdl->ca_hashsize = atoi(argv[1]);
         break;
 
     case TOK_SOURCE:
@@ -939,14 +935,6 @@ do_config(int argc, char *argv[])
     case TOK_COMMENT: 
         safe_dup(&map.comment, argv[1]);
 	break; 
-
-    case TOK_DROPFILE:
-	safe_dup(&map.dropfile, argv[1]);
-	break;
-
-    case TOK_DROPLOGSIZE:
-	map.dropfilesize = parse_size(argv[1]);
-	break;
 
     default:
 	logmsg(LOGWARN, "unknown keyword %s\n", argv[0]);

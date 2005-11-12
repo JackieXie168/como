@@ -95,7 +95,7 @@ sniffer_start(source_t * src)
     } 
 
     src->fd = sd; 
-    src->flags = SNIFF_POLL; 	/* just to slow it down... */
+    src->flags = SNIFF_TOUCHED|SNIFF_POLL; 	/* just to slow it down... */
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     return sd;
 }
@@ -110,7 +110,7 @@ sniffer_start(source_t * src)
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *dropcntr)
+sniffer_next(source_t * src, pkt_t * out, int max_no)
 {
     struct _snifferinfo * info; 
     pkt_t * pkt; 
@@ -149,10 +149,10 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, __unused int *dropcntr)
 	pkt->ts = NTOHLL(p->ts); 
 	pkt->len = ntohl(p->len); 
 	pkt->caplen = ntohl(p->caplen);
-        pkt->l2type = ntohs(p->l2type); 
+        pkt->type = ntohs(p->type); 
   	pkt->l3type = ntohs(p->l3type); 
-        pkt->layer3ofs = ntohs(p->layer3ofs); 
-        pkt->layer4ofs = ntohs(p->layer4ofs); 
+        pkt->l3ofs = ntohs(p->l3ofs); 
+        pkt->l4ofs = ntohs(p->l4ofs); 
 
 	/* the payload is just after the packet. update 
 	 * the payload pointer. 

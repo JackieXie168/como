@@ -37,7 +37,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 
-#ifndef USE_STARGATE
+#ifndef BUILD_FOR_ARM
 #include <pcap.h>	/* DLT_* on linux */
 #else 
 #include "pcap-stargate.h"
@@ -51,21 +51,48 @@
 /*
  * SNIFFER  ---    pcap files 
  *
- * Reads pcap trace files. It supports only ethernet traces (DLT_EN10MB). 
+ * Reads pcap trace files. 
  *
  */
 
 /* sniffer specific information */
 #define BUFSIZE (1024*1024) 
 struct _snifferinfo { 
-    uint32_t type; 	 /* CoMo packet type */
-    char buf[BUFSIZE];   /* base of the capture buffer */
-    int nbytes;      	 /* valid bytes in buffer */
-    char pktbuf[BUFSIZE];/* buffer for pre-processed packets 
-			  * (used only to deal with 802.11 frames)
-			  */
-    int pkt_nbytes; 	 /* valid bytes in pktbuf */
+    uint16_t type; 	 	/* CoMo packet type */
+    int littleendian;		/* set if pcap headers are bigendian */
+    char buf[BUFSIZE];   	/* base of the capture buffer */
+    int nbytes;      	 	/* valid bytes in buffer */
+
+    /* 
+     * the following are needed to deal 
+     * with IEEE 802.11 frames 
+     */
+    char pktbuf[BUFSIZE];	/* buffer for pre-processed packets */
+    int pkt_nbytes; 	 	/* valid bytes in pktbuf */
 };
+
+
+/* libpcap magic */
+#define PCAP_MAGIC 0xa1b2c3d4
+
+/* 
+ * swapl(), swaps()
+ * 
+ * swap bytes from network byte order to host byte order 
+ * cannot use ntoh macros because we do really need to swap now. 
+ */
+static __inline__ uint32_t 
+swapl(uint32_t x) 
+{
+    return (((x & 0xff) << 24) | ((x & 0x0000ff00) << 8) | 
+	    ((x >> 8) & 0x0000ff00) | ((x >> 24) & 0x000000ff));
+}
+
+static __inline__ uint32_t 
+swaps(uint16_t x) 
+{
+    return (((x & 0x00ff) << 8) | ((x >> 8) & 0x00ff));
+}
 
 
 /* 
@@ -80,8 +107,9 @@ static int
 sniffer_start(source_t * src) 
 {
     struct _snifferinfo * info; 
-    uint32_t type; 
-    uint32_t hdr[6];
+    struct pcap_file_header pf; 
+    uint16_t type; 
+    int swapped; 
     int rd;
     int fd;
 
@@ -92,42 +120,61 @@ sniffer_start(source_t * src)
 	return -1; 
     } 
 
-    rd = read(fd, &hdr, sizeof(hdr));
-    if (rd != sizeof(hdr)) {
+    rd = read(fd, &pf, sizeof(pf));
+    if (rd != sizeof(pf)) {
 	logmsg(LOGWARN, "pcap sniffer: failed to read header\n");
 	return -1; 
     } 
 
-    switch (hdr[5]) { 
+    if (pf.magic != PCAP_MAGIC) { 
+        if (pf.magic != swapl(PCAP_MAGIC)) {
+             logmsg(LOGWARN, "pcap sniffer: invalid pcap file\n"); 
+            return -1;
+        } else {
+            pf.version_major = swaps(pf.version_major);
+            pf.version_minor = swaps(pf.version_minor);
+            pf.thiszone = swapl(pf.thiszone);
+            pf.sigfigs = swapl(pf.sigfigs);
+            pf.snaplen = swapl(pf.snaplen);
+            pf.linktype = swapl(pf.linktype);
+            swapped = 1;
+        }
+    }
+
+
+    switch (pf.linktype) { 
     case DLT_EN10MB: 
-	logmsg(LOGSNIFFER, "sniffer: datalink Ethernet (%d)\n", hdr[5]); 
+	logmsg(LOGSNIFFER, "datalink Ethernet (%d)\n", pf.linktype); 
 	type = COMOTYPE_ETH; 
 	break; 
 
     case DLT_IEEE802_11: 
-	logmsg(LOGSNIFFER, "sniffer: datalink 802.11 (%d)\n", hdr[5]); 
-	type = COMOTYPE_WLAN;
+	logmsg(LOGSNIFFER, "datalink 802.11 (%d)\n", pf.linktype); 
+	type = COMOTYPE_80211;
 	break;
 
-
     case DLT_PRISM_HEADER: 
-	logmsg(LOGSNIFFER, "sniffer: datalink 802.11 with Prism header (%d)\n"
-								, hdr[5]); 
-	type = COMOTYPE_WLAN_PRISM;
+	logmsg(LOGSNIFFER, 
+	       "datalink 802.11 with Prism header (%d)\n",
+	       pf.linktype); 
+	type = COMOTYPE_RADIO;
 	break;
 
     default: 
-	logmsg(LOGWARN, "pcap sniffer: unrecognized datalink (%d)\n", hdr[5]); 
+	logmsg(LOGWARN, 
+	       "pcap sniffer %s: unrecognized datalink (%d)\n", 
+	       src->device, pf.linktype); 
 	close(fd);
 	return -1; 
     }
 
     src->fd = fd; 
-    src->flags = SNIFF_FILE|SNIFF_SELECT; 
+    src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_SELECT; 
     src->polling = 0; 
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
     info->type = type; 
+    info->littleendian = swapped;
     return 0;
 }
 
@@ -150,7 +197,7 @@ typedef struct {
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr) 
+sniffer_next(source_t * src, pkt_t *out, int max_no) 
 {
     struct _snifferinfo * info; 
     pkt_t *pkt;                 /* CoMo record structure */
@@ -177,6 +224,14 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
         pcap_hdr_t * ph = (pcap_hdr_t *) base ; 
 	int left = info->nbytes - (base - info->buf); 
 
+	/* convert the header if needed */
+	if (info->littleendian) { 
+            ph->ts.tv_sec = swapl(ph->ts.tv_sec);
+            ph->ts.tv_usec = swapl(ph->ts.tv_usec);
+            ph->caplen = swapl(ph->caplen);
+            ph->len = swapl(ph->len);
+        } 
+
 	/* do we have a pcap header? */
 	if (left < (int) sizeof(pcap_hdr_t)) 
 	    break; 
@@ -193,8 +248,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
 	 * Now we have a packet: start filling a new pkt_t struct
 	 * (beware that it could be discarded later on)
 	 */
-	if (info->type == COMOTYPE_WLAN_PRISM ||
-	 			   info->type == COMOTYPE_WLAN) { 
+	if (info->type == COMOTYPE_80211 || info->type == COMOTYPE_RADIO) { 
 	    int n; 
 
 	    /* 

@@ -72,7 +72,7 @@ sniffer_start(source_t * src)
     if (src->fd < 0)
         return -1; 
 
-    src->flags = SNIFF_FILE; 
+    src->flags = SNIFF_FILE|SNIFF_SELECT|SNIFF_TOUCHED; 
     src->polling = 0; 
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
     return 0;		/* success */
@@ -88,7 +88,7 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no, __unused int *drop_cntr)
+sniffer_next(source_t * src, pkt_t *out, int max_no)
 {
     struct _snifferinfo * info; /* sniffer specific information */
     pkt_t *pkt;                 /* packet records */

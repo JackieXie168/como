@@ -33,14 +33,10 @@
 #include "stdwlan.h"
 #include "ieee80211.h"
 
-
 /* 
  * this file includes some inline helper functions to be 
  * shared among all sniffers. 
  */
-
-
-
 
 /* 
  * Layer 2 header lengths
@@ -51,10 +47,11 @@ static size_t como_l2_len[] = {
     4,          // COMOTYPE_HDLC
     18,         // COMOTYPE_VLAN
     40,         // COMOTYPE_ISL
-    0,		// COMOTYPE_PRISM
     0,          // COMOTYPE_NF
-    24,         // COMOTYPE_WLAN
+    24,         // COMOTYPE_80211
+    88,         // COMOTYPE_RADIO - value fixed: 64 + 24 (prism+mgmt hdrs)
 };
+
 
 /* 
  * figure out if a packet is ISL.
@@ -80,24 +77,24 @@ isISL(pkt_t * pkt)
 /* 
  * -- updatel4 
  * 
- * populates layer3ofs and layer4ofs values of a packet
+ * populates l3ofs and l4ofs values of a packet
  */
 static __inline__ void
 updatel4(pkt_t * pkt)
 {
     if (pkt->l3type == ETHERTYPE_IP) {
-	pkt->layer3ofs = pkt->layer4ofs = como_l2_len[pkt->l2type];
-	pkt->layer4ofs += ((IP(vhl) & 0x0f) << 2);
+	pkt->l3ofs = pkt->l4ofs = como_l2_len[pkt->type];
+	pkt->l4ofs += ((IP(vhl) & 0x0f) << 2);
 	pkt->l4type = IP(proto);
     } else {
 	switch(FC_TYPE(pkt->l3type)) { /* determine 802.11 frame type */
 	case WLANTYPE_MGMT:
-	    pkt->layer4ofs = pkt->layer3ofs + MGMT_HDR_LEN;
+	    pkt->l4ofs = pkt->l3ofs + MGMT_HDR_LEN;
 	    break;
 	case WLANTYPE_CTRL:
             break;
 	case WLANTYPE_DATA:
-	    pkt->layer4ofs = pkt->layer3ofs + DATA_HDR_LEN;
+	    pkt->l4ofs = pkt->l3ofs + DATA_HDR_LEN;
             break;
          default:
             logmsg(LOGWARN, "ieee802.11 type not supported");
@@ -116,29 +113,32 @@ updatel4(pkt_t * pkt)
 __inline__ void 
 updateofs(pkt_t * pkt, int type) 
 {
-    pkt->l2type = type; 
-    switch (pkt->l2type) { 
+    pkt->type = type; 
+    switch (pkt->type) { 
     case COMOTYPE_ETH: 
-	if (H16(ETH(type)) == ETHERTYPE_VLAN) {
-            pkt->l2type = COMOTYPE_VLAN;
+        if (H16(ETH(type)) == ETHERTYPE_VLAN) {
+            pkt->type = COMOTYPE_VLAN;
             pkt->l3type = H16(VLAN(ethtype));
         } else if (isISL(pkt)) { 
-	    pkt->l2type = COMOTYPE_ISL; 
+	    pkt->type = COMOTYPE_ISL; 
 	    pkt->l3type = H16(ISL(ethtype)); 
 	} else { 
             pkt->l3type = H16(ETH(type));
         }
 	break; 
+
     case COMOTYPE_HDLC: 
 	pkt->l3type = H16(HDLC(type)); 
         break; 
-    case COMOTYPE_WLAN:
+    
+    case COMOTYPE_80211:
         pkt->l3type = H16(IEEE80211_HDR(fc));
         break;
-    case COMOTYPE_WLAN_PRISM:
+    case COMOTYPE_RADIO:
         /* 802.11 + 64 byte capture header */
         pkt->l3type = H16(IEEE80211_HDR(fc));
         break;
+
     default: 
 	pkt->l3type = 0; 
         break; 

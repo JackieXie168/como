@@ -41,7 +41,7 @@
 #include <string.h>		/* bcopy */
 #include <stdio.h>		/* fprintf, stderr */
 #include <net/ethernet.h>	/* ether_addr, ether_ntoa */
-#if USE_STARGATE == 1
+#ifdef BUILD_FOR_ARM
 #include "pcap-stargate.h"
 #else
 #include <pcap.h>		/* bpf_int32, etc. */
@@ -127,7 +127,7 @@ init(__unused void *mem, __unused size_t msize, char * args[])
 
 
 static int
-update(pkt_t *pkt, void *fh, __unused int isnew, __unused unsigned drop_cntr)
+update(pkt_t *pkt, void *fh, __unused int isnew)
 {
     FLOWDESC *x = F(fh);
     int len; 
@@ -159,10 +159,10 @@ store(void *fh, char *buf, size_t len)
     pkt->ts = HTONLL(pkt->ts); 
     pkt->caplen = htonl(pkt->caplen); 
     pkt->len = htonl(pkt->len); 
-    pkt->l2type = htons(pkt->l2type); 
+    pkt->type = htons(pkt->type); 
     pkt->l3type = htons(pkt->l3type); 
-    pkt->layer3ofs = htons(pkt->layer3ofs); 
-    pkt->layer4ofs = htons(pkt->layer4ofs); 
+    pkt->l3ofs = htons(pkt->l3ofs); 
+    pkt->l4ofs = htons(pkt->l4ofs); 
 
     memcpy(buf, pkt, need); 
     return need; 
@@ -299,11 +299,11 @@ print(char *buf, size_t *len, char * const args[])
     p.ts = NTOHLL(COMO(ts)); 
     p.len = ntohl(COMO(len)); 
     p.caplen = ntohl(COMO(caplen)); 
-    p.l2type = ntohl(COMO(l2type)); 
+    p.type = ntohl(COMO(type)); 
     p.l3type = ntohs(COMO(l3type)); 
     p.l4type = ntohs(COMO(l4type)); 
-    p.layer3ofs = ntohs(COMO(layer3ofs)); 
-    p.layer4ofs = ntohs(COMO(layer4ofs)); 
+    p.l3ofs = ntohs(COMO(l3ofs)); 
+    p.l4ofs = ntohs(COMO(l4ofs)); 
     p.payload = buf + sizeof(pkt_t);
 
     /* now we are ready to process this packet */

@@ -72,25 +72,25 @@
 #define PUTH8(x, val) {         \
     uint8_t v = val;            \
     memcpy(x, &v, sizeof(v));   \
-    ((char *)x) += 1; 		\
+    x = ((char *)x) + 1; 	\
 }
 
 #define PUTH16(x, val) {        \
     uint16_t v = htons(val);    \
     memcpy(x, &v, sizeof(v));   \
-    ((char *)x) += 2; 		\
+    x = ((char *)x) + 2;	\
 }
 
 #define PUTH32(x, val) {        \
     uint32_t v = htonl(val);    \
     memcpy(x, &v, sizeof(v));   \
-    ((char *)x) += 4; 		\
+    x = ((char *)x) + 4; 	\
 }
 
 #define PUTH64(x, val) {        \
     uint64_t v = HTONLL(val);   \
     memcpy(x, &v, sizeof(v));   \
-    ((char *)x) += 8; 		\
+    x = ((char *)x) + 8; 	\
 }
 
 /*
@@ -103,20 +103,21 @@
 #define PUTN16(x, val) {        \
     uint16_t v = val;           \
     memcpy(x, &v, sizeof(v));   \
-    ((char *)x) += 2; 		\
+    x = ((char *)x) + 2; 	\
 }
 
 #define PUTN32(x, val) {        \
     uint32_t v = val;           \
     memcpy(x, &v, sizeof(v));   \
-    ((char *)x) += 4; 		\
+    x = ((char *)x) + 4; 	\
 }
 
 #define PUTN64(x, val) {        \
     uint64_t v = val;           \
     memcpy(x, &v, sizeof(v));   \
-    ((char *)x) += 8; 		\
+    x = ((char *)x) + 8; 	\
 }
+
 
 #define MAX(a,b) 	(((a) > (b))? (a) : (b))
 

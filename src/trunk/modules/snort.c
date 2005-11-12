@@ -553,8 +553,8 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
             switch(onode->keyword) {
                 case SNTOK_CONTENT:
                     if (onode->has_distance || onode->has_within)
-                        pl_start = pkt->layer4ofs + onode->offset + last_found + onode->distance;
-                    else pl_start = pkt->layer4ofs + onode->offset;
+                        pl_start = pkt->l4ofs + onode->offset + last_found + onode->distance;
+                    else pl_start = pkt->l4ofs + onode->offset;
 
                     /* Jump the layer 4 header */
                     pl_start += layer4jmp;
@@ -565,8 +565,8 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
                         logmsg(LOGWARN, "SNORT: payload search out of limits: %d > %d\n",
                                pl_start, pkt->caplen);
                         /* XXX debug
-                        logmsg(LOGWARN, "last_found = %d, pkt->layer4ofs = %d, pl_start = %d\n",
-                               last_found, pkt->layer4ofs, pl_start); */
+                        logmsg(LOGWARN, "last_found = %d, pkt->l4ofs = %d, pl_start = %d\n",
+                               last_found, pkt->l4ofs, pl_start); */
                         continue;
                     }
                     
@@ -592,22 +592,22 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
                     }
                     ok &= BM(onode->cnt, onode->cntlen, pl, pl_size,
                              onode->bmBc, onode->bmGs, &last_found);
-                    if (ok) last_found = last_found + (pl_start - pkt->layer4ofs - layer4jmp) + onode->cntlen;
+                    if (ok) last_found = last_found + (pl_start - pkt->l4ofs - layer4jmp) + onode->cntlen;
                     prv_free(pl);
                     
                     if (onode->neg) ok ^= 1;
                     break;
                 case SNTOK_ISDATAAT:
                     if (onode->relative) {
-                        ok &= ((pkt->caplen - pkt->layer4ofs - layer4jmp) > (onode->isdataat + last_found));
+                        ok &= ((pkt->caplen - pkt->l4ofs - layer4jmp) > (onode->isdataat + last_found));
                     }
-                    else ok &= ((pkt->caplen - pkt->layer4ofs - layer4jmp) > onode->isdataat);
+                    else ok &= ((pkt->caplen - pkt->l4ofs - layer4jmp) > onode->isdataat);
                     break;
                 case SNTOK_PCRE:
 #ifdef HAVE_PCRE
-                    pl_size = pkt->caplen - pkt->layer4ofs - layer4jmp;
+                    pl_size = pkt->caplen - pkt->l4ofs - layer4jmp;
                     pl = (char *)prv_alloc(pl_size);
-                    memcpy(pl, pkt->payload + pkt->layer4ofs + layer4jmp, pl_size);
+                    memcpy(pl, pkt->payload + pkt->l4ofs + layer4jmp, pl_size);
                     
                     if (onode->relative) pcre_startoffset = last_found;
                     else pcre_startoffset = 0;
@@ -632,7 +632,7 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
                     break;
                 case SNTOK_BYTETEST:
                     pl = (char *)prv_alloc(onode->byte_number);
-                    pl_start = pkt->layer4ofs + layer4jmp + onode->byte_offset;
+                    pl_start = pkt->l4ofs + layer4jmp + onode->byte_offset;
                     if (onode->relative) pl_start += last_found;
                     memcpy(pl, pkt->payload + pl_start, onode->byte_number);
                     if (!(onode->byte_isstring))
@@ -656,11 +656,11 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
                             ok &= (byte_value & onode->byte_value);
                             break;
                     }
-                    if (ok) last_found = pl_start - pkt->layer4ofs - layer4jmp + onode->byte_number;
+                    if (ok) last_found = pl_start - pkt->l4ofs - layer4jmp + onode->byte_number;
                     break;
                 case SNTOK_BYTEJUMP:
                     pl = (char *)prv_alloc(onode->byte_number);
-                    pl_start = pkt->layer4ofs + layer4jmp + onode->byte_offset;
+                    pl_start = pkt->l4ofs + layer4jmp + onode->byte_offset;
                     if (onode->relative) pl_start += last_found;
                     memcpy(pl, pkt->payload + pl_start, onode->byte_number);
                     if (!(onode->byte_isstring)) {
@@ -739,7 +739,7 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
                     }
                     break;
                 case SNTOK_DSIZE:
-                    pl_size = pkt->caplen - pkt->layer4ofs - layer4jmp;
+                    pl_size = pkt->caplen - pkt->l4ofs - layer4jmp;
                     switch (oaux->dsizecmp) {
                         case SNTOK_EQ:
                             ok &= (pl_size == oaux->dsizelow);
@@ -987,7 +987,7 @@ check(pkt_t *pkt)
  *
  */ 
 static int
-update(pkt_t *pkt, void *fh, __unused int isnew, __unused unsigned drop_cntr)
+update(pkt_t *pkt, void *fh, __unused int isnew)
 {
     unsigned int idx;
     
@@ -1203,13 +1203,13 @@ void ts_print(register const struct timeval *tvp, char *timebuf)
     
 /* Macros to access packet fields from print() */
 #define IPS(field)               \
-    (((struct _como_iphdr *) ((char *)(pkt + 1) + pkt->layer3ofs))->field)
+    (((struct _como_iphdr *) ((char *)(pkt + 1) + pkt->l3ofs))->field)
 #define TCPS(field)              \
-    (((struct _como_tcphdr *) ((char *)(pkt + 1) + pkt->layer4ofs))->field)
+    (((struct _como_tcphdr *) ((char *)(pkt + 1) + pkt->l4ofs))->field)
 #define UDPS(field)              \
-    (((struct _como_udphdr *) ((char *)(pkt + 1) + pkt->layer4ofs))->field)
+    (((struct _como_udphdr *) ((char *)(pkt + 1) + pkt->l4ofs))->field)
 #define ICMPS(field)              \
-    (((struct _como_icmphdr *) ((char *)(pkt + 1) + pkt->layer4ofs))->field)
+    (((struct _como_icmphdr *) ((char *)(pkt + 1) + pkt->l4ofs))->field)
 
 /*
  * -- create_alert_str
@@ -1383,7 +1383,7 @@ print(char *buf, size_t *len, char * const args[])
             /* XXX TODO: snaplen and linktype should depend on 
              * the sniffer used:
              * - snaplen can be passed as an init parameter 
-             * - linktype can be gathered from pkt->l2type
+             * - linktype can be gathered from pkt->type
              */
             fhdr.magic = TCPDUMP_MAGIC;
             fhdr.version_major = PCAP_VERSION_MAJOR;
@@ -1644,16 +1644,16 @@ print(char *buf, size_t *len, char * const args[])
         /* Print payload info */
         switch(IPS(proto)) {
             case IPPROTO_IP:
-                pl_start = pkt->layer4ofs;
+                pl_start = pkt->l4ofs;
                 break;
             case IPPROTO_TCP:
-                pl_start = pkt->layer4ofs + ((TCPS(hlen) >> 4) << 2);
+                pl_start = pkt->l4ofs + ((TCPS(hlen) >> 4) << 2);
                 break;
             case IPPROTO_UDP:
-                pl_start = pkt->layer4ofs + sizeof(struct _como_udphdr);
+                pl_start = pkt->l4ofs + sizeof(struct _como_udphdr);
                 break;
             case IPPROTO_ICMP:
-                pl_start = pkt->layer4ofs + sizeof(struct _como_icmphdr);
+                pl_start = pkt->l4ofs + sizeof(struct _como_icmphdr);
                 break;
         }
         *len += snprintf(s + *len, pkt->caplen - pl_start, "%s", (char *)(pkt + 1) + pl_start);

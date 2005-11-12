@@ -234,15 +234,7 @@ supervisor_mainloop(int accept_fd)
     int client_fd;	/* for http queries */
     int num_procs;
     char *buf;
-    FILE * logfile;
     
-    /* 
-     * open log file 
-     */
-    logfile = fopen("/tmp/como.log", "w"); 
-    if (logfile == NULL)
-	panic("opening /tmp/como.log"); 
-
     /* 
      * Start listening for query requests.
      */
@@ -262,26 +254,15 @@ supervisor_mainloop(int accept_fd)
      * initialize resource management and
      * interprocess communication
      */
-#ifdef RESOURCE_MANAGEMENT
     resource_mgmt_init();
-#endif
     ipc_init();
 
     for (;;) { 
         int secs, dd, hh, mm, ss;
 	struct timeval now;
-    /* XXX Resource management needs this timer to be small so supervisor
-     * can wake up more frequently and look at the resources used, reacting
-     * in time to any sudden changes in resource usage.
-     */
-#ifdef RESOURCE_MANAGEMENT
-	struct timeval to = { 0, 50000 }; /* 0.05 sec */
-#else
-	struct timeval to = { 1, 0 }; /* fire every second */
-#endif
+	struct timeval to = {1, 0};
 	int i, n_ready;
 	fd_set r = valid_fds;
-
 
 	/* 
          * user interface. just one line... 
@@ -303,6 +284,19 @@ supervisor_mainloop(int accept_fd)
 	    map.stats->pkts, map.stats->drops,
 	    map.stats->modules_active, map.module_count); 
 
+#ifdef RESOURCE_MANAGEMENT
+	/* 
+	 * to do resource management we need the select timeout to 
+	 * be shorter so that supervisor can be more reactive to 
+	 * sudden changes in the resource usage. 
+	 * 
+	 * XXX shouldn't the other processes be more reactive and 
+	 *     supervisor just wait for an "heads up" from them? 
+	 */
+	to.tv_sec = 0; 
+	to.tv_usec = 50000; 
+#endif
+
 	n_ready = select(max_fd, &r, NULL, NULL, &to);
 	fprintf(stderr, "%78s\r", ""); /* clean the line */
 
@@ -313,23 +307,20 @@ supervisor_mainloop(int accept_fd)
 	    n_ready--;
 	    if (i == accept_fd) {
 		int x;
-		logmsg(V_LOGDEBUG, "accept on socket %d\n", i);
 		x = accept(i, NULL, NULL);
-		logmsg(V_LOGDEBUG,
-		    "accept done on socket %d returns %d\n", i, x);
-		if (x < 0)
+		if (x < 0) {
 		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n",
 			    i, x, strerror(errno));
-		else {
-            if (num_procs < 3) {
-                /* XXX ugly hack. only add to proc_fds the first 3
-                 * processes that connect to supervisor. they will be
-                 * CA, EX or ST in no particular order. queries' fds
-                 * don't belong into proc_fds.
-                 */
-                num_procs++;
-                register_ipc_fd(x); //XXX XXX
-            }
+		} else {
+		    if (num_procs < 3) {
+			/* XXX ugly hack. only add to proc_fds the first 3
+			 * processes that connect to supervisor. they will be
+			 * CA, EX or ST in no particular order. queries' fds
+			 * don't belong into proc_fds.
+			 */
+			num_procs++;
+			register_ipc_fd(x); //XXX XXX
+		    }
 		    max_fd = add_fd(x, &valid_fds, max_fd);
 		    logmsg(V_LOGDEBUG, "accept fd[%d] ok new desc %d\n", i, x);
 		}
@@ -375,27 +366,28 @@ supervisor_mainloop(int accept_fd)
 	    }
 
 	    /* receive & process messages */
-        if (sup_recv_message(i) < 0) {
-            close(i);
-            del_fd(i, &valid_fds, max_fd);
-            unregister_ipc_fd(i);
-        }
-        
-        /* echo message on stdout */
-        /* XXX For now all messages are handled with sup_recv_message
-         * Should we change that ???
-         */
-        /* if (echo_log_msgs(i, logfile) != 0) { 
+	    if (sup_recv_message(i) < 0) {
+		close(i);
+		del_fd(i, &valid_fds, max_fd);
+		unregister_ipc_fd(i);
+	    }
+	    
+	    /* echo message on stdout */
+	    /* XXX For now all messages are handled with sup_recv_message
+	     * Should we change that ???
+	     */
+#if 0 
+	    if (echo_log_msgs(i) != 0) { 
 		close(i); 
 		del_fd(i, &valid_fds, max_fd);
-	    } */
+	    } 
+#endif
 	}
+
 	handle_children(); /* handle dead children etc */
 
         if (num_procs >= 3) {
-#ifdef RESOURCE_MANAGEMENT
             schedule();    /* resource management */
-#endif
             reconfigure(); /* if needed, reconfigure */
         }
     }

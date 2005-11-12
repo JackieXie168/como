@@ -1,7 +1,8 @@
 $Id$
 
 CoMo is open source and is released under terms of the BSD License. 
-CoMo has been tested under Linux 2.4, 2.6 and FreeBSD 4.x and 5.x.
+CoMo has been tested under Linux 2.4, 2.6 and FreeBSD 4.x and 5.x. It 
+also compiles for gcc 2.9.5 and any more recent releases. 
 
 In order to install CoMo follow these steps:
 
@@ -14,35 +15,9 @@ set a few configuration options to build a customized CoMo binary. The
 options can be found in config_var.default. Rename that file to 
 config_var.local to customize your release. 
 
-There are five options supported so far:
-
-* HAVE_FTLIB_AND_ZLIB, needed to compile the flow-tools support. 
-  CoMo only supports flow-tools v0.67 or higher.
-
-* USE_DAG, needed to run the packet sniffer with Endace DAG cards. 
-  It requires DAG API v2.4 or higher.
-
-* USE_SK98, to support SysKonnect* cards with modified drivers for Linux. 
-  This will allow to use the sniffer-sk98 but only runs under Linux. 
-  It requires a driver that can be found at:
-  http://www.cl.cam.ac.uk/Research/SRG/netos/nprobe/downloads/sk98lin.tar.bz2 
-
-* USE_SNORT_MODULE, needed to run the Snort module.
-  Bison v1.875 or higher required. 
-
-* DISABLE_FILTER_PARSER, to disable the Flex/Bison parser for CoMo filters.
-
-* HAVE_PCRE, needed to use the Perl-Compatible Regular Expressions support
-  in the Snort module. It requires that libpcre is installed.
-  
-* USE_STARGATE, to compile the code for the Crossbow's Stargate platform 
-  (see platformx.sourceforge.net). It requires arm-linux-gcc 3.2.2.
-
 Once built the como binary will reside in base/como. An example configuration 
 file can be found in base/example.conf. A man page can be found in 
 man/como.1 (run "nroff -man como.1" to view it formatted properly).
-
-
 
 --------------------------------------------------------------------------
 Copyright (c) 2004-2005 Intel Corporation

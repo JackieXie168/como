@@ -236,12 +236,12 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     
     pkt = (pkt_t *) template; 
     pkt->caplen = htonl(sizeof(struct _como_iphdr)); 
-    pkt->l2type = htons(COMOTYPE_NONE); 
+    pkt->type = htons(COMOTYPE_NONE); 
     pkt->l3type = htons(ETHERTYPE_IP);
-    pkt->layer3ofs = 0; 
-    pkt->layer4ofs = htons(sizeof(struct _como_iphdr));
+    pkt->l3ofs = 0; 
+    pkt->l4ofs = htons(sizeof(struct _como_iphdr));
     pkt->payload = template + sizeof(pkt_t); 
-    iph = (struct _como_iphdr *)(pkt->payload + pkt->layer3ofs);
+    iph = (struct _como_iphdr *)(pkt->payload + pkt->l3ofs);
     iph->vhl = 0x45; 
     iph->proto = IPPROTO_TCP; 
 
@@ -250,7 +250,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 
 
 static int
-update(pkt_t *pkt, void *fh, int isnew, __unused unsigned drop_cntr)
+update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     int app; 
@@ -476,7 +476,7 @@ replay(char *buf, char *out, size_t * len)
 	int nbytes; 
 	int i; 
 	struct _como_iphdr *iph = (struct _como_iphdr *)(pkt->payload +
-							 pkt->layer3ofs);
+							 pkt->l3ofs);
 	nbytes = 0; 
 	for (i = 0; i < APPLICATIONS; i++) { 
 	    npkts += NTOHLL(app->pkts[i]); 

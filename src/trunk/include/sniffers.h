@@ -67,7 +67,7 @@ typedef struct _sniffer 	sniffer_t;
 
 /* sniffer callbacks */
 typedef int (start_fn)(source_t *src);
-typedef int (next_fn)(source_t *src, pkt_t *pkts, int max_no, int *dropnr); 
+typedef int (next_fn)(source_t *src, pkt_t *pkts, int max_no); 
 typedef void (stop_fn)(source_t *src);
 
 struct _sniffer {
@@ -92,9 +92,11 @@ struct _source {
     pktdesc_t *output;		/* packet stream description */
     void *ptr;			/* sniffer-dependent information */ 
     uint32_t flags;		/* sniffer flags */
-    uint64_t polling; 	/* polling interval, if needed */
+    timestamp_t polling; 	/* polling interval, if needed */
+    uint32_t drops;		/* packets dropped by sniffer */
 };
 
+#define SNIFF_TOUCHED	0x8000	/* set if the the flags have changed */
 #define	SNIFF_SELECT	0x0001	/* device must be polled */
 #define	SNIFF_POLL	0x0002	/* device must be polled */
 #define	SNIFF_FILE	0x0004	/* device reads from file */
@@ -107,6 +109,5 @@ void updateofs(pkt_t * pkt, int type);
 
 /* function used by sniffer-*.c to parse the 802.11 frames */
 int parse80211_frame(pkt_t *pkt, char *buf, char *pl, uint32_t type);
-
 
 #endif /* _COMO_SNIFFERS_H */

@@ -4,14 +4,30 @@ $Id$
 ---- CoMo v0.5-current (Oct 3rd, 2005)
 --
 
-. Protocol module
-. SSID module
-. Snort module
+TODOs
+. Anonymization
+. Porting to MAC OS and MS Windows
+. WLAN support
+-----------------------
 
-. Fixed bugs that caused exhaustion of file descriptors
- 
-  Fixed a few bugs in query and storage that cause the como process to 
-  sooner or later exhaust all file descriptors.  
+. Configuration file
+
+  CoMo monitors changes to the configuration file and implements them 
+  without any need to restart. For now, the only supported changes are 
+  the addition or removal of modules. 
+
+. Embronyal Resource Management
+
+  A rather simple mechanism for resource management is now included in 
+  the code. It can be turned on setting the DO_RESOURCE_MANAGEMENT flag
+  in the configuration file. 
+
+. Resolution for gnuplot files in several modules
+
+  The counter, protocol, application modules accept a new parameter 
+  in the query ("granularity") to specify the resolution of the results.
+  This can be done to reduce the data transfer when the query covers a 
+  large period of time. 
 
 . HTTP queries include "time" flag
 
@@ -41,7 +57,7 @@ $Id$
   Added support for timing and profiling the source code. A simple API 
   to access the CPU's timestamp counter is provided. 
 
-. Small directory reord
+. Small directory reorg
   
   Directories have been reorganized with a new directory src/sniffers 
   that contains all sniffers currently implemented. The util.c files
