@@ -17,19 +17,19 @@ MODULES= \
 	netflow-anon.c
 
 ifdef ENABLE_SNORT_MODULE
-        MODULES += \
-            snort.so
-        OTHER = \
-            snort-lexic.c \
-            snort-syntax.c
-        SRCS_snort.so = \
-            snort-syntax.c \
-            snort-mem.c \
-            bm.c
-        DEPS_snort.so = \
-            snort-lexic.c
-        LIBS_snort.so = pcre
-	CLAGS += -DHAVE_PCRE
+    MODULES += \
+        snort.so
+    OTHER = \
+        snort-lexic.c \
+        snort-syntax.c
+    SRCS_snort.so = \
+        snort-syntax.c \
+        snort-mem.c \
+        bm.c
+    DEPS_snort.so = \
+        snort-lexic.c
+    LIBS_snort.so = pcre
+    CFLAGS += -DHAVE_PCRE
 endif
 
 INCDIRS = ../base /usr/local/include
