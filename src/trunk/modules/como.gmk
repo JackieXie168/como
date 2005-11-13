@@ -13,7 +13,8 @@ MODULES= \
 	connx.so \
 	trace.so \
 	application.so \
-	protocol.so
+	protocol.so \
+	netflow-anon.c
 
 ifdef ENABLE_SNORT_MODULE
         MODULES += \
