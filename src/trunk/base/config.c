@@ -1551,7 +1551,19 @@ reconfigure(void)
     /*
      * tell processes to load the new modules.
      */
-    sup_send_new_modules();
+    if (sup_send_new_modules() < 0) { /* failed */
+        logmsg(LOGUI, "Failed to load new modules, going back to old cfg\n");
+
+        /* forget about modules */
+        for (idx = 0; idx < map.module_count; idx++) {
+            module_t *mdl = &map.modules[idx];
+
+            if (mdl->status == MDL_LOADING)
+                remove_module(mdl);
+        }
+
+        return; /* done */
+    }
 
     /*
      * modules that were in MDL_LOADING status

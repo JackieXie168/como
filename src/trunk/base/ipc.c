@@ -220,7 +220,7 @@ unregister_ipc_fd(int fd)
  * for capture to link it.
  *
  */
-void
+int
 sup_send_new_modules(void)
 {
     char msg_id;
@@ -229,6 +229,11 @@ sup_send_new_modules(void)
     free(map.filter);
     map.filter = create_filter(map.modules, map.module_count,
             map.template, map.workdir);
+
+    if (map.filter == NULL) {
+        logmsg(LOGWARN, "failed to compile filter function\n");
+        return -1;
+    }
 
     msg_id = MSG_NEW_MODULES;
 
@@ -272,6 +277,7 @@ sup_send_new_modules(void)
     }
 
     logmsg(LOGDEBUG, "sent new modules to all procs\n");
+    return 0;
 }
 
 /**
