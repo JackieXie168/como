@@ -216,7 +216,7 @@ uint32_t netmasks[33] =
 static int
 parse_nm(int i, uint32_t *nm)
 {
-    if (i >= 0 && i <= 32) *nm = netmasks[i];
+    if (i >= 0 && i <= 32) *nm = htonl(netmasks[i]);
     else {
         yferror("Invalid CIDR netmask: %d", i);
         return -1;
@@ -1662,9 +1662,9 @@ yyreduce:
 #line 712 "filter-syntax.y"
     {
         if (yyvsp[0].ipaddr.direction == 0)
-            asprintf(&s, "(N32(IP(src_ip)) == %d)", yyvsp[0].ipaddr.ip & yyvsp[0].ipaddr.nm);
+            asprintf(&s, "((N32(IP(src_ip)) & %u) == %u)", yyvsp[0].ipaddr.nm, yyvsp[0].ipaddr.ip);
         else
-            asprintf(&s, "(N32(IP(dst_ip)) == %d)", yyvsp[0].ipaddr.ip & yyvsp[0].ipaddr.nm);
+            asprintf(&s, "((N32(IP(dst_ip)) & %u) == %u)", yyvsp[0].ipaddr.nm, yyvsp[0].ipaddr.ip);
         
         yyval.tree = tree_make(Tpred, NULL, NULL, s);
         free(s);
@@ -1734,7 +1734,7 @@ yyreduce:
         if (parse_ip(yyvsp[0].string, &(yyval.ipaddr.ip)) == -1)
             YYABORT;
         /* Assume it's a host IP address if we don't have a netmask */
-        yyval.ipaddr.nm = netmasks[32];
+        yyval.ipaddr.nm = htonl(netmasks[32]);
     ;}
     break;
 

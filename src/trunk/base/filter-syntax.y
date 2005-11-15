@@ -197,7 +197,7 @@ uint32_t netmasks[33] =
 static int
 parse_nm(int i, uint32_t *nm)
 {
-    if (i >= 0 && i <= 32) *nm = netmasks[i];
+    if (i >= 0 && i <= 32) *nm = htonl(netmasks[i]);
     else {
         yferror("Invalid CIDR netmask: %d", i);
         return -1;
@@ -711,9 +711,9 @@ expr: expr AND expr
     | ip
       {
         if ($1.direction == 0)
-            asprintf(&s, "(N32(IP(src_ip)) == %d)", $1.ip & $1.nm);
+            asprintf(&s, "((N32(IP(src_ip)) & %u) == %u)", $1.nm, $1.ip);
         else
-            asprintf(&s, "(N32(IP(dst_ip)) == %d)", $1.ip & $1.nm);
+            asprintf(&s, "((N32(IP(dst_ip)) & %u) == %u)", $1.nm, $1.ip);
         
         $$ = tree_make(Tpred, NULL, NULL, s);
         free(s);
@@ -775,7 +775,7 @@ ip: DIRECTION IPADDR
         if (parse_ip($2, &($$.ip)) == -1)
             YYABORT;
         /* Assume it's a host IP address if we don't have a netmask */
-        $$.nm = netmasks[32];
+        $$.nm = htonl(netmasks[32]);
     }
   | DIRECTION IPADDR NETMASK
     {
