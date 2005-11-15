@@ -183,7 +183,7 @@ uint64_t get_min_tscsample(tsc_t *);
 void ipc_init(void);
 void register_ipc_fd(int fd);
 void unregister_ipc_fd(int fd);
-void sup_send_new_modules(void);
+int  sup_send_new_modules(void);
 void sup_send_module_status(void);
 void recv_message(int fd, proc_callbacks_t *callbacks);
 int  sup_recv_message(int fd);
