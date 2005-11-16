@@ -203,7 +203,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     int npkts;                  /* processed pkts */
     int rd;
   
-            int t =0;
     info = (struct _snifferinfo *) src->ptr; 
 
     /* read pcap records from fd */
