@@ -50,7 +50,7 @@ p, ul, li, td, form, input {
 #content {
     position: absolute;
     width: 800px;
-    height: 450px;
+    height: 480px;
     top: 100px;
     left: 20px;
     border-left: 1px dashed gray;
@@ -63,7 +63,7 @@ p, ul, li, td, form, input {
     position:absolute; 
     width: 802px; 
     left: 20px;
-    top: 550px; 
+    top: 580px; 
     background-color: #DDD;
     border-top: 1px dashed gray;
     border-bottom: 1px solid gray;
@@ -83,14 +83,14 @@ p, ul, li, td, form, input {
 
 #intel { 
     position: absolute; 
-    top: 500px; 
+    top: 530px; 
     left: 640px; 
 }
 
 .graph {
     position: relative;
     width: 600px;
-    height: 445px;
+    height: 480px;
     top: 0px;
     left: 0px;
     margin: 0;
@@ -154,7 +154,7 @@ dl, dt, dd, ul, li {
 
 #menu dl {
     float: left;
-    width: 7em;
+    width: 7.5em;
     padding: 0;
     list-style-type: none;
     margin: 0;

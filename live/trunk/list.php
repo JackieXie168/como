@@ -9,21 +9,21 @@
 <div id=content> 
 <?php 
     $no_areas = 1; 
-    $area[0] = $_GET['area'];
+    $region[0] = $_GET['area'];
 
-    if (ereg("all", $area[0])) { 
+    if (ereg("all", $region[0])) { 
 	$no_areas = 7; 
-	$area[0] = "europe"; 
-	$area[1] = "north_america"; 
-	$area[2] = "south_america"; 
-	$area[3] = "asia"; 
-	$area[4] = "africa"; 
-	$area[5] = "oceania"; 
-	$area[6] = "others"; 
+	$region[0] = "europe"; 
+	$region[1] = "north_america"; 
+	$region[2] = "south_america"; 
+	$region[3] = "asia"; 
+	$region[4] = "africa"; 
+	$region[5] = "oceania"; 
+	$region[6] = "others"; 
     } 
  
     for ($i = 0; $i < $no_areas; $i++) { 
-        $filename = $_SERVER['DOCUMENT_ROOT'].$NODEDB."/".$area[$i].".list";   
+        $filename = $_SERVER['DOCUMENT_ROOT'].$NODEDB."/".$region[$i].".list"; 
 
 	if (!file_exists($filename)) 
 	    continue; 

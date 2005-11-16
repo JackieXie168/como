@@ -15,7 +15,7 @@
 	if (!is_null($filter)) 
 	    print "&filter=$filter";
 	else 
-	    print "&filter=ALL"; 
+	    print "&filter=all"; 
 	print "&stime=$zstime&etime=$zetime\">\n";
 	print "<img src=images/zoom-in.png></a>\n";
     } else {
@@ -36,7 +36,7 @@
     if (!is_null($filter)) 
 	print "&filter=$filter";
     else 
-        print "&filter=ALL"; 
+        print "&filter=all"; 
     print "&stime=$zstime&etime=$zetime\">\n";
     print "<img src=images/zoom-out.png></a>\n";
 
@@ -47,7 +47,7 @@
     if (!is_null($filter)) 
 	print "&filter=$filter";
     else 
-        print "&filter=ALL"; 
+        print "&filter=all"; 
     print "&start=$stime&end=$etime&format=pretty\">";
     print "<img src=images/zoom-ascii.png alt=\"ASCII Output\"></a>";
 
@@ -61,7 +61,7 @@
     if (!is_null($filter)) 
 	print "&filter=$filter";
     else 
-        print "&filter=ALL"; 
+        print "&filter=all"; 
     print "&stime=$bstime&etime=$betime\">\n";
     print "<img src=images/backward.png alt=\"Back $range_min minutes\"></a>\n";
 
@@ -75,7 +75,7 @@
 	if (!is_null($filter)) 
 	    print "&filter=$filter";
 	else 
-	    print "&filter=ALL"; 
+	    print "&filter=all"; 
 	print "&stime=$fstime&etime=$fetime\">\n";
         print "<img src=images/forward.png alt=\"Forward $range_min minutes\"></a>\n";
     }else{

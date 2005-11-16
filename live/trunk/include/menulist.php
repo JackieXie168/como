@@ -76,34 +76,35 @@ function clearmenu(name) {
            ?>
 	<li>
 	   <?php
-	   print "<a class=inactive href=system.php?"; 
-	   print "node=$host&module=protocol&filter=isIP";
+	   print "<a href=system.php?"; 
+	   print "node=$host&module=protocol&filter=ip";
 	   print "&stime=$stime&etime=$etime>";
 	   print "Protocol Breakdown</a></li>";
            ?>
 	<li>
 	   <?php
 	   print "<a href=\"system.php?"; 
-	   print "node=$host&module=application&filter=isIP%20and%20proto(TCP)";
+	   print "node=$host&module=application&filter=tcp";
 	   print "&stime=$stime&etime=$etime\">";
 	   print "Application Breakdown</a></li>";
            ?>
 	<li>
 	   <?php
-	   $topstart = $stime - 1; 
-	   $topend = $stime + 300; 
+	   $topend = $stime + 3600; 
 	   print "<a target=new href=\"textquery.php?"; 
-	   print "node=$host&module=topdest&filter=isIP&format=pretty";
-	   print "&stime=$topstart&etime=$topend\">";
+	   print "node=$host&module=topdest&filter=ip&format=pretty";
+	   print "&stime=$stime&etime=$topend\">";
 	   print "Top destinations</a></li>";
            ?>
+<!--
         <li>
-           <?php
+           <?php /*
            print "<a href=\"system.php?";
-           print "node=$host&module=snort&filter=isIP";
+           print "node=$host&module=snort&filter=ip";
            print "&stime=$stime&etime=$etime\">";
-           print "Snort module</a></li>";
+           print "Snort module</a></li>"; */
            ?>
+-->
       </ul>
     </dd>
   </dl>

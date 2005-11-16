@@ -1,5 +1,20 @@
 <!-- $Id$ --> 
 
+<html>
+  <title>CoMolive! - Intel Research Cambridge</title>
+  <link rel="stylesheet" type="text/css" name="como" href="css/live.css">
+  <link rel="shortcut icon" href="images/live_favicon.ico">
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta name="description" content="CoMolive!">
+<body>
+
+<script language="JavaScript">
+<!--
+  window.resizeTo(500,600); 
+-->
+</script>
+
+
 <?php 
 
 include("comolive.conf"); 
@@ -26,7 +41,7 @@ $query = "module=$mdl&start=$stime&end=$etime&format=gnuplot";
 if (!is_null($filter)) 
     $query = "$query&filter=$filter";
 else 
-    $query .= "&filter=ALL"; 
+    $query .= "&filter=all"; 
 
 /* 
  * make sure the directory where the results should 
@@ -40,17 +55,6 @@ if (!(file_exists($results_dir))) {
     exit;
 }
 
-?>
-
-<html>
-  <title>CoMolive! - Intel Research Cambridge</title>
-  <link rel="stylesheet" type="text/css" name="como" href="css/live.css">
-  <link rel="shortcut icon" href="images/live_favicon.ico">
-  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
-  <meta name="description" content="CoMolive!">
-<body>
-
-<?php 
 /* 
  * check if we have cached the file. otherwise, generate the 
  * .eps and .jpg files. 
@@ -68,20 +72,23 @@ $output = explode("\n", $script, $num);
 ?>
 
 <table cellpadding=1>
-  <tr> 
-    <td colspan=5>Date</td> 
-    <td width=200 align=center>IP /24 destination prefix</td> 
-    <td width=150 align=center>Bytes</td>
-    <td width=150 align=center>Packets</td>
+  <tr>
+    <td width=200 style="border-bottom:1px solid"><b>Destination</b></td> 
+    <td width=150 style="border-bottom:1px solid"><b>Bytes</b></td>
+    <td width=150 style="border-bottom:1px solid"><b>Packets</b></td>
   </tr>
 
 <?php
 for ($i = 1; $i < $num; $i++) {
     print "<tr>";
     $tok = strtok($output[$i], " ");
+    $n = 1; 
     while ($tok !== false) { 
-	print "<td align=center>$tok</td>\n"; 
+	if ($n > 5) {
+	    print "<td align=left>$tok</td>\n"; 
+	} 
 	$tok = strtok(" ");
+	$n++; 
     } 
     print "</tr>\n";
 }

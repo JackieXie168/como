@@ -4,6 +4,8 @@
 
 <?php 
 
+include("comolive.conf");
+
 /* get the node hostname and port number */
 $host = $_GET['node'];
 $nodename = NULL;
@@ -23,15 +25,14 @@ if ($nodeinfo == false) {
      * query failed. write error message and exit
      */
     include("include/header.php"); 
-    include("comolive.conf");
     $level = "top"; 
     include("include/menulist.php");
     ?>
     <div id=content>
       <div class=graph onmouseover="javascript:clearmenu('smenu')">
 	<br><br><center>
-        CoMo node <?= $host ?> cannot be contacted. <br>
-	Please try another time.
+        Sorry but the requested CoMo node is not <br>
+	available at the moment. Please try another time.
       </div>
     </div>
     <?php include("include/footer.php"); ?>
@@ -55,35 +56,37 @@ while ($tok !== false) {
     else if ($tok === "Build date")
         $builddate = strtok(":\n");
     else if ($tok === "Delay")
-        $delay = ((int) strtok(":\n")) * 2;
+        $delay = ((int) strtok(":\n")); 
     $tok = strtok(":\n");
 }
 
 /* banner on top */
 include("include/header.php"); 
 
-/* read configuration parameters */
-include("comolive.conf");
-
-/* run the query and generate the resulting image and update 
- * the php_env file that flash will fetch. Note that 
- * XXX the variable $filename will contain the image */
-include("include/query.php");
+/*
+ * first of all, parse the input variables.
+ * this file will give us the following variables:
+ *   . module name (mdl)
+ *   . filter expression (filter)
+ *   . start time (stime) aligned to $GRANULARITY (see comolive.conf)
+ *   . end time (etime) aligned to $GRANULARITY (see comolive.conf)
+ */
+include ("include/variables.php");
 
 $level = "system"; 
 include("include/menulist.php");
 
 include ("include/vcrbuttons.php"); 
+
 ?>
 
 <div id=content>
   <div class=graph>
     <br>
     <?php 
-	if ($USEFLASH == false) 
- 	    print "<img src=$filename.jpg>";
-	else 
-	    include("flash/zooming.php");
+	/* run the query and generate the resulting image 
+	 * XXX the variable $filename will contain the image */
+	include("include/query.php");
     ?> 
 
   </div>
@@ -107,24 +110,24 @@ include ("include/vcrbuttons.php");
 ?>
       <br>
 
-<?php /*
+<?php 
+/*
     <div class=title>Status Information</div>
       Active modules: <?= $active_modules ?><br>
-      Loaded modules: <?= $total_modules ?><br>
 
     <div class=title>Traffic Load (Mbps)</div>
-      5 minutes average: <?= $mbps_5min ?><br>
-      1 hour average: <?= $mbps_1hr ?><br>
-      24 hours average: <?= $mbps_24hrs ?><br>
+      Past 5 minutes: <?= $mbps_5min ?><br>
+      Past hour: <?= $mbps_1hr ?><br>
+      Past 24 hours: <?= $mbps_24hrs ?><br>
       Link Speed: <?= $linkspeed ?><br>
-*/ ?>
+*/ 
+?>
       
     <div class=title>Image Info</div>
-      <!-- Module: <?= $mdl ?><br> -->
-      Time interval:<br>
+      Time interval (UTC):<br>
 	<?php 
-	    $startstr = strftime("%a %b %d %T %Y", $stime - 3600); 
-	    $endstr = strftime("%a %b %d %T %Y", $etime - 3600); 
+	    $startstr = gmstrftime("%a %b %d %T %Y", $stime); 
+	    $endstr = gmstrftime("%a %b %d %T %Y", $etime); 
 	    print "&nbsp; $startstr<br>&nbsp; $endstr<br>";
 	?>
       Download: [<a href=<?=$filename?>.jpg>JPG</a>]
@@ -147,7 +150,7 @@ include ("include/vcrbuttons.php");
     if (!is_null($filter))
 	print "&filter=$filter";
     else
-	print "&filter=ALL";
+	print "&filter=all";
     print "&stime=$hr&etime=$sec\">\n";
     print "View last hour</a><br>\n"; 
 
@@ -155,7 +158,7 @@ include ("include/vcrbuttons.php");
     if (!is_null($filter))
 	print "&filter=$filter";
     else
-	print "&filter=ALL";
+	print "&filter=all";
     print "&stime=$day&etime=$sec\">\n";
     print "View last 24 hours</a><br>\n"; 
 
@@ -163,7 +166,7 @@ include ("include/vcrbuttons.php");
     if (!is_null($filter))
 	print "&filter=$filter";
     else
-	print "&filter=ALL";
+	print "&filter=all";
     print "&stime=$week&etime=$sec\">\n";
     print "View last week</a><br>\n"; 
 
