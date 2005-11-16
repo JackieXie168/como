@@ -48,8 +48,6 @@ static size_t como_l2_len[] = {
     18,         // COMOTYPE_VLAN
     40,         // COMOTYPE_ISL
     0,          // COMOTYPE_NF
-    24,         // COMOTYPE_80211
-    88,         // COMOTYPE_RADIO - value fixed: 64 + 24 (prism+mgmt hdrs)
 };
 
 
@@ -92,6 +90,7 @@ updatel4(pkt_t * pkt)
 	    pkt->l4ofs = pkt->l3ofs + MGMT_HDR_LEN;
 	    break;
 	case WLANTYPE_CTRL:
+            pkt->l4ofs = pkt->l3ofs;
             break;
 	case WLANTYPE_DATA:
 	    pkt->l4ofs = pkt->l3ofs + DATA_HDR_LEN;

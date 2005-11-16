@@ -83,10 +83,9 @@ parse80211_frame(pkt_t *pkt,char *buf,char *pl,uint32_t type)
     struct _p80211info pi;
 
     pi.hdrlen = ieee80211_hdrlen(pkt,type); /* capture header length */ 
-    bcopy(buf+sizeof(pcap_hdr_t),pl,pi.hdrlen+2);
+    bcopy(buf,pl,pi.hdrlen+2);
     updateofs(pkt, type);
 
-    //logmsg(LOGWARN,"processing packet:)\n");    
     switch(FC_TYPE(pkt->l3type)) {
     case WLANTYPE_MGMT:
 	/*
@@ -94,7 +93,7 @@ parse80211_frame(pkt_t *pkt,char *buf,char *pl,uint32_t type)
 	 * parsing process is complete
 	 */
 	pi.rl = pkt->caplen;
-	return parse80211_mgmtframe(pkt,buf,pl,&pi);
+        return parse80211_mgmtframe(pkt,buf,pl,&pi);
 	break;
     case WLANTYPE_CTRL:
 	return parse80211_ctrlframe(pkt,buf,pl);
@@ -115,7 +114,6 @@ parse80211_frame(pkt_t *pkt,char *buf,char *pl,uint32_t type)
 int
 parse80211_dataframe(pkt_t *pkt, char *buf, char *pl)
 {
-    buf += sizeof(pcap_hdr_t);
     bcopy(buf, pl, pkt->caplen);
     return pkt->caplen;
 }
@@ -127,7 +125,6 @@ parse80211_dataframe(pkt_t *pkt, char *buf, char *pl)
 int
 parse80211_ctrlframe(pkt_t *pkt, char *buf, char *pl)
 {
-    buf += sizeof(pcap_hdr_t);
     bcopy(buf, pl, pkt->caplen);
     return pkt->caplen;
 }
@@ -150,7 +147,7 @@ parse80211_mgmtframe(pkt_t *pkt, char *buf, char *pl, struct _p80211info *pi)
      * parsing process is complete
      */
     pi->rl -= pi->hdrlen; 
-    bcopy(buf+=sizeof(pcap_hdr_t), pl, pi->hdrlen);
+    bcopy(buf, pl, pi->hdrlen);
     pkt->caplen = pi->hdrlen; 
     
     /* update capture buffer and processed packets buffer pointers */
@@ -375,7 +372,6 @@ parse80211_auth(pkt_t *pkt, char * buf, char *pl, struct _p80211info *pi)
     return parse80211_info_elements(pkt,buf,pl,pi,mgmt_body);
 }
 
-
 /*
  * -- parse80211_deauth
  *
@@ -532,60 +528,61 @@ parse80211_info_elements(pkt_t *pkt, char * buf, char *pl,
 
     ie = (struct _ieee80211_info_element *)buf;
     
-    while(pi->rl >= (uint32_t)(ie->len + 2)){
-    switch(ie->id) {
-    case SSID_TYPE:  
-	ssid_type = (struct _ieee80211_ssid *)buf;
-	mgmt_body->ssid.id = ssid_type->id;
-	mgmt_body->ssid.len = ssid_type->len;
-	bcopy(ssid_type->ssid, mgmt_body->ssid.ssid, mgmt_body->ssid.len);
-	wh = ssid_type->len + 2;
-	break;
-    case RATES_TYPE: 
-	rates_type = (struct _ieee80211_rates *)buf;
-	mgmt_body->rates.id = rates_type->id;
-	mgmt_body->rates.len = rates_type->len;
-	bcopy(rates_type->rates, mgmt_body->rates.rates, mgmt_body->rates.len);
-	wh = rates_type->len + 2;
-	break;
-    case FH_TYPE:
-	wh = FH_IE_LEN; /* information element ignored */
-	break;
-    case DS_TYPE:
-	ds_type = (struct _ieee80211_ds *)buf;
-	mgmt_body->ds.id = ds_type->id;
-	mgmt_body->ds.len = ds_type->len; 
-	mgmt_body->ds.ch = ds_type->ch;
-	wh = DS_IE_LEN;
-	break;
-    case CF_TYPE:
-	wh = CF_IE_LEN; /* information element ignored */
-	break;
-    case IBSS_TYPE:
-	wh = IBSS_IE_LEN; /* information element ignored */
-	break;
-    case TIM_TYPE:
+    while(pi->rl >= (ie->len + 2)){
+	switch(ie->id) {
+	case SSID_TYPE:  
+	    ssid_type = (struct _ieee80211_ssid *)buf;
+	    mgmt_body->ssid.id = ssid_type->id;
+	    mgmt_body->ssid.len = ssid_type->len;
+	    bcopy(ssid_type->ssid, mgmt_body->ssid.ssid, mgmt_body->ssid.len);
+	    wh = ssid_type->len + 2;
+	    break;
+	case RATES_TYPE: 
+	    rates_type = (struct _ieee80211_rates *)buf;
+	    mgmt_body->rates.id = rates_type->id;
+	    mgmt_body->rates.len = rates_type->len;
+	    bcopy(rates_type->rates, mgmt_body->rates.rates, 
+							mgmt_body->rates.len);
+	    wh = rates_type->len + 2;
+	    break;
+	case FH_TYPE:
+	    wh = FH_IE_LEN; /* information element ignored */
+	    break;
+	case DS_TYPE:
+	    ds_type = (struct _ieee80211_ds *)buf;
+	    mgmt_body->ds.id = ds_type->id;
+	    mgmt_body->ds.len = ds_type->len; 
+	    mgmt_body->ds.ch = ds_type->ch;
+	    wh = DS_IE_LEN;
+	    break;
+	case CF_TYPE:
+	    wh = CF_IE_LEN; /* information element ignored */
+	    break;
+	case IBSS_TYPE:
+	    wh = IBSS_IE_LEN; /* information element ignored */
+	    break;
+	case TIM_TYPE:
 	/* information element ignored */
-	tim_type = (struct _ieee80211_tim *)buf;
-	wh = tim_type->len + 2;
-	break;
-    default: 
-	/* reserved information elements ignored */
+	    tim_type = (struct _ieee80211_tim *)buf;
+	    wh = tim_type->len + 2;
+	    break;
+	default: 
+	    /* reserved information elements ignored */
+	    ie = (struct _ieee80211_info_element *)buf;
+	    wh = ie->len + 2; /* fixed fields: element id + length field */
+	    break;          
+	}
+	pkt->caplen += wh; 
+	/* increment buffer + offset pointers */
+	pl += wh; buf += wh; bptr += wh;
+	/*
+	 * remaining packet length to parse, when zero the packet
+	 * parsing process is complete
+	 */
+	pi->rl -= wh;
+	if (pi->rl == 0) 
+	    return bptr + pi->n + pi->hdrlen;
 	ie = (struct _ieee80211_info_element *)buf;
-	wh = ie->len + 2; /* fixed fields: element id + length field */
-	break;          
-    }
-    pkt->caplen += wh; 
-    /* increment buffer + offset pointers */
-    pl += wh; buf += wh; bptr += wh;
-    /*
-     * remaining packet length to parse, when zero the packet
-     * parsing process is complete
-     */
-    pi->rl -= wh;
-    if (pi->rl == 0) 
-           return bptr + pi->n + pi->hdrlen;
-    ie = (struct _ieee80211_info_element *)buf;
     }
     return bptr + pi->n + pi->hdrlen;
 }

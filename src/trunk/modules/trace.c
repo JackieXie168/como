@@ -371,7 +371,8 @@ print(char *buf, size_t *len, char * const args[])
 			(uint32_t) H32(TCP(ack)), 
 		 	(uint16_t) H16(TCP(win))); 
 	}
-    } else {
+    } else if (FC_TYPE(COMO(l3type)) == WLANTYPE_MGMT || WLANTYPE_DATA || 
+		WLANTYPE_CTRL){
 	hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
 	mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
 	ss = TS2SEC(COMO(ts)) % 60; 
@@ -429,6 +430,8 @@ print(char *buf, size_t *len, char * const args[])
 	    break;
 	}
     }
+    else
+	*len += sprintf(s + *len, "print not supported");
     *len += sprintf(s + *len, "\n");
     return s; 
 }
