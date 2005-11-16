@@ -108,8 +108,8 @@ sniffer_start(source_t * src)
 {
     struct _snifferinfo * info; 
     struct pcap_file_header pf; 
-    uint16_t type; 
     int swapped; 
+    uint16_t type;
     int rd;
     int fd;
 
@@ -147,7 +147,6 @@ sniffer_start(source_t * src)
 	logmsg(LOGSNIFFER, "datalink Ethernet (%d)\n", pf.linktype); 
 	type = COMOTYPE_ETH; 
 	break; 
-
     case DLT_IEEE802_11: 
 	logmsg(LOGSNIFFER, "datalink 802.11 (%d)\n", pf.linktype); 
 	type = COMOTYPE_80211;
@@ -155,11 +154,9 @@ sniffer_start(source_t * src)
 
     case DLT_PRISM_HEADER: 
 	logmsg(LOGSNIFFER, 
-	       "datalink 802.11 with Prism header (%d)\n",
-	       pf.linktype); 
+	       "datalink 802.11 with Prism header (%d)\n", pf.linktype); 
 	type = COMOTYPE_RADIO;
 	break;
-
     default: 
 	logmsg(LOGWARN, 
 	       "pcap sniffer %s: unrecognized datalink (%d)\n", 
@@ -173,7 +170,7 @@ sniffer_start(source_t * src)
     src->polling = 0; 
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
-    info->type = type; 
+    info->type = type;
     info->littleendian = swapped;
     return 0;
 }
@@ -206,6 +203,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     int npkts;                  /* processed pkts */
     int rd;
   
+            int t =0;
     info = (struct _snifferinfo *) src->ptr; 
 
     /* read pcap records from fd */
@@ -250,7 +248,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 */
 	if (info->type == COMOTYPE_80211 || info->type == COMOTYPE_RADIO) { 
 	    int n; 
-
 	    /* 
 	     * point to memory region to receive pre-processed 802.11 
 	     * frame. this frame may be larger than original frame 
@@ -259,10 +256,14 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	     */
             pkt->payload = info->pktbuf + info->pkt_nbytes;
             pl =  pkt->payload;
+
+            base += sizeof(pcap_hdr_t);
 	    n = parse80211_frame(pkt,base,pl,info->type); 
+
 	    if (n == 0) 
 		break; 
-	    info->pkt_nbytes += n; 
+	    info->pkt_nbytes += ph->caplen; 
+	    base +=  ph->caplen; 
 	} else {  
 	    pkt->payload = base + sizeof(pcap_hdr_t); 
             /* 
@@ -270,9 +271,11 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
              * this sniffer runs on ethernet frames
              */
             updateofs(pkt, info->type); 
+	   
+	   /* increment the number of processed packets */
+	    base += sizeof(pcap_hdr_t) + ph->caplen; 
 	} 
-        /* increment the number of processed packets */
-	base += sizeof(pcap_hdr_t) + ph->caplen; 
+    
     }
     info->nbytes -= (base - info->buf);
     bcopy(base, info->buf, info->nbytes);

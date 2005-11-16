@@ -59,8 +59,8 @@ struct _como_wlan_prism2hdr {
     n32_t      antenna;
     n32_t      priority;
     n32_t      ssi_type;
-    n32_t      ssi_signal;
-    n32_t      ssi_noise;
+    int32_t    ssi_signal;
+    int32_t    ssi_noise;
     n32_t      preamble;
     n32_t      encoding;
 }; 
@@ -94,10 +94,10 @@ struct _como_wlan_mgmt_body {
     struct _ieee80211_challenge challenge_info;
 };
 #define MGMT_BODY(field)        \
-    (((struct _como_wlan_mgmt_body*) \
-    (pkt->payload + PRISM_HDR_LEN + MGMT_HDR_LEN))->field) 
+    (((struct _como_wlan_mgmt_body*)(pkt->payload + pkt->l4ofs))->field) 
 
 typedef struct _como_wlan_mgmt_body        mgmt_body_t;
+
 
 #define WLAN_CAPINFO_PRIVACY	0x0010
 
@@ -122,8 +122,8 @@ typedef struct _como_wlan_mgmt_body        mgmt_body_t;
 
 /* parsing  variables */
 struct _p80211info {
-    uint32_t  rl;      /* remaining packet length */
     uint32_t  hdrlen;  /* header length */
+    int  rl;           /* remaining packet length */
     int  n;
 };
 

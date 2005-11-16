@@ -57,7 +57,8 @@
 /* 
  * functions that we need from libpcap.so 
  */
-typedef int (*sniff_pcap_dispatch)(pcap_t *, int, pcap_handler, u_char *); 
+typedef int (*sniff_pcap_dispatch)
+			(pcap_t *, int, pcap_handler, u_char *); 
 typedef pcap_t * (*sniff_pcap_open)(const char *, int, int, int, char *);
 typedef void (*sniff_pcap_close)(pcap_t *); 
 typedef int (*sniff_pcap_noblock)(pcap_t *, int, char *); 
@@ -179,8 +180,6 @@ sniffer_start(source_t * src)
     sniff_pcap_close sp_close; 
     struct wlan_req wreq;
 
-    uint32_t type;
-
     if (src->args) { 
 	/* process input arguments */
 	char * p; 
@@ -221,7 +220,7 @@ sniffer_start(source_t * src)
     wreq.type = MONITOR_MODE; 
     wreq.len = 0;
 #endif
-    send_ioctl(src->device, &wreq, SET_OPERATIONMODE); 
+  //  send_ioctl(src->device, &wreq, SET_OPERATIONMODE); 
 
     /* 
      * fix the channel, if requested 
@@ -238,7 +237,7 @@ sniffer_start(source_t * src)
 	wreq.len = 1; 
 	wreq.val[0] = channel; 
 #endif
-	send_ioctl(src->device, &wreq, SET_CHANNEL); 
+//	send_ioctl(src->device, &wreq, SET_CHANNEL); 
     } 
 
     /* 
@@ -305,7 +304,6 @@ sniffer_start(source_t * src)
     src->fd = sp_fileno(info->pcap);
     src->flags = SNIFF_TOUCHED|SNIFF_SELECT; 
     src->polling = 0;
-    info->type = type;
     return 0; 		/* success */
 }
 
@@ -321,13 +319,15 @@ static void
 processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
 {
     pkt_t * pkt = (pkt_t *) data; 
+    char * pl = pkt->payload; 
+     
     pkt->ts = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
     pkt->len = h->len;
     pkt->caplen = h->caplen;
-
-    bcopy(buf, pkt->payload, pkt->caplen);
-
- }
+  
+    /* process 802.11 packet */
+    parse80211_frame(pkt, (char *)buf, pl, pkt->type);
+}
 
 
 /*
@@ -357,6 +357,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
         
 	/* point the packet payload to next packet */
 	pkt->payload = info->pktbuf + nbytes; 
+        /* specify 802.11 type */
+	pkt->type = info->type; 
 
 	/*
 	 * we use pcap_dispatch() because pcap_next() is assumend unaffected
@@ -368,29 +370,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	 * 
 	 */
 
-
 	count = info->dispatch(info->pcap, 1, processpkt, (u_char *) pkt); 
 	if (count == 0) 
 	    break;
-
-#if 0
-        /*
-         * if BSD_PRISM_HDR do this, supporting AVS type header for now
-         */
-
-	if (PRISM(status) & PRISM_BADCRC) {
-	    /* bad CRC, need to skip this packet. */
-	    logmsg(V_LOGSNIFFER, "packet with bad CRC, skipping it\n"); 
-	    continue; 
-	} 
-#endif
-
-	/*
-	 * determine what type of packet this is. if this is 
-	 * an IP packet we also populate the l3type, l3ofs, and l4ofs 
- 	 * information. right now we do not do anything to help navigate
-	 * thru the 802.11 headers (mgmt, ctl, data, etc.)
-         */
 
 	nbytes += pkt->caplen; 
 	npkts++; 

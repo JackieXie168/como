@@ -201,7 +201,7 @@ struct _ieee80211_deauth {
 #define REASSOC_RES_FIXED_LEN 6
 #define PROBE_REQ_FIXED_LEN 0
 #define PROBE_RES_FIXED_LEN 12
-#define AUTH_FIXED_LEN 4
+#define AUTH_FIXED_LEN 6 
 #define DEAUTH_FIXED_LEN 2
 
 /*
@@ -287,7 +287,7 @@ struct _ieee80211_data_hdr {
 };
 
 #define DATA_HDR(field)         \
-    (((struct _como_wlan_data_hdr*)(pkt->payload + pkt->layer3ofs))->field)
+    (((struct _ieee80211_data_hdr*)(pkt->payload + pkt->l3ofs))->field)
 
 #define DATA_HDR_LEN 24
 
@@ -322,7 +322,7 @@ struct _como_wlan_mgmt_hdr {
  * 802.11 management header macro
  */
 #define MGMT_HDR(field)         \
-    (((struct _como_wlan_mgmt_hdr*)(pkt->payload + PRISM_HDR_LEN))->field)
+    (((struct _ieee80211_mgmt_hdr*)(pkt->payload + pkt->l3ofs))->field)
 
 #define MGMT_HDR_LEN 24
 
