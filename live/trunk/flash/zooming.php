@@ -13,7 +13,7 @@
     if (!is_null($filter))
 	$info .= "&filter=$filter";
     else
-	$info .= "&filter=ALL";
+	$info .= "&filter=all";
 
 ?>
 
