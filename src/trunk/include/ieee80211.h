@@ -47,7 +47,6 @@
 #define WLANTYPE_CTRL 0x4000
 #define WLANTYPE_DATA 0x8000
 
-
 #define MGMT_SUBTYPE_ASSOC_REQ   0x0000
 #define MGMT_SUBTYPE_ASSOC_RES   0x1000
 #define MGMT_SUBTYPE_REASSOC_REQ 0x2000
@@ -396,6 +395,9 @@ struct _ieee80211_challenge {
 #define DS_IE_LEN 3
 #define CF_IE_LEN 8
 #define IBSS_IE_LEN 4
+
+/* useful macros ... */
+#define isWLANBEACON (MGMT_SUBTYPE_BEACON | (WLANTYPE_MGMT >> 4))
 
 
 #endif /* _COMO_IEEE80211_H */ 
