@@ -1093,6 +1093,16 @@ capture_mainloop(int accept_fd)
 		if (src->flags & SNIFF_FILE) 
 		    src->flags |= SNIFF_FROZEN|SNIFF_TOUCHED; 
 	    } 
+	} else {
+	    /* 
+	     * memory is now below threshold. unfreeze any source
+	     */
+	    for (src = map.sources; src; src = src->next) {
+		if (src->flags & SNIFF_FROZEN) {
+		    src->flags &= ~SNIFF_FROZEN; 
+		    src->flags |= SNIFF_TOUCHED; 
+		} 
+	    } 
 	}
 
 	end_tsctimer(map.stats->ca_loop_timer);
