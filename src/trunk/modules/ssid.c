@@ -54,153 +54,55 @@ FLOWDESC {
     int8_t 	channel;
     uint8_t	wepmode;
     uint8_t	len; 
-    char 	ssid[33]; 
+    char 	ssid[34]; 
 };
 
-
-/* 
- * beacon packet format... 
- */ 
-
-struct wlanbeacon { 
-    uint64_t ts; 
-    uint16_t ivl; 
-    uint16_t cap; 
-    char variable[0];
-};
-
-
-struct wlanssid { 
-    uint8_t id; 	/* must be 0 */
-    uint8_t len; 	/* length of SSID */
-    char ssid[33]; 	/* actual ssid */
-};
-
-struct wlands { 
-    uint8_t id; 	/* must be 3 */
-    uint8_t len; 	/* length of field (must be 1) */
-    uint8_t ch; 	/* channel */
-};
-
-struct wlanrates { 
-    uint8_t id; 	/* must be 1 */
-    uint8_t len; 	/* no. of rates */
-    uint8_t rates[7]; 	/* rates values */
-};
-
-static int meas_ivl = 1;     /* measurement granularity */
-
-static int
-init(__unused void *mem, __unused size_t msize, char *args[])
-{
-    int i;
-
-    if (args == NULL)
-        return 0;
-
-    for (i = 0; args[i]; i++) {
-        if (strstr(args[i], "granularity")) {
-            char * val = index(args[i], '=') + 1;
-            meas_ivl = atoi(val);
-        }
-    }
-    return 0;
-}
 
 /* 
  * define a check() callback to filter out messages that are not 
- * beacons... we have to do it here because we don't have the right 
- * macros ready yet for the filter. 
+ * beacons 
  */
 static int
 check(pkt_t * pkt) 
 {
-    if ((COMO(type) != COMOTYPE_RADIO)) 
+    if ((COMO(type) != COMOTYPE_RADIO) || (COMO(l3type) != isWLANBEACON)) 
 	return 0; 
     return 1; 
 }
 
-static int 
-match(pkt_t * pkt, void * fh) 
-{
-    struct wlanbeacon * bcn; 
-    struct wlanssid * ssidinfo; 
-    struct wlands * dsinfo; 
-    FLOWDESC * x = F(fh); 
-    int ch = -1; 
-    int skip; 
 
-    bcn = (struct wlanbeacon *) (pkt->payload + 
-				sizeof(struct _como_wlan_prism2hdr) + 
-              		        sizeof(struct _como_wlan_mgmt_hdr)); 
-
-    ssidinfo = (struct wlanssid *) bcn->variable; 
-    skip = x->len + 2;				/* skipping ssid info element */
-    skip += bcn->variable[skip + 1] + 2; 	/* skipping rates info */
-       
-    /* look for the DS parameter set */
-    dsinfo = (struct wlands *) (bcn->variable + skip); 
-    if (dsinfo->id == 3) 
-	ch = dsinfo->ch; 
-
-    if (!(strncmp(x->ssid, ssidinfo->ssid, x->len)) && x->channel == ch)
-	return 1; 
-
-    return 0; 
-}
-
-
+/*
+ * update callback
+ */
 static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
-    FLOWDESC *x = F(fh);
+    FLOWDESC *x = F(fh); 
 
     if (isnew) {
-	struct wlanbeacon * bcn; 
-	struct wlanssid * ssidinfo; 
-	struct wlands * dsinfo; 
-	int skip;
-
-
-	x->ts = pkt->ts - pkt->ts % TIME2TS(meas_ivl, 0);
+	x->ts = pkt->ts;
 	x->channel = -1; 
 	x->signal = x->noise = x->samples = 0; 
 
-        
-	/* now find the information in the management frame */
-	bcn = (struct wlanbeacon *) (pkt->payload + 
-					sizeof(struct _como_wlan_prism2hdr) +
-                                        sizeof(struct _como_wlan_mgmt_hdr)); 
-
-	/* get to the privacy bit to find out if wep is used */
-	x->wepmode = (bcn->cap & WLAN_CAPINFO_PRIVACY)? 1 : 0;
-
+	/* now find the information in the management frame.
+	 * get privacy bit to determine if wep is enabled
+	 */
+	x->wepmode = (MGMT_BODY(cap) & WLAN_CAPINFO_PRIVACY)? 1 : 0;
 
 	/* get to the SSID information element */
-	ssidinfo = (struct wlanssid *) bcn->variable; 
-	if (ssidinfo->len > 0) { 
-	    x->len = ssidinfo->len; 
-	    bcopy(ssidinfo->ssid, x->ssid, x->len); 
+	if (MGMT_BODY(ssid.len) > 0) { 
+	    x->len = (MGMT_BODY(ssid.len)); 
+	    bcopy(MGMT_BODY(ssid.ssid), x->ssid, x->len);
 	} else { 
-	    /* no SSID? */
 	    x->len = 3; 
 	    sprintf(x->ssid, "ANY"); 
 	}
+	x->channel = MGMT_BODY(ds.ch); 	 
 
-	/* find where the DS parameter set is */
-	skip = x->len + 2;	/* skipping ssid info element */
-	skip += bcn->variable[skip + 1] + 2; 
-       
-	/* look for the DS parameter set */
-	dsinfo = (struct wlands *) (bcn->variable + skip); 
-	if (dsinfo->id == 3) 
-	    x->channel = dsinfo->ch; 
+	x->signal = PRISM_HDR(ssi_signal); 
+	x->noise = PRISM_HDR(ssi_noise); 
     } 
-
-    x->samples++; 
-    x->signal += H32(PRISM_HDR(ssi_signal)); 
-    x->noise += H32(PRISM_HDR(ssi_noise)); 
-    return 0;		/* records are never full */
+    return 1; /* records are always full */
 }
 
 
@@ -209,8 +111,10 @@ store(void *rp, char *buf, size_t len)
 {
     FLOWDESC *x = F(rp);
     int i; 
+    
     if (len < sizeof(FLOWDESC)) 
-        return -1;   
+	return -1;   
+    
     PUTH64(buf, x->ts);
     PUTH32(buf, x->signal);
     PUTH32(buf, x->noise);
@@ -220,48 +124,27 @@ store(void *rp, char *buf, size_t len)
     PUTH8(buf, x->len); 
     for (i = 0; i < x->len; i++) 
 	PUTH8(buf, x->ssid[i]); 
-
-#if 1
-    /* XXX for debugging... */
-    {
-	time_t t; 
-	char ssid[33]; 
-	uint8_t sig, noise; 
-	char * wepmode = x->wepmode? "yes": "no"; 
-
-	t = (time_t) TS2SEC(x->ts); 
-	snprintf(ssid, x->len + 1, x->ssid); 
-	sig = (uint8_t) (x->signal / x->samples); 
-	noise = (uint8_t) (x->noise / x->samples); 
-
-#define PRETTYFMT	"%.24s %-32s %-3s %2d %2d %2d %2d\n"
-	fprintf(stderr, PRETTYFMT, asctime(localtime(&t)), ssid, wepmode, 
-	           x->channel, sig, noise, x->samples); 
-#undef PRETTYFMT
-    }
-#endif 
-
-    return 20 + x->len;
+    
+    return sizeof(FLOWDESC);
 }
+
 
 static size_t
 load(char * buf, size_t len, timestamp_t * ts)
-{
-
+{   
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
         return 0;
     }
-
     *ts = NTOHLL(((FLOWDESC *)buf)->ts);
-    return 20 + (((FLOWDESC *)buf)->len);
+    return sizeof(FLOWDESC);
 }
 
 
 #define PRETTYHDR		\
-    "Date                       SSID           WEP   Ch Signal Noise Samples\n"
-#define PRETTYFMT	"%.24s %-32s %-3s %2d %2d %2d %2d\n"
-#define PLAINFMT	"%12ld %-32s %1d %2d %2d %2d %2d\n" 
+    "timestamp s (dbm) n (dbm) ch wep ssid\n"
+#define PRETTYFMT	"%02d:%02d:%02d.%06d %2d %2d %2d %s %s\n"
+#define PLAINFMT	"%12ld %2d %2d %2d\n" 
 
 static char *
 print(char *buf, size_t *len, char * const args[])
@@ -271,9 +154,10 @@ print(char *buf, size_t *len, char * const args[])
     FLOWDESC *x; 
     timestamp_t ts;
     time_t t; 
-    char ssid[33]; 
-    uint8_t sig, noise; 
+    char ssid[34];
+    int hh, mm, ss;
 
+ 
     if (buf == NULL && args != NULL) { 
 	int n; 
 
@@ -300,18 +184,20 @@ print(char *buf, size_t *len, char * const args[])
     x = (FLOWDESC *) buf; 
     ts = NTOHLL(x->ts);
     t = (time_t) TS2SEC(ts); 
-    snprintf(ssid, x->len + 1, x->ssid); 
-    sig = (uint8_t) (x->signal / x->samples); 
-    noise = (uint8_t) (x->noise / x->samples); 
+    snprintf(ssid, x->len+1, x->ssid);   
 
+    hh = (TS2SEC(ts) % 86400) /3600;
+    mm = (TS2SEC(ts) % 3600) / 60;
+    ss = TS2SEC(ts) % 60;
+    
     /* print according to the requested format */
     if (fmt == PRETTYFMT) {
-	char * wepmode = x->wepmode? "yes": "no"; 
-	*len = sprintf(s, fmt, asctime(localtime(&t)), ssid, wepmode, 
-	           x->channel, sig, noise, x->samples); 
+	char * wepmode = x->wepmode? "Y": "N"; 
+	*len = sprintf(s, fmt, hh, mm, ss, TS2USEC(ts), (x->signal-256), 
+		(x->noise-256), x->channel, wepmode, ssid); 
     } else {
-	*len = sprintf(s, fmt, (long int) t, ssid, x->wepmode, 
-		   x->channel, sig, noise, x->samples); 
+	*len = sprintf(s, fmt, (long int) t,  (x->signal-256), (x->noise-256),
+				    x->channel); 
     } 
 	
     return s;
@@ -322,10 +208,10 @@ callbacks_t callbacks = {
     ex_recordsize: 0,
     indesc: NULL, 
     outdesc: NULL,
-    init: init,
+    init: NULL,
     check: check,
     hash: NULL,
-    match: match,
+    match: NULL,
     update: update,
     ematch: NULL,
     export: NULL,
