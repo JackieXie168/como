@@ -395,7 +395,7 @@ parse80211_deauth(pkt_t *pkt, char * buf, char *pl, struct _p80211info *pi)
      */ 
     pkt->caplen += DEAUTH_FIXED_LEN;
     buf += DEAUTH_FIXED_LEN;
-    return pi->hdrlen + DEAUTH_FIXED_LEN;
+    return pi->hdrlen + sizeof(struct _como_wlan_mgmt_body);
 }
 
 
@@ -472,7 +472,7 @@ parse80211_disassoc(pkt_t *pkt, char * buf, char *pl, struct _p80211info *pi)
      */
     pkt->caplen += DISASSOC_FIXED_LEN;
     buf += DISASSOC_FIXED_LEN;
-    return pi->hdrlen + DISASSOC_FIXED_LEN;
+    return pi->hdrlen + sizeof(struct _como_wlan_mgmt_body);
 }
 
 
@@ -581,10 +581,10 @@ parse80211_info_elements(pkt_t *pkt, char * buf, char *pl,
 	 */
 	pi->rl -= wh;
 	if (pi->rl == 0) 
-	    return bptr + pi->n + pi->hdrlen;
+	    return pi->hdrlen + sizeof(struct _como_wlan_mgmt_body);
 	ie = (struct _ieee80211_info_element *)buf;
     }
-    return bptr + pi->n + pi->hdrlen;
+    return pi->hdrlen + sizeof(struct _como_wlan_mgmt_body);
 }
 
 
