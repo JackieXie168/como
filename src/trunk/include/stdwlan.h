@@ -88,10 +88,17 @@ struct _como_wlan_mgmt_body {
     struct _ieee80211_ssid ssid;
     struct _ieee80211_rates rates; 
     struct _ieee80211_ds ds;
+#if 0 
+    /*
+     * working with a minimum set of information elements 
+     * to start with. For now, fh, cf, tim, & challenge 
+     * not supported - kpmcgrath
+     */
     struct _ieee80211_fh fh;
     struct _ieee80211_cf cf;
     struct _ieee80211_tim tim;
     struct _ieee80211_challenge challenge_info;
+#endif
 };
 #define MGMT_BODY(field)        \
     (((struct _como_wlan_mgmt_body*)(pkt->payload + pkt->l4ofs))->field) 
@@ -101,23 +108,6 @@ typedef struct _como_wlan_mgmt_body        mgmt_body_t;
 
 #define WLAN_CAPINFO_PRIVACY	0x0010
 
-/*
- *   Macros are specific to 64 byte prism header
- *
- */
-#define WLAN_TYPE_MASK          0x0c
-#define WLAN_SUBTYPE_MASK	0xf0
-
-#define WLAN_HDR(field) \
-    (((struct _como_wlan_mgmt_hdr *) \
-    (pkt->payload + sizeof(struct _como_wlan_prism2hdr)))->field)
-
-#define WLANTYPE	(H16(WLAN_HDR(fc)) & WLAN_TYPE_MASK) 
-#define WLANSUBTYPE	(H16(WLAN_HDR(fc)) & WLAN_SUBTYPE_MASK) 
-#define isWLANDATA	(WLANTYPE == WLANTYPE_DATA)
-#define isWLANWEP	(isWLANDATA && (H16(WLAN_HDR(fc)) & WLAN_WEP))
-#define isWLANMGMT	(WLANTYPE == WLANTYPE_MGMT) 
-#define isWLANBEACON	(isWLANMGMT && (WLANSUBTYPE == MGMT_SUBTYPE_BEACON))
 
 
 /* parsing  variables */
@@ -127,8 +117,6 @@ struct _p80211info {
     int  n;
 };
 
-#define is80211_MGMT	(FC_TYPE(pkt->l3type) == WLANTYPE_MGMT)
-#define is80211_BEACON	(FC_SUBTYPE(pkt->l3type) == MGMT_SUBTYPE_BEACON)
 
 /* function used by sniffer-*.c to parse the 802.11 frames */
 int

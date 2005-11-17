@@ -261,8 +261,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 
 	    if (n == 0) 
 		break; 
-	    info->pkt_nbytes += ph->caplen; 
-	    base +=  ph->caplen; 
+	    info->pkt_nbytes += n; 
+	    base += ph->caplen; 
 	} else {  
 	    pkt->payload = base + sizeof(pcap_hdr_t); 
             /* 

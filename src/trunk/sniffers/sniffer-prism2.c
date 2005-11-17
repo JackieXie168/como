@@ -320,13 +320,15 @@ processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
 {
     pkt_t * pkt = (pkt_t *) data; 
     char * pl = pkt->payload; 
-     
+    int n;
+
     pkt->ts = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
     pkt->len = h->len;
     pkt->caplen = h->caplen;
   
     /* process 802.11 packet */
-    parse80211_frame(pkt, (char *)buf, pl, pkt->type);
+    n = parse80211_frame(pkt, (char *)buf, pl, pkt->type);
+    pkt->caplen = n; /* temporary solution */
 }
 
 
@@ -354,7 +356,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 
     while (npkts < max_no) {
 	int count; 
-        
+	
 	/* point the packet payload to next packet */
 	pkt->payload = info->pktbuf + nbytes; 
         /* specify 802.11 type */
