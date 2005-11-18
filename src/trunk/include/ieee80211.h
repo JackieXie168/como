@@ -112,6 +112,7 @@
 
 /*
  * snap header: subnetwork access protocol
+ * layer 2 encapsulation header
  */
 struct ieee80211_snap_hdr {
     uint8_t dsap;              
@@ -119,7 +120,7 @@ struct ieee80211_snap_hdr {
     uint8_t ctrl;    
     uint8_t oui[3]; /* organisation code */ 
 }; 
-
+#define SNAP_HDR_LEN 8
 
 /*
  * ieee802.11 general header frame format 
@@ -398,7 +399,7 @@ struct _ieee80211_challenge {
 
 /* useful macros ... */
 #define isWLANBEACON (MGMT_SUBTYPE_BEACON | (WLANTYPE_MGMT >> 4))
-
+#define isWLANPROBE_RESPONSE (MGMT_SUBTYPE_PROBE_RES | (WLANTYPE_MGMT >> 4))
 
 #endif /* _COMO_IEEE80211_H */ 
 

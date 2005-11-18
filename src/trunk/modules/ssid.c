@@ -29,9 +29,9 @@
 /*
  * 802.11 SSID 
  *
- * This module parses the 802.11 management frames to find beacon messages
- * and stores all the SSIDs it observes together with the SNR information. 
- *
+ * This module parses the 802.11 management frames to find beacon and probe
+ * response messages and stores all the SSIDs it observes together with 
+ * the signal strength value and noise value. 
  *
  */
 
@@ -39,7 +39,6 @@
 #include <time.h>
 #include "module.h"
 #include "como.h"
-
 
 /* 
  * the information we maintain in capture is just the 
@@ -57,17 +56,53 @@ FLOWDESC {
     char 	ssid[34]; 
 };
 
+#define WLAN_WEP 0x40
+
+static int meas_ivl = 1;     /* measurement granularity */
+
+
+static int
+init(__unused void *mem, __unused size_t msize, char *args[])
+{
+    int i;
+
+    if (args == NULL)
+        return 0;
+
+    for (i = 0; args[i]; i++) {
+        if (strstr(args[i], "granularity")) {
+            char * val = index(args[i], '=') + 1;
+            meas_ivl = atoi(val);
+        }
+    }
+    return 0;
+}
+
 
 /* 
  * define a check() callback to filter out messages that are not 
- * beacons 
+ * beacons and probe reponses  
  */
 static int
 check(pkt_t * pkt) 
 {
-    if ((COMO(type) != COMOTYPE_RADIO) || (COMO(l3type) != isWLANBEACON)) 
-	return 0; 
-    return 1; 
+    if ((COMO(type) == COMOTYPE_RADIO) && ((COMO(l3type) == isWLANBEACON) ||
+	    (COMO(l3type) == isWLANPROBE_RESPONSE))) 
+	return 1; 
+    return 0; 
+}
+
+
+static int 
+match(pkt_t * pkt, void * fh) 
+{
+    FLOWDESC * x = F(fh); 
+    
+    if (!(strncmp(x->ssid, MGMT_BODY(ssid.ssid), x->len)) && 
+	    (x->channel == MGMT_BODY(ds.ch)))
+	return 1; 
+
+    return 0; 
 }
 
 
@@ -80,9 +115,10 @@ update(pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh); 
 
     if (isnew) {
-	x->ts = pkt->ts;
+	x->ts = pkt->ts - pkt->ts % TIME2TS(meas_ivl, 0);
 	x->channel = -1; 
-	x->signal = x->noise = x->samples = 0; 
+	x->signal = x->noise = 0;
+        x->samples = 0; 
 
 	/* now find the information in the management frame.
 	 * get privacy bit to determine if wep is enabled
@@ -97,12 +133,14 @@ update(pkt_t *pkt, void *fh, int isnew)
 	    x->len = 3; 
 	    sprintf(x->ssid, "ANY"); 
 	}
-	x->channel = MGMT_BODY(ds.ch); 	 
 
-	x->signal = PRISM_HDR(ssi_signal); 
-	x->noise = PRISM_HDR(ssi_noise); 
-    } 
-    return 1; /* records are always full */
+	x->channel = MGMT_BODY(ds.ch); 	
+    }
+    x->samples++;
+    x->signal += H32(PRISM_HDR(ssi_signal)); 
+    x->noise += H32(PRISM_HDR(ssi_noise)); 
+    
+    return 0; /* records are never full */
 }
 
 
@@ -142,9 +180,9 @@ load(char * buf, size_t len, timestamp_t * ts)
 
 
 #define PRETTYHDR		\
-    "timestamp s (dbm) n (dbm) ch wep ssid\n"
-#define PRETTYFMT	"%02d:%02d:%02d.%06d %2d %2d %2d %s %s\n"
-#define PLAINFMT	"%12ld %2d %2d %2d\n" 
+    "date s(dbm) n(dbm) ch samples wep ssid\n"
+#define PRETTYFMT	"%.24s %2d %2d %2d %2d %s %s\n"
+#define PLAINFMT	"%12ld %1d %2d %2d %2d %2d\n" 
 
 static char *
 print(char *buf, size_t *len, char * const args[])
@@ -155,8 +193,7 @@ print(char *buf, size_t *len, char * const args[])
     timestamp_t ts;
     time_t t; 
     char ssid[34];
-    int hh, mm, ss;
-
+    uint8_t sig, noise;
  
     if (buf == NULL && args != NULL) { 
 	int n; 
@@ -169,7 +206,6 @@ print(char *buf, size_t *len, char * const args[])
 		return s; 
 	    } 
 	} 
-
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);  
 	fmt = PRETTYFMT; 
@@ -185,21 +221,19 @@ print(char *buf, size_t *len, char * const args[])
     ts = NTOHLL(x->ts);
     t = (time_t) TS2SEC(ts); 
     snprintf(ssid, x->len+1, x->ssid);   
-
-    hh = (TS2SEC(ts) % 86400) /3600;
-    mm = (TS2SEC(ts) % 3600) / 60;
-    ss = TS2SEC(ts) % 60;
+    sig = (uint8_t)(ntohl(x->signal) / x->samples); 
+    noise = (uint8_t)(ntohl(x->noise) / x->samples); 
     
     /* print according to the requested format */
     if (fmt == PRETTYFMT) {
 	char * wepmode = x->wepmode? "Y": "N"; 
-	*len = sprintf(s, fmt, hh, mm, ss, TS2USEC(ts), (x->signal-256), 
-		(x->noise-256), x->channel, wepmode, ssid); 
+	*len = sprintf(s, fmt, asctime(localtime(&t)), (sig-256), (noise-256),
+					x->channel, x->samples, wepmode, ssid); 
     } else {
-	*len = sprintf(s, fmt, (long int) t,  (x->signal-256), (x->noise-256),
-				    x->channel); 
+	*len = sprintf(s, fmt, (long int) t, x->wepmode, 
+		   x->channel, (sig-256), (noise-256), x->samples); 
     } 
-	
+
     return s;
 }
 
@@ -208,10 +242,10 @@ callbacks_t callbacks = {
     ex_recordsize: 0,
     indesc: NULL, 
     outdesc: NULL,
-    init: NULL,
+    init: init,
     check: check,
     hash: NULL,
-    match: NULL,
+    match: match,
     update: update,
     ematch: NULL,
     export: NULL,
