@@ -112,8 +112,10 @@ struct _como_pkt {
     uint32_t caplen;		/* capture length */
     uint16_t type; 		/* packet type (COMOTYPE_*) */
     uint16_t dropped;		/* dropped packets since last (max 0xffff) */ 
+    uint16_t l2type; 		/* layer2 type using mac codes */ 
     uint16_t l3type; 		/* layer3 type using ethernet codes */
     uint16_t l4type;            /* layer4 type using layer3 specific codes */
+    uint16_t l2ofs;		/* offset where layer2 header starts */
     uint16_t l3ofs;		/* offset where layer3 header starts */
     uint16_t l4ofs; 		/* offset where layer4 header starts */
     char * payload; 		/* pointer to packet */ 

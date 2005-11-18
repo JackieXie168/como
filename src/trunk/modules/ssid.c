@@ -86,10 +86,9 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static int
 check(pkt_t * pkt) 
 {
-    if ((COMO(type) == COMOTYPE_RADIO) && ((COMO(l3type) == isWLANBEACON) ||
-	    (COMO(l3type) == isWLANPROBE_RESPONSE))) 
-	return 1; 
-    return 0; 
+    if ((COMO(type) != COMOTYPE_RADIO) || (COMO(l2type) != isWLANBEACON)) 
+	return 0; 
+    return 1; 
 }
 
 

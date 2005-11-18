@@ -114,13 +114,17 @@
  * snap header: subnetwork access protocol
  * layer 2 encapsulation header
  */
-struct ieee80211_snap_hdr {
+struct _ieee80211_snap_hdr {
     uint8_t dsap;              
     uint8_t ssap;   
     uint8_t ctrl;    
-    uint8_t oui[3]; /* organisation code */ 
+    uint8_t oui[3]; /* organisation code */
+    n16_t type;
 }; 
 #define SNAP_HDR_LEN 8
+#define LLC_HDR(field) \
+    (((struct _ieee80211_snap_hdr*)(pkt->payload + pkt->l2ofs + \
+    DATA_HDR_LEN))->field)
 
 /*
  * ieee802.11 general header frame format 
@@ -135,7 +139,7 @@ struct _ieee80211_hdr {
 };
 
 #define IEEE80211_HDR(field)         \
-    (((struct _ieee80211_hdr*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_hdr*)(pkt->payload + pkt->l2ofs))->field)
 
 
 /*
@@ -260,17 +264,17 @@ struct _ieee80211_ctrl_end_ack {
 
 
 #define CTRL_RTS(field)         \
-    (((struct _ieee80211_ctrl_rts*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_ctrl_rts*)(pkt->payload + pkt->l2ofs))->field)
 #define CTRL_CTS(field)         \
-    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->l2ofs))->field)
 #define CTRL_ACK(field)         \
-    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_ctrl_cts*)(pkt->payload + pkt->l2ofs))->field)
 #define CTRL_PS_POLL(field)     \
-    (((struct _ieee80211_ctrl_ps_poll*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_ctrl_ps_poll*)(pkt->payload + pkt->l2ofs))->field)
 #define CTRL_END(field)         \
-    (((struct _ieee80211_ctrl_end*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_ctrl_end*)(pkt->payload + pkt->l2ofs))->field)
 #define CTRL_END_ACK(field)     \
-    (((struct _ieee80211_ctrl_end_ack*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_ctrl_end_ack*)(pkt->payload + pkt->l2ofs))->field)
 
 
 /*
@@ -287,7 +291,7 @@ struct _ieee80211_data_hdr {
 };
 
 #define DATA_HDR(field)         \
-    (((struct _ieee80211_data_hdr*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_data_hdr*)(pkt->payload + pkt->l2ofs))->field)
 
 #define DATA_HDR_LEN 24
 
@@ -322,7 +326,7 @@ struct _como_wlan_mgmt_hdr {
  * 802.11 management header macro
  */
 #define MGMT_HDR(field)         \
-    (((struct _ieee80211_mgmt_hdr*)(pkt->payload + pkt->l3ofs))->field)
+    (((struct _ieee80211_mgmt_hdr*)(pkt->payload + pkt->l2ofs))->field)
 
 #define MGMT_HDR_LEN 24
 

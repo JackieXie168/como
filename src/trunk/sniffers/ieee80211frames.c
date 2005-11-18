@@ -54,11 +54,11 @@ ieee80211_hdrlen(pkt_t *pkt, uint32_t type)
     /* determine header type */
     switch(type) { 
     case COMOTYPE_80211:
-	pkt->l3ofs = 0;
+	pkt->l2ofs = 0;
 	return 0;
 	break;
     case COMOTYPE_RADIO: /* AVS wlan monitoring header ??? */
-	pkt->l3ofs = PRISM_HDR_LEN;
+	pkt->l2ofs = PRISM_HDR_LEN;
 	return PRISM_HDR_LEN;
 	break;
     /* 
@@ -86,7 +86,7 @@ parse80211_frame(pkt_t *pkt,char *buf,char *pl,uint32_t type)
     bcopy(buf,pl,pi.hdrlen+2);
     updateofs(pkt, type);
 
-    switch(FC_TYPE(pkt->l3type)) {
+    switch(FC_TYPE(pkt->l2type)) {
     case WLANTYPE_MGMT:
 	/*
 	 * remaining packet length to parse, when zero the packet
@@ -153,7 +153,7 @@ parse80211_mgmtframe(pkt_t *pkt, char *buf, char *pl, struct _p80211info *pi)
     /* update capture buffer and processed packets buffer pointers */
     buf += pi->hdrlen; pl += pi->hdrlen;
 
-    switch(FC_SUBTYPE(pkt->l3type)) {
+    switch(FC_SUBTYPE(pkt->l2type)) {
     case MGMT_SUBTYPE_ASSOC_REQ:
 	return parse80211_assoc_req(pkt,buf,pl,pi);
 	break;
