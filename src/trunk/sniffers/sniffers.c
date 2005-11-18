@@ -85,15 +85,15 @@ updatel4(pkt_t * pkt)
 	pkt->l4ofs += ((IP(vhl) & 0x0f) << 2);
 	pkt->l4type = IP(proto);
     } else {
-	switch(FC_TYPE(pkt->l3type)) { /* determine 802.11 frame type */
+	switch(FC_TYPE(pkt->l2type)) { /* determine 802.11 frame type */
 	case WLANTYPE_MGMT:
-	    pkt->l4ofs = pkt->l3ofs + MGMT_HDR_LEN;
+	    pkt->l3ofs = pkt->l4ofs = pkt->l2ofs + MGMT_HDR_LEN;
 	    break;
 	case WLANTYPE_CTRL:
-            pkt->l4ofs = pkt->l3ofs;
+            pkt->l3ofs = pkt->l4ofs = pkt->l2ofs;
             break;
 	case WLANTYPE_DATA:
-	    pkt->l4ofs = pkt->l3ofs + DATA_HDR_LEN;
+	    pkt->l3ofs = pkt->l4ofs = pkt->l2ofs + DATA_HDR_LEN + SNAP_HDR_LEN;
             break;
          default:
             logmsg(LOGWARN, "ieee802.11 type not supported");
@@ -131,11 +131,18 @@ updateofs(pkt_t * pkt, int type)
         break; 
     
     case COMOTYPE_80211:
-        pkt->l3type = H16(IEEE80211_HDR(fc));
+        pkt->l2type = H16(IEEE80211_HDR(fc));
+        if (FC_TYPE(pkt->l2type) == WLANTYPE_DATA)
+	    pkt->l3type = H16(LLC_HDR(type));
+	else
+	    pkt->l3type = 0;
         break;
     case COMOTYPE_RADIO:
-        /* 802.11 + 64 byte capture header */
-        pkt->l3type = H16(IEEE80211_HDR(fc));
+        pkt->l2type = H16(IEEE80211_HDR(fc)); /* 802.11 + XX byte capture hdr */
+        if (FC_TYPE(pkt->l2type) == WLANTYPE_DATA)
+	    pkt->l3type = H16(LLC_HDR(type));
+	else
+	    pkt->l3type = 0;
         break;
 
     default: 

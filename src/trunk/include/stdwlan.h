@@ -59,8 +59,8 @@ struct _como_wlan_prism2hdr {
     n32_t      antenna;
     n32_t      priority;
     n32_t      ssi_type;
-    int32_t    ssi_signal;
-    int32_t    ssi_noise;
+    n32_t      ssi_signal;
+    n32_t      ssi_noise;
     n32_t      preamble;
     n32_t      encoding;
 }; 
@@ -101,7 +101,7 @@ struct _como_wlan_mgmt_body {
 #endif
 };
 #define MGMT_BODY(field)        \
-    (((struct _como_wlan_mgmt_body*)(pkt->payload + pkt->l4ofs))->field) 
+    (((struct _como_wlan_mgmt_body*)(pkt->payload + pkt->l3ofs))->field) 
 
 typedef struct _como_wlan_mgmt_body        mgmt_body_t;
 
