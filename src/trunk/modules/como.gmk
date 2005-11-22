@@ -15,7 +15,8 @@ MODULES= \
 	application.so \
 	protocol.so \
 	netflow-anon.so \
-	ssid.so
+	ssid.so \
+#   interarrival.so
 
 ifdef ENABLE_SNORT_MODULE
     MODULES += \
