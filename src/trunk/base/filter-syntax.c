@@ -69,12 +69,13 @@
      CLOSEBR = 262,
      COLON = 263,
      ALL = 264,
-     DIRECTION = 265,
-     PORT = 266,
-     LEVEL3 = 267,
-     LEVEL4 = 268,
-     NETMASK = 269,
-     IPADDR = 270
+     DIR = 265,
+     PORTDIR = 266,
+     PORT = 267,
+     LEVEL3 = 268,
+     LEVEL4 = 269,
+     NETMASK = 270,
+     IPADDR = 271
    };
 #endif
 #define NOT 258
@@ -84,18 +85,19 @@
 #define CLOSEBR 262
 #define COLON 263
 #define ALL 264
-#define DIRECTION 265
-#define PORT 266
-#define LEVEL3 267
-#define LEVEL4 268
-#define NETMASK 269
-#define IPADDR 270
+#define DIR 265
+#define PORTDIR 266
+#define PORT 267
+#define LEVEL3 268
+#define LEVEL4 269
+#define NETMASK 270
+#define IPADDR 271
 
 
 
 
 /* Copy the first part of user declarations.  */
-#line 80 "filter-syntax.y"
+#line 83 "filter-syntax.y"
 
 
 /* C Declarations */
@@ -110,46 +112,30 @@
 #define YYERROR_VERBOSE
 
 /* Node types */
-#define Tand   0
-#define Tor    1
-#define Tnot   2
-#define Tpred  3
+#define Tnone  0
+#define Tand   1
+#define Tor    2
+#define Tnot   3
+#define Tpred  4
+#define Tip    5
+#define Tport  6
+#define Tproto 7
 
-struct _ipaddr {
-    uint8_t direction;
-    uint32_t ip;
-    uint32_t nm;
-};
-typedef struct _ipaddr ipaddr_t;
-
-struct _portrange {
-    uint8_t proto;
-    uint8_t direction;
-    uint16_t lowport;
-    uint16_t highport;
-};
-typedef struct _portrange portrange_t;
-
-typedef struct treenode
-{
-    uint8_t type;
-    char *string;
-    struct treenode *left;
-    struct treenode *right;
-} treenode_t;
-
-typedef struct listnode
+struct _listnode
 {
     char *string;
-    struct listnode *next;
-    struct listnode *prev;
-} listnode_t;
+    struct _listnode *next;
+    struct _listnode *prev;
+};
+typedef struct _listnode listnode_t;
 
 int yflex(void);
 void yferror(char *fmt, ...);
 
-/* Variable where the result string will be stored after parsing the filter */
-char **parsed_filter;
+/* Variables where the results will be stored after parsing the filter */
+treenode_t **filter_tree;
+char **filter_cmp;
+
 
 /*
  * -- parse_ip
@@ -243,15 +229,40 @@ append_string(char *dest, char *src)
  *
  */
 treenode_t *
-tree_make(uint8_t type, treenode_t *left,
-          treenode_t *right, char *string)
+tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
+          treenode_t *right, nodedata_t *data)
 {
     treenode_t *t;
     
     t = (treenode_t *)safe_malloc(sizeof(treenode_t));
     t->type = type;
     if (t->type == Tpred) {
-        t->string = safe_strdup(string);
+        t->pred_type = pred_type;
+        t->data = (nodedata_t *)safe_malloc(sizeof(nodedata_t));
+        switch(t->pred_type) {
+        case Tip:
+            asprintf(&(t->string), "%d ip %d/%d",
+                     data->ipaddr.direction,
+                     data->ipaddr.ip,
+                     data->ipaddr.nm);
+            t->data->ipaddr.direction = data->ipaddr.direction;
+            t->data->ipaddr.ip = data->ipaddr.ip & data->ipaddr.nm;
+            t->data->ipaddr.nm = data->ipaddr.nm;
+            break;
+        case Tport:
+            asprintf(&(t->string), "%d port %d:%d",
+                     data->ports.direction,
+                     data->ports.lowport,
+                     data->ports.highport);
+            t->data->ports.direction = data->ports.direction;
+            t->data->ports.lowport = data->ports.lowport;
+            t->data->ports.highport = data->ports.highport;
+            break;
+        case Tproto:
+            asprintf(&(t->string), "proto %d", data->proto);
+            t->data->proto = data->proto;
+            break;
+        }
     }
     t->right = right;
     t->left = left;
@@ -503,7 +514,7 @@ negate(treenode_t *t)
     switch(t->type) {
     case Tpred:
         /* Negate the node */
-        t = tree_make(Tnot, t, NULL, NULL);
+        t = tree_make(Tnot, Tnone, t, NULL, NULL);
         break;
     case Tnot:
         /* Double negation, get rid of it */
@@ -535,17 +546,14 @@ negate(treenode_t *t)
 treenode_t *
 tree_copy(treenode_t *t)
 {
-    treenode_t *taux;
+    treenode_t *taux, *taux_left, *taux_right;
 
     if (!t)
         return NULL;
     
-    taux = (treenode_t *)safe_malloc(sizeof(treenode_t));
-    taux->type = t->type;
-    if (taux->type == Tpred)
-        taux->string = safe_strdup(t->string);
-    taux->left = tree_copy(t->left);
-    taux->right = tree_copy(t->right);
+    taux_left = tree_copy(t->left);
+    taux_right = tree_copy(t->right);
+    taux = tree_make(t->type, t->pred_type, taux_left, taux_right, t->data);
 
     return taux;
 }
@@ -579,7 +587,8 @@ or_and(treenode_t *t)
             t->left->type = Tor;
             taux = t->left->right;
             t->left->right = t->right;
-            t->right = tree_make(Tor, taux, tree_copy(t->left->right), NULL);
+            t->right = tree_make(Tor, Tnone, taux,
+                                 tree_copy(t->left->right), NULL);
             
             t->left = or_and(t->left);
             t->right = or_and(t->right);
@@ -603,7 +612,8 @@ or_and(treenode_t *t)
             t->right->type = Tor;
             taux = t->right->left;
             t->right->left = t->left;
-            t->left = tree_make(Tor, tree_copy(t->right->left), taux, NULL);
+            t->left = tree_make(Tor, Tnone, tree_copy(t->right->left),
+                                taux, NULL);
             
             t->left = or_and(t->left);
             t->right = or_and(t->right);
@@ -657,9 +667,104 @@ cnf(treenode_t *t)
     return t;
 }
 
-char *s = NULL;
-char *direction = NULL;
-char *proto = NULL;
+/*
+ * -- evaluate_pred
+ *
+ * Evaluate a predicate expression
+ *
+ */
+int evaluate_pred(treenode_t *t, pkt_t *pkt)
+{
+    int z;
+
+    if (t != NULL) {
+        switch(t->pred_type) {
+        case Tip:
+            if (!isIP) return 0;
+            if (t->data->ipaddr.direction == 0)
+                z = ((N32(IP(src_ip)) & t->data->ipaddr.nm) ==
+                     t->data->ipaddr.ip);
+            else
+                z = ((N32(IP(dst_ip)) & t->data->ipaddr.nm) ==
+                     t->data->ipaddr.ip);
+            break;
+        case Tport:
+            if (!isTCP && !isUDP)
+                return 0;
+            if (t->data->ports.direction == 0) {
+                if (isTCP)
+                    z = (H16(TCP(src_port)) >= t->data->ports.lowport &&
+                         H16(TCP(src_port)) <= t->data->ports.highport);
+                else /* udp */
+                    z = (H16(UDP(src_port)) >= t->data->ports.lowport &&
+                         H16(UDP(src_port)) <= t->data->ports.highport);
+            } else {
+                if (isTCP)
+                    z = (H16(TCP(dst_port)) >= t->data->ports.lowport &&
+                         H16(TCP(dst_port)) <= t->data->ports.highport);
+                else /* udp */
+                    z = (H16(UDP(dst_port)) >= t->data->ports.lowport &&
+                         H16(UDP(dst_port)) <= t->data->ports.highport);
+            }
+            break;
+        case Tproto:
+            switch(t->data->proto) {
+            case ETHERTYPE_IP:
+                z = isIP;
+                break;
+            case IPPROTO_TCP:
+                z = isTCP;
+                break;
+            case IPPROTO_UDP:
+                z = isUDP;
+                break;
+            case IPPROTO_ICMP:
+                z = isICMP;
+                break;
+            }
+            break;
+        }
+    }
+
+    return z;
+}
+
+/*
+ * -- evaluate
+ *
+ * Evaluate an expression tree
+ *
+ */
+int evaluate(treenode_t *t, pkt_t *pkt)
+{
+    int x,y,z;
+    
+    if (t == NULL) return 1;
+    else {
+        if (t->type != Tpred) {
+            x = evaluate(t->left, pkt);
+            /* Shortcuts */
+            if ((!x && t->type == Tand) || (x && t->type == Tor))
+                return x;
+            y = evaluate(t->right, pkt);
+            switch(t->type) {
+            case Tand:
+                z = x && y;
+                break;
+            case Tor:
+                z = x || y;
+                break;
+            case Tnot:
+                z = (x == 0)? 1 : 0;
+                break;
+            }
+        } else {
+            z = evaluate_pred(t, pkt);
+        }
+    }
+
+    return z;
+}
 
 
 
@@ -677,7 +782,7 @@ char *proto = NULL;
 #endif
 
 #if ! defined (YYSTYPE) && ! defined (YYSTYPE_IS_DECLARED)
-#line 647 "filter-syntax.y"
+#line 753 "filter-syntax.y"
 typedef union YYSTYPE {
     char *string;
     uint8_t byte;
@@ -688,7 +793,7 @@ typedef union YYSTYPE {
     portrange_t portrange;
 } YYSTYPE;
 /* Line 191 of yacc.c.  */
-#line 692 "filter-syntax.c"
+#line 797 "filter-syntax.c"
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
 # define YYSTYPE_IS_TRIVIAL 1
@@ -700,7 +805,7 @@ typedef union YYSTYPE {
 
 
 /* Line 214 of yacc.c.  */
-#line 704 "filter-syntax.c"
+#line 809 "filter-syntax.c"
 
 #if ! defined (yyoverflow) || YYERROR_VERBOSE
 
@@ -804,12 +909,12 @@ union yyalloc
 #endif
 
 /* YYFINAL -- State number of the termination state. */
-#define YYFINAL  17
+#define YYFINAL  19
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   41
+#define YYLAST   44
 
 /* YYNTOKENS -- Number of terminals. */
-#define YYNTOKENS  16
+#define YYNTOKENS  17
 /* YYNNTS -- Number of nonterminals. */
 #define YYNNTS  6
 /* YYNRULES -- Number of rules. */
@@ -819,7 +924,7 @@ union yyalloc
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   270
+#define YYMAXUTOK   271
 
 #define YYTRANSLATE(YYX) 						\
   ((unsigned int) (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
@@ -854,7 +959,7 @@ static const unsigned char yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
        5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
-      15
+      15,    16
 };
 
 #if YYDEBUG
@@ -863,29 +968,28 @@ static const unsigned char yytranslate[] =
 static const unsigned char yyprhs[] =
 {
        0,     0,     3,     5,     7,    11,    17,    21,    27,    30,
-      35,    37,    39,    41,    44,    48,    52,    57,    62,    68,
-      70
+      35,    37,    39,    41,    44,    48,    51,    55,    59,    64,
+      66
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS. */
 static const yysigned_char yyrhs[] =
 {
-      17,     0,    -1,    18,    -1,     9,    -1,    18,     4,    18,
-      -1,     6,    18,     4,    18,     7,    -1,    18,     5,    18,
-      -1,     6,    18,     5,    18,     7,    -1,     3,    18,    -1,
-       3,     6,    18,     7,    -1,    19,    -1,    20,    -1,    21,
-      -1,    10,    15,    -1,    10,    15,    14,    -1,    13,    10,
-      11,    -1,    13,    10,    11,     8,    -1,    13,    10,     8,
-      11,    -1,    13,    10,    11,     8,    11,    -1,    12,    -1,
-      13,    -1
+      18,     0,    -1,    19,    -1,     9,    -1,    19,     4,    19,
+      -1,     6,    19,     4,    19,     7,    -1,    19,     5,    19,
+      -1,     6,    19,     5,    19,     7,    -1,     3,    19,    -1,
+       3,     6,    19,     7,    -1,    20,    -1,    21,    -1,    22,
+      -1,    10,    16,    -1,    10,    16,    15,    -1,    11,    12,
+      -1,    11,    12,     8,    -1,    11,     8,    12,    -1,    11,
+      12,     8,    12,    -1,    13,    -1,    14,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const unsigned short yyrline[] =
 {
-       0,   676,   676,   681,   686,   690,   694,   698,   702,   707,
-     711,   721,   751,   772,   780,   789,   796,   803,   810,   818,
-     822
+       0,   781,   781,   788,   795,   799,   803,   807,   811,   816,
+     820,   824,   828,   833,   841,   850,   856,   862,   868,   875,
+     879
 };
 #endif
 
@@ -895,7 +999,7 @@ static const unsigned short yyrline[] =
 static const char *const yytname[] =
 {
   "$end", "error", "$undefined", "NOT", "AND", "OR", "OPENBR", "CLOSEBR",
-  "COLON", "ALL", "DIRECTION", "PORT", "LEVEL3", "LEVEL4", "NETMASK",
+  "COLON", "ALL", "DIR", "PORTDIR", "PORT", "LEVEL3", "LEVEL4", "NETMASK",
   "IPADDR", "$accept", "filter", "expr", "ip", "port", "proto", 0
 };
 #endif
@@ -906,23 +1010,23 @@ static const char *const yytname[] =
 static const unsigned short yytoknum[] =
 {
        0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
-     265,   266,   267,   268,   269,   270
+     265,   266,   267,   268,   269,   270,   271
 };
 # endif
 
 /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const unsigned char yyr1[] =
 {
-       0,    16,    17,    17,    18,    18,    18,    18,    18,    18,
-      18,    18,    18,    19,    19,    20,    20,    20,    20,    21,
-      21
+       0,    17,    18,    18,    19,    19,    19,    19,    19,    19,
+      19,    19,    19,    20,    20,    21,    21,    21,    21,    22,
+      22
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
 static const unsigned char yyr2[] =
 {
        0,     2,     1,     1,     3,     5,     3,     5,     2,     4,
-       1,     1,     1,     2,     3,     3,     4,     4,     5,     1,
+       1,     1,     1,     2,     3,     2,     3,     3,     4,     1,
        1
 };
 
@@ -931,33 +1035,33 @@ static const unsigned char yyr2[] =
    means the default is an error.  */
 static const unsigned char yydefact[] =
 {
-       0,     0,     0,     3,     0,    19,    20,     0,     2,    10,
-      11,    12,     0,     8,     0,    13,     0,     1,     0,     0,
-       0,     0,     0,    14,     0,    15,     4,     6,     9,     4,
-       6,    17,    16,     5,     7,    18
+       0,     0,     0,     3,     0,     0,    19,    20,     0,     2,
+      10,    11,    12,     0,     8,     0,    13,     0,    15,     1,
+       0,     0,     0,     0,     0,    14,    17,    16,     4,     6,
+       9,     4,     6,    18,     5,     7
 };
 
 /* YYDEFGOTO[NTERM-NUM]. */
 static const yysigned_char yydefgoto[] =
 {
-      -1,     7,     8,     9,    10,    11
+      -1,     8,     9,    10,    11,    12
 };
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-#define YYPACT_NINF -12
+#define YYPACT_NINF -15
 static const yysigned_char yypact[] =
 {
-       0,    13,    21,   -12,   -11,   -12,    12,    28,     3,   -12,
-     -12,   -12,    21,   -12,    10,    22,    -6,   -12,    21,    21,
-      25,    21,    21,   -12,    24,    29,   -12,   -12,   -12,    31,
-      32,   -12,    30,   -12,   -12,   -12
+       0,    15,    21,   -15,   -14,    -4,   -15,   -15,     5,    11,
+     -15,   -15,   -15,    21,   -15,    36,    -8,    18,     9,   -15,
+      21,    21,    32,    21,    21,   -15,   -15,    26,   -15,   -15,
+     -15,    35,    37,   -15,   -15,   -15
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yysigned_char yypgoto[] =
 {
-     -12,   -12,    -1,   -12,   -12,   -12
+     -15,   -15,    -1,   -15,   -15,   -15
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
@@ -967,30 +1071,30 @@ static const yysigned_char yypgoto[] =
 #define YYTABLE_NINF -1
 static const unsigned char yytable[] =
 {
-      13,    14,    24,     1,    15,    25,     2,    18,    19,     3,
-       4,    20,     5,     6,    21,    22,     1,    26,    27,    12,
-      29,    30,    16,     4,     1,     5,     6,     2,    17,    21,
-      22,     4,    28,     5,     6,    31,    23,    32,    33,    34,
-       0,    35
+      14,    15,    16,     1,    17,    19,     2,    25,    18,     3,
+       4,     5,    22,     6,     7,    20,    21,    27,     1,    28,
+      29,    13,    31,    32,     1,     4,     5,     2,     6,     7,
+      26,     4,     5,     0,     6,     7,    23,    24,    33,    30,
+      23,    24,    34,     0,    35
 };
 
 static const yysigned_char yycheck[] =
 {
-       1,     2,     8,     3,    15,    11,     6,     4,     5,     9,
-      10,    12,    12,    13,     4,     5,     3,    18,    19,     6,
-      21,    22,    10,    10,     3,    12,    13,     6,     0,     4,
-       5,    10,     7,    12,    13,    11,    14,     8,     7,     7,
-      -1,    11
+       1,     2,    16,     3,     8,     0,     6,    15,    12,     9,
+      10,    11,    13,    13,    14,     4,     5,     8,     3,    20,
+      21,     6,    23,    24,     3,    10,    11,     6,    13,    14,
+      12,    10,    11,    -1,    13,    14,     4,     5,    12,     7,
+       4,     5,     7,    -1,     7
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
    symbol of state STATE-NUM.  */
 static const unsigned char yystos[] =
 {
-       0,     3,     6,     9,    10,    12,    13,    17,    18,    19,
-      20,    21,     6,    18,    18,    15,    10,     0,     4,     5,
-      18,     4,     5,    14,     8,    11,    18,    18,     7,    18,
-      18,    11,     8,     7,     7,    11
+       0,     3,     6,     9,    10,    11,    13,    14,    18,    19,
+      20,    21,    22,     6,    19,    19,    16,     8,    12,     0,
+       4,     5,    19,     4,     5,    15,    12,     8,    19,    19,
+       7,    19,    19,    12,     7,     7
 };
 
 #if ! defined (YYSIZE_T) && defined (__SIZE_TYPE__)
@@ -1601,134 +1705,90 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-#line 677 "filter-syntax.y"
+#line 782 "filter-syntax.y"
     {
+        if (filter_tree != NULL)
+            *filter_tree = tree_copy(yyvsp[0].tree);
         yyvsp[0].tree = cnf(yyvsp[0].tree);
-        *parsed_filter = tree_to_string(yyvsp[0].tree);
+        *filter_cmp = tree_to_string(yyvsp[0].tree);
         ;}
     break;
 
   case 3:
-#line 682 "filter-syntax.y"
+#line 789 "filter-syntax.y"
     {
-        *parsed_filter = safe_strdup("ALL");
+        if (filter_tree != NULL)
+            *filter_tree = NULL;
+        asprintf(filter_cmp, "all");
         ;}
     break;
 
   case 4:
-#line 687 "filter-syntax.y"
+#line 796 "filter-syntax.y"
     {
-        yyval.tree = tree_make(Tand, yyvsp[-2].tree, yyvsp[0].tree, NULL);
+        yyval.tree = tree_make(Tand, Tnone, yyvsp[-2].tree, yyvsp[0].tree, NULL);
       ;}
     break;
 
   case 5:
-#line 691 "filter-syntax.y"
+#line 800 "filter-syntax.y"
     {
-        yyval.tree = tree_make(Tand, yyvsp[-3].tree, yyvsp[-1].tree, NULL);
+        yyval.tree = tree_make(Tand, Tnone, yyvsp[-3].tree, yyvsp[-1].tree, NULL);
       ;}
     break;
 
   case 6:
-#line 695 "filter-syntax.y"
+#line 804 "filter-syntax.y"
     {
-        yyval.tree = tree_make(Tor, yyvsp[-2].tree, yyvsp[0].tree, NULL);
+        yyval.tree = tree_make(Tor, Tnone, yyvsp[-2].tree, yyvsp[0].tree, NULL);
       ;}
     break;
 
   case 7:
-#line 699 "filter-syntax.y"
+#line 808 "filter-syntax.y"
     {
-        yyval.tree = tree_make(Tor, yyvsp[-3].tree, yyvsp[-1].tree, NULL);
+        yyval.tree = tree_make(Tor, Tnone, yyvsp[-3].tree, yyvsp[-1].tree, NULL);
       ;}
     break;
 
   case 8:
-#line 703 "filter-syntax.y"
+#line 812 "filter-syntax.y"
     {
-        yyval.tree = tree_make(Tnot, yyvsp[0].tree, NULL, NULL);
+        yyval.tree = tree_make(Tnot, Tnone, yyvsp[0].tree, NULL, NULL);
         
       ;}
     break;
 
   case 9:
-#line 708 "filter-syntax.y"
+#line 817 "filter-syntax.y"
     {
-        yyval.tree = tree_make(Tnot, yyvsp[-1].tree, NULL, NULL);
+        yyval.tree = tree_make(Tnot, Tnone, yyvsp[-1].tree, NULL, NULL);
       ;}
     break;
 
   case 10:
-#line 712 "filter-syntax.y"
+#line 821 "filter-syntax.y"
     {
-        if (yyvsp[0].ipaddr.direction == 0)
-            asprintf(&s, "((N32(IP(src_ip)) & %u) == %u)", yyvsp[0].ipaddr.nm, yyvsp[0].ipaddr.ip);
-        else
-            asprintf(&s, "((N32(IP(dst_ip)) & %u) == %u)", yyvsp[0].ipaddr.nm, yyvsp[0].ipaddr.ip);
-        
-        yyval.tree = tree_make(Tpred, NULL, NULL, s);
-        free(s);
+        yyval.tree = tree_make(Tpred, Tip, NULL, NULL, (nodedata_t *)&yyvsp[0].ipaddr);
       ;}
     break;
 
   case 11:
-#line 722 "filter-syntax.y"
+#line 825 "filter-syntax.y"
     {
-        if (yyvsp[0].portrange.proto == IPPROTO_TCP)
-            proto = safe_strdup("TCP");
-        else if (yyvsp[0].portrange.proto == IPPROTO_UDP)
-            proto = safe_strdup("UDP");
-        else {
-            yferror("Invalid protocol number: %d, using TCP instead",
-                    yyvsp[0].portrange.proto);
-            proto = safe_strdup("TCP");
-        }
-        
-        if (yyvsp[0].portrange.direction == 0)
-            direction = safe_strdup("src");
-        else
-            direction = safe_strdup("dst");
-        
-        if (yyvsp[0].portrange.lowport == yyvsp[0].portrange.highport)
-            asprintf(&s, "(H16(%s(%s_port)) == %d)",
-                     proto, direction, yyvsp[0].portrange.lowport);
-        else
-            asprintf(&s, "((H16(%s(%s_port)) >= %d) && "
-                     "(H16(%s(%s_port)) <= %d))", proto, direction, yyvsp[0].portrange.lowport,
-                     proto, direction, yyvsp[0].portrange.highport);
-        
-        yyval.tree = tree_make(Tpred, NULL, NULL, s);
-        free(s);
-        free(direction);
-        free(proto);
+        yyval.tree = tree_make(Tpred, Tport, NULL, NULL, (nodedata_t *)&yyvsp[0].portrange);
       ;}
     break;
 
   case 12:
-#line 752 "filter-syntax.y"
+#line 829 "filter-syntax.y"
     {
-        /* XXX Should we use the "isIP, isTCP, isUDP" helper macros ??? */
-        switch(yyvsp[0].word) {
-        case ETHERTYPE_IP:
-            asprintf(&s, "(COMO(l3type) == ETHERTYPE_IP)");
-            break;
-        case IPPROTO_TCP:
-            asprintf(&s, "(COMO(l4type) == IPPROTO_TCP)");
-            break;
-        case IPPROTO_UDP:
-            asprintf(&s, "(COMO(l4type) == IPPROTO_UDP)");
-            break;
-        case IPPROTO_ICMP:
-            asprintf(&s, "(COMO(l4type) == IPPROTO_ICMP)");
-            break;
-        }
-        yyval.tree = tree_make(Tpred, NULL, NULL, s);
-        free(s);
+        yyval.tree = tree_make(Tpred, Tproto, NULL, NULL, (nodedata_t *)&yyvsp[0].word);
       ;}
     break;
 
   case 13:
-#line 773 "filter-syntax.y"
+#line 834 "filter-syntax.y"
     {
         yyval.ipaddr.direction = yyvsp[-1].byte;
         if (parse_ip(yyvsp[0].string, &(yyval.ipaddr.ip)) == -1)
@@ -1739,7 +1799,7 @@ yyreduce:
     break;
 
   case 14:
-#line 781 "filter-syntax.y"
+#line 842 "filter-syntax.y"
     {
         yyval.ipaddr.direction = yyvsp[-2].byte;
         if (parse_ip(yyvsp[-1].string, &(yyval.ipaddr.ip)) == -1)
@@ -1750,9 +1810,8 @@ yyreduce:
     break;
 
   case 15:
-#line 790 "filter-syntax.y"
+#line 851 "filter-syntax.y"
     {
-        yyval.portrange.proto = yyvsp[-2].word;
         yyval.portrange.direction = yyvsp[-1].byte;
         yyval.portrange.lowport = yyvsp[0].word;
         yyval.portrange.highport = yyvsp[0].word;
@@ -1760,9 +1819,8 @@ yyreduce:
     break;
 
   case 16:
-#line 797 "filter-syntax.y"
+#line 857 "filter-syntax.y"
     {
-        yyval.portrange.proto = yyvsp[-3].word;
         yyval.portrange.direction = yyvsp[-2].byte;
         yyval.portrange.lowport = yyvsp[-1].word;
         yyval.portrange.highport = 65535;
@@ -1770,9 +1828,8 @@ yyreduce:
     break;
 
   case 17:
-#line 804 "filter-syntax.y"
+#line 863 "filter-syntax.y"
     {
-        yyval.portrange.proto = yyvsp[-3].word;
         yyval.portrange.direction = yyvsp[-2].byte;
         yyval.portrange.lowport = 1;
         yyval.portrange.highport = yyvsp[0].word;
@@ -1780,9 +1837,8 @@ yyreduce:
     break;
 
   case 18:
-#line 811 "filter-syntax.y"
+#line 869 "filter-syntax.y"
     {
-        yyval.portrange.proto = yyvsp[-4].word;
         yyval.portrange.direction = yyvsp[-3].byte;
         yyval.portrange.lowport = yyvsp[-2].word;
         yyval.portrange.highport = yyvsp[0].word;
@@ -1790,14 +1846,14 @@ yyreduce:
     break;
 
   case 19:
-#line 819 "filter-syntax.y"
+#line 876 "filter-syntax.y"
     {
         yyval.word = yyvsp[0].word;
        ;}
     break;
 
   case 20:
-#line 823 "filter-syntax.y"
+#line 880 "filter-syntax.y"
     {
         yyval.word = yyvsp[0].word;
        ;}
@@ -1807,7 +1863,7 @@ yyreduce:
     }
 
 /* Line 1000 of yacc.c.  */
-#line 1811 "filter-syntax.c"
+#line 1867 "filter-syntax.c"
 
   yyvsp -= yylen;
   yyssp -= yylen;
@@ -2032,7 +2088,7 @@ yyreturn:
 }
 
 
-#line 828 "filter-syntax.y"
+#line 885 "filter-syntax.y"
 
 
 #include "filter-lexic.c"
@@ -2049,10 +2105,11 @@ void yferror(char *fmt, ...)
 }
 
 int 
-parse_filter(char *filter, char **result)
+parse_filter(char *f, treenode_t **result_tree, char **result_cmp)
 {
-    parsed_filter = result;
-    yf_scan_string(filter);
+    filter_tree = result_tree;
+    filter_cmp = result_cmp;
+    yf_scan_string(f);
     return yfparse();
 }
 

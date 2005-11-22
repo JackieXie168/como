@@ -369,11 +369,8 @@ struct _como_icmphdr {
  * Helper macros
  */
 #define isIP            (COMO(l3type) == ETHERTYPE_IP)
-#define isTCP           ((isIP && IP(proto) == IPPROTO_TCP) ||  \
-                         (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_TCP))
-#define isUDP           ((isIP && IP(proto) == IPPROTO_UDP) ||  \
-                         (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_UDP))
-#define isICMP          ((isIP && IP(proto) == IPPROTO_ICMP) ||  \
-                         (isIPv6 && IPV6_PROTO(pkt) == IPPROTO_ICMP))
+#define isTCP           (isIP && (IP(proto) == IPPROTO_TCP))
+#define isUDP           (isIP && (IP(proto) == IPPROTO_UDP))
+#define isICMP          (isIP && (IP(proto) == IPPROTO_ICMP))
 
 #endif/* _COMO_STDPKT_H */

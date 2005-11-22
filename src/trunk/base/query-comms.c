@@ -241,7 +241,8 @@ query_parse(char *buf)
     nargs = 0;
 
     /* provide some default values */
-    asprintf(&q.filter, "ALL");
+    asprintf(&q.filter_str, "all");
+    asprintf(&q.filter_cmp, "all");
     q.len = sizeof(q);
     gettimeofday(&t, NULL);
     q.start = t.tv_sec - 50;
@@ -296,19 +297,9 @@ query_parse(char *buf)
 	    char * s = strchr(p1, '=');
 	    asprintf(&q.module, "%s", s + 1); 
 	} else if (strstr(p1, "filter=") == p1) {
-        char *s;
-#ifdef DISABLE_FILTER_PARSER
-        s = strchr(p1, '=');
-        asprintf(&q.filter, "%s", s + 1);
-#else
-        char *input;
-        input = strchr(p1, '=') + 1;
-        if (parse_filter(input, &s) == 0) {
-            asprintf(&q.filter, "%s", s);
-            free(s);
-        } else
-            asprintf(&q.filter, "%s", input);
-#endif	
+        char * s = strchr(p1, '=');
+        q.filter_str = strdup(s + 1);
+        parse_filter(s + 1, NULL, &(q.filter_cmp));
     } else if (strstr(p1, "start=") == p1) {
 	    q.start = atoi(p1+6);
 	} else if (strstr(p1, "end=") == p1) {

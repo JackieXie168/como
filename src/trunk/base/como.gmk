@@ -22,7 +22,6 @@ SRCS_como := \
 	memory.c \
 	query-comms.c \
 	query-ondemand.c \
-	pippo.c \
 	supervisor.c \
 	logging.c \
 	util-io.c \
@@ -70,12 +69,6 @@ ifeq ($(shell uname),FreeBSD)
 	SNIFFERS += bpf
 endif
 
-# Disable Flex/Bison support for filter expressions
-#
-ifdef DISABLE_FILTER_PARSER
-        CFLAGS += -DDISABLE_FILTER_PARSER
-endif
-
 # Endace DAG cards.
 #
 ifdef USE_DAG
@@ -111,7 +104,7 @@ SRCS_como += $(x)
 
 capture.o:	build-sniffer-list
 
-TEMPORARY += sniffer-list.h pippo.c pippo.o 
+TEMPORARY += sniffer-list.h
 
 build-sniffer-list:
 	@( \
@@ -125,46 +118,6 @@ build-sniffer-list:
 	done  ;							\
 	echo "	NULL };" ;					\
 	) > sniffer-list.h
-
-pippo.o: $(BASEDIR)/include/stdpkt.h $(BASEDIR)/base/template $(BASEDIR)/include/comotypes.h $(BASEDIR)/include/sniffers.h
-	@( \
-	f="$(BASEDIR)/include/stdpkt.h" ;			\
-	echo "stdpkt.h is $${f}" ;				\
-	sz_f=`cat $$f | wc -c`;					\
-	g="$(BASEDIR)/base/template" ;				\
-	echo "template is $${g}" ;				\
-	sz_g=`cat $$g | wc -c`;	                                \
-    h="$(BASEDIR)/include/comotypes.h" ;                    \
-	echo "comotypes.h is $${h}" ;				\
-    sz_h=`cat $$h | wc -c`;                                 \
-    i="$(BASEDIR)/include/sniffers.h" ;                     \
-	echo "sniffers.h is $${i}" ;				\
-    sz_i=`cat $$i | wc -c`;                                 \
-    echo "build defs are '$(DEFS)'";                        \
-    echo -n "$(DEFS)" > build_defs.txt;                        \
-    j=build_defs.txt;                                       \
-    sz_j=`cat $$j | wc -c`;                                 \
-				\
-	(							\
-	echo "char stdpkt[$$sz_f +32 ] = \"replace_stdpkt\";";	\
-	echo "char template[$$sz_g +32 ] = \"replace_template\";" ; \
-        echo "char comotypes[$$sz_h + 32 ] = \"replace_types\";" ; \
-        echo "char sniffers[$$sz_i + 32 ] = \"replace_sniffers\";" ; \
-        echo "char builddefs[$$sz_j + 32 ] = \"replace_builddefs\";" ; \
-	) > pippo.c; 						\
-	$(CC) -c pippo.c ; 					\
-	set `strings -at d pippo.o | grep "replace_stdpkt"` ; pos_f=$$1 ; \
-	set `strings -at d pippo.o | grep "replace_template"` ; pos_g=$$1 ; \
-	set `strings -at d pippo.o | grep "replace_types"` ; pos_h=$$1 ; \
-	set `strings -at d pippo.o | grep "replace_sniffers"` ; pos_i=$$1 ; \
-	set `strings -at d pippo.o | grep "replace_builddefs"` ; pos_j=$$1 ; \
-	dd if=$$f of=pippo.o obs=$$pos_f seek=1 conv=notrunc  ; \
-	dd if=$$g of=pippo.o obs=$$pos_g seek=1 conv=notrunc ; 	\
-	dd if=$$h of=pippo.o obs=$$pos_h seek=1 conv=notrunc ; \
-	dd if=$$i of=pippo.o obs=$$pos_i seek=1 conv=notrunc ; \
-	dd if=$$j of=pippo.o obs=$$pos_j seek=1 conv=notrunc ; \
-	rm pippo.c build_defs.txt				\
-	) 2> /dev/null
 
 CFLAGS_como := -Dfoo
 

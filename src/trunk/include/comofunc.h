@@ -67,7 +67,6 @@ memlist_t *new_memlist(uint entries);
  * capture.c
  */
 void capture_mainloop(int fd);
-char *create_filter(module_t * mdl, int count, char *template, char *workdir);
 
 
 /*
@@ -99,7 +98,8 @@ void _epanicx(const char * file, const int line, const char *fmt, ...);
 /* 
  * filter-syntax.c
  */
-int parse_filter(char *, char **);
+int parse_filter(char *, treenode_t **, char **);
+int evaluate(treenode_t *t, pkt_t *pkt);
 
 
 /*

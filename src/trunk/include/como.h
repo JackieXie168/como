@@ -53,9 +53,6 @@ struct _como {
 
     source_t *sources;	/* list of input data feeds */
 
-    char * template;    /* file for compiling the filter on the fly */
-    char * filter;      /* dedicated library for filter */
-
     module_t * modules; /* array of modules */ 
     int module_max;  	/* max no. of modules */
     int module_count;   /* current no. of modules */

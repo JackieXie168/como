@@ -44,16 +44,17 @@
  * The following process is used to normalize a filter:
  * 
  * 1. Read the filter string and create a tree that represents the logical
- *    expression obtained from it.
+ *    expression obtained from it. This tree can be evaluated when packets
+ *    arrive to see if they match the corresponding filter.
  *
  * 2. Transform the tree to Conjunctive Normal Form:
  *      - Propagate negations inward the tree, until only literals
  *        (leaves of the tree) are negated.
  *      - Propagate conjunctions outward, using the logical rules that apply.
  *
- * 3. Traverse the tree and transform it into a string that can
- * be used as a CoMo filter, using lexicographical order to assure that two
- * semantically equivalent filters always produce the same string.
+ * 3. Traverse the tree and transform it into a string, using lexicographical
+ *    order to assure that two semantically equivalent filters always produce
+ *    the same string.
  *
  *
  * How to add new keywords to the filter parser:
@@ -70,10 +71,12 @@
  * 3. base/filter-syntax.y: extend the "expr" rule of the grammar as needed.
  *
  *      - You should always finish with a call to tree_make:
- *              $$ = tree_make(Tpred, NULL, NULL, s);
- *        where s is a string containing an expression that can be evaluated
- *        to a boolean value (for example, you can use some of the macros in
- *        include/stdpkt.h)
+ *          Example:
+ *          $$ = tree_make(Tpred, Tproto, NULL, NULL, (nodedata_t *)&$1);
+ *        where $1 is a structure containing the data related to the new
+ *        keyword.
+ *
+ * 4. base/filter-syntax.y: modify the tree_make function accordingly.
  *
  */
  
@@ -91,46 +94,30 @@
 #define YYERROR_VERBOSE
 
 /* Node types */
-#define Tand   0
-#define Tor    1
-#define Tnot   2
-#define Tpred  3
+#define Tnone  0
+#define Tand   1
+#define Tor    2
+#define Tnot   3
+#define Tpred  4
+#define Tip    5
+#define Tport  6
+#define Tproto 7
 
-struct _ipaddr {
-    uint8_t direction;
-    uint32_t ip;
-    uint32_t nm;
-};
-typedef struct _ipaddr ipaddr_t;
-
-struct _portrange {
-    uint8_t proto;
-    uint8_t direction;
-    uint16_t lowport;
-    uint16_t highport;
-};
-typedef struct _portrange portrange_t;
-
-typedef struct treenode
-{
-    uint8_t type;
-    char *string;
-    struct treenode *left;
-    struct treenode *right;
-} treenode_t;
-
-typedef struct listnode
+struct _listnode
 {
     char *string;
-    struct listnode *next;
-    struct listnode *prev;
-} listnode_t;
+    struct _listnode *next;
+    struct _listnode *prev;
+};
+typedef struct _listnode listnode_t;
 
 int yflex(void);
 void yferror(char *fmt, ...);
 
-/* Variable where the result string will be stored after parsing the filter */
-char **parsed_filter;
+/* Variables where the results will be stored after parsing the filter */
+treenode_t **filter_tree;
+char **filter_cmp;
+
 
 /*
  * -- parse_ip
@@ -224,15 +211,40 @@ append_string(char *dest, char *src)
  *
  */
 treenode_t *
-tree_make(uint8_t type, treenode_t *left,
-          treenode_t *right, char *string)
+tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
+          treenode_t *right, nodedata_t *data)
 {
     treenode_t *t;
     
     t = (treenode_t *)safe_malloc(sizeof(treenode_t));
     t->type = type;
     if (t->type == Tpred) {
-        t->string = safe_strdup(string);
+        t->pred_type = pred_type;
+        t->data = (nodedata_t *)safe_malloc(sizeof(nodedata_t));
+        switch(t->pred_type) {
+        case Tip:
+            asprintf(&(t->string), "%d ip %d/%d",
+                     data->ipaddr.direction,
+                     data->ipaddr.ip,
+                     data->ipaddr.nm);
+            t->data->ipaddr.direction = data->ipaddr.direction;
+            t->data->ipaddr.ip = data->ipaddr.ip & data->ipaddr.nm;
+            t->data->ipaddr.nm = data->ipaddr.nm;
+            break;
+        case Tport:
+            asprintf(&(t->string), "%d port %d:%d",
+                     data->ports.direction,
+                     data->ports.lowport,
+                     data->ports.highport);
+            t->data->ports.direction = data->ports.direction;
+            t->data->ports.lowport = data->ports.lowport;
+            t->data->ports.highport = data->ports.highport;
+            break;
+        case Tproto:
+            asprintf(&(t->string), "proto %d", data->proto);
+            t->data->proto = data->proto;
+            break;
+        }
     }
     t->right = right;
     t->left = left;
@@ -484,7 +496,7 @@ negate(treenode_t *t)
     switch(t->type) {
     case Tpred:
         /* Negate the node */
-        t = tree_make(Tnot, t, NULL, NULL);
+        t = tree_make(Tnot, Tnone, t, NULL, NULL);
         break;
     case Tnot:
         /* Double negation, get rid of it */
@@ -516,17 +528,14 @@ negate(treenode_t *t)
 treenode_t *
 tree_copy(treenode_t *t)
 {
-    treenode_t *taux;
+    treenode_t *taux, *taux_left, *taux_right;
 
     if (!t)
         return NULL;
     
-    taux = (treenode_t *)safe_malloc(sizeof(treenode_t));
-    taux->type = t->type;
-    if (taux->type == Tpred)
-        taux->string = safe_strdup(t->string);
-    taux->left = tree_copy(t->left);
-    taux->right = tree_copy(t->right);
+    taux_left = tree_copy(t->left);
+    taux_right = tree_copy(t->right);
+    taux = tree_make(t->type, t->pred_type, taux_left, taux_right, t->data);
 
     return taux;
 }
@@ -560,7 +569,8 @@ or_and(treenode_t *t)
             t->left->type = Tor;
             taux = t->left->right;
             t->left->right = t->right;
-            t->right = tree_make(Tor, taux, tree_copy(t->left->right), NULL);
+            t->right = tree_make(Tor, Tnone, taux,
+                                 tree_copy(t->left->right), NULL);
             
             t->left = or_and(t->left);
             t->right = or_and(t->right);
@@ -584,7 +594,8 @@ or_and(treenode_t *t)
             t->right->type = Tor;
             taux = t->right->left;
             t->right->left = t->left;
-            t->left = tree_make(Tor, tree_copy(t->right->left), taux, NULL);
+            t->left = tree_make(Tor, Tnone, tree_copy(t->right->left),
+                                taux, NULL);
             
             t->left = or_and(t->left);
             t->right = or_and(t->right);
@@ -638,9 +649,104 @@ cnf(treenode_t *t)
     return t;
 }
 
-char *s = NULL;
-char *direction = NULL;
-char *proto = NULL;
+/*
+ * -- evaluate_pred
+ *
+ * Evaluate a predicate expression
+ *
+ */
+int evaluate_pred(treenode_t *t, pkt_t *pkt)
+{
+    int z;
+
+    if (t != NULL) {
+        switch(t->pred_type) {
+        case Tip:
+            if (!isIP) return 0;
+            if (t->data->ipaddr.direction == 0)
+                z = ((N32(IP(src_ip)) & t->data->ipaddr.nm) ==
+                     t->data->ipaddr.ip);
+            else
+                z = ((N32(IP(dst_ip)) & t->data->ipaddr.nm) ==
+                     t->data->ipaddr.ip);
+            break;
+        case Tport:
+            if (!isTCP && !isUDP)
+                return 0;
+            if (t->data->ports.direction == 0) {
+                if (isTCP)
+                    z = (H16(TCP(src_port)) >= t->data->ports.lowport &&
+                         H16(TCP(src_port)) <= t->data->ports.highport);
+                else /* udp */
+                    z = (H16(UDP(src_port)) >= t->data->ports.lowport &&
+                         H16(UDP(src_port)) <= t->data->ports.highport);
+            } else {
+                if (isTCP)
+                    z = (H16(TCP(dst_port)) >= t->data->ports.lowport &&
+                         H16(TCP(dst_port)) <= t->data->ports.highport);
+                else /* udp */
+                    z = (H16(UDP(dst_port)) >= t->data->ports.lowport &&
+                         H16(UDP(dst_port)) <= t->data->ports.highport);
+            }
+            break;
+        case Tproto:
+            switch(t->data->proto) {
+            case ETHERTYPE_IP:
+                z = isIP;
+                break;
+            case IPPROTO_TCP:
+                z = isTCP;
+                break;
+            case IPPROTO_UDP:
+                z = isUDP;
+                break;
+            case IPPROTO_ICMP:
+                z = isICMP;
+                break;
+            }
+            break;
+        }
+    }
+
+    return z;
+}
+
+/*
+ * -- evaluate
+ *
+ * Evaluate an expression tree
+ *
+ */
+int evaluate(treenode_t *t, pkt_t *pkt)
+{
+    int x,y,z;
+    
+    if (t == NULL) return 1;
+    else {
+        if (t->type != Tpred) {
+            x = evaluate(t->left, pkt);
+            /* Shortcuts */
+            if ((!x && t->type == Tand) || (x && t->type == Tor))
+                return x;
+            y = evaluate(t->right, pkt);
+            switch(t->type) {
+            case Tand:
+                z = x && y;
+                break;
+            case Tor:
+                z = x || y;
+                break;
+            case Tnot:
+                z = (x == 0)? 1 : 0;
+                break;
+            }
+        } else {
+            z = evaluate_pred(t, pkt);
+        }
+    }
+
+    return z;
+}
 
 %}
 
@@ -658,11 +764,10 @@ char *proto = NULL;
 
 %token NOT AND OR OPENBR CLOSEBR COLON ALL
 %left NOT AND OR /* Order of precedence */
-%token <byte> DIRECTION
+%token <byte> DIR PORTDIR
 %token <word> PORT LEVEL3 LEVEL4
 %token <dword> NETMASK
 %token <string> IPADDR 
-%type <string> filter
 %type <tree> expr
 %type <ipaddr> ip
 %type <portrange> port
@@ -675,101 +780,57 @@ char *proto = NULL;
 
 filter: expr
         {
+        if (filter_tree != NULL)
+            *filter_tree = tree_copy($1);
         $1 = cnf($1);
-        *parsed_filter = tree_to_string($1);
+        *filter_cmp = tree_to_string($1);
         }
       | ALL
         {
-        *parsed_filter = safe_strdup("ALL");
+        if (filter_tree != NULL)
+            *filter_tree = NULL;
+        asprintf(filter_cmp, "all");
         }
           
 expr: expr AND expr
       {
-        $$ = tree_make(Tand, $1, $3, NULL);
+        $$ = tree_make(Tand, Tnone, $1, $3, NULL);
       }
     | OPENBR expr AND expr CLOSEBR
       {
-        $$ = tree_make(Tand, $2, $4, NULL);
+        $$ = tree_make(Tand, Tnone, $2, $4, NULL);
       }
     | expr OR expr
       {
-        $$ = tree_make(Tor, $1, $3, NULL);
+        $$ = tree_make(Tor, Tnone, $1, $3, NULL);
       }
     | OPENBR expr OR expr CLOSEBR
       {
-        $$ = tree_make(Tor, $2, $4, NULL);
+        $$ = tree_make(Tor, Tnone, $2, $4, NULL);
       }
     | NOT expr
       {
-        $$ = tree_make(Tnot, $2, NULL, NULL);
+        $$ = tree_make(Tnot, Tnone, $2, NULL, NULL);
         
       }
     | NOT OPENBR expr CLOSEBR
       {
-        $$ = tree_make(Tnot, $3, NULL, NULL);
+        $$ = tree_make(Tnot, Tnone, $3, NULL, NULL);
       }
     | ip
       {
-        if ($1.direction == 0)
-            asprintf(&s, "((N32(IP(src_ip)) & %u) == %u)", $1.nm, $1.ip);
-        else
-            asprintf(&s, "((N32(IP(dst_ip)) & %u) == %u)", $1.nm, $1.ip);
-        
-        $$ = tree_make(Tpred, NULL, NULL, s);
-        free(s);
+        $$ = tree_make(Tpred, Tip, NULL, NULL, (nodedata_t *)&$1);
       }
     | port
       {
-        if ($1.proto == IPPROTO_TCP)
-            proto = safe_strdup("TCP");
-        else if ($1.proto == IPPROTO_UDP)
-            proto = safe_strdup("UDP");
-        else {
-            yferror("Invalid protocol number: %d, using TCP instead",
-                    $1.proto);
-            proto = safe_strdup("TCP");
-        }
-        
-        if ($1.direction == 0)
-            direction = safe_strdup("src");
-        else
-            direction = safe_strdup("dst");
-        
-        if ($1.lowport == $1.highport)
-            asprintf(&s, "(H16(%s(%s_port)) == %d)",
-                     proto, direction, $1.lowport);
-        else
-            asprintf(&s, "((H16(%s(%s_port)) >= %d) && "
-                     "(H16(%s(%s_port)) <= %d))", proto, direction, $1.lowport,
-                     proto, direction, $1.highport);
-        
-        $$ = tree_make(Tpred, NULL, NULL, s);
-        free(s);
-        free(direction);
-        free(proto);
+        $$ = tree_make(Tpred, Tport, NULL, NULL, (nodedata_t *)&$1);
       }
     | proto
       {
-        /* XXX Should we use the "isIP, isTCP, isUDP" helper macros ??? */
-        switch($1) {
-        case ETHERTYPE_IP:
-            asprintf(&s, "(COMO(l3type) == ETHERTYPE_IP)");
-            break;
-        case IPPROTO_TCP:
-            asprintf(&s, "(COMO(l4type) == IPPROTO_TCP)");
-            break;
-        case IPPROTO_UDP:
-            asprintf(&s, "(COMO(l4type) == IPPROTO_UDP)");
-            break;
-        case IPPROTO_ICMP:
-            asprintf(&s, "(COMO(l4type) == IPPROTO_ICMP)");
-            break;
-        }
-        $$ = tree_make(Tpred, NULL, NULL, s);
-        free(s);
+        $$ = tree_make(Tpred, Tproto, NULL, NULL, (nodedata_t *)&$1);
       }
 
-ip: DIRECTION IPADDR
+ip: DIR IPADDR
     {
         $$.direction = $1;
         if (parse_ip($2, &($$.ip)) == -1)
@@ -777,7 +838,7 @@ ip: DIRECTION IPADDR
         /* Assume it's a host IP address if we don't have a netmask */
         $$.nm = htonl(netmasks[32]);
     }
-  | DIRECTION IPADDR NETMASK
+  | DIR IPADDR NETMASK
     {
         $$.direction = $1;
         if (parse_ip($2, &($$.ip)) == -1)
@@ -786,33 +847,29 @@ ip: DIRECTION IPADDR
             YYABORT;
     }
 
-port: LEVEL4 DIRECTION PORT
+port: PORTDIR PORT
       {
-        $$.proto = $1;
-        $$.direction = $2;
-        $$.lowport = $3;
-        $$.highport = $3;
+        $$.direction = $1;
+        $$.lowport = $2;
+        $$.highport = $2;
       } 
-    | LEVEL4 DIRECTION PORT COLON
+    | PORTDIR PORT COLON
       {
-        $$.proto = $1;
-        $$.direction = $2;
-        $$.lowport = $3;
+        $$.direction = $1;
+        $$.lowport = $2;
         $$.highport = 65535;
       }
-    | LEVEL4 DIRECTION COLON PORT
+    | PORTDIR COLON PORT
       {
-        $$.proto = $1;
-        $$.direction = $2;
+        $$.direction = $1;
         $$.lowport = 1;
-        $$.highport = $4;
+        $$.highport = $3;
       }
-    | LEVEL4 DIRECTION PORT COLON PORT
+    | PORTDIR PORT COLON PORT
       {
-        $$.proto = $1;
-        $$.direction = $2;
-        $$.lowport = $3;
-        $$.highport = $5;
+        $$.direction = $1;
+        $$.lowport = $2;
+        $$.highport = $4;
       }
 
 proto: LEVEL3
@@ -841,9 +898,10 @@ void yferror(char *fmt, ...)
 }
 
 int 
-parse_filter(char *filter, char **result)
+parse_filter(char *f, treenode_t **result_tree, char **result_cmp)
 {
-    parsed_filter = result;
-    yf_scan_string(filter);
+    filter_tree = result_tree;
+    filter_cmp = result_cmp;
+    yf_scan_string(f);
     return yfparse();
 }

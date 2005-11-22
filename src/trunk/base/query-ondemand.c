@@ -98,7 +98,7 @@ send_status(__unused qreq_t * req, int client_fd)
 	mdl = &map.modules[idx]; 
 
 	len = sprintf(buf, "Module: %-20s\tFilter: %s\n", mdl->name,
-                      mdl->filter);
+                      mdl->filter_str);
 	ret = como_writen(client_fd, buf, len);
 	if (ret < 0)
 	    panic("sending status to the client");
@@ -329,7 +329,7 @@ query_ondemand(int client_fd)
 
     logmsg(V_LOGQUERY,
         "got query (%d bytes); mdl: %s filter: %s\n",  
-        ntohs(req->len), req->module, req->filter); 
+        ntohs(req->len), req->module, req->filter_str); 
     logmsg(0, "    from %d to %d\n", req->start, req->end); 
 
     if (req->format == Q_STATUS) { 
@@ -376,9 +376,6 @@ query_ondemand(int client_fd)
      * - With the new filter parser that uses Flex and Bison, the filters
      *   only need to be semantically equivalent
      *   (i.e., "A and B" is the same as "B and A").
-     * - When not using Flex and Bison, the filters have to be 
-     *   exactly the same.
-     *   (i.e., "A and B" is not the same as "B and A").
      * In the future we will have to check if the module has been running
      * during the interval of interest. If not, we have to run it on the
      * stored packet trace. 
@@ -393,7 +390,7 @@ query_ondemand(int client_fd)
 
 	/* check filter string */
         module_found = 1;
-	if (!strcmp(req->filter, mdl->filter)) 
+	if (!strcmp(req->filter_cmp, mdl->filter_cmp)) 
 	    break; 	/* found! */
     } 
 
@@ -408,7 +405,7 @@ query_ondemand(int client_fd)
 		      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
 		      "Module not found\n", 0);
         } else {
-	    logmsg(LOGWARN, "query filter not found (%s)\n", req->filter);
+	    logmsg(LOGWARN, "query filter not found (%s)\n", req->filter_str);
 	    ret = como_writen(client_fd, 
 		      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
 		      "Filter not found\n", 0);

@@ -59,54 +59,6 @@
  */
 struct _como map;
 
-extern char template[];	/* dynamically filled in pippo.o */
-extern char stdpkt[];	/* dynamically filled in pippo.o */
-extern char comotypes[]; /* dynamically filled */
-extern char sniffers[]; /* dynamically filled */
-static char * 
-create_filter_template()
-{
-    char * filename;
-    FILE * fp;
-#define	DEF_TEMPLATE	"template.c"
-
-    /* create file in our work directory */
-    asprintf(&filename, "%s/stdpkt.h", map.workdir);
-    fp = fopen(filename, "w");
-    if (fp == NULL)
-	panic("cannot create stdpkt.h %s\n", filename);
-    fprintf(fp, "%s", stdpkt);
-    fclose(fp);
-    free(filename);
-
-    asprintf(&filename, "%s/comotypes.h", map.workdir);
-    fp = fopen(filename, "w");
-    if (fp == NULL)
-	panic("cannot create comotypes.h %s\n", filename);
-    fprintf(fp, "%s", comotypes);
-    fclose(fp);
-    free(filename);
-
-    asprintf(&filename, "%s/sniffers.h", map.workdir);
-    fp = fopen(filename, "w");
-    if (fp == NULL)
-	panic("cannot create sniffers.h %s\n", filename);
-    fprintf(fp, "%s", sniffers);
-    fclose(fp);
-    free(filename);
-
-    asprintf(&filename, "%s/%s", map.workdir, DEF_TEMPLATE);
-    fp = fopen(filename, "w");
-    if (fp == NULL)
-	panic("cannot create filter template %s\n", filename);
-    fprintf(fp, "%s", template);
-    fclose(fp);
-    free(filename);
-
-    return DEF_TEMPLATE;	/* relative filename is good */
-}
-
-
 /*
  * cleanup() called at termination time to
  * remove the byproducts of the compilation.
@@ -169,10 +121,6 @@ main(int argc, char *argv[])
     map.name = strdup("CoMo Node"); 
     map.location = strdup("Unknown"); 
     map.linkspeed = strdup("Unknown"); 
-
-    /* create the filter template file */
-    /* XXX check that we use the user-defined template */
-    map.template = create_filter_template(); 
 
     /* write welcome message */ 
     logmsg(LOGUI, "----------------------------------------------------\n");

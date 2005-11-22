@@ -291,6 +291,37 @@ struct _callbacks {
 typedef int *(filter_fn)(void *pkt_buf, int n_packets, int n_outputs,
         module_t *modules);
 
+struct _ipaddr {
+    uint8_t direction;
+    uint32_t ip;
+    uint32_t nm;
+};
+typedef struct _ipaddr ipaddr_t;
+
+struct _portrange {
+    uint8_t direction;
+    uint16_t lowport;
+    uint16_t highport;
+};
+typedef struct _portrange portrange_t;
+
+union _nodedata {
+    ipaddr_t ipaddr;
+    portrange_t ports;
+    uint16_t proto;
+};
+typedef union _nodedata nodedata_t;
+
+struct _treenode
+{
+    uint8_t type;
+    uint8_t pred_type;
+    char *string;
+    nodedata_t *data;
+    struct _treenode *left;
+    struct _treenode *right;
+};
+typedef struct _treenode treenode_t;
 
 /*
  * "Module" data structure. It needs a set of configuration parameters
@@ -302,7 +333,9 @@ struct _module {
     int index;          	/* order in the array of classifiers */
     char * name;		/* name of the module */
     char * description;		/* module description */
-    char * filter; 	        /* filter expression */
+    treenode_t * filter_tree;   /* filter data */
+    char * filter_str;          /* filter expression */
+    char * filter_cmp;          /* filter expression to compare with queries */
     char * output;              /* output file basename */
     char ** args;               /* parameters for the module */
     char * source;              /* filename of the shared lib. */
@@ -336,6 +369,12 @@ struct _module {
                                  */
 };
 
+#define FILTER_ALL      0x0000
+#define FILTER_PROTO    0x0001
+#define FILTER_SRCIP    0x0002
+#define FILTER_DSTIP    0x0004
+#define FILTER_SRCPORT  0x0008
+#define FILTER_DSTPORT  0x0010
 
 /*
  * _record is the header assumed to be in front of each 

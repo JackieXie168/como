@@ -52,12 +52,13 @@
 
 DIGIT           [0-9]
 ALFANUMERIC     [a-zA-Z0-9]
-DIRECTION       src|dst
+DIR             src|dst
+PORTDIR         sport|dport
 IPADDR          ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
 NETMASK         "/"({DIGIT}){1,2}
 PORT            {DIGIT}+
 LEVEL3          ip
-LEVEL4          tcp|udp
+LEVEL4          tcp|udp|icmp
 
 %option noyywrap
 %option nounput
@@ -77,12 +78,19 @@ LEVEL4          tcp|udp
 
 %%
 
-{DIRECTION}     {
+{DIR}           {
                 if (!strcmp(yytext, "src"))
                     yflval.byte = 0;
                 else /* dst */
                     yflval.byte = 1;
-                return(DIRECTION);
+                return(DIR);
+                }
+{PORTDIR}       {
+                if (!strcmp(yytext, "sport"))
+                    yflval.byte = 0;
+                else /* dport */
+                    yflval.byte = 1;
+                return(PORTDIR);
                 }
 {IPADDR}        { 
                 /* Copy the dots and numbers notation string */
@@ -123,5 +131,7 @@ not             { return(NOT); }
 all             { return(ALL); }
 
 [ \t\n]+
+
+.
 
 %%
