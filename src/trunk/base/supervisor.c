@@ -254,7 +254,7 @@ supervisor_mainloop(int accept_fd)
      * initialize resource management and
      * interprocess communication
      */
-    resource_mgmt_init();
+    resource_mgmt_init(void);
     ipc_init();
 
     for (;;) { 
@@ -387,7 +387,7 @@ supervisor_mainloop(int accept_fd)
 	handle_children(); /* handle dead children etc */
 
         if (num_procs >= 3) {
-            schedule();    /* resource management */
+            schedule(void); /* resource management */
             reconfigure(); /* if needed, reconfigure */
         }
     }

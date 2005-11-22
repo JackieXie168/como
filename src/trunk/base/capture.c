@@ -125,87 +125,6 @@ match_desc(pktdesc_t *req, pktdesc_t *bid)
     return 1;
 }
 
-
-/*
- * -- create_filter
- *
- * Create a filter on the fly. Using the template provided
- * in the configuration, for each module we dump the associated
- * filter expression, then invoke the compiler to build a shared object
- * which reside in the working directory.
- * The function returns the full pathname of the shared object.
- *
- * This function is also used by supervisor to compile new filter
- * functions in runtime.
- */
-char *
-create_filter(module_t * mdl, int count, char * template, char *workdir)
-{
-    char *src;  /* generated .c file */
-    char *out;  /* compiled .so file */
-    char *buf;
-    FILE * fp;
-    int fd; 
-    int ret;
-    int idx; 
-    extern char builddefs[]; /* generated at compile time, contains all
-                                definitions needed for como to build */
-
-    asprintf(&src, "%s/filter_XXXXXX", workdir);
-    fd = mkstemp(src);		/* use mkstemp instead of mktemp for safety */
-    if (fd < 0) 
-        panic("cannot create tmp filter file\n");
-    close(fd);
-    asprintf(&out, "%s.so", src);
-
-    fp = fopen(src, "w");
-    if (fp == NULL)
-        panic("cannot open temp file %s\n", src);
-
-    fprintf(fp, "#define MODULE_COUNT %d\n", count);
-
-    /*
-     * build filters of modules
-     */
-    fprintf(fp, "#define USERFILTER \\\n");
-    for (idx = 0; idx < count; idx++) {
-        /*
-         * 1st check the module is not disabled
-         */
-        fprintf(fp, "\touts[%d][i] = (modules[%d].status == %d) && ",
-                idx, idx, MDL_ACTIVE);
-        /*
-         * then check the filter
-         */
-        fprintf(fp, "(%s);\\\n", mdl[idx].filter);
-    }
-    fprintf(fp, "\n");
-    fclose(fp);
-
-    /*
-     * Invoke the compiler with the appropriate flags.
-     */
-#define	BUILD_FLAGS "-g -I- -I . -shared -Wl,-x,-S"
-    asprintf(&buf, 
-             "(cd %s; cc %s %s\\\n"
-             "\t\t-o %s -include %s %s)",
-             workdir, BUILD_FLAGS, builddefs,
-             out, src, template);
-#undef BUILD_FLAGS
-
-    logmsg(LOGCAPTURE, "compiling filter \n\t%s\n", buf);
-    ret = system(buf);
-    free(buf);
-    free(src);
-    if (ret != 0) {
-	    logmsg(LOGWARN, "compile failed with error %d\n", ret);
-        free(out);
-	    return NULL;
-    }
-    return out;
-}
-
-
 #define SHMEM_USAGE(mdl) \
     map.stats->mdl_stats[(mdl)->index].mem_usage_shmem
 
@@ -563,48 +482,25 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 }
 
 /*
- * callbacks of the capture process
- */
-
-filter_fn *filter; /* filter functions */
-void *filter_h; /* identifier for later unload_object */
-
-/**
- * -- load_filter
- *
- */
-static void
-load_filter(char *filter_file)
-{
-    /*
-     * unload old filter function
-     */
-    if (filter_h)
-        unload_object(filter_h);
-    /*
-     * then load new one
-     */
-    filter = load_object_h(filter_file, "filter", &filter_h);
-    /*
-     * after having linked the shared object we can 
-     * remove it from disk
-     */
-    //unlink(filter_file);
-}
-
-
-/*
  * -- ca_init_module
  *
  * Do capture-specific initialization of a module.
  * Make sure module is compatible with current sniffers and
  * initialize capture hashsize.
+ * Also parse the filter string from the config file for this module.
  */
 static void
 ca_init_module(module_t *mdl)
 {
     source_t *src;
-
+    
+    /* Default values for filter stuff */
+    mdl->filter_tree = NULL;
+    mdl->filter_cmp = strdup("all");
+    
+    /* Parse the filter string from the configuration file */
+    parse_filter(mdl->filter_str, &(mdl->filter_tree), &(mdl->filter_cmp));
+    
     /*
      * we browse the list of sniffers to make sure that this module
      * understands the packets coming them. to do so, we compare the
@@ -697,7 +593,7 @@ ca_disable_module(module_t *mdl)
 
 /* callbacks */
 static proc_callbacks_t capture_callbacks = {
-    load_filter,
+    NULL,
     ca_init_module,
     NULL,   /* enable_module not needed because necessary structures
                are allocated when necessary in capture. */
@@ -705,6 +601,41 @@ static proc_callbacks_t capture_callbacks = {
     ca_disable_module
 };
 
+/*
+ * -- filter()
+ *
+ * Filter function.
+ * When a packet arrives, we evaluate an expression tree for each filter.
+ * This needs to be optimized.
+ *
+ */
+int *
+filter(pkt_t *pkt, int n_packets, int n_out, module_t *modules)
+{
+    static int *which;
+    static int size;
+    int i = n_packets*n_out*sizeof(int); /* size of the output bitmap */
+    int j;
+    int *outs[n_out];
+
+    if (which == NULL) {
+        size = i;
+        which = (int *)malloc(i);
+    } else if (size < i) {
+        size = i;
+        which = (int *)realloc(which, i);
+    }
+
+    bzero(which, i);
+    for (i = 0; i < n_out; i++)
+        outs[i] = which + n_packets*i;
+
+    for (i = 0; i < n_packets; i++, pkt++)
+        for (j = 0; j < n_out; j++)
+            outs[j][i] = evaluate(modules[j].filter_tree, pkt);
+
+    return which;
+}
 
 /* 
  * -- process_batch 

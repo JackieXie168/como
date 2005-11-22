@@ -564,7 +564,9 @@ new_module(char *name)
     mdl->ex_hashsize = mdl->ca_hashsize = 1; 
     mdl->args = NULL;
     mdl->priority = 5;
-    mdl->filter = strdup("ALL");
+    mdl->filter_tree = NULL;
+    mdl->filter_str = strdup("all");
+    mdl->filter_cmp = strdup("all");
     mdl->output = strdup(mdl->name);
     asprintf(&mdl->source, "%s.so", mdl->name);
 
@@ -710,6 +712,8 @@ do_config(int argc, char *argv[])
 
     case TOK_END:
         {
+        int idx;
+
 	/*
 	 * "end" of a module configuration.  run some checks depending 
 	 * on context to make sure that all mandatory fields are there
@@ -736,7 +740,7 @@ do_config(int argc, char *argv[])
          * module loaded ok.
          * locate first unused entry in map.modules.
          */
-        int idx = map.module_count;
+        idx = map.module_count;
         for (i = 0; i < idx; i++) {
             if (map.modules[i].status == MDL_UNUSED) {
                 idx = i;
@@ -760,7 +764,8 @@ do_config(int argc, char *argv[])
         if (mdl->description != NULL) 
                 logmsg(LOGUI,"[%s]", mdl->description); 
         logmsg(LOGUI, "\n    - prio %d; filter %s; out %s (max %uMB)\n", 
-                mdl->priority, mdl->filter, mdl->output, mdl->streamsize / (1024*1024));
+                mdl->priority, mdl->filter_str, mdl->output,
+                mdl->streamsize / (1024*1024));
 
         scope = CTX_GLOBAL;
 	break;
@@ -768,17 +773,8 @@ do_config(int argc, char *argv[])
 
     case TOK_FILTER:
 	if (scope == CTX_MODULE) {
-#ifdef DISABLE_FILTER_PARSER
-        safe_dup(&mdl->filter, argv[1]);
-#else
-        char *s;
-        if (parse_filter(argv[1], &s) == 0) {
-            safe_dup(&mdl->filter, s);
-            free(s);
-        }
-#endif	
-    } else if (scope == CTX_GLOBAL) {
-	    safe_dup(&map.filter, argv[1]);
+        safe_dup(&mdl->filter_str, argv[1]);
+        parse_filter(argv[1], &(mdl->filter_tree), &(mdl->filter_cmp));
     }
 	break;
 
@@ -1430,7 +1426,7 @@ link_cfgfile(char *file)
 void
 configure(int argc, char **argv)
 {
-    char c;
+    int c;
 
     cfg_state = CFGSTATE_CONFIG; /* configuring for the 1st time */
 

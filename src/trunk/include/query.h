@@ -46,11 +46,13 @@ struct _query_req
 {
     uint16_t len; 		/* message length */
     char * module;		/* module name */
-    char * filter; 		/* filter expression */
-    uint32_t start;             /* query starts at */
-    uint32_t end;               /* query ends at */
+    char * filter_str;  /* filter expression */
+    char * filter_cmp;  /* filter expression to compare with
+                         * the module's filter */
+    uint32_t start;     /* query starts at */
+    uint32_t end;       /* query ends at */
     int wait; 			/* set if query should wait for data */
-    uint format;                /* query response format */
+    uint format;        /* query response format */
 #define Q_OTHER		154	/* any format (print() should know better) */
 #define Q_RAW		235	/* raw binary data */
 #define Q_COMO		324	/* output of dump() callback */

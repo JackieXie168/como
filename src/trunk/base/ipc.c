@@ -226,15 +226,6 @@ sup_send_new_modules(void)
     char msg_id;
     int idx, i;
 
-    free(map.filter);
-    map.filter = create_filter(map.modules, map.module_count,
-            map.template, map.workdir);
-
-    if (map.filter == NULL) {
-        logmsg(LOGWARN, "failed to compile filter function\n");
-        return -1;
-    }
-
     msg_id = MSG_NEW_MODULES;
 
     for (i = min_proc_fd; i < max_proc_fd; i++) {
@@ -243,7 +234,6 @@ sup_send_new_modules(void)
 
         logmsg(LOGDEBUG, "writing new modules to fd %d\n", i);
         write_var(i, msg_id);
-        write_str(i, map.filter);
 
         for(idx = 0; idx < map.module_count; idx++) {
             module_t *mdl = &map.modules[idx];
@@ -256,7 +246,7 @@ sup_send_new_modules(void)
             como_writen(i, (char *)mdl, sizeof(module_t));
             write_str(i, mdl->name);
             write_str(i, mdl->description);
-            write_str(i, mdl->filter);
+            write_str(i, mdl->filter_str);
             write_str(i, mdl->output);
             write_str(i, mdl->source);
 
@@ -434,7 +424,7 @@ sup_recv_message(int fd)
 void
 sup_wait_for_ack(int fd)
 {
-    char msg_id;
+    int msg_id;
 
     logmsg(V_LOGDEBUG, "Awaiting ack from fd %d\n", fd);
     do {
@@ -456,15 +446,7 @@ sup_wait_for_ack(int fd)
 static void
 recv_new_modules(int fd, proc_callbacks_t *callbacks)
 {
-    logmsg(LOGDEBUG, "Loading new modules / filter function\n");
-
-    free(map.filter);
-    safe_read_str(fd, map.filter);
-
-    if (callbacks->filter_init)
-        callbacks->filter_init(map.filter);
-
-    logmsg(LOGDEBUG, "Filter functions loaded\n");
+    logmsg(LOGDEBUG, "Loading new modules\n");
 
     for(;;) {
         module_t *mdl;
@@ -480,7 +462,7 @@ recv_new_modules(int fd, proc_callbacks_t *callbacks)
         safe_read_var(fd, *mdl);
         safe_read_str(fd, mdl->name);
         safe_read_str(fd, mdl->description);
-        safe_read_str(fd, mdl->filter);
+        safe_read_str(fd, mdl->filter_str);
         safe_read_str(fd, mdl->output);
         safe_read_str(fd, mdl->source);
 

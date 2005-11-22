@@ -86,6 +86,5 @@
 # The following options are for debugging only for the developers' team.
 # Use at your own risk.
 #
-# DISABLE_FILTER_PARSER=1
 # DO_RESOURCE_MANAGEMENT=1
 # DO_PROFILING=1
