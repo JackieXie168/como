@@ -836,6 +836,38 @@ capture_mainloop(int accept_fd)
 	    } 
 	} 
 
+	/* 
+	 * if no sniffers are left, flush all the tables given that
+	 * no more packets will be received. 
+	 */
+	if (active_sniffers == 0) { 
+            logmsg(LOGCAPTURE, "no sniffers left, flushing all tables\n");
+	    for (idx = 0; idx < map.module_count; idx++) {
+		module_t * mdl = &map.modules[idx];
+		ctable_t *ct = mdl->ca_hashtable;
+
+		if (ct && ct->records)  
+		    flush_table(mdl, &expired_tables);
+	    }
+	} 
+
+        /* need to write and have no pending jobs from export */
+        if (!sent2export && (TQ_HEAD(&expired_tables)) != NULL) {
+	    msg_t x;	/* message to EXPORT */
+	    int ret; 
+
+            x.m  = flush_map;
+            x.ft = TQ_HEAD(&expired_tables);
+            ret = write(export_fd, &x, sizeof(x)); 
+            if (ret != sizeof(x))
+                panic("error writing export_fd got %d", ret);  
+
+            TQ_HEAD(&expired_tables) = NULL;   /* we are done with this. */
+	    map.stats->table_queue = 0; /* reset counter */
+            sent2export = 1;            /* wait response from export */
+	    table_sent = 1; 		/* for profiling */
+        }
+
 	/* wait for messages, sniffers or up to the polling interval */
 	r = valid_fds;
 	n_ready = select(max_fd, &r, NULL, NULL, &tout);
@@ -850,6 +882,7 @@ capture_mainloop(int accept_fd)
 	    if (export_fd < 0)
 		panic("accepting export process"); 
 	    max_fd = add_fd(export_fd, &valid_fds, max_fd);
+            logmsg(LOGCAPTURE, "connected to EXPORT (%d)\n", export_fd); 
 	}
 
         if (export_fd >= 0 && FD_ISSET(export_fd, &r)) {
@@ -879,23 +912,6 @@ capture_mainloop(int accept_fd)
 
 		sent2export = 0;   /* mark no pending jobs */
 	    }
-        }
-
-        /* need to write and have no pending jobs from export */
-        if (!sent2export && (TQ_HEAD(&expired_tables)) != NULL) {
-	    msg_t x;	/* message to EXPORT */
-	    int ret; 
-
-            x.m  = flush_map;
-            x.ft = TQ_HEAD(&expired_tables);
-            ret = write(export_fd, &x, sizeof(x)); 
-            if (ret != sizeof(x))
-                panic("error writing export_fd got %d", ret);  
-
-            TQ_HEAD(&expired_tables) = NULL;   /* we are done with this. */
-	    map.stats->table_queue = 0; /* reset counter */
-            sent2export = 1;            /* wait response from export */
-	    table_sent = 1; 		/* for profiling */
         }
 
         if (FD_ISSET(map.supervisor_fd, &r))
@@ -937,20 +953,6 @@ capture_mainloop(int accept_fd)
 	    map.stats->ts = process_batch(pkts, count, &expired_tables);
 	    end_tsctimer(map.stats->ca_pkts_timer); 
         }
-
-	/* 
-	 * if no sniffers are left, flush all the tables given that
-	 * no more packets will be received. 
-	 */
-	if (active_sniffers == 0) { 
-	    for (idx = 0; idx < map.module_count; idx++) {
-		module_t * mdl = &map.modules[idx];
-		ctable_t *ct = mdl->ca_hashtable;
-
-		if (ct && ct->records)  
-		    flush_table(mdl, &expired_tables);
-	    }
-	} 
 
 	/* 
 	 * Now we check the memory usage. We use three thresholds.
