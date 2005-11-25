@@ -773,9 +773,9 @@ do_config(int argc, char *argv[])
 
     case TOK_FILTER:
 	if (scope == CTX_MODULE) {
-        safe_dup(&mdl->filter_str, argv[1]);
-        parse_filter(argv[1], &(mdl->filter_tree), &(mdl->filter_cmp));
-    }
+            safe_dup(&mdl->filter_str, argv[1]);
+            parse_filter(argv[1], &(mdl->filter_tree), &(mdl->filter_cmp));
+        }
 	break;
 
     case TOK_HASHSIZE:

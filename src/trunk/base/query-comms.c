@@ -249,6 +249,7 @@ query_parse(char *buf)
     q.end = t.tv_sec + 20;
     q.format = Q_OTHER; 
     q.wait = 1;
+    q.source = NULL;
 
     /* 
      * check if the request is valid. look for GET and HTTP/1 
@@ -322,7 +323,10 @@ query_parse(char *buf)
 
 	    str = index(p1, ':') + 1; 
 	    q.end = parse_timestr(str, &now);
-	} else {
+	} else if (strstr(p1, "source=") == p1) {
+            char * s = strchr(p1, '=');
+            q.source = strdup(s + 1);
+        } else {
 	    logmsg(V_LOGQUERY, "custom argument: %s\n", p1);
 	    q.args[nargs] = strdup(p1); 
 	    nargs++;

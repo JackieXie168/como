@@ -210,7 +210,8 @@ typedef char * (print_fn)(char *buf, size_t *len, char * const args[]);
  * out_buf_len is also updated to indicate the valid bytes in out. 
  * Not mandatory.
  */
-typedef int (replay_fn)(char *ptr, char *out, size_t * out_buf_len);
+typedef int (replay_fn)(char *ptr, char *out, size_t * out_buf_len,
+                        int *count);
 
 /*
  * This structure contains the callbacks for a classifier.
@@ -560,5 +561,27 @@ struct _como_pktdesc {
     struct _como_icmphdr icmph;         /* ICMP header bitmask */
 };
 
+/*
+ * Support for tailq handling.
+ * Used for the expired tables.
+ */
+typedef struct {
+    void * __head;
+    void * __tail;
+} tailq_t;
+
+#define TQ_HEAD(queue)  ((queue)->__head)
+
+#define TQ_APPEND(queue, entry, link_field)             \
+    do {                                                \
+        tailq_t *q = (queue);                           \
+        typeof(entry) e = entry;                        \
+        if (q->__head)                                  \
+            ((typeof(entry))q->__tail)->link_field = e; \
+        else                                            \
+            q->__head = e;                              \
+        q->__tail = e;                                  \
+        e->link_field = NULL;                           \
+    } while (0);
 
 #endif /* _COMOTYPES_H */

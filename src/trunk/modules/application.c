@@ -235,11 +235,12 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     N16(outdesc.ih.len) = 0xffff;
     
     pkt = (pkt_t *) template; 
-    pkt->caplen = htonl(sizeof(struct _como_iphdr)); 
-    pkt->type = htons(COMOTYPE_NONE); 
-    pkt->l3type = htons(ETHERTYPE_IP);
+    pkt->caplen = sizeof(struct _como_iphdr); 
+    pkt->len = pkt->caplen;
+    pkt->type = COMOTYPE_NONE; 
+    pkt->l3type = ETHERTYPE_IP;
     pkt->l3ofs = 0; 
-    pkt->l4ofs = htons(sizeof(struct _como_iphdr));
+    pkt->l4ofs = sizeof(struct _como_iphdr);
     pkt->payload = template + sizeof(pkt_t); 
     iph = (struct _como_iphdr *)(pkt->payload + pkt->l3ofs);
     iph->vhl = 0x45; 
@@ -453,7 +454,7 @@ print(char *buf, size_t *len, char * const args[])
 }
 
 static int
-replay(char *buf, char *out, size_t * len)
+replay(char *buf, char *out, size_t * len, int *count)
 {
     static int npkts = 0; 
     pkt_t * pkt; 
@@ -461,7 +462,7 @@ replay(char *buf, char *out, size_t * len)
     size_t plen; 
     
     pkt = (pkt_t *) template; 
-    plen = ntohl(pkt->caplen) + sizeof(pkt_t); 
+    plen = pkt->caplen + sizeof(pkt_t); 
 
     if (*len < plen) 
         return -1;
@@ -482,18 +483,21 @@ replay(char *buf, char *out, size_t * len)
 	    npkts += NTOHLL(app->pkts[i]); 
 	    nbytes += NTOHLL(app->bytes[i]); 
 	} 
-	N16(iph->len) = htons((uint16_t) (nbytes / npkts)); 
+	if (npkts > 0)
+            N16(iph->len) = htons((uint16_t) (nbytes / npkts));
 	ts = TIME2TS(ntohl(app->ts), 0);
-	pkt->ts = HTONLL(ts); 
+	pkt->ts = ts; 
+        *count = npkts;
     }
     
     for (out_len = 0; out_len < *len && npkts > 0; npkts--) { 
-	pkt->payload = out + out_len + sizeof(pkt_t); 
-	bcopy(template, out + out_len, sizeof(pkt_t) + htonl(pkt->caplen)); 
-	out_len += sizeof(pkt_t) + htonl(pkt->caplen); 
+	pkt->payload = out + out_len + sizeof(pkt_t);
+	bcopy(template, out + out_len, sizeof(pkt_t) + pkt->caplen); 
+	out_len += sizeof(pkt_t) + pkt->caplen; 
     } 
     
     *len = out_len; 
+    *count -= npkts;
     return npkts; 
 }
 

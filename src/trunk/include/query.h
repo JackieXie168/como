@@ -58,6 +58,8 @@ struct _query_req
 #define Q_COMO		324	/* output of dump() callback */
 #define Q_STATUS	542	/* node status, no module data */
 
+    char * source;      /* source module to read data from */
+
     char ** args; 		/* query arguments to be passed to module*/
 };
 

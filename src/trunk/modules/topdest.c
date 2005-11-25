@@ -39,7 +39,7 @@
 #include "module.h"
 
 #define TOPN        20		/* Top-20 destinations */
-#define EXPORT_IVL  5		/* export interval (seconds) */
+#define GRANULARITY  5		/* default measurement granularity (secs) */
 
 #define FLOWDESC	struct _ca_topdest
 #define EFLOWDESC	FLOWDESC
@@ -51,7 +51,39 @@ FLOWDESC {
     uint64_t pkts;	/* number of packets */
 };
 
+/* 
+ * static variable for the modules. 
+ * XXX we should get rid of these to force callbacks to be closures. 
+ */
+static unsigned int granularity = GRANULARITY;   /* measurement
+                                                  * granularity (secs) */
+static int topn = TOPN;    /* number of top destinations */
 
+static int
+init(__unused void *mem, __unused size_t msize, char *args[])
+{
+    int i;
+    char *len;
+    
+    /* 
+     * process input arguments 
+     */
+    if (args != NULL) { 
+	for (i = 0; args[i]; i++) { 
+	    if (strstr(args[i], "granularity")) {
+		len = index(args[i], '='); 
+		len++; 	/* skip '=' */
+		granularity = atoi(len); 
+	    } else if (strstr(args[i], "topn")) {
+                len = index(args[i], '=');
+                len++; /* skip '=' */
+                topn = atoi(len);
+            }
+	}
+    }
+
+    return 0;
+}
 
 static uint32_t
 hash(pkt_t *pkt)
@@ -72,7 +104,7 @@ update(pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh);
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % EXPORT_IVL);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % granularity);
         x->dst_ip = IP(dst_ip);
         x->bytes = 0;
         x->pkts = 0;
@@ -132,15 +164,16 @@ action(void *efh, timestamp_t current_time, int count)
 	 * check if it is time to export the table. 
 	 * if not stop. 
 	 */
-	uint32_t ivl = TS2SEC(current_time) - TS2SEC(current_time) % EXPORT_IVL;
-	if (ivl - last_export < EXPORT_IVL) 
+	uint32_t ivl = TS2SEC(current_time) -
+                       TS2SEC(current_time) % granularity;
+	if (ivl - last_export < granularity) 
 	    return ACT_STOP;		/* too early */
 
 	last_export = ivl; 
 	return ACT_GO; 		/* dump the records */
     }
 
-    return (count < TOPN)? ACT_STORE|ACT_DISCARD : ACT_DISCARD; 
+    return (count < topn)? ACT_STORE|ACT_DISCARD : ACT_DISCARD; 
 }
 
 
@@ -210,7 +243,7 @@ callbacks_t callbacks = {
     ex_recordsize: sizeof(EFLOWDESC),
     indesc: NULL, 
     outdesc: NULL, 
-    init: NULL,
+    init: init,
     check: NULL,
     hash: hash,
     match: match,
