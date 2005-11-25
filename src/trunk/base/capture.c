@@ -841,7 +841,6 @@ capture_mainloop(int accept_fd)
 	 * no more packets will be received. 
 	 */
 	if (active_sniffers == 0) { 
-            logmsg(LOGCAPTURE, "no sniffers left, flushing all tables\n");
 	    for (idx = 0; idx < map.module_count; idx++) {
 		module_t * mdl = &map.modules[idx];
 		ctable_t *ct = mdl->ca_hashtable;
@@ -882,7 +881,6 @@ capture_mainloop(int accept_fd)
 	    if (export_fd < 0)
 		panic("accepting export process"); 
 	    max_fd = add_fd(export_fd, &valid_fds, max_fd);
-            logmsg(LOGCAPTURE, "connected to EXPORT (%d)\n", export_fd); 
 	}
 
         if (export_fd >= 0 && FD_ISSET(export_fd, &r)) {
