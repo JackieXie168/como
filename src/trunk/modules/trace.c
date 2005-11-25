@@ -156,13 +156,17 @@ store(void *fh, char *buf, size_t len)
         return -1;
 
     /* convert the CoMo header in network byte order */
-    pkt->ts = HTONLL(pkt->ts); 
-    pkt->caplen = htonl(pkt->caplen); 
-    pkt->len = htonl(pkt->len); 
-    pkt->type = htons(pkt->type); 
-    pkt->l3type = htons(pkt->l3type); 
-    pkt->l3ofs = htons(pkt->l3ofs); 
-    pkt->l4ofs = htons(pkt->l4ofs); 
+    COMO(ts) = HTONLL(COMO(ts)); 
+    COMO(len) = htonl(COMO(len)); 
+    COMO(caplen) = htonl(COMO(caplen)); 
+    COMO(type) = htons(COMO(type));
+    COMO(dropped) = htons(COMO(dropped));
+    COMO(l2type) = htons(COMO(l2type)); 
+    COMO(l3type) = htons(COMO(l3type)); 
+    COMO(l4type) = htons(COMO(l4type)); 
+    COMO(l2ofs) = htons(COMO(l2ofs)); 
+    COMO(l3ofs) = htons(COMO(l3ofs)); 
+    COMO(l4ofs) = htons(COMO(l4ofs)); 
 
     memcpy(buf, pkt, need); 
     return need; 
@@ -299,9 +303,12 @@ print(char *buf, size_t *len, char * const args[])
     p.ts = NTOHLL(COMO(ts)); 
     p.len = ntohl(COMO(len)); 
     p.caplen = ntohl(COMO(caplen)); 
-    p.type = ntohl(COMO(type)); 
+    p.type = ntohs(COMO(type));
+    p.dropped = ntohs(COMO(dropped));
+    p.l2type = ntohs(COMO(l2type)); 
     p.l3type = ntohs(COMO(l3type)); 
     p.l4type = ntohs(COMO(l4type)); 
+    p.l2ofs = ntohs(COMO(l2ofs)); 
     p.l3ofs = ntohs(COMO(l3ofs)); 
     p.l4ofs = ntohs(COMO(l4ofs)); 
     p.payload = buf + sizeof(pkt_t);
@@ -437,7 +444,7 @@ print(char *buf, size_t *len, char * const args[])
 }
 
 static int  
-replay(char *buf, char *out, size_t * len)
+replay(char *buf, char *out, size_t * len, int *count)
 {
     pkt_t * pkt = (pkt_t *) buf; 
     size_t need = ntohl(pkt->caplen) + sizeof(pkt_t); 
@@ -446,9 +453,22 @@ replay(char *buf, char *out, size_t * len)
 	return -1; 
 
     bcopy(buf, out, need); 
-    pkt = (pkt_t *) out; 
+    pkt = (pkt_t *) out;
+    /* Convert the header data into host byte order */
+    COMO(ts) = NTOHLL(COMO(ts)); 
+    COMO(len) = ntohl(COMO(len)); 
+    COMO(caplen) = ntohl(COMO(caplen)); 
+    COMO(type) = ntohs(COMO(type));
+    COMO(dropped) = ntohs(COMO(dropped));
+    COMO(l2type) = ntohs(COMO(l2type)); 
+    COMO(l3type) = ntohs(COMO(l3type)); 
+    COMO(l4type) = ntohs(COMO(l4type)); 
+    COMO(l2ofs) = ntohs(COMO(l2ofs)); 
+    COMO(l3ofs) = ntohs(COMO(l3ofs)); 
+    COMO(l4ofs) = ntohs(COMO(l4ofs)); 
     pkt->payload = out + sizeof(pkt_t); 
     *len = need; 
+    *count = 1;
     return 0;	
 }
 

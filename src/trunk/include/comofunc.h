@@ -100,6 +100,7 @@ void _epanicx(const char * file, const int line, const char *fmt, ...);
  */
 int parse_filter(char *, treenode_t **, char **);
 int evaluate(treenode_t *t, pkt_t *pkt);
+treenode_t *tree_copy(treenode_t *t);
 
 
 /*

@@ -56,30 +56,6 @@ extern struct _como map;
 /* sniffer list and callbacks */
 extern struct _sniffer *__sniffers[];
 
-/*
- * Support for tailq handling.
- * Used for the expired tables.
- */
-typedef struct {
-    void * __head;
-    void * __tail;
-} tailq_t;
-
-
-#define TQ_HEAD(queue)  ((queue)->__head)
-
-#define TQ_APPEND(queue, entry, link_field)             \
-    do {                                                \
-        tailq_t *q = (queue);                           \
-        typeof(entry) e = entry;                        \
-        if (q->__head)                                  \
-            ((typeof(entry))q->__tail)->link_field = e; \
-        else                                            \
-            q->__head = e;                              \
-        q->__tail = e;                                  \
-        e->link_field = NULL;                           \
-    } while (0);
-
 tailq_t expired_tables;  /* expired flow tables */
 
 
