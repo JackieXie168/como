@@ -314,7 +314,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "           Unknown\n"
 
 #define GNUPLOTHDR 							\
-    "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
+    "set terminal postscript eps color solid lw 5 \"Helvetica\" 14;"	\
     "set grid;"								\
     "set ylabel \"Percentage\";"					\
     "set xlabel \"Time (H:M UTC)\";"					\
