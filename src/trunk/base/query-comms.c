@@ -309,6 +309,12 @@ query_parse(char *buf)
 	    q.format = Q_RAW;
         } else if (strstr(p1, "format=como") == p1) {
 	    q.format = Q_COMO;
+        } else if (strstr(p1, "format=html") == p1) {
+	    q.format = Q_HTML;
+	    /* we forward this to the module */
+	    q.args[nargs] = strdup(p1); 
+	    nargs++;
+	    assert(nargs < max_args);
         } else if (strstr(p1, "wait=no") == p1) {
 	    q.wait = 0; 
         } else if (strstr(p1, "status") == p1) {

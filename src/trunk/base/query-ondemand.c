@@ -52,7 +52,6 @@
 /* global state */
 extern struct _como map;
 
-tailq_t expired_tables;  /* expired flow tables */
 
 /* 
  * -- send_status
@@ -256,6 +255,7 @@ replayrecord(module_t * mdl, char * ptr, int client)
      *     in any case there is no definitive solution so we
      *     will have always to deal with this loop here.
      */
+    count = 0;
     do {
 	len = DEFAULT_REPLAY_BUFSIZE;
 	left = mdl->callbacks.replay(ptr, out, &len, &count);
@@ -297,9 +297,11 @@ q_filter(pkt_t *pkt, int n_packets, int n_out, module_t *modules)
     for (i = 0; i < n_out; i++)
         outs[i] = which + n_packets*i;
 
-    for (i = 0; i < n_packets; i++, pkt++)
+    for (i = 0; i < n_packets; i++, pkt = (pkt_t *)(((char *)pkt) +
+                                    sizeof(pkt_t) + pkt->caplen)) {
         for (j = 0; j < n_out; j++)
             outs[j][i] = evaluate(modules[j].filter_tree, pkt);
+    }
 
     return which;
 }
@@ -332,11 +334,11 @@ q_create_table(module_t * mdl, timestamp_t ts)
     ct->next_expired = NULL;
 
     /*
-     * save the timestamp indicating with flush interval this 
+     * save the timestamp to indicate which flush interval this 
      * table belongs to. this information will be useful for 
      * EXPORT when it processes the flushed tables. 
      */
-    ct->ivl = ts - (ts % mdl->max_flush_ivl);
+    ct->ivl = ts - (ts % mdl->flush_ivl);
     return ct; 
 }
 
@@ -371,7 +373,6 @@ q_flush_table(module_t * mdl, tailq_t * expired)
 
     /* add to linked list and remove from here. */
     TQ_APPEND(expired, ct, next_expired);
-    map.stats->table_queue++; 
     mdl->ca_hashtable = NULL;
 
     logmsg(V_LOGQUERY, "module %s flush_table done.\n", mdl->name);
@@ -387,7 +388,7 @@ q_flush_table(module_t * mdl, tailq_t * expired)
  * current flow table needs to be flushed.
  *
  */
-timestamp_t
+static void
 q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which, 
 	    tailq_t * expired)
 {
@@ -423,7 +424,7 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	    ctable_t * ct = mdl->ca_hashtable; 
 	
 	    ct->ts = pkt->ts; 
-	    if (ct->ts > ct->ivl + mdl->max_flush_ivl && ct->records) {  
+	    if (ct->ts >= ct->ivl + mdl->flush_ivl && ct->records) {  
 		q_flush_table(mdl, expired);
 		mdl->ca_hashtable = NULL;
 	    }
@@ -550,8 +551,6 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	}
 	cand->full = mdl->callbacks.update(pkt, cand, new_record);
     }
-
-    return max_ts; 
 }
 
 /* 
@@ -562,10 +561,9 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
  * module. return the last timestamp of the batch.
  * 
  */
-static timestamp_t
+static void
 q_process_batch(pkt_t *pkts, int count, tailq_t *expired, module_t *mdl) 
 {
-    timestamp_t last_ts;
     int * which;
 
     /*
@@ -589,13 +587,10 @@ q_process_batch(pkt_t *pkts, int count, tailq_t *expired, module_t *mdl)
      *
      */
     assert(mdl->name != NULL);
-	logmsg(V_LOGQUERY,
-	       "sending %d packets to module %s for processing",
-	       count, mdl->name);
+    logmsg(V_LOGQUERY, "sending %d packets to module %s for processing\n",
+	   count, mdl->name);
 
-    last_ts = q_capture_pkt(mdl, pkts, count, which, expired);
-
-    return last_ts;
+    q_capture_pkt(mdl, pkts, count, which, expired);
 }
 
 /**
@@ -769,15 +764,14 @@ q_process_table(ctable_t * ct, int client_fd)
      */
     record_fn = mdl->callbacks.export? q_export_record : q_call_print;
 
+    logmsg(V_LOGQUERY, "processing table for module %s (bucket %d)\n",
+	   mdl->name, ct->first_full);
     /*
      * scan all buckets and save the information to the output file.
      * then see what the EXPORT process has to keep about the entry.
      */
     for (; ct->first_full < ct->size; ct->first_full++) {
 	rec_t *rec; 
-
-	logmsg(V_LOGQUERY, "processing table for module %s (bucket %d)\n",
-	       mdl->name, ct->first_full);
 
 	/*
 	 * Each entry in the bucket is a list of records for the same record.
@@ -960,13 +954,16 @@ q_print_records(module_t * mdl, timestamp_t ts, int client_fd)
  * 
  */
 static void 
-replay_source(module_t * orig_mdl, module_t * mdl,
-              char * ptr, int client_fd) 
+replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd) 
 {
     char out[DEFAULT_REPLAY_BUFSIZE]; 
     size_t len, sz; 
     int left, count;
     ctable_t *ft, *next;
+    tailq_t expired_tables;  /* expired flow tables */
+
+    /* init expired flow tables */
+    TQ_HEAD(&expired_tables) = NULL;
 
     /*
      * one record may generate a large sequence of packets.
@@ -987,20 +984,35 @@ replay_source(module_t * orig_mdl, module_t * mdl,
      *     in any case there is no definitive solution so we
      *     will have always to deal with this loop here.
      */
+    count = 0;
     do {
         len = DEFAULT_REPLAY_BUFSIZE;
-	left = mdl->callbacks.replay(ptr, out, &len, &count);
+	left = src->callbacks.replay(ptr, out, &len, &count);
 	if (left < 0)
-	    panicx("%s.replay returns error", mdl->name);
+	    panicx("%s.replay() returns error", src->name);
 
-        /* Here we have a batch of replayed packets in "out".
-         * Pass them through the capture sequence. */
-    
-        map.stats->ts = q_process_batch((pkt_t *)out, count, &expired_tables,
-                                        orig_mdl);
+        /* 
+	 * we have a batch of replayed packets in "out".
+         * pass them through the capture sequence. 
+         */
+	if (count)
+	    q_process_batch((pkt_t *)out, count, &expired_tables, mdl);
     } while (left > 0);
-        
-    /* Here we should do the export stuff */
+
+    /* 
+     * if the record (ptr) is NULL, this is the last call to 
+     * replay_source(). flush all tables independently if the 
+     * timer has expired. 
+     */
+    if (!ptr && mdl->ca_hashtable && mdl->ca_hashtable->records) {
+	q_flush_table(mdl, &expired_tables);
+	mdl->ca_hashtable = NULL;
+    }
+
+    /* 
+     * here we do the export stuff and process all 
+     * expired tables before processing any more packets
+     */  
     ft = TQ_HEAD(&expired_tables);
     while (ft != NULL) {
 	next = ft->next_expired;
@@ -1012,16 +1024,10 @@ replay_source(module_t * orig_mdl, module_t * mdl,
 	/* process export table, printing/discarding records */
 	q_print_records(ft->module, ft->ts, client_fd);
 
-        /* update memory counter */
-        MDL_STATS(ft->module)->mem_usage_shmem_f += sz;
-		
         /* free the capture table and move to next */
 	free(ft);  
 	ft = next;
     }
-    
-    /* We are finished with the expired tables */
-    TQ_HEAD(&expired_tables) = NULL;
 }
 
 /**
@@ -1048,6 +1054,181 @@ q_init_export_tables(module_t *mdl)
         2 * mdl->ex_hashsize * sizeof(void *);
 }
 
+
+/* 
+ * -- validate_query
+ * 
+ * validates a query checking that the timestamps are correct, 
+ * the module names are recognized and that the format of the entire
+ * query is valid. it returns NULL in case of success or a string 
+ * containing the HTTP error string in case of failure. 
+ *
+ */
+static char * 
+validate_query(qreq_t * req)
+{
+    static char httpstr[8192];
+    int idx;
+
+    if (req->module == NULL) {
+        /*
+         * no module defined. return warning message and exit
+         */
+        logmsg(LOGWARN, "query module not defined\n");
+	sprintf(httpstr, "HTTP/1.0 405 Method Not Allowed\n"
+                         "Content-Type: text/plain\n\n"
+                         "Module name is missing\n"); 
+        return httpstr;
+    }
+
+    if (req->start > req->end) {
+        /*
+         * start time is after end time, return error message
+         */
+        logmsg(LOGWARN,
+               "query start time (%d) after end time (%d)\n", 
+               req->start, req->end);
+         
+	sprintf(httpstr, "HTTP/1.0 405 Method Not Allowed\n"
+		         "Content-Type: text/plain\n\n"
+                         "Query start time after end time\n");
+        return httpstr;
+    }
+
+    /* check if the module is present in the configuration file */
+    for (idx = 0; idx < map.module_count; idx++) {
+        req->mdl = &map.modules[idx];
+
+        /* check module name */
+        if (!strcmp(req->module, req->mdl->name))
+	    break;
+    }
+
+    if (idx == map.module_count) { 
+	/*
+	 * the module is not present in the configuration file 
+	 */
+	logmsg(LOGWARN, "module %s not found\n", req->module);
+	sprintf(httpstr, 
+		"HTTP/1.0 404 Not Found\n"
+	 	"Content-Type: text/plain\n\n"
+                "Module %s not found in the current configuration\n", 
+		req->module);
+	return httpstr;
+    } 
+
+    if (!req->mdl->callbacks.print && 
+	 (req->format == Q_OTHER || req->format == Q_HTML)) {
+	/*
+	 * the module exists but does not support printing records. 
+	 */
+	logmsg(LOGWARN, "module \"%s\" does not have print()\n", req->module);
+	sprintf(httpstr, 
+		"HTTP/1.0 405 Method Not Allowed\n"
+	 	"Content-Type: text/plain\n\n"
+                "Module \"%s\" does not have print() callback\n", 
+		req->module);
+	return httpstr;
+    } 
+	
+    /* 
+     * there are two types of queries. the ones that just need to print or 
+     * retrieve the data stored by a running instance of a module and the 
+     * ones that require to process the output data of a different module 
+     * (i.e. chain together two modules as defined by "source=..." in the 
+     * query). 
+     *
+     * in the first case we have to make sure that the running module is 
+     * using the same filter that is present in the query (we need that also
+     * to distinguish between multiple instances of the same module). 
+     * 
+     * in the second case (if req->source is not NULL) we need to make sure
+     * the source module actually exists. 
+     * 
+     * XXX we do not support the existance of multiple modules that have the
+     *     same name as the source module but different filters. we assume
+     *     whoever posted the query knew what was going on...
+     * 
+     * XXX in the future we will have to check if the module has been running
+     *     during the interval of interest.
+     */
+    if (!req->source) { 
+	/* 
+	 * source is not defined, hence we just want to read 
+	 * the output file. check the filter of the running modules 
+	 */
+	for (idx = 0; idx < map.module_count; idx++) {
+	    req->mdl = &map.modules[idx];
+
+	    /* check module name */
+	    if (strcmp(req->module, req->mdl->name))
+		continue;
+	 
+	    /* check filter string */
+	    if (!strcmp(req->filter_cmp, req->mdl->filter_cmp))
+		break;  /* found! */
+	}
+
+	if (idx == map.module_count) {
+	    /*
+	     * the module is not present in the configuration file 
+	     */
+	    logmsg(LOGWARN, "module %s found but it is not using filter (%s)\n",
+		req->module, req->filter_str); 
+	    sprintf(httpstr, 
+		    "HTTP/1.0 404 Not Found\n"
+		    "Content-Type: text/plain\n\n"
+		    "Module %s found but it is not using filter \"%s\"\n", 
+		    req->module, req->filter_str);
+	    return httpstr;
+	}
+    } else { 
+	/* 
+	 * a source is defined. go look for it and forget about the 
+	 * filter defined in the query. we will have to instantiate a
+	 * new module anyway. 
+	 */
+        for (idx = 0; idx < map.module_count; idx++) {
+            req->src = &map.modules[idx];
+            if (!strcmp(req->source, req->src->name))
+		break;
+        }
+        
+	if (idx == map.module_count) {
+            /* No source module found,
+             * return an error message to the client and finish
+             */
+            logmsg(LOGWARN, "source module not found (%s)\n", req->source);
+	    sprintf(httpstr, 
+		    "HTTP/1.0 404 Not Found\n"
+		    "Content-Type: text/plain\n\n"
+		    "Source module \"%s\" not found\n", 
+		    req->source); 
+            return httpstr;
+        }
+
+	if (!req->src->callbacks.outdesc || !req->src->callbacks.replay) {
+	    /*	
+	     * the source module does not have the replay() callback or 
+	     * a description of the packets it can generate. return an 
+	     * error message 
+	     */
+            logmsg(LOGWARN, "source module \"%s\" does not support replay()\n",
+		   req->source);
+	    sprintf(httpstr, 
+		    "HTTP/1.0 404 Not Found\n"
+		    "Content-Type: text/plain\n\n"
+		    "Source module \"%s\" does not support replay()\n", 
+		    req->source); 
+            return httpstr;
+        }
+    } 
+
+    return NULL;		/* everything OK, nothing to say */
+}
+
+
+
 /*
  * -- query_ondemand
  *
@@ -1060,29 +1241,29 @@ q_init_export_tables(module_t *mdl)
  *
  *  . name, the module to run (the shared object must exist already)
  *  . filter, filter expression
- *  . start, start timestamp
- *  . end, end timestamp
+ *  . time, interval of interest 
+ *  . source, data source if not one of the running sniffers 
+ *  . format, to define the output format of the query
  * 
- * XXX as of now, query_ondemand requires that the module has been running
- *     during the interval of interest. this way it just has to find the 
- *     output file, read them and send them "as is" to the client. 
+ * XXX as of now, if "source" is not defined, query_ondemand requires 
+ *     that the module has been running during the interval of interest. 
+ *     if "source" is defined then that module replay() callback is used. 
+ *     in the future, query should independently pick the most appropriate
+ *     source of data.
  *
  */
 void
 query_ondemand(int client_fd)
 {
-    int idx;
-    int ret; 
-    module_t *mdl, *orig_mdl;
     qreq_t *req;
     int storage_fd, file_fd;
     off_t ofs; 
     char * output; 
     ssize_t len;
-    int module_found; 
-    int mode;
+    int mode, ret;
     int arg, narg;
     callbacks_t *cb;
+    char * httpstr;
 
     /* set the name of this process */
     map.procname = "qd"; 
@@ -1123,156 +1304,84 @@ query_ondemand(int client_fd)
 	return; 
     }
 
-    if (req->module == NULL) { 
-	/* 
-	 * no module defined. return warning message and exit
-	 */
-	logmsg(LOGWARN, "query module not defined\n"); 
-	close(client_fd);
-	return; 
-    } 
-
-    if (req->start > req->end) { 
-	/* 
-	 * start time is after end time, return error message 
-	 */  
-	logmsg(LOGWARN, 
-	       "query start time (%d) after end time (%d)\n", 
-	       req->start, req->end); 
-
-	ret = como_writen(client_fd, 
-		  "HTTP/1.0 405 Method Not Allowed\n"
-		  "Content-Type: text/plain\n\n"
-		  "Query start time after end time\n", 0); 
-	close(client_fd);
-	return; 
-    } 
-
     /* 
-     * check if the module is running using the same filter 
+     * validate the query and find the relevant modules. 
+     *
+     * req->mdl will contain a pointer to the module that has to 
+     * run the print() callback. 
      * 
-     * XXX right now we just check if the module exists and is using an
-     * equivalent filter:
-     * - With the new filter parser that uses Flex and Bison, the filters
-     *   only need to be semantically equivalent
-     *   (i.e., "A and B" is the same as "B and A").
-     * In the future we will have to check if the module has been running
-     * during the interval of interest. If not, we have to run it on the
-     * stored packet trace. 
+     * req->src will point to the module that has to run load() or 
+     * replay() callback. 
+     * 
+     * req->mdl and req->src are the same if load()/print() is all we 
+     * need to do. they will be different for the load()/replay()/... 
+     * cycle. 
+     * 
      */
-    module_found = 0; 
-    for (idx = 0; idx < map.module_count; idx++) { 
-        mdl = &map.modules[idx]; 
-
-	/* check module name */
-	if (strcmp(req->module, mdl->name))
-	    continue; 
-
-	/* check filter string */
-        module_found = 1;
-	if (!strcmp(req->filter_cmp, mdl->filter_cmp)) 
-            break;  /* found! */
+    httpstr = validate_query(req);
+    if (httpstr != NULL) { 
+	if (como_writen(client_fd, httpstr, 0) < 0) 
+	    panic("sending data to the client [%d]", client_fd); 
+        close(client_fd);
+	return;
     } 
-
-    if (idx == map.module_count) { 
-	/* 
-	 * no module found. return an error message 
-	 * to the client. 
-	 */
-        if (!module_found) {
-	    logmsg(LOGWARN, "query module not found (%s)\n", req->module);
-	    ret = como_writen(client_fd, 
-		      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
-		      "Module not found\n", 0);
-        } else {
-	    logmsg(LOGWARN, "query filter not found (%s)\n", req->filter_str);
-	    ret = como_writen(client_fd, 
-		      "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
-		      "Filter not found\n", 0);
-	}
-	if (ret < 0)
-	    panic("sending data to the client"); 
-	close(client_fd);
-	return; 
-    }
-
-    /* Check if we have to retrieve the data using the replay callback of
-     * another module instead of connecting to storage and reading a file
+	
+    /* 
+     * if we have to retried the data using the replay callback of
+     * another module instead of reading the output file of the module,
+     * we need to create a new instance of the module itself. 
      */
     if (req->source) {
-        
-        /* Set up a new module structure and call the init callback */
-        orig_mdl = safe_calloc(1, sizeof(module_t));
-        orig_mdl->name = safe_strdup(mdl->name);
-        orig_mdl->description = safe_strdup(mdl->description);
-        orig_mdl->filter_tree = tree_copy(mdl->filter_tree);
-        orig_mdl->filter_str = safe_strdup(mdl->filter_str);
-        orig_mdl->filter_cmp = safe_strdup(mdl->filter_cmp);
-        orig_mdl->output = safe_strdup(mdl->output);
-        
-        /* Copy module arguments */
-        narg = 0;
-        if (mdl->args)
-            for (narg = 0; mdl->args[narg] != NULL; narg++);
-            orig_mdl->args = safe_calloc(narg + 1, sizeof(char *));
-            for (arg = 0; arg < narg; arg++)
-                orig_mdl->args[arg] = safe_strdup(mdl->args[arg]);
-            orig_mdl->args[arg] = NULL;
-        
-        orig_mdl->source = safe_strdup(mdl->source);
-        orig_mdl->msize = mdl->msize;
-        if (orig_mdl->msize)
-	    orig_mdl->mem = safe_calloc(1, orig_mdl->msize);
-        load_callbacks(orig_mdl);
-        mdl->status = MDL_ACTIVE;
-        orig_mdl->ca_hashsize = mdl->ca_hashsize;
-        orig_mdl->ex_hashsize = mdl->ex_hashsize;
-        orig_mdl->min_flush_ivl = mdl->min_flush_ivl;
-        orig_mdl->max_flush_ivl = mdl->max_flush_ivl;
-        orig_mdl->bsize = mdl->bsize;
-        
-        cb = &(orig_mdl->callbacks);
-        if (cb->init != NULL && cb->init(orig_mdl->mem,
-                                         orig_mdl->msize, orig_mdl->args) != 0)
-	    panicx("could not initialize %s\n", mdl->name);
-        
-        /* Init expired flow tables queue */
-        TQ_HEAD(&expired_tables) = NULL;
-        map.stats->table_queue = 0;
-        
-        /* Init capture tables */
-        orig_mdl->ca_hashtable = NULL;
-        
-        /* Init export tables */
-        q_init_export_tables(orig_mdl);
-        
-        /* Find the source module */
-        module_found = 0;
-        for (idx = 0; !module_found && idx < map.module_count; idx++) {
-            mdl = &map.modules[idx];
-            if (!strcmp(req->source, mdl->name))
-                module_found = 1;
-        }
-        
-        if (!module_found) {
-            /* No source module found,
-             * return an error message to the client and finish
-             */
-            logmsg(LOGWARN, "source module not found (%s)\n", req->source);
-	        ret = como_writen(client_fd, 
-		        "HTTP/1.0 404 Not Found\nContent-Type: text/plain\n\n"
-		        "Source module not found\n", 0);
-            if (ret < 0)
-                panic("sending data to the client");
-            close(client_fd);
-            return;
-        }
+	module_t * x; 
 
-        /* mdl is our source module here.
-         * We want it to output using its replay callback
-         */
-        req->format = Q_COMO;
-    }
+	/* 
+	 * creat a new instance of the module and initialize it 
+	 */
+        x = safe_calloc(1, sizeof(module_t));
+        x->name = safe_strdup(req->mdl->name);
+        x->description = safe_strdup(req->mdl->description);
+	x->filter_str = safe_strdup(req->filter_str);
+        parse_filter(x->filter_str, &(x->filter_tree), &(x->filter_cmp));
+        x->output = safe_strdup(req->mdl->output);
+        x->source = safe_strdup(req->mdl->source);
+        x->msize = req->mdl->msize;
+        if (x->msize)
+	    x->mem = safe_calloc(1, x->msize);
+        x->ca_hashsize = req->mdl->ca_hashsize;
+        x->ex_hashsize = req->mdl->ex_hashsize;
+        
+        /* we get the new module arguments from the request command. 
+	 * 
+	 * XXX note that we do not distinguish between arguments for the 
+  	 *     init() or print() callback. we assume the two callback will
+	 *     just ignore any argument they do not understand 
+	 *
+	 */ 
+	for (narg = 0; req->args[narg]; narg++) 
+	    ; 
+	x->args = safe_calloc(narg + 1, sizeof(char *));
+	for (arg = 0; arg < narg; arg++)
+	    x->args[arg] = safe_strdup(req->args[arg]);
+        
+        load_callbacks(x);
+        cb = &(x->callbacks);
+	x->flush_ivl = cb->init == NULL? 
+		DEFAULT_CAPTURE_IVL: cb->init(x->mem, x->msize, x->args);
+	if (x->flush_ivl == 0)
+	    panicx("could not initialize the new module %s\n", x->name);
+
+        /* init capture tables */
+        x->ca_hashtable = NULL;
+        
+        /* init export tables */
+        q_init_export_tables(x);
+        
+        /* replace the pointer in the query request */
+	req->mdl = x; 
+    } else { 
+	/* the source is the same as the module */
+	req->src = req->mdl;
+    } 
     
     /* 
      * connect to the storage process, open the module output file 
@@ -1280,11 +1389,11 @@ query_ondemand(int client_fd)
      */
     storage_fd = create_socket("storage.sock", NULL);
 
-    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", mdl->output); 
+    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req->src->output); 
     mode =  req->wait? CS_READER : CS_READER_NOBLOCK; 
-    file_fd = csopen(mdl->output, mode, 0, storage_fd); 
+    file_fd = csopen(req->src->output, mode, 0, storage_fd); 
     if (file_fd < 0) 
-	panic("opening file %s", mdl->output);
+	panic("opening file %s", req->src->output);
 
     /* get start offset. this is needed because we access the file via
      * csmap instead of csreadp (that is not implemented yet) 
@@ -1294,17 +1403,22 @@ query_ondemand(int client_fd)
     /*
      * initializations
      */
+    httpstr = NULL;
     switch (req->format) {
     case Q_OTHER:
+        asprintf(&httpstr, "HTTP/1.0 200 OK\nContent-Type: text/plain\n\n");
+	/* pass thru */
+
+    case Q_HTML:
+        if (httpstr == NULL)
+	    asprintf(&httpstr, "HTTP/1.0 200 OK\nContent-Type: text/html\n\n");
+
 	/*
 	 * produce a response header
 	 */
-	if (mdl->callbacks.print == NULL) 
-	    panicx("module %s does not support printing results\n", mdl->name); 
-	ret = como_writen(client_fd, 
-		"HTTP/1.0 200 OK\nContent-Type: text/plain\n\n", 0);
-	if (ret < 0) 
+	if (como_writen(client_fd, httpstr, 0) < 0) 
 	    panic("sending data to the client");  
+	free(httpstr);
 
 	/* first print callback. we need to make sure that req->args != NULL. 
 	 * if this is not the case we just make something up
@@ -1313,28 +1427,17 @@ query_ondemand(int client_fd)
 	    req->args = safe_calloc(1, sizeof(char **)); 
 	    req->args[0] = NULL;
 	} 
-	printrecord(mdl, NULL, req->args, client_fd);
+	printrecord(req->mdl, NULL, req->args, client_fd);
 	break;
 	
     case Q_COMO: 
 	/*
 	 * transmit the output stream description
 	 */
-	if (mdl->callbacks.outdesc == NULL || mdl->callbacks.replay == NULL)
-	    panicx("module %s does not support trace replay\n", mdl->name); 
-	if (!req->source) {
-            ret = como_writen(client_fd, (char*) mdl->callbacks.outdesc, 
-		              sizeof(pktdesc_t)); 
-	    if (ret < 0)
-	        panic("could not send pktdesc");
-        } else {
-            /* Do the first print callback for the original module */
-            if (req->args == NULL) {
-                req->args = safe_calloc(1, sizeof(char **));
-                req->args[0] = NULL;
-            }
-            printrecord(orig_mdl, NULL, req->args, client_fd);
-        }
+	ret = como_writen(client_fd, (char*) req->src->callbacks.outdesc, 
+			  sizeof(pktdesc_t)); 
+	if (ret < 0)
+	    panic("could not send pktdesc");
 
 	/* allocate the output buffer */
 	output = safe_calloc(1, DEFAULT_REPLAY_BUFSIZE);
@@ -1353,17 +1456,17 @@ query_ondemand(int client_fd)
 	timestamp_t ts;
 	char * ptr; 
 
-        len = mdl->bsize; 
-        ptr = getrecord(file_fd, &ofs, mdl->callbacks.load, &len, &ts);
+        len = req->src->bsize; 
+        ptr = getrecord(file_fd, &ofs, req->src->callbacks.load, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
 	    if (len == -1) 
-		panic("reading from file %s\n", mdl->output); 
+		panic("reading from file %s\n", req->src->output); 
 
 	    if (len == 0) {
 		/* notify the end of stream to the module */
-		if (req->format == Q_OTHER) 
-		    printrecord(mdl, NULL, NULL, client_fd); 
-		logmsg(LOGQUERY, "reached end of file %s\n", mdl->output); 
+		if (req->format == Q_OTHER || req->format == Q_HTML) 
+		    printrecord(req->mdl, NULL, NULL, client_fd); 
+		logmsg(LOGQUERY, "reached end of file %s\n", req->src->output); 
 		break;
 	    }
 	}
@@ -1373,7 +1476,8 @@ query_ondemand(int client_fd)
 	 * If lost sync, move to the next file and try again. 
 	 */
 	if (ptr == GR_LOSTSYNC) {
-	    logmsg(LOGQUERY, "lost sync, trying next file %s\n", mdl->output); 
+	    logmsg(LOGQUERY, "lost sync, trying next file %s\n", 
+		req->src->output); 
 	    ofs = csseek(file_fd);
 	    continue;
 	}
@@ -1381,33 +1485,59 @@ query_ondemand(int client_fd)
     	if (TS2SEC(ts) < req->start)	/* before the required time. */
 	    continue;
     	if (TS2SEC(ts) >= req->end) {
-	    /* notify the end of stream to the module */
-	    if (req->format == Q_OTHER) 
-		printrecord(mdl, NULL, NULL, client_fd); 
+	    /* 
+	     * we have reached the end of the stream 
+	     * we want to notify the module that there are 
+	     * no more records so that it can cleanup data 
+	     * structures and send the last messages if needed
+	     */
+	    if (req->source) {
+		replay_source(req->mdl, req->src, NULL, client_fd);
+	    } else { 
+	       /* 
+	        * ask the module to send the message footer if it 
+		* has any to send. 
+	        */  
+		switch (req->format) { 
+		case Q_OTHER:
+		case Q_HTML:
+		    printrecord(req->mdl, NULL, NULL, client_fd); 
+		    break;
+
+		case Q_COMO: 
+		    replayrecord(req->src, NULL, client_fd);
+		    break;
+	    
+		default:
+		    break;
+		} 
+	    } 
+
 	    logmsg(LOGQUERY, "query completed\n"); 
 	    break;
 	}
 
-	switch (req->format) { 
-	case Q_COMO: 	
-	    if (!req->source)
-            replayrecord(mdl, ptr, client_fd);
-        else {
-            replay_source(orig_mdl, mdl, ptr, client_fd);
-        }
-	    break; 
+	if (req->source) {
+	    replay_source(req->mdl, req->src, ptr, client_fd);
+	} else { 
+	    switch (req->format) { 
+	    case Q_COMO: 	
+		replayrecord(req->src, ptr, client_fd);
+		break; 
 
-	case Q_RAW: 
-	    /* send the data to the query client */
-	    ret = como_writen(client_fd, ptr, len);
-	    if (ret < 0) 
-		panic("sending data to the client"); 
-	    break;
-            
-	case Q_OTHER: 
-	    printrecord(mdl, ptr, NULL, client_fd); 
-	    break;
-        }
+	    case Q_RAW: 
+		/* send the data to the query client */
+		ret = como_writen(client_fd, ptr, len);
+		if (ret < 0) 
+		    panic("sending data to the client"); 
+		break;
+		
+	    case Q_OTHER: 
+	    case Q_HTML:
+		printrecord(req->mdl, ptr, NULL, client_fd); 
+		break;
+	    }
+	}
     }
 
     /* close the socket and the file */
