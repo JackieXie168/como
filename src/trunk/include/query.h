@@ -33,6 +33,7 @@
 #include <stdint.h>		/* uint8_t, etc. */
 #endif
 
+#include "comotypes.h"
 
 /* 
  * well known port numbers
@@ -42,25 +43,26 @@
 /* 
  * query request message 
  */
-struct _query_req
-{
+struct _query_req {
     uint16_t len; 		/* message length */
     char * module;		/* module name */
-    char * filter_str;  /* filter expression */
-    char * filter_cmp;  /* filter expression to compare with
-                         * the module's filter */
-    uint32_t start;     /* query starts at */
-    uint32_t end;       /* query ends at */
+    char * filter_str; 		/* filter string */
+    char * filter_cmp;  	/* filter canonical form */
+    uint32_t start;     	/* query starts at */
+    uint32_t end;       	/* query ends at */
     int wait; 			/* set if query should wait for data */
-    uint format;        /* query response format */
+    uint format;        	/* query response format */
 #define Q_OTHER		154	/* any format (print() should know better) */
 #define Q_RAW		235	/* raw binary data */
 #define Q_COMO		324	/* output of dump() callback */
 #define Q_STATUS	542	/* node status, no module data */
+#define Q_HTML		334	/* print() with format=html */
 
-    char * source;      /* source module to read data from */
+    char * source;      	/* source module to read data from */
+    char ** args; 		/* arguments to be passed to module */
 
-    char ** args; 		/* query arguments to be passed to module*/
+    module_t * mdl;		/* module producing data -- using print() */
+    module_t * src;		/* module retrieving data -- using load() */
 };
 
 typedef struct _query_req qreq_t;
