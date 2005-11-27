@@ -54,6 +54,60 @@ FLOWDESC {
     uint64_t pkts;
 };
 
+/*
+ * packet description and templates for the
+ * replay() callback or to know if we can process
+ * the packets from given sniffer
+ */    
+static pktdesc_t indesc, outdesc;
+
+static timestamp_t
+init(__unused void *mem, __unused size_t msize, char *args[])
+{
+    timestamp_t flush_ivl = DEFAULT_CAPTURE_IVL;
+    int i; 
+
+    /*
+     * process input arguments
+     */
+    for (i = 0; args && args[i]; i++) {
+	if (strstr(args[i], "granularity")) {
+	    char * len = index(args[i], '=') + 1; 
+	    flush_ivl = TIME2TS(atoi(len), 0);
+	}
+    }
+
+    /*
+     * our input stream needs to contain the port numbers and
+     * a packet length. for the timestamp, we use a default value of
+     * one second or whatever we receive from configuration
+     */
+    bzero(&indesc, sizeof(pktdesc_t));
+    indesc.ts = flush_ivl; 
+    indesc.ih.proto = 0xff;
+    N16(indesc.ih.len) = 0xffff;
+    N32(indesc.ih.src_ip) = ~0; 
+    N32(indesc.ih.dst_ip) = ~0; 
+    N16(indesc.tcph.src_port) = 0xffff;
+    N16(indesc.tcph.dst_port) = 0xffff;
+    N16(indesc.udph.src_port) = 0xffff;
+    N16(indesc.udph.dst_port) = 0xffff;
+    
+    bzero(&outdesc, sizeof(pktdesc_t));
+    outdesc.ts = flush_ivl; 
+    outdesc.flags = COMO_AVG_PKTLEN;
+    N16(outdesc.ih.len) = 0xffff;
+    outdesc.ih.proto = 0xff;
+    N32(outdesc.ih.src_ip) = 0xffffffff;
+    N32(outdesc.ih.dst_ip) = 0xffffffff;
+    N16(outdesc.tcph.src_port) = 0xffff;
+    N16(outdesc.tcph.dst_port) = 0xffff;
+    N16(outdesc.udph.src_port) = 0xffff;
+    N16(outdesc.udph.dst_port) = 0xffff;
+    
+    return flush_ivl;
+}
+
 
 static uint32_t
 hash(pkt_t *pkt)
@@ -98,12 +152,6 @@ match(pkt_t *pkt, void *fh)
 }
 
 static int
-check(pkt_t *pkt)
-{
-    return pkt->l3type == ETHERTYPE_IP;
-}
-
-static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
@@ -125,9 +173,6 @@ update(pkt_t *pkt, void *fh, int isnew)
 	} else {
 	    N16(x->src_port) = N16(x->dst_port) = 0; 
 	}
-
-	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) { 
-	} 
     }
 
     x->bytes += H16(IP(len));
@@ -135,7 +180,6 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     return 0;
 }
-
 
 static ssize_t
 store(void *efh, char *buf, size_t len)
@@ -215,22 +259,88 @@ print(char *buf, size_t *len, char * const args[])
 };
 
 
+static int
+replay(char *buf, char *out, size_t * len, int *count)
+{
+    FLOWDESC * x;
+    size_t outlen;
+    uint64_t nbytes, npkts; 
+    int pktsz, howmany;
+
+    if (buf == NULL) {
+	*len = 0;
+	*count = 0;
+	return 0; 		/* nothing to do */
+    } 
+
+    /* 
+     * generate packets as long as we have space in the output 
+     * buffer. the packets will all be equal with the same timestamps
+     * and a packet length equal to the average packet lengths. 
+     */
+    x = (FLOWDESC *) buf; 
+    nbytes = NTOHLL(x->bytes);
+    npkts = NTOHLL(x->pkts);
+    howmany = *count;
+
+    /* fill the output buffer */
+    outlen = 0; 
+    pktsz = sizeof(pkt_t) + sizeof(struct _como_iphdr) + 
+					sizeof(struct _como_udphdr); 
+    while (outlen + pktsz < *len && howmany < (int) npkts) { 
+	pkt_t * pkt;
+
+	howmany++;
+
+	pkt = (pkt_t *) (out + outlen); 
+	pkt->payload = (char *) pkt + sizeof(pkt_t);
+
+	COMO(ts) = TIME2TS(ntohl(x->ts), 0); 
+	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
+	COMO(type) = COMOTYPE_NONE;
+	COMO(l3type) = ETHERTYPE_IP;
+	COMO(l3ofs) = 0; 
+	COMO(l4type) = x->proto; 
+	COMO(l4ofs) = sizeof(struct _como_iphdr);
+
+	COMO(len) = (uint32_t) nbytes/npkts; 
+	if (howmany == (int) npkts) 
+	    COMO(len) += (uint32_t) nbytes % npkts; 
+
+        IP(proto) = x->proto;
+	N16(IP(len)) = htons((uint16_t) COMO(len)); 
+        IP(src_ip) = x->src_ip;
+        IP(dst_ip) = x->dst_ip;
+
+        UDP(src_port) = x->src_port;
+        UDP(dst_port) = x->dst_port;
+
+	outlen += pktsz; 
+    } 
+
+    *len = outlen;
+    *count = howmany;
+    return (npkts - howmany);
+}
+
+
 callbacks_t callbacks = {
-    sizeof(FLOWDESC),
-    0, 
-    NULL,
-    NULL,
-    NULL,
-    check,
-    hash,
-    match,
-    update,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    store,
-    load,
-    print,
-    NULL
+    ca_recordsize: sizeof(FLOWDESC),
+    ex_recordsize: 0,
+    st_recordsize: sizeof(FLOWDESC), 
+    indesc: &indesc,
+    outdesc: &outdesc,
+    init: init,
+    check: NULL,
+    hash: hash,
+    match: match,
+    update: update,
+    ematch: NULL,
+    export: NULL,
+    compare: NULL,
+    action: NULL,
+    store: store,
+    load: load,
+    print: print,
+    replay: replay
 };

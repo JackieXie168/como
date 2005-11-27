@@ -59,21 +59,18 @@ FLOWDESC {
 
 static timestamp_t idle_timeout = TIME2TS(60,0);     /* idle timeout (secs) */
 
-static int
+static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
 {
     int i;
 
-    if (args == NULL)
-        return 0;
-
-    for (i = 0; args[i]; i++) {
+    for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "idle-timeout")) {
             char * val = index(args[i], '=') + 1;
             idle_timeout = TIME2TS(atoi(val), 0);
         }
     }
-    return 0;
+    return TIME2TS(1,0);
 }
 
 static uint32_t
@@ -308,6 +305,7 @@ print(char *buf, size_t *len, char * const args[])
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
+    st_recordsize: sizeof(EFLOWDESC),
     indesc: NULL,
     outdesc: NULL,
     init: init,

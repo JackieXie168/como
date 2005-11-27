@@ -68,6 +68,13 @@ FLOWDESC {
 };
 
 
+static timestamp_t 
+init(__unused void *mem, __unused size_t msize, __unused char *args[])
+{
+    return TIME2TS(300,0);
+}
+
+
 static uint32_t
 hash(pkt_t *pkt)
 {
@@ -570,9 +577,10 @@ print(char *buf, size_t *len, char * const args[])
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
+    st_recordsize: sizeof(FLOWDESC),
     indesc: NULL,
     outdesc: NULL,
-    init: NULL,
+    init: init,
     check: check,
     hash: hash,
     match: match,

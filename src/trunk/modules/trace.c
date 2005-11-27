@@ -106,23 +106,21 @@ static unsigned snaplen = 65535;
 static pktdesc_t outdesc;
 
 
-static int 
+static timestamp_t 
 init(__unused void *mem, __unused size_t msize, char * args[])
 {
-    if (args == NULL) 
-	return 0; 
+    int i; 
 
-    if (strstr(args[0], "snaplen=")) { 
-	char * len; 
-
-	len = index(args[0], '='); 
-	len++; 	/* skip '=' */
-	snaplen = atoi(len); 		/* set the snaplen */
-    } 
+    for (i = 0; args && args[i]; i++) {
+	if (strstr(args[i], "snaplen=")) { 
+	    char * len = index(args[i], '=') + 1; 
+	    snaplen = atoi(len); 		/* set the snaplen */
+	} 
+    }
 
     memset(&outdesc, 0xff, sizeof(pktdesc_t));
     outdesc.caplen = snaplen; 
-    return 0; 
+    return TIME2TS(1,0); 
 }
 
 
@@ -475,6 +473,7 @@ replay(char *buf, char *out, size_t * len, int *count)
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
+    st_recordsize: 65535,
     indesc: NULL, 
     outdesc: &outdesc, 
     init: init,

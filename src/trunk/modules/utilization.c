@@ -64,13 +64,13 @@ EFLOWDESC {
 
 static pktdesc_t reqs;
 
-static int
+static timestamp_t
 init(__unused void *mem, __unused size_t msize, __unused char **args)
 {
     bzero(&reqs, sizeof(pktdesc_t));
     reqs.ts = WATERMARK_IVL;
     N16(reqs.ih.len) = 0xffff;
-    return 0;
+    return FLUSH_IVL;
 }
 
 static int
@@ -263,6 +263,7 @@ print(char *buf, size_t *len, char * const args[])
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
+    st_recordsize: sizeof(EFLOWDESC),
     indesc: &reqs,
     outdesc: NULL,
     init: init,
