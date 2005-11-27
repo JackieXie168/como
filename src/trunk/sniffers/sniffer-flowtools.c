@@ -563,8 +563,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 */
 	if (flow->pkt.ts >= flow->end_ts) { 
 	    pkt->ts = flow->end_ts; 
-	    pkt->len = flow->length_last; 
-	    N16(IP(len)) = htons((uint16_t) flow->length_last);
+	    pkt->len += flow->length_last; 
+	    N16(IP(len)) = htons((uint16_t) pkt->len); 
 	    free(flow); 
 	} else {  
 	    flow->pkt.ts += flow->increment; 
