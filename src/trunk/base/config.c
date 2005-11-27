@@ -57,7 +57,6 @@ enum tokens {
     TOK_NULL=0,
 
     TOK_BASEDIR,
-    TOK_BLOCK_SIZE,
     TOK_SOURCE,
     TOK_DESCRIPTION,
     TOK_END,
@@ -73,8 +72,6 @@ enum tokens {
     TOK_SNIFFER,
     TOK_STREAMSIZE,
     TOK_ARGS,
-    TOK_MIN_FLUSH,
-    TOK_MAX_FLUSH,
     TOK_PRIORITY,
     TOK_NAME,   
     TOK_LOCATION,
@@ -145,7 +142,6 @@ keyword_t keywords[] = {
     { "sniffer",     TOK_SNIFFER,     3, CTX_GLOBAL },
     { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL|CTX_MODULE },
     { "output",      TOK_OUTPUT,      2, CTX_MODULE },
-    { "blocksize",   TOK_BLOCK_SIZE,  2, CTX_MODULE },
     { "hashsize",    TOK_HASHSIZE,    2, CTX_MODULE },
     { "source",      TOK_SOURCE,      2, CTX_MODULE },
     { "filter",      TOK_FILTER,      2, CTX_GLOBAL|CTX_MODULE },
@@ -153,8 +149,6 @@ keyword_t keywords[] = {
     { "end",         TOK_END,         1, CTX_MODULE },
     { "streamsize",  TOK_STREAMSIZE,  2, CTX_MODULE },
     { "args",        TOK_ARGS,        2, CTX_MODULE },
-    { "min-flush",   TOK_MIN_FLUSH,   2, CTX_MODULE },
-    { "max-flush",   TOK_MAX_FLUSH,   2, CTX_MODULE },
     { "priority",    TOK_PRIORITY,    1, CTX_MODULE },
     { "name",        TOK_NAME,        2, CTX_GLOBAL },
     { "location",    TOK_LOCATION,    2, CTX_GLOBAL },
@@ -319,6 +313,7 @@ load_callbacks(module_t *mdl)
 
     /* store the callbacks */
     mdl->callbacks = *cb;
+    mdl->bsize = cb->st_recordsize;	/* store the block size too */
     mdl->cb_handle = handle;
 
     return 1;
@@ -436,7 +431,9 @@ load_module(module_t *mdl, int idx)
 	mdl->mem = safe_calloc(1, mdl->msize);
 
     /* initialize module */
-    if (cb->init != NULL && cb->init(mdl->mem, mdl->msize, mdl->args) != 0)
+    mdl->flush_ivl = cb->init == NULL? 
+	DEFAULT_CAPTURE_IVL: cb->init(mdl->mem, mdl->msize, mdl->args);
+    if (mdl->flush_ivl == 0) 
 	panicx("could not initialize %s\n", mdl->name); 
 
     return mdl;
@@ -557,9 +554,6 @@ new_module(char *name)
     mdl->status = MDL_UNUSED; 
 
     /* set some default values */
-    mdl->max_flush_ivl = DEFAULT_MAXCAPTUREIVL;
-    mdl->min_flush_ivl = DEFAULT_MINCAPTUREIVL;
-    mdl->bsize = DEFAULT_BLOCKSIZE;
     mdl->streamsize = DEFAULT_STREAMSIZE; 
     mdl->ex_hashsize = mdl->ca_hashsize = 1; 
     mdl->args = NULL;
@@ -698,10 +692,6 @@ do_config(int argc, char *argv[])
 	safe_dup(&map.basedir, argv[1]);
 	break;
 
-    case TOK_BLOCK_SIZE:
-	mdl->bsize = atoi(argv[1]);
-	break;
-
     case TOK_QUERYPORT:
 	map.query_port = atoi(argv[1]);
 	break;
@@ -719,15 +709,15 @@ do_config(int argc, char *argv[])
 	 * on context to make sure that all mandatory fields are there
 	 * and set default values
 	 */
-        if (! load_callbacks(mdl)) {
-            logmsg(LOGWARN, "cannot load callbacks of module '%s'\n", mdl->name);
+        if (!load_callbacks(mdl)) {
+            logmsg(LOGWARN, "cannot load callbacks module '%s'\n", mdl->name);
             free_module(mdl); /* free the module_t */
             free(mdl);
             scope = CTX_GLOBAL;
             break;
         }
 
-        if (! check_module(mdl)) {
+        if (!check_module(mdl)) {
             logmsg(LOGWARN, "module '%s' incorrectly configured\n", mdl->name);
             unload_object(mdl->cb_handle);  /* unload callbacks */
             free_module(mdl);               /* free the module_t */
@@ -902,16 +892,6 @@ do_config(int argc, char *argv[])
     mdl->args[i-1] = NULL;
     break;
     
-    case TOK_MIN_FLUSH: 
-	mdl->min_flush_ivl = 
-		TIME2TS(atoi(argv[1])/1000,(atoi(argv[1])%1000)*1000);
-	break; 
-
-    case TOK_MAX_FLUSH: 
-	mdl->max_flush_ivl = 
-		TIME2TS(atoi(argv[1])/1000,(atoi(argv[1])%1000)*1000);
-	break; 
-
     case TOK_PRIORITY: 
         mdl->priority = atoi(argv[1]);
 	break; 

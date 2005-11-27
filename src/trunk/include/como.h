@@ -119,8 +119,7 @@ struct _como {
 #define DEFAULT_LOGFLAGS	(LOGUI|LOGWARN) /* log messages */
 #define DEFAULT_MEMORY		64		/* memory capture/export */
 #define DEFAULT_QUERY_PORT	44444		/* query port */
-#define DEFAULT_MAXCAPTUREIVL	TIME2TS(1,0)    /* max capture flush interval */
-#define DEFAULT_MINCAPTUREIVL	0 		/* min capture flush interval */
+#define DEFAULT_CAPTURE_IVL	TIME2TS(1,0)    /* capture flush interval */
 #define DEFAULT_REPLAY_BUFSIZE	(1024*1024)	/* replay packet trace buffer */
 
 /* The "memory" bit is a gcc-ism saying that any pending writes to

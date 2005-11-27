@@ -897,7 +897,7 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
  * allowed in CoMo modules.
  *
  */   
-static int
+static timestamp_t
 init(void *mem, size_t msize, char *args[])
 {
     char *line;
@@ -907,7 +907,7 @@ init(void *mem, size_t msize, char *args[])
     if (msize < 100000) {
 	logmsg(LOGWARN, "SNORT: need at least 100 Kbytes"
            " of private memory, have just %d\n", msize);
-	return ENOMEM; 
+	return 0; 
     } 
     memset(mem, 0, msize);
     prv_mem = mem;
@@ -916,7 +916,7 @@ init(void *mem, size_t msize, char *args[])
     /* Check whether we have rules */
     if (!args[0]) {
         logmsg(LOGWARN, "SNORT: no rules specified in base/como.conf");
-        return 1;
+        return TIME2TS(1,0);
     }
     
     /* Read the rules line by line and parse them,
@@ -924,7 +924,7 @@ init(void *mem, size_t msize, char *args[])
     line = strtok(args[0], "\n");
     while(line != NULL) {
         if (parse_rules(line, mem, msize) == 1)
-            return 1;
+            return TIME2TS(1,0);
         line = strtok(NULL, "\n");
     }
     
@@ -934,7 +934,7 @@ init(void *mem, size_t msize, char *args[])
     logmsg(LOGUI, "SNORT: rules loaded = %d / rules read = %d\n",
            nrules, nrules_read);
     
-    return 0;
+    return TIME2TS(1,0);
 }
 
 /**
@@ -1668,6 +1668,7 @@ print(char *buf, size_t *len, char * const args[])
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
+    st_recordsize: 1590,	/* Ethernet MTU + sizeof(pktinfo_t) */
     indesc:     NULL, 
     outdesc:    NULL,
     init:       init,

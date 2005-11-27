@@ -119,7 +119,7 @@ static char template[1024];
 static int meas_ivl = 1; 		/* measurement granularity (secs) */
 static uint8_t port2app[65536];		/* mapping port number to app */
 
-static int
+static timestamp_t 
 init(__unused void *mem, __unused size_t msize, char *args[])
 {
     pkt_t * pkt; 
@@ -204,18 +204,16 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     /* 
      * process input arguments 
      */
-    if (args != NULL) { 
-	for (i = 0; args[i]; i++) { 
-	    if (strstr(args[i], "granularity")) {
-		char * len; 
+    for (i = 0; args && args[i]; i++) { 
+	if (strstr(args[i], "granularity")) {
+	    char * len; 
 
-		len = index(args[i], '='); 
-		len++; 	/* skip '=' */
+	    len = index(args[i], '='); 
+	    len++; 	/* skip '=' */
 
-		meas_ivl = atoi(len); 
-	    } 
-	}
-    } 
+	    meas_ivl = atoi(len); 
+	} 
+    }
 	 
     /* 
      * our input stream needs to contain the port numbers and 
@@ -246,7 +244,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     iph->vhl = 0x45; 
     iph->proto = IPPROTO_TCP; 
 
-    return 0;
+    return TIME2TS(meas_ivl, 0);
 }
 
 
@@ -505,6 +503,7 @@ replay(char *buf, char *out, size_t * len, int *count)
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
+    st_recordsize: sizeof(app_t),
     indesc: &indesc,
     outdesc: &outdesc,
     init: init,

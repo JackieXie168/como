@@ -76,10 +76,10 @@ typedef enum {
  * init_fn() does whatever is needed to initialize a module,
  * For the time being, just initialize the private memory for the module,
  * and take arguments from the config file.
- * Returns 0 on success, >0 on error.
- * Not mandatory, default does nothing and returns 0.
+ * Returns the capture flush interval on success, 0 on failure. 
+ * Not mandatory, default does nothing and returns DEFAULT_CAPTURE_IVL.
  */
-typedef int (init_fn)(void *mem, size_t msize, char * args[]);
+typedef timestamp_t (init_fn)(void *mem, size_t msize, char * args[]);
 
 /**
  * check_fn() ... checks for the validity of a packet before
@@ -222,7 +222,8 @@ typedef int (replay_fn)(char *ptr, char *out, size_t * out_buf_len,
 struct _callbacks {
     size_t ca_recordsize; 
     size_t ex_recordsize; 
-    
+    size_t st_recordsize;
+
 #if ((linux == 1) && (__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))
     pktdesc_t   * indesc;   /* packet requirements */
     pktdesc_t   * outdesc;  /* packet offer */
@@ -350,15 +351,14 @@ struct _module {
 
     ctable_t *ca_hashtable;  	/* capture hash table */
     uint ca_hashsize;    	/* capture hash table size (by config) */
-    timestamp_t min_flush_ivl;  /* min interval between two table flushes */
-    timestamp_t max_flush_ivl;  /* max interval between two table flushes */
+    timestamp_t flush_ivl;	/* capture flush interval */
 
     etable_t *ex_hashtable;  	/* export hash table */
     uint ex_hashsize; 	   	/* export hash table size (by config) */
     earray_t *ex_array; 	/* array of export records */
 
     int	file;			/* output file for export records */
-    size_t bsize;		/* block size */
+    size_t bsize;		/* blocksize ... */
     off_t streamsize;       	/* max bytestream size */
     off_t offset;		/* current offset in the export file */
 

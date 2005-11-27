@@ -61,21 +61,18 @@ FLOWDESC {
 static int meas_ivl = 1;     /* measurement granularity */
 
 
-static int
+static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
 {
     int i;
 
-    if (args == NULL)
-        return 0;
-
-    for (i = 0; args[i]; i++) {
+    for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "granularity")) {
             char * val = index(args[i], '=') + 1;
             meas_ivl = atoi(val);
         }
     }
-    return 0;
+    return TIME2TS(meas_ivl, 0);
 }
 
 
@@ -239,6 +236,7 @@ print(char *buf, size_t *len, char * const args[])
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
+    st_recordsize: sizeof(FLOWDESC),
     indesc: NULL, 
     outdesc: NULL,
     init: init,

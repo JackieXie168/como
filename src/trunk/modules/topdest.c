@@ -59,30 +59,30 @@ static unsigned int granularity = GRANULARITY;   /* measurement
                                                   * granularity (secs) */
 static int topn = TOPN;    /* number of top destinations */
 
-static int
+static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
 {
     int i;
     char *len;
     
+    granularity = GRANULARITY;  
+    topn = TOPN;    
+
     /* 
      * process input arguments 
      */
-    if (args != NULL) { 
-	for (i = 0; args[i]; i++) { 
-	    if (strstr(args[i], "granularity")) {
-		len = index(args[i], '='); 
-		len++; 	/* skip '=' */
-		granularity = atoi(len); 
-	    } else if (strstr(args[i], "topn")) {
-                len = index(args[i], '=');
-                len++; /* skip '=' */
-                topn = atoi(len);
-            }
+    for (i = 0; args && args[i]; i++) { 
+	if (strstr(args[i], "granularity")) {
+	    len = index(args[i], '=') + 1; 
+	    granularity = atoi(len); 
+	} 
+	if (strstr(args[i], "topn")) {
+	    len = index(args[i], '=') + 1;
+	    topn = atoi(len);
 	}
     }
 
-    return 0;
+    return TIME2TS(granularity, 0);
 }
 
 static uint32_t
@@ -211,29 +211,78 @@ load(char *buf, size_t len, timestamp_t *ts)
 
 #define PRETTYFMT 	"%.24s %15s %10llu %10llu\n"
 
+#define PLAINFMT	"%12u %15s %10llu %10llu\n"
+
+#define HTMLHDR							\
+    "<html><body>\n"						\
+    "<table cellpadding=1>\n"					\
+    "  <tr>\n"							\
+    "    <td width=200 style=\"border-bottom:1px solid\">\n"	\
+    "      <b>Destination</b></td>\n"				\
+    "    <td width=150 style=\"border-bottom:1px solid\">\n"	\
+    "      <b>Bytes</b></td>\n"					\
+    "    <td width=150 style=\"border-bottom:1px solid\">\n"	\
+    "      <b>Packets</b></td>\n"				\
+    "  </tr>\n"						
+
+#define HTMLFOOTER						\
+    "</table>\n"						\
+    "</body></html>\n"						
+
+#define HTMLFMT		"<tr><td>%15s</td><td>%10llu</td><td>%10llu</td></tr>\n"
+
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
-    EFLOWDESC *x; 
     static char s[2048];
+    static char * fmt; 
+    EFLOWDESC *x; 
     struct in_addr addr;
     time_t ts;
 
     if (buf == NULL && args != NULL) { 
-	*len = sprintf(s, PRETTYHDR); 
+	int n; 
+
+        /* by default, pretty print */
+        *len = sprintf(s, PRETTYHDR);  
+        fmt = PRETTYFMT; 
+
+        /* first call of print, process the arguments and return */
+        for (n = 0; args[n]; n++) {
+            if (!strcmp(args[n], "format=plain")) {
+                *len = 0; 
+                fmt = PLAINFMT;
+            } 
+            if (!strcmp(args[n], "format=html")) {
+                *len = sprintf(s, HTMLHDR); 
+                fmt = HTMLFMT;
+            } 
+        } 
+
 	return s; 
     } 
 
     if (buf == NULL && args == NULL) { 
 	*len = 0; 
+	if (fmt == HTMLFMT) 
+	    *len = sprintf(s, HTMLFOOTER);  
   	return s; 
     } 
 
     x = (EFLOWDESC *) buf; 
     ts = (time_t) ntohl(x->ts);
     addr.s_addr = N32(x->dst_ip);
-    *len = sprintf(s, PRETTYFMT, asctime(localtime(&ts)), inet_ntoa(addr), 
-	       NTOHLL(x->bytes), NTOHLL(x->pkts));
+    if (fmt == PRETTYFMT) { 
+	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
+		   NTOHLL(x->bytes), NTOHLL(x->pkts));
+    } else if (fmt == HTMLFMT) { 
+	*len = sprintf(s, fmt, inet_ntoa(addr), 
+		   NTOHLL(x->bytes), NTOHLL(x->pkts));
+    } else { 
+	*len = sprintf(s, fmt, ts, inet_ntoa(addr), 
+		   NTOHLL(x->bytes), NTOHLL(x->pkts));
+    } 
+	
     return s;
 };
 
@@ -241,6 +290,7 @@ print(char *buf, size_t *len, char * const args[])
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
+    st_recordsize: sizeof(EFLOWDESC),
     indesc: NULL, 
     outdesc: NULL, 
     init: init,

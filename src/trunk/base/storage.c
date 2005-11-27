@@ -850,7 +850,8 @@ handle_seek(int s, csmsg_t * in)
     csclient_t * cl;
     csfile_t * cf;
 
-    logmsg(LOGSTORAGE, "SEEK: %d %d %lld\n", in->id, in->arg, in->ofs);
+    logmsg(LOGSTORAGE, "seek: id %d, arg %d, ofs %lld\n", 
+	   in->id, in->arg, in->ofs);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
 	logmsg(LOGWARN, "close: invalid id (%d)\n", in->id); 

@@ -136,7 +136,7 @@ create_table(module_t * mdl, timestamp_t ts)
      * table belongs to. this information will be useful for 
      * EXPORT when it processes the flushed tables. 
      */
-    ct->ivl = ts - (ts % mdl->max_flush_ivl);
+    ct->ivl = ts - (ts % mdl->flush_ivl);
     return ct; 
 }
 
@@ -322,7 +322,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	    ctable_t * ct = mdl->ca_hashtable; 
 	
 	    ct->ts = pkt->ts; 
-	    if (ct->ts > ct->ivl + mdl->max_flush_ivl && ct->records) {  
+	    if (ct->ts >= ct->ivl + mdl->flush_ivl && ct->records) {  
 		flush_table(mdl, expired);
 		mdl->ca_hashtable = NULL;
 	    }
@@ -981,8 +981,7 @@ capture_mainloop(int accept_fd)
 		module_t * mdl = &map.modules[idx];
 		ctable_t *ct = mdl->ca_hashtable;
 
-		if (ct && ct->records && 
-			last_ts > ct->ts + mdl->min_flush_ivl) {
+		if (ct && ct->records && last_ts > ct->ts + mdl->flush_ivl) {
 		    logmsg(0, "    flushing table for %s\n", mdl->name); 
 		    flush_table(mdl, &expired_tables); 
 		}
