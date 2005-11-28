@@ -209,7 +209,7 @@ print(char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce 
                  * communication messages. 
                  */
-                granularity = atoi(val);
+                granularity = MAX(atoi(val)/TS2SEC(FLUSH_IVL), 1);
             } 
 	} 
 
