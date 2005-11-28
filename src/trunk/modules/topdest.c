@@ -38,9 +38,6 @@
 #include "como.h"
 #include "module.h"
 
-#define TOPN        20		/* Top-20 destinations */
-#define GRANULARITY  5		/* default measurement granularity (secs) */
-
 #define FLOWDESC	struct _ca_topdest
 #define EFLOWDESC	FLOWDESC
 
@@ -51,13 +48,8 @@ FLOWDESC {
     uint64_t pkts;	/* number of packets */
 };
 
-/* 
- * static variable for the modules. 
- * XXX we should get rid of these to force callbacks to be closures. 
- */
-static unsigned int granularity = GRANULARITY;   /* measurement
-                                                  * granularity (secs) */
-static int topn = TOPN;    /* number of top destinations */
+static uint32_t meas_ivl = 5;  		  /* interval (secs) */
+static int topn = 20;                     /* number of top destinations */
 
 static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
@@ -65,16 +57,13 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     int i;
     char *len;
     
-    granularity = GRANULARITY;  
-    topn = TOPN;    
-
     /* 
      * process input arguments 
      */
     for (i = 0; args && args[i]; i++) { 
-	if (strstr(args[i], "granularity")) {
+	if (strstr(args[i], "interval")) {
 	    len = index(args[i], '=') + 1; 
-	    granularity = atoi(len); 
+	    meas_ivl = atoi(len); 
 	} 
 	if (strstr(args[i], "topn")) {
 	    len = index(args[i], '=') + 1;
@@ -82,7 +71,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 	}
     }
 
-    return TIME2TS(granularity, 0);
+    return TIME2TS(meas_ivl, 0);
 }
 
 static uint32_t
@@ -104,7 +93,7 @@ update(pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh);
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % granularity);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
         x->dst_ip = IP(dst_ip);
         x->bytes = 0;
         x->pkts = 0;
@@ -164,9 +153,9 @@ action(void *efh, timestamp_t current_time, int count)
 	 * check if it is time to export the table. 
 	 * if not stop. 
 	 */
-	uint32_t ivl = TS2SEC(current_time) -
-                       TS2SEC(current_time) % granularity;
-	if (ivl - last_export < granularity) 
+        uint32_t now = TS2SEC(current_time);
+	uint32_t ivl = now - now %meas_ivl; 
+	if (ivl - last_export < meas_ivl) 
 	    return ACT_STOP;		/* too early */
 
 	last_export = ivl; 
@@ -220,16 +209,14 @@ load(char *buf, size_t len, timestamp_t *ts)
     "    <td width=200 style=\"border-bottom:1px solid\">\n"	\
     "      <b>Destination</b></td>\n"				\
     "    <td width=150 style=\"border-bottom:1px solid\">\n"	\
-    "      <b>Bytes</b></td>\n"					\
-    "    <td width=150 style=\"border-bottom:1px solid\">\n"	\
-    "      <b>Packets</b></td>\n"				\
+    "      <b>Mbps</b></td>\n"					\
     "  </tr>\n"						
 
 #define HTMLFOOTER						\
     "</table>\n"						\
     "</body></html>\n"						
 
-#define HTMLFMT		"<tr><td>%15s</td><td>%10llu</td><td>%10llu</td></tr>\n"
+#define HTMLFMT		"<tr><td>%15s</td><td>%.2f</td></tr>\n"
 
 static char *
 print(char *buf, size_t *len, char * const args[])
@@ -276,8 +263,8 @@ print(char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));
     } else if (fmt == HTMLFMT) { 
-	*len = sprintf(s, fmt, inet_ntoa(addr), 
-		   NTOHLL(x->bytes), NTOHLL(x->pkts));
+        float mbps = (float) (NTOHLL(x->bytes) * 8) / (float) meas_ivl;
+	*len = sprintf(s, fmt, inet_ntoa(addr), mbps);
     } else { 
 	*len = sprintf(s, fmt, ts, inet_ntoa(addr), 
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));
