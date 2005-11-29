@@ -9,6 +9,18 @@ TODOs
 . Porting to MAC OS and MS Windows
 . WLAN support
 -----------------------
+. Re-using data from running modules
+
+  Modules can now reuse data processed by other modules that implement
+  the replay() callback. This is entirely done in the QUERY process that
+  basically emulates the CAPTURE/EXPORT processes. It can be triggered by
+  using the source option in the HTTP query as follows
+
+  http://<host>/?module=counter&time=-1m:0&filter=src 10.0.0.1&source=tuple
+
+  This query will read the output of the tuple module in the last minute 
+  and use the counter module to count all bytes and packets sent by source 
+  IP address 10.0.0.1.
 
 . Configuration file
 
