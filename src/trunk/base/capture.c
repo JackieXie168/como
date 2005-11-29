@@ -950,6 +950,9 @@ capture_mainloop(int accept_fd)
 	    start_tsctimer(map.stats->ca_pkts_timer); 
 	    map.stats->ts = process_batch(pkts, count, &expired_tables);
 	    end_tsctimer(map.stats->ca_pkts_timer); 
+
+	    if (map.stats->ts < map.stats->first_ts) 
+	        map.stats->first_ts = map.stats->ts;
         }
 
 	/* 
