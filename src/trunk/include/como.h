@@ -76,7 +76,12 @@ struct _como {
     char * name; 
     char * location; 
     char * linkspeed; 
-    char * comment; 
+    char * comment;
+
+    int il_mode;            /* tells whether CoMo has been started in
+                             * inline mode */
+    module_t * il_module;   /* module that needs to be run in inline mode */
+    char * il_qargs;        /* query args for the inline mode */
 };
 
 

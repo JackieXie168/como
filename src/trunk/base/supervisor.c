@@ -235,6 +235,124 @@ supervisor_mainloop(int accept_fd)
     int num_procs;
     char *buf;
     
+    if (map.il_mode) {
+        
+        /* CoMo was started in inline mode.
+         * We need to fork a query-ondemand process straight away,
+         * make the query, get the data, print it to stdout and finish
+         */
+	
+        char *msg, *local, data[2048];
+        int ret, sd, cd, i, n_ready;
+        pid_t pid;
+        fd_set r;
+        struct timeval to = {1, 0};
+
+        /* add CA,EX,ST processes to the ipc file descriptor list */
+        
+        max_fd = 0;
+        num_procs = 0;
+        max_fd = add_fd(accept_fd, &valid_fds, max_fd);
+        ipc_init();
+        
+        for (; num_procs < 3;) {
+            r = valid_fds;
+    	    n_ready = select(max_fd, &r, NULL, NULL, &to);
+            for (i = 0; n_ready > 0 && i < max_fd; i++) {
+	        if (!FD_ISSET(i, &r))
+		    continue;
+
+	        n_ready--;
+	        if (i == accept_fd) {
+		    int x;
+		    x = accept(i, NULL, NULL);
+		    if (x < 0) {
+		        logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n",
+			       i, x, strerror(errno));
+		    } else {
+		        if (num_procs < 3) {
+			    /* XXX ugly hack. only add to proc_fds the first 3
+			     * processes that connect to supervisor. they will
+                             * be CA, EX or ST in no particular order.
+                             * queries' fds don't belong into proc_fds.
+                             */
+			    num_procs++;
+			    register_ipc_fd(x); //XXX XXX
+		        }
+		        max_fd = add_fd(x, &valid_fds, max_fd);
+		        logmsg(V_LOGDEBUG, "accept fd[%d] ok new desc %d\n",
+                               i, x);
+		    }
+		    continue;
+	        }
+            }
+        }
+
+        /* Check that at least one module has been specified in the
+           command line */
+        if (!map.il_module) {
+            logmsg(LOGWARN, "inline mode selected but no modules specified "
+                   "in the command line. please use -M \"module_name\".\n");
+            exit(0);
+        }
+        
+        logmsg(LOGUI, "running CoMo in inline mode...\n");
+        
+        /*
+         * tell processes to load the modules.
+         */
+        if (sup_send_new_modules() < 0) /* failed */
+            logmsg(LOGUI, "Failed to load modules\n");
+        
+        /* create the socket on which query-ondemand will accept the query */
+        asprintf(&buf, "S:http://localhost:%d/", map.query_port);
+        sd = create_socket(buf, NULL);
+        if (sd < 0)
+            panic("inline mode: cannot create server socket: %s\n",
+                  strerror(errno));
+        free(buf);
+    
+        /* fork a process to serve the query */
+	pid = fork();
+	if (pid < 0) 
+	    logmsg(LOGWARN, "fork query-ondemand: %s\n",
+		   strerror(errno));
+
+	if (pid == 0) {	/* here is the child... */
+	    query_ondemand(sd);
+	    exit(EXIT_SUCCESS);
+	} else {    /* parent */
+            /* wait 5 seconds before starting the query */
+            logmsg(LOGUI, "waiting 5 seconds before starting the query...\n");
+            sleep(5);
+            /* send the query string followed by "\n\n" */
+            asprintf(&buf, "http://localhost:%d/?module=%s&filter=%s&%s",
+                     map.query_port, map.il_module->name,
+                     map.il_module->filter_str, map.il_qargs);
+            cd = create_socket(buf, &local);
+            if (cd < 0)
+                panic("inline mode: cannot create client socket: %s\n",
+                      strerror(errno));
+            free(buf);
+            asprintf(&msg, "GET %s HTTP/1.0\n\n", local);
+            ret = como_writen(cd, msg, 0);
+            free(local);
+            free(msg);
+            if (ret < 0)
+                panic("inline mode: write error: %s\n", strerror(errno));
+
+            /* read the reply */
+            for (; ret > 0; ret = como_readn(cd, (char *)&data,
+                                             strlen(data))) {
+                fprintf(stderr, "%s", data);
+            }
+            if (ret == 0) /* eof */
+                exit(0);                   
+            else
+                panic("inline mode: error reading data");
+        }
+    }
+    
     /* 
      * Start listening for query requests.
      */

@@ -120,7 +120,8 @@ main(int argc, char *argv[])
     map.workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
     map.name = strdup("CoMo Node"); 
     map.location = strdup("Unknown"); 
-    map.linkspeed = strdup("Unknown"); 
+    map.linkspeed = strdup("Unknown");
+    map.il_mode = 0;
 
     /* write welcome message */ 
     logmsg(LOGUI, "----------------------------------------------------\n");

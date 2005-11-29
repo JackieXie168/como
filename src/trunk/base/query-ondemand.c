@@ -1283,6 +1283,32 @@ query_ondemand(int client_fd)
 	}
     }
 
+    if (map.il_mode) {
+        /* we are in inline mode. we need to do the accept on the socket
+         * before reading any data, because supervisor cannot do this for us
+         * as it is acting as our client now */
+        struct sockaddr_in addr;
+	socklen_t slen;
+	    
+	slen = sizeof(addr);
+	client_fd = accept(client_fd, (struct sockaddr *)&addr, &slen);
+	if (client_fd < 0) {
+	    /* check if accept was unblocked by a signal */
+	    if (errno == EINTR) {
+		logmsg(LOGWARN, "accept unblocked by a signal\n");
+                close(client_fd);
+                return;
+            }
+
+	    logmsg(LOGWARN, "accepting connection: %s\n",
+		   strerror(errno));
+	}
+
+	logmsg(LOGQUERY, 
+	       "query from %s on fd %d\n", 
+               inet_ntoa(addr.sin_addr), client_fd);
+    }
+    
     req = (qreq_t *) qryrecv(client_fd); 
     if (req == NULL) {
 	close(client_fd);
