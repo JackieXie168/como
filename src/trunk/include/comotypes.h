@@ -508,7 +508,8 @@ struct _statistics {
 
     /* XXX Pending: update correctly */
 
-    timestamp_t ts;	 	/* timestamp last processed packet */
+    timestamp_t ts;	 	/* timestamp last processed batch */
+    timestamp_t first_ts; 	/* timestamp first processed batch */
     int modules_active;		/* no. of modules processing packets */
     int table_queue; 		/* expired tables in capture->export queue */
     size_t mem_usage_cur; 	/* current shared memory usage */

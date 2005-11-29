@@ -329,6 +329,13 @@ print(char *buf, size_t *len, char * const args[])
      * if not PCAP, the format is PRETTYFMT... 
      */
     
+    /* print timestamp (hh:mm:ss.us) */
+    hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
+    mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
+    ss = TS2SEC(COMO(ts)) % 60; 
+    *len = sprintf(s, "%u.%06u %02d:%02d:%02d.%06d ",
+		   TS2SEC(COMO(ts)), TS2USEC(COMO(ts)), 
+		   hh, mm, ss, TS2USEC(COMO(ts))); 
 
     /* 
      * depending on the l3 type we print different 

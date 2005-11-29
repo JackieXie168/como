@@ -160,6 +160,7 @@ main(int argc, char *argv[])
 				   "mdl stats");
     gettimeofday(&map.stats->start, NULL); 
     map.stats->modules_active = map.module_count; 
+    map.stats->first_ts = ~0;
 
     /*
      * Prepare to start processes.

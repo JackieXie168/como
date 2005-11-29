@@ -14,7 +14,6 @@ MODULES= \
 	trace.so \
 	application.so \
 	protocol.so \
-	netflow-anon.so \
 	ssid.so \
         topports.so \
 #   interarrival.so
@@ -34,6 +33,11 @@ ifdef ENABLE_SNORT_MODULE
     LIBS_snort.so = pcre
     CFLAGS += -DHAVE_PCRE
 endif
+
+ifdef SUPPORT_NETFLOW_V5
+    MODULES += \
+	netflow-anon.so 
+endif 
 
 INCDIRS = ../base /usr/local/include
 
