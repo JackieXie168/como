@@ -71,7 +71,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
      * process input arguments
      */
     for (i = 0; args && args[i]; i++) {
-	if (strstr(args[i], "granularity")) {
+	if (strstr(args[i], "interval")) {
 	    char * len = index(args[i], '=') + 1; 
 	    flush_ivl = TIME2TS(atoi(len), 0);
 	}
