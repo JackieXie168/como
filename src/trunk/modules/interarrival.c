@@ -61,8 +61,30 @@ EFLOWDESC {
     char padding[3];
     uint32_t nts;
     uint8_t full;
+    char padding2[3];
     timestamp_t ts[1000];
 };
+
+/* 
+ * static variable for the modules. 
+ * XXX we should get rid of these to force callbacks to be closures. 
+ */
+static int meas_ivl = 60; 		/* measurement granularity (secs) */
+
+static timestamp_t 
+init(__unused void *mem, __unused size_t msize, char *args[])
+{
+    int i;
+
+    for (i = 0; args && args[i]; i++) {
+	if (strstr(args[i], "interval")) {
+	    char * val = index(args[i], '=') + 1;
+	    meas_ivl = atoi(val);
+        }
+    }
+
+    return TIME2TS(meas_ivl, 0);
+}
 
 static int
 check(pkt_t *pkt)
@@ -266,6 +288,10 @@ store(void *efh, char *buf, size_t len)
     PUTH8(buf, ex->padding[1]);
     PUTH8(buf, ex->padding[2]);
     PUTH32(buf, ex->nts);
+    PUTH8(buf, ex->full);
+    PUTH8(buf, ex->padding2[0]);
+    PUTH8(buf, ex->padding2[1]);
+    PUTH8(buf, ex->padding2[2]);
     for (i = 0; i < ex->nts; i++)
         PUTH64(buf, ex->ts[i]);
 
@@ -303,7 +329,7 @@ print(char *buf, size_t *len, char * const args[])
     static char s[32768];
     char src[20], dst[20];
     struct in_addr saddr, daddr;
-    FLOWDESC *x; 
+    EFLOWDESC *ex; 
     uint32_t i;
     timestamp_t t;
 
@@ -317,19 +343,19 @@ print(char *buf, size_t *len, char * const args[])
         return s; 
     } 
 
-    x = (FLOWDESC *) buf;
+    ex = (EFLOWDESC *) buf;
     
-    saddr.s_addr = N32(x->src_ip);
-    daddr.s_addr = N32(x->dst_ip);
+    saddr.s_addr = N32(ex->src_ip);
+    daddr.s_addr = N32(ex->dst_ip);
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
     *len = sprintf(s, PRETTYFMT, 
-		           (uint) x->proto, 
-		           src, (uint) H16(x->src_port), 
-		           dst, (uint) H16(x->dst_port));
+		           (uint) ex->proto, 
+		           src, (uint) H16(ex->src_port), 
+		           dst, (uint) H16(ex->dst_port));
 
-    for (i = 0; i < ntohl(x->nts); i++) {
-        t = NTOHLL(x->ts[i]);
+    for (i = 0; i < ntohl(ex->nts); i++) {
+        t = NTOHLL(ex->ts[i]);
         *len += sprintf(s + *len, "%12d.%06d ", TS2SEC(t), TS2USEC(t));
     }
 
@@ -345,7 +371,7 @@ callbacks_t callbacks = {
     st_recordsize: sizeof(EFLOWDESC),
     indesc: NULL,
     outdesc: NULL,
-    init: NULL,
+    init: init,
     check: check,
     hash: hash,  
     match: match,
