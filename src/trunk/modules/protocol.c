@@ -54,7 +54,7 @@ FLOWDESC {
     uint64_t pkts[IPPROTO_MAX];
 };
 
-static int meas_ivl = 1;     /* measurement granularity */
+static int meas_ivl = 1;     /* measurement interval */
 
 static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
@@ -62,7 +62,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     int i;
 
     for (i = 0; args && args[i]; i++) {
-        if (strstr(args[i], "granularity")) {
+        if (strstr(args[i], "interval")) {
             char * val = index(args[i], '=') + 1;
             meas_ivl = atoi(val);
         }
