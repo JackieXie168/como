@@ -737,16 +737,19 @@ do_config(int argc, char *argv[])
                 break;
             }
         }
+        
         /*
          * load module in that index
          */
         mdl = load_module(mdl, idx);
-
+        
         /*
          * MDL_LOADING is a temporary status that is used by
          * reconfigure() to recognize new modules in the modules
          * array.
          */
+        if (map.il_mode)
+            map.il_module = mdl;
         mdl->status = MDL_LOADING;
         mdl->seen = 1;
 
@@ -1179,12 +1182,12 @@ parse_cmdline(int argc, char *argv[])
      * string as well...
      */
     static const char * usage =
- 	   "usage: %s [-c config_file] [-D basedir] [-L libdir] "
-	   "[-M module] [-O keyword[=value]]..].. [-m memsize] [-v logflags] [-x debug_opts] "
-	   "[-s sniffer] [-p query_port]\n";
+ 	   "usage: %s [-I] [-q args] [-c config_file] [-D basedir] "
+           "[-L libdir] " "[-M module] [-O keyword[=value]]..].. [-m memsize] "
+           "[-v logflags] [-x debug_opts] " "[-s sniffer] [-p query_port]\n";
 
     /* flag to be set if we parsed a configuration file */
-    static const char *opts = "c:D:L:M:O:m:p:s:v:x:";
+    static const char *opts = "Iq:c:D:L:M:O:m:p:s:v:x:";
 
     /* tells wether we are configuring a module or not */
     int mod_conf = 0;
@@ -1212,7 +1215,20 @@ parse_cmdline(int argc, char *argv[])
      */
     while ((c = getopt(argc, argv, opts)) != -1) {
         switch(c) {
-	case 'x':
+	case 'I':
+            /* inline mode. if present, this option must be the first one */
+            map.il_mode = 1;
+            /* treat the module as if we were reconfiguring */
+            cfg_state = CFGSTATE_RECONFIG;
+            break;
+        case 'q':
+            /* this option is valid only if we are in inline mode */
+            if (!map.il_mode)
+                logmsg(LOGWARN, "cannot use -q before -I (ignoring)\n");
+	    else
+                safe_dup(&map.il_qargs, optarg);
+            break;
+        case 'x':
 	    /* pass debug options into a string */
 	    if (strstr(optarg,"malloc=") == optarg) {
 		/* only significant on FreeBSD */
