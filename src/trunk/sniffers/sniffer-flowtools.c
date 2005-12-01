@@ -182,11 +182,8 @@ flowtools_next(int ofd, char * device, struct _snifferinfo * info)
     int ret; 
 
     if (ofd >= 0) {
-	/* close current file */
+	/* close current file and move to next */
 	ftio_close(&info->ftio); 
-	close(ofd); 
-
-	/* move to next file */
 	info->curfile++;  
     } 
   
@@ -205,13 +202,23 @@ flowtools_next(int ofd, char * device, struct _snifferinfo * info)
 
     logmsg(LOGSNIFFER, "opening file %s\n", info->in.gl_pathv[info->curfile]);
     fd = open(info->in.gl_pathv[info->curfile], O_RDONLY);
-    if (fd < 0) 
+    if (fd < 0) {
+        logmsg(LOGWARN, "sniffer-flowtools: opening %s: %s\n", 
+	    info->in.gl_pathv[info->curfile], strerror(errno)); 
         return -1;
- 
+    }
+
+    /* reuse the old file descriptor */
+    if (ofd >= 0) 
+	fd = dup2(fd, ofd); 
+
     /* init flowtools library */
     ret = ftio_init(&info->ftio, fd, FT_IO_FLAG_READ);
-    if (ret < 0) 
+    if (ret < 0) {
+        logmsg(LOGWARN, "sniffer-flowtools: initializing %s: %s\n", 
+	    info->in.gl_pathv[info->curfile], strerror(errno)); 
         return -1;
+    }
 
     return fd; 
 }
@@ -243,15 +250,13 @@ flowtools_read(source_t * src)
     if (src->fd >= 0) 
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);
     while (fr == NULL) {
-	src->fd = flowtools_next(src->fd, src->device, info); 
-	if (src->fd < 0) { 
-	    /* file is not ready, yet. this is normal if we are streaming
-	     * flowtools files. if not it could be an error. in both cases
-	     * we return 0 and have sniffer_next() deal with it. 
-	     */
-	    return 0; 
-	} 
+	int fd; 
 
+	fd = flowtools_next(src->fd, src->device, info); 
+	if (fd < 0)
+	    return 0; 
+
+	src->fd = fd; 
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);  
 	if (fr == NULL) {
 	    logmsg(LOGWARN, "error reading flowtools file: %s\n", 
@@ -416,8 +421,6 @@ sniffer_start(source_t * src)
     info->curfile = 0;
     src->fd = flowtools_next(-1, src->device, info); 
     if (src->fd < 0) {
-        logmsg(LOGWARN, "sniffer-flowtools: opening %s: %s\n", 
-	    info->in.gl_pathv[info->curfile], strerror(errno)); 
 	globfree(&info->in);
 	free(src->ptr);
 	return -1; 
@@ -427,6 +430,10 @@ sniffer_start(source_t * src)
      * set the config values 
      */
     configsniffer(src->args, info);
+
+    /* this sniffer operates on file and uses a select()able descriptor */
+    src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_SELECT; 
+    src->polling = 0; 
 
     /* initialize the heap */
     info->heap = heap_init(flow_cmp);
@@ -439,8 +446,14 @@ sniffer_start(source_t * src)
     info->min_ts = (timestamp_t) ~0; 
     info->max_ts = (timestamp_t) 0; 
     do { 
-	if (!flowtools_read(src)) 
+	if (!flowtools_read(src)) {
+	    src->fd = -1;
+	    if (info->flags & FLOWTOOLS_STREAM) 
+		src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_POLL; 
+	    else 
+		src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_INACTIVE; 
 	    break; 		/* EOF */
+	} 
     } while (info->max_ts - info->min_ts < info->window);
 
     info->last_ts = info->min_ts; 
@@ -463,9 +476,6 @@ sniffer_start(source_t * src)
     N16(p->udph.src_port) = 0xffff;
     N16(p->udph.dst_port) = 0xffff;
     
-    /* this sniffer operates on file and uses a select()able descriptor */
-    src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_SELECT; 
-    src->polling = 0; 
     return 0; 
 }
 
@@ -505,6 +515,9 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
  	 * of flows in the heap. 
 	 */ 
 	while (info->max_ts - info->min_ts < info->window) {
+	    if (src->flags & SNIFF_INACTIVE) 
+		break; 
+
 	    if (!flowtools_read(src)) { 
 		/* 
 		 * no more flow records to be read. if we are 
@@ -512,18 +525,18 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 	 * got so far and try again later. otherwise, process 
 		 * the flow records left in the heap. 
 		 */
+		src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_INACTIVE; 
 		if (info->flags & FLOWTOOLS_STREAM) { 
 		    /* we don't have files to process anymore. write a 
 		     * message and sleep for 10 mins. 
 		     */
-		    assert(src->fd == -1); 
 		    logmsg(V_LOGWARN, "sniffing from %s\n", src->device);
 		    logmsg(0, "   no more files to read, but want more\n");
 		    logmsg(0, "   going to sleed for 10minutes\n");
 		    src->polling = TIME2TS(600, 0);
 		    src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_POLL; 
 		    return npkts;	
-		} 
+		}
 		break;
 	    } else if (src->flags & SNIFF_POLL) { 
 		/* 
