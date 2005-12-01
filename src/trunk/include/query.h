@@ -71,8 +71,6 @@ typedef struct _query_req qreq_t;
  * prototypes 
  */
 void query_ondemand(int);
-qreq_t * qryrecv(int); 
-
-
+qreq_t * qryrecv(int, timestamp_t); 
 
 #endif /* _COMO_QUERY_H */
