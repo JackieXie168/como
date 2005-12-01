@@ -543,7 +543,7 @@ add_sniffer(char *want, char *device, char *args)
 }
 
 static module_t *
-new_module(char *name)
+new_module(char *name, __unused char * opt)
 {
     module_t * mdl; 
 
@@ -750,7 +750,7 @@ do_config(int argc, char *argv[])
          */
         if (map.il_mode)
             map.il_module = mdl;
-        mdl->status = MDL_LOADING;
+	mdl->status = MDL_LOADING;
         mdl->seen = 1;
 
         logmsg(LOGUI, "... module %-16s ", mdl->name); 
@@ -820,7 +820,7 @@ do_config(int argc, char *argv[])
                 module_is_new = 0;
 
             } else { /* new module */
-                mdl = new_module(argv[1]);
+                mdl = new_module(argv[1], (argc > 2)? argv[2] : NULL);
                 module_is_new = 1;
             }
 
