@@ -356,7 +356,7 @@ q_flush_table(module_t * mdl, tailq_t * expired)
 {
     ctable_t *ct;
 
-    logmsg(V_LOGQUERY, "flush_table start\n");
+    logmsg(V_LOGDEBUG, "flush_table start\n");
 
     /* check if the table is there and if it is non-empty */
     ct = mdl->ca_hashtable;
@@ -368,7 +368,7 @@ q_flush_table(module_t * mdl, tailq_t * expired)
 	    "flush_table table '%s' overfull (%d vs %d) -- %d live\n",
 	    mdl->name, ct->records, ct->size, ct->live_buckets);
 
-    logmsg(V_LOGQUERY,
+    logmsg(V_LOGDEBUG,
 	"flush_tables %p(%s) buckets %d records %d live %d\n", ct,
 	mdl->name, ct->size, ct->records, ct->live_buckets);
 
@@ -376,7 +376,7 @@ q_flush_table(module_t * mdl, tailq_t * expired)
     TQ_APPEND(expired, ct, next_expired);
     mdl->ca_hashtable = NULL;
 
-    logmsg(V_LOGQUERY, "module %s flush_table done.\n", mdl->name);
+    logmsg(V_LOGDEBUG, "module %s flush_table done.\n", mdl->name);
 }
 
 /*
@@ -574,7 +574,7 @@ q_process_batch(pkt_t *pkts, int count, tailq_t *expired, module_t *mdl)
      * if the packet is of interest for the given classifier, and it is 0
      * otherwise.
      */
-    logmsg(V_LOGQUERY, 
+    logmsg(V_LOGDEBUG, 
 	   "calling filter with pkts %p, n_pkts %d, n_out %d\n", 
 	   pkts, count, 1); 
     which = q_filter(pkts, count, 1, mdl);
@@ -588,7 +588,7 @@ q_process_batch(pkt_t *pkts, int count, tailq_t *expired, module_t *mdl)
      *
      */
     assert(mdl->name != NULL);
-    logmsg(V_LOGQUERY, "sending %d packets to module %s for processing\n",
+    logmsg(V_LOGDEBUG, "sending %d packets to module %s for processing\n",
 	   count, mdl->name);
 
     q_capture_pkt(mdl, pkts, count, which, expired);
@@ -765,7 +765,7 @@ q_process_table(ctable_t * ct, int client_fd)
      */
     record_fn = mdl->callbacks.export? q_export_record : q_call_print;
 
-    logmsg(V_LOGQUERY, "processing table for module %s (bucket %d)\n",
+    logmsg(V_LOGDEBUG, "processing table for module %s (bucket %d)\n",
 	   mdl->name, ct->first_full);
     /*
      * scan all buckets and save the information to the output file.
@@ -1309,7 +1309,7 @@ query_ondemand(int client_fd)
                inet_ntoa(addr.sin_addr), client_fd);
     }
     
-    req = (qreq_t *) qryrecv(client_fd); 
+    req = (qreq_t *) qryrecv(client_fd, map.stats->ts); 
     if (req == NULL) {
 	close(client_fd);
 	return; 
