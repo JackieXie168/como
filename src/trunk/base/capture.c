@@ -297,6 +297,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
     int new_record;
     int record_size; /* effective record size */
 
+
     record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
 
     if (mdl->ca_hashtable == NULL)
@@ -333,7 +334,6 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 		continue;		/* XXX no memory, we keep going. 
 					 *     need better solution! */
 	}
-
 
         if (which[i] == 0)
             continue;   /* no interest in this packet */
@@ -624,7 +624,6 @@ filter(pkt_t *pkt, int n_packets, int n_out, module_t *modules)
 static timestamp_t
 process_batch(pkt_t *pkts, unsigned count, tailq_t *expired) 
 {
-    timestamp_t last_ts;
     int * which;
     int idx;
 
@@ -653,7 +652,9 @@ process_batch(pkt_t *pkts, unsigned count, tailq_t *expired)
      *
      */
     for (idx = 0; idx < map.module_count; idx++) {
-	if (map.modules[idx].status != MDL_ACTIVE) {
+	module_t * mdl = &map.modules[idx]; 
+
+	if (mdl->status != MDL_ACTIVE) {
 	    /* Even if the module isn't active, we still must skip
              * some bytes in which[]
              */
@@ -661,18 +662,22 @@ process_batch(pkt_t *pkts, unsigned count, tailq_t *expired)
             continue;
         }
 
-	assert(map.modules[idx].name != NULL);
+	assert(mdl->name != NULL);
 	logmsg(V_LOGCAPTURE,
 	       "sending %d packets to module %s for processing",
 	       count, map.modules[idx].name);
 
 	start_tsctimer(map.stats->ca_module_timer); 
-	last_ts = capture_pkt(&map.modules[idx], pkts, count, which, expired);
+	capture_pkt(mdl, pkts, count, which, expired);
 	end_tsctimer(map.stats->ca_module_timer); 
 	which += count; /* next module, new list of packets */
     }
 
-    return last_ts;
+    /*  
+     * get batch timestamp, i.e. the timestamp of the first packet 
+     * of the batch. 
+     */
+    return pkts[count - 1].ts;
 }
 
 
@@ -832,6 +837,8 @@ capture_mainloop(int accept_fd)
 	    if (src->flags & SNIFF_TOUCHED) { 
 		active_sniffers = setup_sniffers(map.sources, &valid_fds, 
 					 &max_fd, &tout); 
+		if (active_sniffers == 0) 
+		    logmsg(LOGWARN, "no sniffers left. waiting for queries\n");
 		break;
 	    } 
 	} 
@@ -851,7 +858,7 @@ capture_mainloop(int accept_fd)
 	} 
 
         /* need to write and have no pending jobs from export */
-        if (!sent2export && (TQ_HEAD(&expired_tables)) != NULL) {
+        if (!sent2export && TQ_HEAD(&expired_tables) && export_fd >= 0) {
 	    msg_t x;	/* message to EXPORT */
 	    int ret; 
 
