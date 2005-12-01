@@ -106,10 +106,11 @@ urldecode(char *s)
  *       from the time the query is received.  
  * 
  */
-uint32_t
-parse_timestr(char * str, struct timeval * base) 
+static uint32_t
+parse_timestr(char * str, timestamp_t * base) 
 {
     struct tm timeinfo; 
+    time_t ts;
     char * wh; 
     size_t len;
     int adding; 
@@ -117,7 +118,8 @@ parse_timestr(char * str, struct timeval * base)
     assert(str != NULL); 
     assert(base != NULL); 
 
-    gmtime_r((time_t *) &base->tv_sec, &timeinfo); 
+    ts = TS2SEC(*base);
+    gmtime_r(&ts, &timeinfo); 
 
     /* look if this is a start or end */
     wh = index(str, ':'); 
@@ -152,10 +154,11 @@ parse_timestr(char * str, struct timeval * base)
 		
 	if (len > 0) {
 	    logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
-	    return base->tv_sec; 
+	    return TS2SEC(*base); 
 	} 
 
-	base->tv_sec = timegm(&timeinfo); 
+	ts = timegm(&timeinfo); 
+	*base = TIME2TS(ts, 0);
 	break; 
 	
     case '+': 		/* relative timestamp (after current time) */
@@ -198,13 +201,14 @@ parse_timestr(char * str, struct timeval * base)
 	    return (uint32_t) timegm(&timeinfo); 
 	} 
 
+	ts = timegm(&timeinfo); 
 	break; 
 
     default: 		/* nothing set, use current time */
 	break;
     } 
 
-    return (uint32_t) timegm(&timeinfo); 
+    return (uint32_t) ts; 
 }
     
 
@@ -215,12 +219,11 @@ parse_timestr(char * str, struct timeval * base)
  * GET ?module=xxx&start=xxx&end=xxx&other HTTP/1.x
  */
 static qreq_t *
-query_parse(char *buf)
+query_parse(char *buf, timestamp_t now)
 {
     static qreq_t q; 
     int max_args, nargs;
     char *p, *p1, *end;
-    struct timeval t;
 
     /* 
      * do a first pass to figure out how much space we need
@@ -244,9 +247,8 @@ query_parse(char *buf)
     asprintf(&q.filter_str, "all");
     asprintf(&q.filter_cmp, "all");
     q.len = sizeof(q);
-    gettimeofday(&t, NULL);
-    q.start = t.tv_sec - 50;
-    q.end = t.tv_sec + 20;
+    q.start = TS2SEC(now) - 50;
+    q.end = TS2SEC(now) + 20;
     q.format = Q_OTHER; 
     q.wait = 1;
     q.source = NULL;
@@ -320,15 +322,15 @@ query_parse(char *buf)
         } else if (strstr(p1, "status") == p1) {
 	    q.format = Q_STATUS;
         } else if (strstr(p1, "time=") == p1) {
-	    struct timeval now; 
+	    timestamp_t current; 
 	    char * str; 
 	
-	    gettimeofday(&now, NULL); 
+	    current = now; 
             str = index(p1, '=') + 1; 
-	    q.start = parse_timestr(str, &now); 
+	    q.start = parse_timestr(str, &current); 
 
 	    str = index(p1, ':') + 1; 
-	    q.end = parse_timestr(str, &now);
+	    q.end = parse_timestr(str, &current);
 	} else if (strstr(p1, "source=") == p1) {
             char * s = strchr(p1, '=');
             q.source = strdup(s + 1);
@@ -354,7 +356,7 @@ query_parse(char *buf)
  *
  */
 qreq_t * 
-qryrecv(int sd) 
+qryrecv(int sd, timestamp_t now) 
 {
     char buf[8*1024]; /* XXX large but arbitrary */
     int rd; 
@@ -376,7 +378,7 @@ qryrecv(int sd)
 
 	if (strstr(buf, "\n\n") != NULL ||
 		strstr(buf, "\n\r\n") != NULL) /* found terminator */
-	    return query_parse(buf);
+	    return query_parse(buf, now);
 	if (rd == 0 || buf[0] < ' ')  /* invalid string */
 	    break;
     }
