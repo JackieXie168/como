@@ -306,7 +306,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "           Unknown\n"
 
 #define GNUPLOTHDR 							\
-    "set terminal postscript eps color solid lw 5 \"Helvetica\" 14;"	\
+    "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
     "set grid;"								\
     "set ylabel \"Percentage\";"					\
     "set xlabel \"Time (H:M UTC)\";"					\
@@ -316,14 +316,14 @@ load(char * buf, size_t len, timestamp_t * ts)
     "set xdata time;"							\
     "set timefmt \"%%s\";"						\
     "set format x \"%%H:%%M\";"						\
-    "plot \"-\" using 1:16 with filledcurve x1 title \"Unknown\"," 	\
-    "     \"-\" using 1:14 with filledcurve x1 title \"P2P\","		\
-    "     \"-\" using 1:12 with filledcurve x1 title \"Games\","	\
-    "     \"-\" using 1:10 with filledcurve x1 title \"Stream\","	\
-    "     \"-\" using 1:8 with filledcurve x1 title \"Network\","	\
-    "     \"-\" using 1:6 with filledcurve x1 title \"Email\","		\
-    "     \"-\" using 1:4 with filledcurve x1 title \"Terminal\","	\
-    "     \"-\" using 1:2 with filledcurve x1 title \"Web\";\n"	
+    "plot \"-\" using 1:16 with filledcurve x1 title \"Unknown\" lw 5,"	\
+    "     \"-\" using 1:14 with filledcurve x1 title \"P2P\" lw 5,"	\
+    "     \"-\" using 1:12 with filledcurve x1 title \"Games\" lw 5,"	\
+    "     \"-\" using 1:10 with filledcurve x1 title \"Stream\" lw 5,"	\
+    "     \"-\" using 1:8 with filledcurve x1 title \"Network\" lw 5,"	\
+    "     \"-\" using 1:6 with filledcurve x1 title \"Email\" lw 5,"	\
+    "     \"-\" using 1:4 with filledcurve x1 title \"Terminal\" lw 5,"	\
+    "     \"-\" using 1:2 with filledcurve x1 title \"Web\" lw 5;\n"	
 
 #define GNUPLOTFOOTER	"e\n"
 

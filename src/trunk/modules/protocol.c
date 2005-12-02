@@ -209,12 +209,12 @@ do_header(char * const args[], char * s, int * fmt,
 
 	len += sprintf(s + len, 
 		       "plot \"-\" using 1:%d with filledcurve x1 "
-		       "title \"Other\"",
+		       "title \"Other\" lw 5",
 		       *num_proto + 2); 
 	for (n = *num_proto - 1; n >= 0; n--) { 
 	    len += sprintf(s + len, 
 		           ",\"-\" using 1:%d with filledcurve x1 "
-		           "title \"%s (%d)\"",
+		           "title \"%s (%d)\" lw 5",
 		           n + 2, getprotoname(proto[n]), proto[n]); 
 	} 
 
