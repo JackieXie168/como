@@ -16,6 +16,7 @@ MODULES= \
 	protocol.so \
 	ssid.so \
         topports.so \
+	anomaly-ewma.so
 #   interarrival.so
 
 ifdef ENABLE_SNORT_MODULE

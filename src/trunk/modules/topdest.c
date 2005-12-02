@@ -216,18 +216,23 @@ load(char *buf, size_t len, timestamp_t *ts)
     "</table>\n"						\
     "</body></html>\n"						
 
-#define HTMLFMT		"<tr><td>%15s</td><td>%.2f</td></tr>\n"
+#define HTMLFMT							\
+    "<tr><td><a href=%s target=_new>%15s</a></td><td>%.2f</td></tr>\n"
 
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt; 
+    static char urlstr[2048] = "#"; 
     EFLOWDESC *x; 
     struct in_addr addr;
     time_t ts;
 
     if (buf == NULL && args != NULL) { 
+	char * url = NULL;
+	char * urlargs[20];
+	int no_urlargs = 0;
 	int n; 
 
         /* by default, pretty print */
@@ -239,13 +244,26 @@ print(char *buf, size_t *len, char * const args[])
             if (!strcmp(args[n], "format=plain")) {
                 *len = 0; 
                 fmt = PLAINFMT;
-            } 
-            if (!strcmp(args[n], "format=html")) {
+            } else if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTMLHDR); 
                 fmt = HTMLFMT;
-            } 
+            } else if (!strncmp(args[n], "url=", 4)) {
+		url = args[n] + 4; 
+	    } else if (!strncmp(args[n], "urlargs=", 8)) {
+		urlargs[no_urlargs] = args[n] + 8;
+		no_urlargs++;
+	    } 
         } 
 
+	if (url != NULL) {
+	    int w, k; 
+
+	    w = sprintf(urlstr, "%s?", url); 
+	    for (k = 0; k < no_urlargs; k++) 
+		w += sprintf(urlstr + w, "%s&", urlargs[k]);
+	    w += sprintf(urlstr + w ,"ip=%%s");
+	} 
+	    
 	return s; 
     } 
 
@@ -263,8 +281,14 @@ print(char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));
     } else if (fmt == HTMLFMT) { 
-        float mbps = (float) (NTOHLL(x->bytes) * 8) / (float) meas_ivl;
-	*len = sprintf(s, fmt, inet_ntoa(addr), mbps);
+        float mbps; 
+	char tmp[2048] = "#";
+	
+        mbps = (float) (NTOHLL(x->bytes) * 8) / (float) meas_ivl;
+	mbps /= 1000000;
+	if (urlstr[0] != '#') 
+	    sprintf(tmp, urlstr, inet_ntoa(addr));
+	*len = sprintf(s, fmt, tmp, inet_ntoa(addr), mbps);
     } else { 
 	*len = sprintf(s, fmt, ts, inet_ntoa(addr), 
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));
