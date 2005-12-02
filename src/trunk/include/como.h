@@ -96,10 +96,11 @@ struct _como {
 #define	LOGQUERY	0x0080
 #define	LOGSNIFFER	0x0100	/* sniffers debugging 			*/
 #define LOGTIMER	0x0200	/* print timing information 		*/
+#define LOGMODULE	0x0400	/* modules debugging 			*/
 #define	LOGDEBUG	0x8000
 #define	LOGALL		(LOGUI|LOGWARN|LOGMEM|LOGCONFIG|LOGCAPTURE| \
 				LOGEXPORT|LOGSTORAGE|LOGQUERY|LOGDEBUG| \
-				LOGSNIFFER|LOGTIMER)
+				LOGSNIFFER|LOGTIMER|LOGMODULE)
 
 #define	V_LOGUI		(LOGUI << 16) 
 #define	V_LOGWARN	(LOGWARN << 16)
@@ -111,6 +112,7 @@ struct _como {
 #define	V_LOGQUERY	(LOGQUERY << 16)
 #define	V_LOGSNIFFER	(LOGSNIFFER << 16)
 #define	V_LOGTIMER	(LOGTIMER << 16)
+#define	V_LOGMODULE	(LOGMODULE << 16)
 #define	V_LOGDEBUG	(LOGDEBUG << 16)
 
 /*
