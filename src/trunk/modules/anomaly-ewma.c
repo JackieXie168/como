@@ -251,33 +251,36 @@ load(char * buf, size_t len, timestamp_t * ts)
     "<html>\n"							\
     "<head>\n"							\
     "  <style type=\"text/css\">\n"				\
-    "   .netviewbar{ \n"					\
-    "	  color :#DDD; width :100%%; padding :2px; text-align:center;}\n" \
+    "   body,table,td,tr {\n"					\
+    "     font-size: 9pt; background-color: #ddd;\n"	        \
+    "     font-family: \"lucida sans unicode\", verdana, arial;}\n" \
     "   .netview {\n"						\
     "     top: 0px; width: 100%%; vertical-align:top;\n" 	\
-    "     background-color: #FFF; margin: 2; padding-left: 5px;\n" \
-    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
-    "     padding-right: 5px; font-size: 9pt; text-align:left;\n" \
-    "     border:0px,0px,1px,0px; border-style:solid; \n"	\
-    "     border-color:grey;}\n"				\
+    "     margin: 2; padding-left: 5px;\n" 			\
+    "     padding-right: 5px; text-align:left;}\n" 		\
     "   .nvtitle {\n"						\
-    "     font-weight: bold; font-size: 9pt; padding-bottom: 3px;\n" \
+    "     font-weight: bold; padding-bottom: 3px;\n" 		\
     "     color: #475677;}\n"					\
     "  </style>\n"						\
     "</head>\n"							\
-    "<body><div class=netviewbar\n"  				
+    "<body><div class=nvtitle>Alerts</div>\n"  				
 
 #define HTMLHDR_ALERTS						\
     "<table class=netview>\n"                                   \
     "  <tr class=nvtitle>\n" 					\
     "    <td><b>Time</b></td>\n" 		                \
-    "    <td><b>Volume</b></td>\n" 				\
+    "    <td><b>Type</b></td>\n" 				\
+    "    <td><b>Magnitude</b></td>\n" 				\
     "  </tr>\n"                                         
 
-#define HTMLFMT		"<tr><td>%.24s</td><td>%s</td><td>%2u.%2u</td></tr>"
+#define HTMLFMT							\
+    "<tr><td><a href=%s target=_top>%.24s</a></td><td>%s</td>"  \
+    "<td>%2u.%2u</td></tr>\n"
+
+#define HTMLFOOTER_ALERTS                                       \
+    "</table>\n"                                                
 
 #define HTMLFOOTER                                              \
-    "</table>\n"                                                \
     "</div></body></html>\n"                                          
 
 static char *
@@ -285,6 +288,7 @@ print(char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt; 
+    static char urlstr[2048] = "#";
     static int alerts = 0;
     struct alert_record *x; 
     char typestr[20];
@@ -293,6 +297,10 @@ print(char *buf, size_t *len, char * const args[])
     uint32_t ch_int, ch_dec; 
 
     if (buf == NULL && args != NULL) { 
+        char * url = NULL;
+        char * urlargs[20];
+        int no_urlargs = 0;
+
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);  
 	fmt = PRETTYFMT; 
@@ -302,12 +310,25 @@ print(char *buf, size_t *len, char * const args[])
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
 		fmt = PLAINFMT;
-	    } 
-            if (!strcmp(args[n], "format=html")) {
+	    } else if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTMLHDR); 
                 fmt = HTMLFMT;
-            } 
-	} 
+            } else if (!strncmp(args[n], "url=", 4)) {
+                url = args[n] + 4;
+            } else if (!strncmp(args[n], "urlargs=", 8)) {
+                urlargs[no_urlargs] = args[n] + 8;
+                no_urlargs++;
+            }
+        }
+
+        if (url != NULL) {
+            int w, k;
+
+            w = sprintf(urlstr, "%s?", url);
+            for (k = 0; k < no_urlargs; k++)
+                w += sprintf(urlstr + w, "%s&", urlargs[k]);
+	    w += sprintf(urlstr + w, "stime=%%u&etime=%%u"); 
+        }
 
 	return s; 
     } 
@@ -315,11 +336,16 @@ print(char *buf, size_t *len, char * const args[])
     if (buf == NULL && args == NULL) {  
 	*len = alerts? 0 : 
 	    sprintf(s, "No anomalies to report during this time interval\n"); 
-	if (fmt == HTMLFMT) 
+	if (fmt == HTMLFMT) { 
+	    if (alerts) 
+		*len += sprintf(s + *len, HTMLFOOTER_ALERTS); 
 	    *len += sprintf(s + *len, HTMLFOOTER);
+	} 
 	return s; 
     } 
 	
+    *len = 0; 
+
     if (alerts == 0) { 
 	if (fmt == HTMLFMT) 
 	    *len = sprintf(s, HTMLHDR_ALERTS); 
@@ -335,11 +361,17 @@ print(char *buf, size_t *len, char * const args[])
 
     /* print according to the requested format */
     if (fmt == PRETTYFMT) {
-	*len = sprintf(s, fmt, asctime(gmtime(&ts)), typestr, ch_int, ch_dec);
+	*len += sprintf(s + *len, fmt, asctime(gmtime(&ts)), typestr, 
+			ch_int, ch_dec);
     } else if (fmt == HTMLFMT) {
-	*len = sprintf(s, fmt, asctime(gmtime(&ts)), typestr, ch_int, ch_dec); 
+        char tmp[2048] = "#";
+
+        if (urlstr[0] != '#')
+            sprintf(tmp, urlstr, ts - 3600, ts + 3600);
+	*len += sprintf(s + *len, fmt, tmp, asctime(gmtime(&ts)), typestr, 
+			ch_int, ch_dec); 
     } else {
-	*len = sprintf(s, fmt, (long int)ts, typestr, ch_int, ch_dec); 
+	*len += sprintf(s + *len, fmt, (long int)ts, typestr, ch_int, ch_dec); 
     } 
 	
     return s;

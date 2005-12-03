@@ -203,14 +203,29 @@ load(char *buf, size_t len, timestamp_t *ts)
 #define PLAINFMT	"%12u %15s %10llu %10llu\n"
 
 #define HTMLHDR							\
-    "<html><body>\n"						\
-    "<table cellpadding=1>\n"					\
-    "  <tr>\n"							\
-    "    <td width=200 style=\"border-bottom:1px solid\">\n"	\
-    "      <b>Destination</b></td>\n"				\
-    "    <td width=150 style=\"border-bottom:1px solid\">\n"	\
-    "      <b>Mbps</b></td>\n"					\
-    "  </tr>\n"						
+    "<html>\n"							\
+    "<head>\n"                                                  \
+    "  <style type=\"text/css\">\n"                             \
+    "   a, a:visited { color: #475677; text-decoration: none;}\n" \
+    "   .netviewbar{ \n"                                        \
+    "     color :#FFF; width :100%%; padding :2px; text-align:center;}\n" \
+    "   .netview {\n"                                           \
+    "     top: 0px; width: 100%%; vertical-align:top;\n"        \
+    "     background-color: #DDD; margin: 2; padding-left: 5px;\n" \
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     padding-right: 5px; font-size: 9pt; text-align:left;\n" \
+    "     border:0px,0px,1px,0px; border-style:solid; \n"       \
+    "     border-color:grey;}\n"                                \
+    "   .nvtitle {\n"                                           \
+    "     font-weight: bold; font-size: 9pt; padding-bottom: 3px;\n" \
+    "     color: #475677;}\n"                                   \
+    "  </style>\n"                                              \
+    "</head>\n"                                                 \
+    "<body>\n"							\
+    "<table class=netview>\n"					\
+    "  <tr class=nvtitle><td colwidth=2>Top-%d Destinations</td></tr>\n" \
+    "  <tr class=nvtitle><td>IP Address</td>\n"			\
+    "      <td>Mbps</td></tr>\n"						
 
 #define HTMLFOOTER						\
     "</table>\n"						\
@@ -245,7 +260,7 @@ print(char *buf, size_t *len, char * const args[])
                 *len = 0; 
                 fmt = PLAINFMT;
             } else if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR); 
+                *len = sprintf(s, HTMLHDR, topn); 
                 fmt = HTMLFMT;
             } else if (!strncmp(args[n], "url=", 4)) {
 		url = args[n] + 4; 

@@ -339,7 +339,7 @@ q_create_table(module_t * mdl, timestamp_t ts)
      * table belongs to. this information will be useful for 
      * EXPORT when it processes the flushed tables. 
      */
-    ct->ivl = ts - (ts % mdl->flush_ivl);
+    ct->ivl = ts; 
     return ct; 
 }
 
@@ -722,8 +722,9 @@ q_export_record(module_t * mdl, rec_t * rp, __unused int client_fd)
 static int
 q_call_print(module_t * mdl, rec_t *rp, int client_fd)
 {
-    char *dst;
-    int ret; 
+    char *dst, *p;
+    ssize_t ret; 
+    size_t left; 
 
     dst = safe_calloc(1, (ssize_t)mdl->bsize); 
 
@@ -731,11 +732,29 @@ q_call_print(module_t * mdl, rec_t *rp, int client_fd)
     if (ret < 0) 
         logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
 
-    printrecord(mdl, dst, NULL, client_fd);
+    /* now the dst pointer contains the entire output of 
+     * store. note that store could save more than one record
+     * in a single call. we pass this pointer to the load callback
+     * to get that information. 
+     */
+    p = dst; 
+    left = (size_t) ret; 
+    while (left > 0) { 
+	size_t sz; 
+	timestamp_t ts; 
+
+ 	sz = mdl->callbacks.load(p, (size_t) ret, &ts);  
+
+	/* print this record */
+        printrecord(mdl, p, NULL, client_fd);
+
+	/* move to next */
+	p += sz; 
+	left -= sz; 
+    } 
     
     free(dst);
-    
-    return ret;
+    return (int) ret;
 }
 
 /**

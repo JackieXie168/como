@@ -47,8 +47,8 @@ FLOWDESC {
     uint64_t pkts[65536];		/* pkts per port number */
 };
 
-static timestamp_t meas_ivl = TIME2TS(1, 0);	/* interval (secs) */
-static int topn = 20;    			/* number of top ports */
+static uint32_t meas_ivl = 1;		/* interval (secs) */
+static int topn = 20;    		/* number of top ports */
 
 static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
@@ -62,7 +62,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     for (i = 0; args && args[i]; i++) { 
 	if (strstr(args[i], "interval")) {
 	    len = index(args[i], '=') + 1; 
-	    meas_ivl = TIME2TS(atoi(len), 0); 
+	    meas_ivl = atoi(len); 
 	} 
 	if (strstr(args[i], "topn")) {
 	    len = index(args[i], '=') + 1;
@@ -70,7 +70,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 	}
     }
 
-    return meas_ivl; 
+    return TIME2TS(meas_ivl, 0); 
 }
 
 static int
@@ -87,7 +87,7 @@ update(pkt_t *pkt, void *rp, int isnew)
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC)); 
-	x->ts = TS2SEC(pkt->ts - pkt->ts % meas_ivl);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
     }
 
     if (isTCP) {
@@ -118,7 +118,7 @@ static ssize_t
 store(void *rp, char *buf, size_t len)
 {
     FLOWDESC *x = F(rp);
-    int top_ports[65536 + 1];		/* we need one more the max topN */
+    int top_ports[65536 + 1];		/* we need one more than max port */
     int i, j;
     
     if (len < topn * sizeof(struct topports))
@@ -174,15 +174,30 @@ load(char *buf, size_t len, timestamp_t *ts)
 
 #define PLAINFMT	"%12u %5u %10llu %10llu\n"
 
-#define HTMLHDR							\
-    "<html><body>\n"						\
-    "<table cellpadding=1>\n"					\
-    "  <tr>\n"							\
-    "    <td width=200 style=\"border-bottom:1px solid\">\n"	\
-    "      <b>Port</b></td>\n"			                \
-    "    <td width=150 style=\"border-bottom:1px solid\">\n"	\
-    "      <b>Mbps</b></td>\n"					\
-    "  </tr>\n"						
+#define HTMLHDR                                                 \
+    "<html>\n"                                                  \
+    "<head>\n"                                                  \
+    "  <style type=\"text/css\">\n"                             \
+    "   a, a:visited { color: #475677; text-decoration: none;}\n" \
+    "   .netviewbar{ \n"                                        \
+    "     color :#FFF; width :100%%; padding :2px; text-align:center;}\n" \
+    "   .netview {\n"                                           \
+    "     top: 0px; width: 100%%; vertical-align:top;\n"        \
+    "     background-color: #DDD; margin: 2; padding-left: 5px;\n" \
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     padding-right: 5px; font-size: 9pt; text-align:left;\n" \
+    "     border:0px,0px,1px,0px; border-style:solid; \n"       \
+    "     border-color:grey;}\n"                                \
+    "   .nvtitle {\n"                                           \
+    "     font-weight: bold; font-size: 9pt; padding-bottom: 3px;\n" \
+    "     color: #475677;}\n"                                   \
+    "  </style>\n"                                              \
+    "</head>\n"                                                 \
+    "<body>\n"                                                  \
+    "<table class=netview>\n"                                   \
+    "  <tr class=nvtitle><td colwidth=2>Top-%d Port Numbers</td></tr>\n" \
+    "  <tr class=nvtitle><td>Port</td>\n"                 	\
+    "      <td>Mbps</td></tr>\n"
 
 #define HTMLFOOTER						\
     "</table>\n"						\
@@ -212,7 +227,7 @@ print(char *buf, size_t *len, char * const args[])
                 fmt = PLAINFMT;
             } 
             if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR); 
+                *len = sprintf(s, HTMLHDR, topn); 
                 fmt = HTMLFMT;
             } 
         } 
@@ -233,7 +248,8 @@ print(char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), ntohl(x->port),
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));
     } else if (fmt == HTMLFMT) { 
-	float mbps = (float) NTOHLL(x->bytes) * 8 / (float) TS2SEC(meas_ivl);
+	float mbps = (float) NTOHLL(x->bytes) * 8 / (float) meas_ivl;
+	mbps /= 1000000;
 	*len = sprintf(s, fmt, ntohl(x->port), mbps); 
     } else { 
 	*len = sprintf(s, fmt, ts, ntohl(x->port), 
