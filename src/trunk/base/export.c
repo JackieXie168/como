@@ -601,6 +601,12 @@ export_mainloop(__unused int fd)
     storage_fd = create_socket("storage.sock", NULL);
     capture_fd = create_socket("capture.sock", NULL);
 
+    /*
+     * The first message from supervisor contains the modules information.
+     */
+    logmsg(LOGDEBUG, "wait for 1st msg from SU\n");
+    recv_message(map.supervisor_fd, &export_callbacks);
+
     /* allocate the timers */
     init_timers();
 

@@ -218,15 +218,19 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     info->pkt_nbytes = 0; 
     base = info->buf;
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
-        pcap_hdr_t * ph = (pcap_hdr_t *) base ; 
+        pcap_hdr_t ph; 
 	int left = info->nbytes - (base - info->buf); 
+
+        /* XXX We use bcopy here because the base pointer may not be word
+         * aligned. This is an issue on some platforms like the Stargate */
+        bcopy(base, &ph, sizeof(pcap_hdr_t));
 
 	/* convert the header if needed */
 	if (info->littleendian) { 
-            ph->ts.tv_sec = swapl(ph->ts.tv_sec);
-            ph->ts.tv_usec = swapl(ph->ts.tv_usec);
-            ph->caplen = swapl(ph->caplen);
-            ph->len = swapl(ph->len);
+            ph.ts.tv_sec = swapl(ph.ts.tv_sec);
+            ph.ts.tv_usec = swapl(ph.ts.tv_usec);
+            ph.caplen = swapl(ph.caplen);
+            ph.len = swapl(ph.len);
         } 
 
 	/* do we have a pcap header? */
@@ -234,12 +238,12 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    break; 
 
         /* check if entire record is available */
-        if (left < (int) sizeof(pcap_hdr_t) + ph->caplen) 
+        if (left < (int) sizeof(pcap_hdr_t) + ph.caplen) 
             break;
 
-        pkt->ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
-        pkt->len = ph->len;
-        pkt->caplen = ph->caplen; 
+        pkt->ts = TIME2TS(ph.ts.tv_sec, ph.ts.tv_usec);
+        pkt->len = ph.len;
+        pkt->caplen = ph.caplen; 
 
 	/*      
 	 * Now we have a packet: start filling a new pkt_t struct
@@ -262,7 +266,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    if (n == 0) 
 		break; 
 	    info->pkt_nbytes += n; 
-	    base += ph->caplen; 
+	    base += ph.caplen; 
 	} else {  
 	    pkt->payload = base + sizeof(pcap_hdr_t); 
             /* 
@@ -272,7 +276,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
             updateofs(pkt, info->type); 
 	   
 	   /* increment the number of processed packets */
-	    base += sizeof(pcap_hdr_t) + ph->caplen; 
+	    base += sizeof(pcap_hdr_t) + ph.caplen; 
 	} 
     
     }

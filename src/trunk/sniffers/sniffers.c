@@ -112,7 +112,8 @@ updatel4(pkt_t * pkt)
 __inline__ void 
 updateofs(pkt_t * pkt, int type) 
 {
-    pkt->type = type; 
+    pkt->type = type;
+    pkt->l2type = 0xFFFF;
     switch (pkt->type) { 
     case COMOTYPE_ETH: 
         if (H16(ETH(type)) == ETHERTYPE_VLAN) {
