@@ -37,6 +37,7 @@
 #endif
 #include <netinet/in.h>
 #include <arpa/inet.h>          /* inet_ntop */
+#include <strings.h>            /* bcopy */
 
 
 /* typedefs for entries in network format. C99 types are used for native.
@@ -47,12 +48,26 @@
  * the field names).
  * Also never use explicitly the ntoh*(), hton*() macros.
  */
+
+#ifdef BUILD_FOR_ARM
+
+#define N16(x)  (x)
+#define H16(x)  (ntohs(x))
+#define N32(x)  (x)
+#define H32(x)  (ntohl(x))
+#define N64(x)  (x)
+#define H64(x)  (NTOHLL(x))
+
+#else
+
 #define N16(x)  ((x).__x16)
 #define H16(x)  (ntohs(N16(x)))
 #define N32(x)  ((x).__x32)
 #define H32(x)  (ntohl(N32(x)))
 #define N64(x)  ((x).__x64)
 #define H64(x)  (NTOHLL(N64(x)))
+
+#endif
 
 struct _n16_t {
     uint16_t __x16;
@@ -71,9 +86,20 @@ struct _n128_t {
     uint64_t __y64;
 };
 
+#ifdef BUILD_FOR_ARM
+
+typedef uint16_t n16_t;  /* network format */
+typedef uint32_t n32_t;  /* network format */
+typedef uint64_t n64_t;  /* network format */
+
+#else
+
 typedef struct _n16_t   n16_t;  /* network format */
 typedef struct _n32_t   n32_t;  /* network format */
 typedef struct _n64_t   n64_t;  /* network format */
+
+#endif
+
 typedef struct _n128_t  n128_t; /* network format */
 
 /*
@@ -278,8 +304,87 @@ struct _como_icmphdr {
  * macros to use for packet header fields. these can be
  * used in the filters present in the como.conf file.
  */
+
+#ifdef BUILD_FOR_ARM
+
+/* These functions (get_field, set_field) take into account
+   the word alignment of a pointer */
+
+__inline__ static uint64_t
+get_field(char *ptr, size_t size)
+{
+    uint64_t result = 0;
+    char *r = NULL, *p = NULL;
+    size_t s = 0, left = 0;
+    uint32_t off = 0;
+
+    r = (char *)&result;
+    
+    off = (uint)ptr % 4;
+    
+    if (off == 0)
+        /* The pointer is word aligned, we don't need to do anything here,
+         * just copy size bytes */
+        bcopy(ptr, r, size);
+    else {
+        /* The pointer is not word aligned, we need to get the correct data */
+        p = ptr - off;
+        for (left = size; left > 0; p += 4) {
+            s = (left < (4 - off))? left : (4 - off);
+            bcopy(p + off, r + size - left, s);
+            left -= s;
+            /* The offset only applies to the first read, on the rest
+             * we are reading starting at word-aligned memory positions */
+            off = 0;
+        }
+    }
+    return result;
+}
+
+__inline__ static void
+set_field(char *ptr, size_t size, uint64_t value)
+{
+    char *r = NULL, *p = NULL;
+    size_t s = 0, left = 0;
+    uint32_t off = 0;
+
+    r = (char *)&value;
+    
+    off = (uint)ptr % 4;
+    
+    if (off == 0)
+        /* The pointer is word aligned, we don't need to do anything here,
+         * just copy size bytes */
+        bcopy(r, ptr, size);
+    else {
+        /* The pointer is not word aligned, we need to align it and then
+         * copy the data in the correct places */
+        p = ptr - off;
+        for (left = size; left > 0; p += 4) {
+            s = (left < (4 - off))? left : (4 - off);
+            bcopy(r + size - left, p + off, s);
+            left -= s;
+            /* The offset only applies to the first write, on the rest
+             * we are writing starting at word-aligned memory positions */
+            off = 0;
+        }
+    }
+}
+
+#define COMO(field)              \
+    ((typeof(((struct _como_pkt *)NULL)->field)) \
+     get_field((char *)&(((struct _como_pkt *)pkt)->field), \
+     sizeof(typeof(((struct _como_pkt *)NULL)->field))))
+
+#define COMOX(field, value)              \
+    (set_field((char *)&(((struct _como_pkt *)pkt)->field), \
+     sizeof(typeof(((struct _como_pkt *)NULL)->field)), (uint64_t)value))
+
+#else
+
 #define COMO(field)             (((struct _como_pkt *) pkt)->field)
 
+#endif
 
 /*
  * we use two definitions of the macros. one that checks that the
@@ -326,6 +431,93 @@ struct _como_icmphdr {
 
 #else		/* unsafe macros... */
 
+#ifdef BUILD_FOR_ARM
+
+#define ETH(field)              \
+    ((typeof(((struct _como_eth *)NULL)->field)) \
+     get_field((char *)&(((struct _como_eth *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_eth *)NULL)->field))))
+#define ETHX(field, value)              \
+    (set_field((char *)&(((struct _como_eth *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_eth *)NULL)->field)), (uint64_t)value))
+
+#define VLAN(field)             \
+    ((typeof(((struct _como_vlan *)NULL)->field)) \
+     get_field((char *)&(((struct _como_vlan *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_vlan *)NULL)->field))))
+#define VLANX(field, value)              \
+    (set_field((char *)&(((struct _como_vlan *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_vlan *)NULL)->field)), (uint64_t)value))
+
+#define HDLC(field)             \
+    ((typeof(((struct _como_hdlc *)NULL)->field)) \
+     get_field((char *)&(((struct _como_hdlc *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_hdlc *)NULL)->field))))
+#define HDLCX(field, value)              \
+    (set_field((char *)&(((struct _como_hdlc *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_hdlc *)NULL)->field)), (uint64_t)value))
+
+#define ISL(field)              \
+    ((typeof(((struct _como_isl *)NULL)->field)) \
+     get_field((char *)&(((struct _como_isl *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_isl *)NULL)->field))))
+#define ISLX(field, value)              \
+    (set_field((char *)&(((struct _como_isl *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_isl *)NULL)->field)), (uint64_t)value))
+
+#define NF(field)               \
+    ((typeof(((struct _como_nf *)NULL)->field)) \
+     get_field((char *)&(((struct _como_nf *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_nf *)NULL)->field))))
+#define NFX(field, value)              \
+    (set_field((char *)&(((struct _como_nf *)pkt->payload)->field), \
+     sizeof(typeof(((struct _como_nf *)NULL)->field)), (uint64_t)value))
+
+#define IP(field)               \
+    ((typeof(((struct _como_iphdr *)NULL)->field)) \
+     get_field((char *)&(((struct _como_iphdr *) \
+     (pkt->payload + pkt->l3ofs))->field), \
+     sizeof(typeof(((struct _como_iphdr *)NULL)->field))))
+#define IPX(field, value)              \
+    (set_field((char *)&(((struct _como_iphdr *) \
+     (pkt->payload + pkt->l3ofs))->field), \
+     sizeof(typeof(((struct _como_iphdr *)NULL)->field)), (uint64_t)value))
+
+#define TCP(field)              \
+    ((typeof(((struct _como_tcphdr *)NULL)->field)) \
+     get_field((char *)&(((struct _como_tcphdr *) \
+     (pkt->payload + pkt->l4ofs))->field), \
+     sizeof(typeof(((struct _como_tcphdr *)NULL)->field))))
+#define TCPX(field, value)              \
+    (set_field((char *)&(((struct _como_tcphdr *) \
+     (pkt->payload + pkt->l4ofs))->field), \
+     sizeof(typeof(((struct _como_tcphdr *)NULL)->field)), (uint64_t)value))
+
+#define UDP(field)              \
+    ((typeof(((struct _como_udphdr *)NULL)->field)) \
+     get_field((char *)&(((struct _como_udphdr *) \
+     (pkt->payload + pkt->l4ofs))->field), \
+     sizeof(typeof(((struct _como_udphdr *)NULL)->field))))
+#define UDPX(field, value)              \
+    (set_field((char *)&(((struct _como_udphdr *) \
+     (pkt->payload + pkt->l4ofs))->field), \
+     sizeof(typeof(((struct _como_udphdr *)NULL)->field)), (uint64_t)value))
+
+#define ICMP(field)             \
+    ((typeof(((struct _como_icmphdr *)NULL)->field)) \
+     get_field((char *)&(((struct _como_icmphdr *) \
+     (pkt->payload + pkt->l4ofs))->field), \
+     sizeof(typeof(((struct _como_icmphdr *)NULL)->field))))
+#define ICMPX(field, value)              \
+    (set_field((char *)&(((struct _como_icmphdr *) \
+     (pkt->payload + pkt->l4ofs))->field), \
+     sizeof(typeof(((struct _como_icmphdr *)NULL)->field)), (uint64_t)value))
+
+#define ETHP(pkt, field)        ETH(field)
+#define IPP(pkt, field)         IP(field)
+
+#else
+
 #define ETH(field)              \
     (((struct _como_eth *) pkt->payload)->field)
 #define VLAN(field)             \
@@ -348,6 +540,8 @@ struct _como_icmphdr {
 #define ETHP(pkt, field)        ETH(field)
 #define IPP(pkt, field)         \
     (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field)
+
+#endif
 
 #endif
   

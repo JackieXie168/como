@@ -295,6 +295,31 @@ replay(char *buf, char *out, size_t * len, int *count)
 	pkt = (pkt_t *) (out + outlen); 
 	pkt->payload = (char *) pkt + sizeof(pkt_t);
 
+#ifdef BUILD_FOR_ARM
+
+	COMOX(ts, TIME2TS(ntohl(x->ts), 0)); 
+	COMOX(caplen, sizeof(struct _como_iphdr) +
+                        sizeof(struct _como_udphdr));
+	COMOX(type, COMOTYPE_NONE);
+	COMOX(l3type, ETHERTYPE_IP);
+	COMOX(l3ofs, 0); 
+	COMOX(l4type, x->proto); 
+	COMOX(l4ofs, sizeof(struct _como_iphdr));
+
+	COMOX(len, (uint32_t) nbytes/npkts); 
+	if (howmany == (int) npkts) 
+	    COMOX(len, COMO(len) + ((uint32_t) nbytes % npkts)); 
+
+        IPX(proto, x->proto);
+	IPX(len, htons((uint16_t) COMO(len))); 
+        IPX(src_ip, x->src_ip);
+        IPX(dst_ip, x->dst_ip);
+
+        UDPX(src_port, x->src_port);
+        UDPX(dst_port, x->dst_port);
+        
+#else
+
 	COMO(ts) = TIME2TS(ntohl(x->ts), 0); 
 	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
 	COMO(type) = COMOTYPE_NONE;
@@ -314,6 +339,8 @@ replay(char *buf, char *out, size_t * len, int *count)
 
         UDP(src_port) = x->src_port;
         UDP(dst_port) = x->dst_port;
+
+#endif
 
 	outlen += pktsz; 
     } 

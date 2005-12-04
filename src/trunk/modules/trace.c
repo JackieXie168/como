@@ -154,6 +154,19 @@ store(void *fh, char *buf, size_t len)
         return -1;
 
     /* convert the CoMo header in network byte order */
+#ifdef BUILD_FOR_ARM
+    COMOX(ts, HTONLL(COMO(ts))); 
+    COMOX(len, htonl(COMO(len))); 
+    COMOX(caplen, htonl(COMO(caplen))); 
+    COMOX(type, htons(COMO(type)));
+    COMOX(dropped, htons(COMO(dropped)));
+    COMOX(l2type, htons(COMO(l2type))); 
+    COMOX(l3type, htons(COMO(l3type))); 
+    COMOX(l4type, htons(COMO(l4type))); 
+    COMOX(l2ofs, htons(COMO(l2ofs))); 
+    COMOX(l3ofs, htons(COMO(l3ofs))); 
+    COMOX(l4ofs, htons(COMO(l4ofs)));
+#else
     COMO(ts) = HTONLL(COMO(ts)); 
     COMO(len) = htonl(COMO(len)); 
     COMO(caplen) = htonl(COMO(caplen)); 
@@ -165,6 +178,7 @@ store(void *fh, char *buf, size_t len)
     COMO(l2ofs) = htons(COMO(l2ofs)); 
     COMO(l3ofs) = htons(COMO(l3ofs)); 
     COMO(l4ofs) = htons(COMO(l4ofs)); 
+#endif
 
     memcpy(buf, pkt, need); 
     return need; 
@@ -182,8 +196,8 @@ load(char * buf, size_t len, timestamp_t * ts)
     }
 
     pkt = (pkt_t *) buf; 
-    *ts = NTOHLL(pkt->ts);
-    return (sizeof(pkt_t) + ntohl(pkt->caplen)); 
+    *ts = NTOHLL(COMO(ts));
+    return (sizeof(pkt_t) + ntohl(COMO(caplen))); 
 }
 
 
@@ -460,6 +474,19 @@ replay(char *buf, char *out, size_t * len, int *count)
     bcopy(buf, out, need); 
     pkt = (pkt_t *) out;
     /* Convert the header data into host byte order */
+#ifdef BUILD_FOR_ARM
+    COMOX(ts, NTOHLL(COMO(ts))); 
+    COMOX(len, ntohl(COMO(len))); 
+    COMOX(caplen, ntohl(COMO(caplen))); 
+    COMOX(type, ntohs(COMO(type)));
+    COMOX(dropped, ntohs(COMO(dropped)));
+    COMOX(l2type, ntohs(COMO(l2type))); 
+    COMOX(l3type, ntohs(COMO(l3type))); 
+    COMOX(l4type, ntohs(COMO(l4type))); 
+    COMOX(l2ofs, ntohs(COMO(l2ofs))); 
+    COMOX(l3ofs, ntohs(COMO(l3ofs))); 
+    COMOX(l4ofs, ntohs(COMO(l4ofs))); 
+#else
     COMO(ts) = NTOHLL(COMO(ts)); 
     COMO(len) = ntohl(COMO(len)); 
     COMO(caplen) = ntohl(COMO(caplen)); 
@@ -471,7 +498,8 @@ replay(char *buf, char *out, size_t * len, int *count)
     COMO(l2ofs) = ntohs(COMO(l2ofs)); 
     COMO(l3ofs) = ntohs(COMO(l3ofs)); 
     COMO(l4ofs) = ntohs(COMO(l4ofs)); 
-    pkt->payload = out + sizeof(pkt_t); 
+#endif
+    pkt->payload = out + sizeof(pkt_t);
     *len = need; 
     *count = 1;
     return 0;	
