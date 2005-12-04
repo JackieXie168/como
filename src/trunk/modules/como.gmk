@@ -15,8 +15,9 @@ MODULES= \
 	application.so \
 	protocol.so \
         topports.so \
-	anomaly-ewma.so 
-#   interarrival.so
+	anomaly-ewma.so \
+        list.so
+#    interarrival.so
 
 ifdef ENABLE_SNORT_MODULE
     MODULES += \
