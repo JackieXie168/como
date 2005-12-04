@@ -220,7 +220,7 @@ sniffer_start(source_t * src)
     wreq.type = MONITOR_MODE; 
     wreq.len = 0;
 #endif
-  //  send_ioctl(src->device, &wreq, SET_OPERATIONMODE); 
+    send_ioctl(src->device, &wreq, SET_OPERATIONMODE); 
 
     /* 
      * fix the channel, if requested 
@@ -237,7 +237,7 @@ sniffer_start(source_t * src)
 	wreq.len = 1; 
 	wreq.val[0] = channel; 
 #endif
-//	send_ioctl(src->device, &wreq, SET_CHANNEL); 
+	send_ioctl(src->device, &wreq, SET_CHANNEL); 
     } 
 
     /* 
@@ -319,16 +319,19 @@ static void
 processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
 {
     pkt_t * pkt = (pkt_t *) data; 
-    char * pl = pkt->payload; 
-    int n;
-
     pkt->ts = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
     pkt->len = h->len;
     pkt->caplen = h->caplen;
-  
-    /* process 802.11 packet */
-    n = parse80211_frame(pkt, (char *)buf, pl, pkt->type);
-    pkt->caplen = n; /* temporary solution */
+ 
+    /* pkt->caplen padded to be 4 byte aligned. This takes care of
+     * alignment issues on the ARM architecture.
+     */
+
+    /*
+     * the management frame is redefined to include the 802.11 hdr +
+     * capture hdr) plus the como management body structure
+     */
+    parse80211_frame(pkt, (char *) buf, pkt->payload, pkt->type);
 }
 
 

@@ -69,6 +69,7 @@ struct _snifferinfo {
      */
     char pktbuf[BUFSIZE];	/* buffer for pre-processed packets */
     int pkt_nbytes; 	 	/* valid bytes in pktbuf */
+    uint16_t padding;
 };
 
 
@@ -199,10 +200,9 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     struct _snifferinfo * info; 
     pkt_t *pkt;                 /* CoMo record structure */
     char * base;                /* current position in input buffer */
-    char * pl;                  /* position in buffer for processed packets */
     int npkts;                  /* processed pkts */
     int rd;
-  
+
     info = (struct _snifferinfo *) src->ptr; 
 
     /* read pcap records from fd */
@@ -220,6 +220,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
         pcap_hdr_t ph; 
 	int left = info->nbytes - (base - info->buf); 
+	bcopy(base, &ph, sizeof(pcap_hdr_t));
 
         /* XXX We use bcopy here because the base pointer may not be word
          * aligned. This is an issue on some platforms like the Stargate */
@@ -250,23 +251,30 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 * (beware that it could be discarded later on)
 	 */
 	if (info->type == COMOTYPE_80211 || info->type == COMOTYPE_RADIO) { 
-	    int n; 
-	    /* 
+            /* 
 	     * point to memory region to receive pre-processed 802.11 
 	     * frame. this frame may be larger than original frame 
 	     * captured from the medium. (we do it this way for performance
 	     * reasons and to simplify the code in the modules)
 	     */
             pkt->payload = info->pktbuf + info->pkt_nbytes;
-            pl =  pkt->payload;
-
             base += sizeof(pcap_hdr_t);
-	    n = parse80211_frame(pkt,base,pl,info->type); 
+	    /* pkt->caplen padded to be 4 byte aligned. This takes care of 
+	     * alignment issues on the ARM architecture.
+             */
 
-	    if (n == 0) 
+            /*  
+             * the management frame is redefined to include the 802.11 hdr +
+ 	     * capture hdr) plus the como management body structure
+	     */
+	    parse80211_frame(pkt,base,pkt->payload,info->type); 
+
+	    if (pkt->caplen == 0) {
+		logmsg(LOGWARN, "ieee802.11 parsing error (alignment?)\n"); 
 		break; 
-	    info->pkt_nbytes += n; 
-	    base += ph.caplen; 
+	    }
+	    info->pkt_nbytes += pkt->caplen; 
+	    base += ph.caplen;
 	} else {  
 	    pkt->payload = base + sizeof(pcap_hdr_t); 
             /* 
@@ -275,10 +283,9 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
              */
             updateofs(pkt, info->type); 
 	   
-	   /* increment the number of processed packets */
+            /* increment the number of processed packets */
 	    base += sizeof(pcap_hdr_t) + ph.caplen; 
 	} 
-    
     }
     info->nbytes -= (base - info->buf);
     bcopy(base, info->buf, info->nbytes);

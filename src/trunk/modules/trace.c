@@ -52,33 +52,68 @@
 #include "ieee80211.h"
 
 static const char *mgmt_subtypes[] = {
-  "association request",
-  "association response",
-  "reassociation request",
-  "reassociation response",
-  "probe request",
-  "probe response",
-  "reserved",
-  "reserved",
-  "beacon",
-  "atim",
-  "disassociation",
-  "authentication",
-  "deauthentication",
-  "reserved",
-  "reserved"
+    "Association Request",
+    "Association Response",
+    "Reassociation Request",
+    "Reassociation Response",
+    "Probe Request",
+    "Probe Response",
+    "Reserved",
+    "Reserved",
+    "Beacon",
+    "Atim",
+    "Disassociation",
+    "Authentication",
+    "Deauthentication",
+    "Reserved",
+    "Reserved"
 };
 
-
-static const char *data_subtypes[] = {
-"data",
-"data + cf-ack",
-"data + cf-poll",
-"data + cf-ack + cf-poll",
-"null function (no data)",
-"cf-ack (no data)",
-"cf-ack + cf-poll (no data)"
+static const char *rc_text[] = {
+    "Reserved",
+    "Unspecified reason",
+    "Previous authentication no longer valid",
+    "Deauthenticated because sending STA is leaving (or has left) IBSS or ESS",
+    "Disassociated due to inactivity",
+    "Disassociated because AP is unable to handle all currently \
+							    associated STAs",
+    "Class 2 frame received from nonauthenticated STA",
+    "Class 3 frame received from nonassociated STA",
+    "Disassociated because sending STA is leaving (or has left) BSS",
+    "STA requesting (re)association is not authenticated with responding STA"
 };
+
+static const char *sc_text[] = {
+    "Successful",
+    "Unspecified failure",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Cannot support all requested capabilities in the capability information \
+									field",
+    "Reassociation denied due to inability to confirm that association exists",
+    "Association denied due to reason outside the scope of this standard",
+    "Responding station does not support the specified authenticatoin \
+								    algorithm",
+    "Received an authentication frame with authentication transaction \
+				    sequence number out of expected sequence",
+    "Authentication rejected because of challenge failure",
+    "Authentication rejected due to timeout waiting for next frame in sequence",
+    "Association denied because AP is unable to handle additional associated \
+								     stations",
+    "Association denied due to requesting station not supporting all of the \
+				data rates in the BSSBasicRateSet parameter"
+};
+
+#define RC_RESERVED_VALUES 10 /* 10 - 65535 */
+#define SC_RESERVED_VALUES 19 /* 19 - 65535 */
+#define MAC_ADDR_SIZE 6
+
 
 /* 
  * FLOWDESC just contains one packet. 
@@ -270,14 +305,16 @@ static char *
 print(char *buf, size_t *len, char * const args[])
 {
     static char s[65536]; 
+    char payload[65536];
     static int fmt; 
     struct pcap_file_header * fhdr; 
     struct pcap_packet * x; 
-    pkt_t p, *pkt; 
+    pkt_t p, pktbuf, *pkt; 
     int hh, mm, ss; 
     uint32_t addr; 
     int n; 
-    
+    int i;
+    char ssid[34];
 
     if (buf == NULL && args != NULL) { 
 	/* first call, process the arguments */
@@ -311,19 +348,21 @@ print(char *buf, size_t *len, char * const args[])
     /* copy the packet CoMo header, converting 
      * the fields in host-byte order 
      */
-    pkt = (pkt_t *) buf; 
+    //pkt = (pkt_t *) buf; 
+    bcopy(buf, &pktbuf, sizeof(pkt_t));
+    pkt = &pktbuf;
     p.ts = NTOHLL(COMO(ts)); 
     p.len = ntohl(COMO(len)); 
     p.caplen = ntohl(COMO(caplen)); 
-    p.type = ntohs(COMO(type));
-    p.dropped = ntohs(COMO(dropped));
+    p.type = ntohl(COMO(type));
     p.l2type = ntohs(COMO(l2type)); 
     p.l3type = ntohs(COMO(l3type)); 
-    p.l4type = ntohs(COMO(l4type)); 
+    p.l4type = ntohs(COMO(l4type));
     p.l2ofs = ntohs(COMO(l2ofs)); 
     p.l3ofs = ntohs(COMO(l3ofs)); 
     p.l4ofs = ntohs(COMO(l4ofs)); 
-    p.payload = buf + sizeof(pkt_t);
+    bcopy(buf + sizeof(pkt_t), payload, p.caplen);
+    p.payload = payload;
 
     /* now we are ready to process this packet */
     pkt = (pkt_t *) &p; 
@@ -347,8 +386,7 @@ print(char *buf, size_t *len, char * const args[])
     hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
     mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
     ss = TS2SEC(COMO(ts)) % 60; 
-    *len = sprintf(s, "%u.%06u %02d:%02d:%02d.%06d ",
-		   TS2SEC(COMO(ts)), TS2USEC(COMO(ts)), 
+    *len = sprintf(s, "%02d:%02d:%02d.%06d ",
 		   hh, mm, ss, TS2USEC(COMO(ts))); 
 
     /* 
@@ -356,14 +394,6 @@ print(char *buf, size_t *len, char * const args[])
      * information 
      */
     if(COMO(l3type) == ETHERTYPE_IP) { 
-
-	/* print timestamp (hh:mm:ss.us) */
-        hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
-        mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
-        ss = TS2SEC(COMO(ts)) % 60; 
-        *len = sprintf(s, "%02d:%02d:%02d.%06d ", 
-                                       hh, mm, ss, TS2USEC(COMO(ts))); 
-
         /* 
          * print IP header information 
          */
@@ -397,67 +427,140 @@ print(char *buf, size_t *len, char * const args[])
 			(uint32_t) H32(TCP(ack)), 
 		 	(uint16_t) H16(TCP(win))); 
 	}
-    } else if (FC_TYPE(COMO(l3type)) == WLANTYPE_MGMT || WLANTYPE_DATA || 
-		WLANTYPE_CTRL){
-	hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
-	mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
-	ss = TS2SEC(COMO(ts)) % 60; 
-	    
-	switch(FC_TYPE(COMO(l3type))) {
+    } else if (WLANTYPE(COMO(l2type)) == WLANTYPE_MGMT || WLANTYPE_DATA || 
+	WLANTYPE_CTRL) { 
+	
+	switch(WLANTYPE(COMO(l2type))) {
+
 	case WLANTYPE_MGMT:
-	    *len += sprintf(s + *len, 
-		"%02d:%02d:%02d:%06d %s", hh, mm, ss, TS2USEC(COMO(ts)), 
-		mgmt_subtypes[FC_SUBTYPE(COMO(l3type)) >> 12]); 
+            snprintf(ssid, MGMT_BODY(ssid_len) + 1, MGMT_BODY(ssid));
+	    *len += sprintf(s + *len, "%s ",
+				mgmt_subtypes[WLANSUBTYPE(COMO(l2type))>>12]); 
+	    switch(WLANSUBTYPE(COMO(l2type))) {
+	    case MGMT_SUBTYPE_BEACON:
+	    case MGMT_SUBTYPE_PROBE_RES:
+                *len += sprintf(s + *len, "%s %s", ssid,"[");
+                for (i = 0; i < MGMT_BODY(rates_len); i++) {
+                    *len += sprintf(s + *len, "%2.1f%s ",
+                        (0.5 * (MGMT_BODY(rates[i]) & 0x7f)), 
+                        (MGMT_BODY(rates[i]) & 0x80 ? "*" : "" ));
+                }
+		*len += sprintf(s + *len, "%s %s %d %s %s", "Mbit]", "ch:",
+		    MGMT_BODY(ch), CAPINFO_ESS(MGMT_BODY(cap)) ? "ESS" 
+		    : "IBSS", CAPINFO_PRIVACY(MGMT_BODY(cap)) ? "PRIVACY" : "");
+		break;
+	    case MGMT_SUBTYPE_DISASSOC:
+	    case MGMT_SUBTYPE_DEAUTH:
+                *len += sprintf(s + *len, "%s", ntohs(MGMT_BODY(rc)) < 
+		    RC_RESERVED_VALUES ? rc_text[ntohs(MGMT_BODY(rc))] 
+								: "RESERVED");
+		break;
+	    case MGMT_SUBTYPE_ASSOC_REQ:
+	    case MGMT_SUBTYPE_PROBE_REQ:
+                *len += sprintf(s + *len, "%s %s", ssid,"[");
+                for (i = 0; i < MGMT_BODY(rates_len); i++) {
+                    *len += sprintf(s + *len, "%2.1f%s ",
+                        (0.5 * (MGMT_BODY(rates[i]) & 0x7f)),
+                        (MGMT_BODY(rates[i]) & 0x80 ? "*" : "" ));
+                }  
+                *len += sprintf(s + *len, "%s", "Mbit]");
+		break;
+	    case MGMT_SUBTYPE_ASSOC_RES:
+	    case MGMT_SUBTYPE_REASSOC_RES:
+		*len += sprintf(s + *len, "AID(%x) %s %s", 
+		    MGMT_BODY(aid), CAPINFO_PRIVACY(MGMT_BODY(cap)) ?
+		    "PRIVACY" : "", MGMT_BODY(sc) < SC_RESERVED_VALUES ? 
+		    sc_text[ntohs(MGMT_BODY(sc))] : "RESERVED");
+		break;
+	    case MGMT_SUBTYPE_REASSOC_REQ:
+		*len += sprintf(s + *len, "%s %s", ssid, "AP:");
+		for (i = 0; i < MAC_ADDR_SIZE; i++)
+		    *len += sprintf(s + *len, "%02x%s", MGMT_BODY(ap_addr[i]), 
+			i < (MAC_ADDR_SIZE-1) ? ":": ""); 
+		break;
+	    case MGMT_SUBTYPE_AUTH:
+		break;
+	    default:
+		break;
+	    }	
 	    break;
 	case WLANTYPE_CTRL:
-	    switch(FC_SUBTYPE(COMO(l3type))) {
+	    switch(FCTRL_SUBTYPE(COMO(l2type))) {
 	    case CTRL_SUBTYPE_PS_POLL:
-		*len += sprintf(s + *len, 
-		    "%02d:%02d:%02d:%06d power save-poll", 
-		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		*len += sprintf(s + *len, "%s %s%02x%s", "Power Save-Poll", 
+		    "AID(", MGMT_BODY(aid), ")"); 
 		break;
 	    case CTRL_SUBTYPE_RTS:
-		*len += sprintf(s + *len, 
-		    "%02d:%02d:%02d:%06d request to send", 
-		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		*len += sprintf(s + *len, "%s %s", "Request-To-Send", "TA:"); 
+		for (i = 0; i < MAC_ADDR_SIZE; i++)
+		    *len += sprintf(s + *len, "%02x%s", CTRL_RTS(ta[i]), 
+			i < (MAC_ADDR_SIZE-1) ? ":": ""); 
 		break;
 	    case CTRL_SUBTYPE_CTS:
-		*len += sprintf(s + *len, 
-		    "%02d:%02d:%02d:%06d clear to send", 
-		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		*len += sprintf(s + *len, "%s %s", "Clear-To-Send", "RA:"); 
+		for (i = 0; i < MAC_ADDR_SIZE; i++)
+		    *len += sprintf(s + *len, "%02x%s", CTRL_CTS(ra[i]), 
+			i < (MAC_ADDR_SIZE-1) ? ":": ""); 
 		break;
 	    case CTRL_SUBTYPE_ACK:
-		*len += sprintf(s + *len, 
-		    "%02d:%02d:%02d:%06d acknowledgment", 
-		    hh, mm, ss, TS2USEC(COMO(ts)));
+		*len += sprintf(s + *len, "%s %s", "Acknowledgment", "RA:"); 
+		for (i = 0; i < MAC_ADDR_SIZE; i++)
+		    *len += sprintf(s + *len, "%02x%s", CTRL_ACK(ra[i]), 
+			i < (MAC_ADDR_SIZE-1) ? ":": ""); 
 		break;
 	    case CTRL_SUBTYPE_CF_END:
-		*len += sprintf(s + *len, 
-		    "%02d:%02d:%02d:%06d cf-end", 
-		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		*len += sprintf(s + *len, "%s %s", "CF-End", "RA:"); 
+		for (i = 0; i < MAC_ADDR_SIZE; i++)
+		    *len += sprintf(s + *len, "%02x%s", CTRL_END(ra[i]), 
+			i < (MAC_ADDR_SIZE-1) ? ":" : ""); 
 		break;
 	    case CTRL_SUBTYPE_END_ACK:
-		*len += sprintf(s + *len, 
-		    "%02d:%02d:%02d:%06d cf-end + cf-ack", 
-		    hh, mm, ss, TS2USEC(COMO(ts))); 
+		*len += sprintf(s + *len, "%s %s", "CF-End + CF-Ack", "RA:"); 
+		for (i = 0; i < MAC_ADDR_SIZE; i++)
+		    *len += sprintf(s + *len, "%02x%s", CTRL_END_ACK(ra[i]), 
+			i < (MAC_ADDR_SIZE-1) ? ":" : ""); 
 	       break;
 	    default:
 	       break;
 	    }
 	    break;
 	case WLANTYPE_DATA:
-	    *len += sprintf(s + *len, 
-		"%02d:%02d:%02d:%06d %s", hh, mm, ss, TS2USEC(COMO(ts)), 
-		data_subtypes[FC_SUBTYPE(COMO(l3type)) >> 12]); 
-	    break;
+	    switch(WLANSUBTYPE(COMO(l2type))) {
+	    case DATA_SUBTYPE_DATA:
+		*len += sprintf(s + *len, "%s", "Data Type NOT Supported"); 
+		break;
+	    case DATA_SUBTYPE_DATA_CFACK: 
+		*len += sprintf(s + *len, "%s", "Data + CF-Ack"); 
+		break;
+	    case DATA_SUBTYPE_DATA_CFPL:   
+		*len += sprintf(s + *len, "%s", "Data + CF-Poll"); 
+		break;
+	    case DATA_SUBTYPE_DATA_CFACKPL: 
+		*len += sprintf(s + *len, "%s", "Data + CF-Ack + CF-Poll"); 
+	       break;
+	    case DATA_SUBTYPE_NULL:    
+		*len += sprintf(s + *len, "%s", "Null Function (no data)"); 
+		break;
+	    case DATA_SUBTYPE_CFACK:    
+		*len += sprintf(s + *len, "%s", "CF-Ack (no data)"); 
+		break;
+	    case DATA_SUBTYPE_CFPL:       
+		*len += sprintf(s + *len, "%s", "CF-Poll (no data)"); 
+		break;
+	    case DATA_SUBTYPE_CFACKPL:   
+		*len += sprintf(s + *len, "%s", "CF-Ack + CF-Poll (no data)"); 
+		break;
+            default:
+		break;
+	    }
+            break;
 	default:
-	    *len += sprintf(s + *len,
-		"ieee802.11 type not supported - work in progress");
+	    *len += sprintf(s + *len, "%s",  "Print Not Supported");
 	    break;
 	}
     }
     else
-	*len += sprintf(s + *len, "print not supported");
+	*len += sprintf(s + *len, "%s", "Print Not Supported");
     *len += sprintf(s + *len, "\n");
     return s; 
 }
@@ -500,10 +603,11 @@ replay(char *buf, char *out, size_t * len, int *count)
     COMO(l4ofs) = ntohs(COMO(l4ofs)); 
 #endif
     pkt->payload = out + sizeof(pkt_t);
-    *len = need; 
+    *len = need;
     *count = 1;
     return 0;	
 }
+
 
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
