@@ -42,10 +42,10 @@
 /*
  * 802.11 frame type/subtype combinations
  */
-
 #define WLANTYPE_MGMT 0x0000
 #define WLANTYPE_CTRL 0x4000
 #define WLANTYPE_DATA 0x8000
+
 
 #define MGMT_SUBTYPE_ASSOC_REQ   0x0000
 #define MGMT_SUBTYPE_ASSOC_RES   0x1000
@@ -96,18 +96,33 @@
 
 
 /*
- * frame control bits
+ * frame control field consists of the following subfields 
  */
-#define FC_TYPE(fc)    	(((fc) << 4) & 0xc000)
-#define FC_SUBTYPE(fc)	((fc) & 0xf000)
 
+#define FCTRL_TYPE(fc)    	   (((fc) << 4) & 0xc000)
+#define FCTRL_SUBTYPE(fc)	   ((fc) & 0xf000)
+#define FCTRL_TO_DS(fc)     	   ((fc) & 0x0001)
+#define FCTRL_FROM_DS(fc)          ((fc) & 0x0002)
+#define FCTRL_MORE_FLAG(fc)        ((fc) & 0x0004)
+#define FCTRL_RETRY(fc)            ((fc) & 0x0008)
+#define FCTRL_POWER_MGMT(fc)       ((fc) & 0x0010)
+#define FCTRL_MORE_DATA(fc)        ((fc) & 0x0020)
+#define FCTRL_WEP(fc)              ((fc) & 0x0040)
+#define FCTRL_ORDER(fc)            ((fc) & 0x0080)
+
+/* module specific macro */
+#define WLANTYPE(fc)    	   (((fc) << 4) & 0xc000)
+#define WLANSUBTYPE(fc)	           ((fc) & 0xf000)
 
 /*
  * capability information bits
  */
-#define CAP_ESS(cap)     ((cap) & 0x0001)
-#define CAP_PRIVACY(cap) ((cap) & 0x0010)
 
+#define CAPINFO_ESS(cap)     ((cap) & 0x0100)
+#define CAPINFO_IBSS(cap)    ((cap) & 0x0200)
+#define CAPINFO_CFP(cap)     ((cap) & 0x0400)
+#define CAPINFO_CFP_REQ(cap) ((cap) & 0x0800)
+#define CAPINFO_PRIVACY(cap) ((cap) & 0x1000)
 
 
 /*
@@ -121,7 +136,7 @@ struct _ieee80211_snap_hdr {
     uint8_t oui[3]; /* organisation code */
     n16_t type;
 }; 
-#define SNAP_HDR_LEN 8
+#define LLC_HDR_LEN 8
 #define LLC_HDR(field) \
     (((struct _ieee80211_snap_hdr*)(pkt->payload + pkt->l2ofs + \
     DATA_HDR_LEN))->field)
@@ -146,7 +161,7 @@ struct _ieee80211_hdr {
  * management frames: fixed fields
  */
 struct _ieee80211_beacon {
-    uint64_t ts;
+    uint8_t  ts[8];
     uint16_t bi;
     uint16_t cap;
 };
@@ -179,7 +194,7 @@ struct _ieee80211_reassoc_res {
 };
 
 struct _ieee80211_probe_res {
-    uint64_t ts;
+    uint8_t  ts[8];
     uint16_t bi;
     uint16_t cap;
 };
@@ -231,7 +246,7 @@ struct _ieee80211_ctrl_cts {
 struct _ieee80211_ctrl_ack {
     uint16_t       fc;
     uint16_t       duration;
-    uint8_t        ra[6];
+    char           ra[6];
     uint8_t        fcs[4];
 };
 
@@ -281,7 +296,7 @@ struct _ieee80211_ctrl_end_ack {
  * 802.11 data mac header
  */
 struct _ieee80211_data_hdr {
-    uint16_t       fc;
+    uint16_t          fc;
     uint16_t       duration;
     uint8_t        addr1[6];
     uint8_t        addr2[6];
@@ -308,26 +323,13 @@ struct _ieee80211_mgmt_hdr {
     uint16_t    seq_ctrl;
 };
 
-
-/*
- * 802.11 management mac header
- */
-struct _como_wlan_mgmt_hdr {
-    n16_t       fc;
-    uint16_t    duration;
-    uint8_t     da[6];
-    uint8_t     sa[6];
-    uint8_t     bssid[6];
-    uint16_t    seq_ctrl;
-};
-
-
 /*
  * 802.11 management header macro
  */
+
+
 #define MGMT_HDR(field)         \
     (((struct _ieee80211_mgmt_hdr*)(pkt->payload + pkt->l2ofs))->field)
-
 #define MGMT_HDR_LEN 24
 
 
@@ -346,7 +348,7 @@ struct _ieee80211_ssid {
 struct _ieee80211_rates {
     uint8_t     id;
     uint8_t     len;
-    uint8_t     rates[8]; /* ??? */
+    uint8_t     rates[8]; 
 };
 
 struct _ieee80211_fh {
@@ -400,10 +402,6 @@ struct _ieee80211_challenge {
 #define DS_IE_LEN 3
 #define CF_IE_LEN 8
 #define IBSS_IE_LEN 4
-
-/* useful macros ... */
-#define isWLANBEACON (MGMT_SUBTYPE_BEACON | (WLANTYPE_MGMT >> 4))
-#define isWLANPROBE_RESPONSE (MGMT_SUBTYPE_PROBE_RES | (WLANTYPE_MGMT >> 4))
 
 #endif /* _COMO_IEEE80211_H */ 
 

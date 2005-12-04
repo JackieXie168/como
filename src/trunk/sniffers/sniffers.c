@@ -48,7 +48,10 @@ static size_t como_l2_len[] = {
     18,         // COMOTYPE_VLAN
     40,         // COMOTYPE_ISL
     0,          // COMOTYPE_NF
+    0,		// COMOTYPE_80211     
+    0 		// COMOTYPE_RADIO      
 };
+
 
 
 /* 
@@ -80,23 +83,32 @@ isISL(pkt_t * pkt)
 static __inline__ void
 updatel4(pkt_t * pkt)
 {
+
+    pkt->l4ofs = 0; 
+
     if (pkt->l3type == ETHERTYPE_IP) {
 	pkt->l3ofs = pkt->l4ofs = como_l2_len[pkt->type];
 	pkt->l4ofs += ((IP(vhl) & 0x0f) << 2);
 	pkt->l4type = IP(proto);
     } else {
-	switch(FC_TYPE(pkt->l2type)) { /* determine 802.11 frame type */
+	switch(FCTRL_TYPE(pkt->l2type)) { /* determine 802.11 frame type */
 	case WLANTYPE_MGMT:
-	    pkt->l3ofs = pkt->l4ofs = pkt->l2ofs + MGMT_HDR_LEN;
+	    pkt->l3ofs = pkt->l2ofs + MGMT_HDR_LEN;
+	    pkt->l4ofs += pkt->l3ofs; 
 	    break;
 	case WLANTYPE_CTRL:
-            pkt->l3ofs = pkt->l4ofs = pkt->l2ofs;
+            pkt->l3ofs = pkt->l2ofs;
+	    pkt->l4ofs += pkt->l3ofs; 
             break;
 	case WLANTYPE_DATA:
-	    pkt->l3ofs = pkt->l4ofs = pkt->l2ofs + DATA_HDR_LEN + SNAP_HDR_LEN;
+	    if (FCTRL_TO_DS(pkt->l2type) && FCTRL_FROM_DS(pkt->l2type))
+		pkt->l3ofs = pkt->l2ofs + 30 + LLC_HDR_LEN;
+            else
+		pkt->l3ofs = pkt->l2ofs + 24 + LLC_HDR_LEN;
+	    pkt->l4ofs += pkt->l3ofs; 
             break;
          default:
-            logmsg(LOGWARN, "ieee802.11 type not supported");
+            logmsg(LOGWARN, "ieee802.11 frame type unknown");
 	    break;
 	}
     }
@@ -112,8 +124,8 @@ updatel4(pkt_t * pkt)
 __inline__ void 
 updateofs(pkt_t * pkt, int type) 
 {
-    pkt->type = type;
-    pkt->l2type = 0xFFFF;
+    pkt->type = type; 
+    pkt->l2type = 0xFFFF; /* implies field unused */ 
     switch (pkt->type) { 
     case COMOTYPE_ETH: 
         if (H16(ETH(type)) == ETHERTYPE_VLAN) {
@@ -133,14 +145,14 @@ updateofs(pkt_t * pkt, int type)
     
     case COMOTYPE_80211:
         pkt->l2type = H16(IEEE80211_HDR(fc));
-        if (FC_TYPE(pkt->l2type) == WLANTYPE_DATA)
+        if (FCTRL_TYPE(pkt->l2type) == WLANTYPE_DATA)
 	    pkt->l3type = H16(LLC_HDR(type));
 	else
 	    pkt->l3type = 0;
         break;
     case COMOTYPE_RADIO:
         pkt->l2type = H16(IEEE80211_HDR(fc)); /* 802.11 + XX byte capture hdr */
-        if (FC_TYPE(pkt->l2type) == WLANTYPE_DATA)
+        if (FCTRL_TYPE(pkt->l2type) == WLANTYPE_DATA)
 	    pkt->l3type = H16(LLC_HDR(type));
 	else
 	    pkt->l3type = 0;
