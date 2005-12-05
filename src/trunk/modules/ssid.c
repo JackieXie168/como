@@ -29,9 +29,9 @@
 /*
  * 802.11 SSID 
  *
- * This module parses the 802.11 management frames to find beacon and probe
- * response messages and stores all the SSIDs it observes together with 
- * the signal strength value and noise value. 
+ * This module parses the 802.11 management frames to find beacon and stores 
+ * all the SSIDs it observes together with the average signal strength 
+ * value and noise value for the network.
  *
  */
 
@@ -53,10 +53,9 @@ FLOWDESC {
     int8_t 	channel;
     uint8_t	wepmode;
     uint8_t	len; 
-    char 	ssid[34]; 
+    char 	ssid[33];
+    uint8_t     padding[3]; 
 };
-
-#define WLAN_WEP 0x40
 
 static int meas_ivl = 1;     /* measurement interval */
 
@@ -78,14 +77,14 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 
 /* 
  * define a check() callback to filter out messages that are not 
- * beacons and probe reponses  
+ * beacons 
  */
 static int
 check(pkt_t * pkt) 
 {
-    if ((COMO(type) != COMOTYPE_RADIO) || (COMO(l2type) != isWLANBEACON)) 
-	return 0; 
-    return 1; 
+  return ((COMO(type) == COMOTYPE_RADIO) &&
+        ((WLANTYPE(COMO(l2type)) == WLANTYPE_MGMT) &&
+        (WLANSUBTYPE(COMO(l2type)) == MGMT_SUBTYPE_BEACON)));
 }
 
 
@@ -94,8 +93,8 @@ match(pkt_t * pkt, void * fh)
 {
     FLOWDESC * x = F(fh); 
     
-    if (!(strncmp(x->ssid, MGMT_BODY(ssid.ssid), x->len)) && 
-	    (x->channel == MGMT_BODY(ds.ch)))
+    if (!(strncmp(x->ssid, MGMT_BODY(ssid), x->len)) && 
+	    (x->channel == MGMT_BODY(ch)))
 	return 1; 
 
     return 0; 
@@ -119,18 +118,18 @@ update(pkt_t *pkt, void *fh, int isnew)
 	/* now find the information in the management frame.
 	 * get privacy bit to determine if wep is enabled
 	 */
-	x->wepmode = (MGMT_BODY(cap) & WLAN_CAPINFO_PRIVACY)? 1 : 0;
+	x->wepmode = CAPINFO_PRIVACY(MGMT_BODY(cap)) ? 1 : 0;
 
 	/* get to the SSID information element */
-	if (MGMT_BODY(ssid.len) > 0) { 
-	    x->len = (MGMT_BODY(ssid.len)); 
-	    bcopy(MGMT_BODY(ssid.ssid), x->ssid, x->len);
+	if (MGMT_BODY(ssid_len) > 0) { 
+	    x->len = (MGMT_BODY(ssid_len)); 
+	    bcopy(MGMT_BODY(ssid), x->ssid, x->len);
 	} else { 
 	    x->len = 3; 
 	    sprintf(x->ssid, "ANY"); 
 	}
 
-	x->channel = MGMT_BODY(ds.ch); 	
+	x->channel = MGMT_BODY(ch); 	
     }
     x->samples++;
     x->signal += H32(PRISM_HDR(ssi_signal)); 
@@ -170,14 +169,16 @@ load(char * buf, size_t len, timestamp_t * ts)
         ts = 0;
         return 0;
     }
+
     *ts = NTOHLL(((FLOWDESC *)buf)->ts);
     return sizeof(FLOWDESC);
 }
 
 
 #define PRETTYHDR		\
-    "date s(dbm) n(dbm) ch samples wep ssid\n"
-#define PRETTYFMT	"%.24s %2d %2d %2d %2d %s %s\n"
+    "Date                     Signal (dbm)    Noise (dbm)     Channel \
+   Samples    WEP   SSID\n"
+#define PRETTYFMT	"%.24s %-15d %-15d %-10d %-10d %-5s %-32s\n"
 #define PLAINFMT	"%12ld %1d %2d %2d %2d %2d\n" 
 
 static char *
@@ -232,6 +233,7 @@ print(char *buf, size_t *len, char * const args[])
 
     return s;
 }
+
 
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
