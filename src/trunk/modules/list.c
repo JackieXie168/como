@@ -82,33 +82,6 @@ FLOWDESC {
 };
 
 
-/*
- * bytes to capture in each packet. this includes layer2 header 
- * but does not include the CoMo header.  
- */
-static unsigned snaplen = 65535;
-
-static pktdesc_t outdesc;
-
-
-static timestamp_t 
-init(__unused void *mem, __unused size_t msize, char * args[])
-{
-    int i; 
-
-    for (i = 0; args && args[i]; i++) {
-	if (strstr(args[i], "snaplen=")) { 
-	    char * len = index(args[i], '=') + 1; 
-	    snaplen = atoi(len); 	
-	} 
-    }
-
-    memset(&outdesc, 0xff, sizeof(pktdesc_t));
-    outdesc.caplen = snaplen; 
-    return TIME2TS(1,0); 
-}
-
-
 static uint32_t
 hash(pkt_t *pkt) 
 {
@@ -133,7 +106,19 @@ static int
 match(pkt_t * pkt, void * fh)
 {
     FLOWDESC * x = F(fh);
-    return !memcmp(x->addr, MGMT_HDR(bssid), MAC_ADDR_SIZE);
+    uint8_t addr;
+    int i;
+    
+    /* Currently BUILD_FOR_ARM Macros don't support arrays properly, 
+     * hence must access each byte individually. Preferred method 
+     * would be to use the memcmp keyword. 
+     */
+    for (i = 0; i < MAC_ADDR_SIZE; i++) {
+	addr = MGMT_HDR(bssid[i]);
+	if (x->addr[i] != addr) 
+	    return 0;
+    }
+    return 1;
 }
 
 
@@ -141,6 +126,8 @@ static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
+    uint8_t addr;
+    int i;
 
     if (isnew) {
         x->ts = pkt->ts;
@@ -160,8 +147,16 @@ update(pkt_t *pkt, void *fh, int isnew)
         } else {
             x->len = 3;
             sprintf(x->ssid, "ANY");
+        } 
+
+	/* Currently BUILD_FOR_ARM Macros don't support arrays properly, 
+	 * hence must access each byte individually. Preferred method 
+	 * would be to use the bcopy keyword. 
+	 */
+        for (i = 0; i < MAC_ADDR_SIZE; i++) {
+	    addr = MGMT_HDR(bssid[i]);
+	    x->addr[i] = addr;
         }
-        bcopy(MGMT_HDR(bssid), x->addr, MAC_ADDR_SIZE);
     }
     return 0;		
 }
@@ -331,8 +326,8 @@ callbacks_t callbacks = {
     ex_recordsize: 0, 
     st_recordsize: 65535,
     indesc: NULL, 
-    outdesc: &outdesc, 
-    init: init,
+    outdesc: NULL, 
+    init: NULL,
     check: check,
     hash: hash,
     match: match,

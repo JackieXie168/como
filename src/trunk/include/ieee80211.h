@@ -327,9 +327,21 @@ struct _ieee80211_mgmt_hdr {
  * 802.11 management header macro
  */
 
+#ifdef BUILD_FOR_ARM
+
+#define MGMT_HDR(field)               \
+    ((typeof(((struct _ieee80211_mgmt_hdr *)NULL)->field)) \
+     get_field((char *)&(((struct _ieee80211_mgmt_hdr *) \
+     (pkt->payload + pkt->l2ofs))->field), \
+     sizeof(typeof(((struct _ieee80211_mgmt_hdr *)NULL)->field))))
+
+#else
 
 #define MGMT_HDR(field)         \
     (((struct _ieee80211_mgmt_hdr*)(pkt->payload + pkt->l2ofs))->field)
+
+#endif 
+
 #define MGMT_HDR_LEN 24
 
 
