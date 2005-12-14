@@ -1004,8 +1004,8 @@ replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd)
      *     in any case there is no definitive solution so we
      *     will have always to deal with this loop here.
      */
-    count = 0;
     do {
+	count = 0;
         len = DEFAULT_REPLAY_BUFSIZE;
 	left = src->callbacks.replay(ptr, out, &len, &count);
 	if (left < 0)
