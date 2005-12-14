@@ -43,7 +43,7 @@
 
 FLOWDESC {
     uint32_t ts;	/* timestamp of last packet */
-    n32_t dst_ip;	/* destination IP address */
+    uint32_t dst_ip;	/* destination IP address */
     uint64_t bytes;	/* number of bytes */
     uint64_t pkts;	/* number of packets */
 };
@@ -77,14 +77,14 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static uint32_t
 hash(pkt_t *pkt)
 {
-    return (N32(IP(dst_ip))); 
+    return (N32(IP(dst_ip)) & 0x00ffffff); 
 }
 
 static int
 match(pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
-    return (N32(IP(dst_ip)) == N32(x->dst_ip));
+    return ((H32(IP(dst_ip)) & 0xffffff00) == x->dst_ip);
 }
 
 static int
@@ -94,7 +94,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
-        x->dst_ip = IP(dst_ip);
+        x->dst_ip = H32(IP(dst_ip)) & 0xffffff00;
         x->bytes = 0;
         x->pkts = 0;
     }
@@ -111,7 +111,7 @@ ematch(void *efh, void *fh)
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
 
-    return (N32(x->dst_ip) == N32(ex->dst_ip));
+    return (x->dst_ip == ex->dst_ip);
 }
 
 static int
@@ -175,7 +175,7 @@ store(void *efh, char *buf, size_t len)
         return -1;
 
     PUTH32(buf, ex->ts);
-    PUTN32(buf, N32(ex->dst_ip));
+    PUTH32(buf, ex->dst_ip);
     PUTH64(buf, ex->bytes);
     PUTH64(buf, ex->pkts);
 
@@ -206,24 +206,27 @@ load(char *buf, size_t len, timestamp_t *ts)
     "<html>\n"							\
     "<head>\n"                                                  \
     "  <style type=\"text/css\">\n"                             \
+    "   body { font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "          font-size: 9pt; margin: 0; padding: 0;}\n"	\
+    "   table, tr, td {background-color: #DDD;\n"		\
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     font-size: 9pt;}\n"				\
     "   a, a:visited { color: #475677; text-decoration: none;}\n" \
     "   .netviewbar{ \n"                                        \
     "     color :#FFF; width :100%%; padding :2px; text-align:center;}\n" \
     "   .netview {\n"                                           \
     "     top: 0px; width: 100%%; vertical-align:top;\n"        \
-    "     background-color: #DDD; margin: 2; padding-left: 5px;\n" \
-    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
-    "     padding-right: 5px; font-size: 9pt; text-align:left;\n" \
-    "     border:0px,0px,1px,0px; border-style:solid; \n"       \
-    "     border-color:grey;}\n"                                \
+    "     margin: 2; padding-left: 5px;\n" \
+    "     padding-right: 5px; text-align:left;}\n" \
     "   .nvtitle {\n"                                           \
     "     font-weight: bold; font-size: 9pt; padding-bottom: 3px;\n" \
     "     color: #475677;}\n"                                   \
     "  </style>\n"                                              \
     "</head>\n"                                                 \
     "<body>\n"							\
+    "<div class=nvtitle style=\"border-top: 1px solid;\">"	\
+    "Top-%d Destinations</div>\n" \
     "<table class=netview>\n"					\
-    "  <tr class=nvtitle><td colwidth=2>Top-%d Destinations</td></tr>\n" \
     "  <tr class=nvtitle><td>IP Address</td>\n"			\
     "      <td>Mbps</td></tr>\n"						
 
@@ -276,7 +279,7 @@ print(char *buf, size_t *len, char * const args[])
 	    w = sprintf(urlstr, "%s?", url); 
 	    for (k = 0; k < no_urlargs; k++) 
 		w += sprintf(urlstr + w, "%s&", urlargs[k]);
-	    w += sprintf(urlstr + w ,"ip=%%s");
+	    w += sprintf(urlstr + w ,"ip=%%s/24");
 	} 
 	    
 	return s; 
@@ -291,7 +294,7 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (EFLOWDESC *) buf; 
     ts = (time_t) ntohl(x->ts);
-    addr.s_addr = N32(x->dst_ip);
+    addr.s_addr = x->dst_ip;
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));

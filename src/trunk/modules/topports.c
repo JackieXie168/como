@@ -178,26 +178,30 @@ load(char *buf, size_t len, timestamp_t *ts)
     "<html>\n"                                                  \
     "<head>\n"                                                  \
     "  <style type=\"text/css\">\n"                             \
+    "   body {font-size: 9pt; margin: 0; padding: 0 \n"		\
+    "     font-family: \"lucida sans unicode\", verdana, arial;}\n" \
+    "   table,tr,td {background-color: #ddd;\n" 	           \
+    "     font-size: 9pt; \n"		            \
+    "     font-family: \"lucida sans unicode\", verdana, arial;}\n" \
     "   a, a:visited { color: #475677; text-decoration: none;}\n" \
-    "   .netviewbar{ \n"                                        \
-    "     color :#FFF; width :100%%; padding :2px; text-align:center;}\n" \
     "   .netview {\n"                                           \
     "     top: 0px; width: 100%%; vertical-align:top;\n"        \
-    "     background-color: #DDD; margin: 2; padding-left: 5px;\n" \
-    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
-    "     padding-right: 5px; font-size: 9pt; text-align:left;\n" \
-    "     border:0px,0px,1px,0px; border-style:solid; \n"       \
-    "     border-color:grey;}\n"                                \
+    "     margin: 2; padding-left: 5px;\n" \
+    "     padding-right: 5px; text-align:left;}\n" \
     "   .nvtitle {\n"                                           \
-    "     font-weight: bold; font-size: 9pt; padding-bottom: 3px;\n" \
+    "     font-weight: bold; padding-bottom: 3px;\n" \
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     font-size: 9pt; \n"		            \
     "     color: #475677;}\n"                                   \
     "  </style>\n"                                              \
     "</head>\n"                                                 \
     "<body>\n"                                                  \
-    "<table class=netview>\n"                                   \
-    "  <tr class=nvtitle><td colwidth=2>Top-%d Port Numbers</td></tr>\n" \
-    "  <tr class=nvtitle><td>Port</td>\n"                 	\
-    "      <td>Mbps</td></tr>\n"
+    "<div class=nvtitle style=\"border-top: 1px solid;\">"	\
+    "Top-%d Port Numbers</div>\n" 		\
+    "<table class=netview>\n" 			\
+    "  <tr class=nvtitle>\n"					\
+    "      <td>Port</td>\n"                 	\
+    "      <td width=60>Mbps</td></tr>\n"
 
 #define HTMLFOOTER						\
     "</table>\n"						\
