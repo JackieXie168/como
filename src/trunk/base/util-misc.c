@@ -120,7 +120,7 @@ unload_object(void *handle)
  * we know the name of the first 133 protocols.
  */
 
-static char * 
+char * 
 alias[256] = { 
     "ip","icmp","igmp","ggp","ipencap","st2","tcp","cbt","egp",
     "igp","bbn-rcc","nvp","pup","argus","emcon","xnet","chaos",
