@@ -73,15 +73,14 @@
  * Application code means also application priority
  */
 #define WEB		0x00
-#define TERMINAL	0x01	/* ssh, telnet, etc. */
+#define NETWORK		0x01	/* ssh, telnet, dns, ntp, nfs, ftp, etc. */
 #define EMAIL		0x03	/* email, news, etc. */
-#define NETWORKDATA	0x07	/* dns, ntp, netbios, nfs, ftp, etc. */
-#define STREAM		0x0f
-#define GAMES		0x1f
-#define SHARING		0x3f
-#define UNKNOWN		0x7f    
+#define STREAM		0x07
+#define GAMES		0x0f
+#define SHARING		0x1f
+#define UNKNOWN		0x3f    
 
-#define APPLICATIONS       8 
+#define APPLICATIONS       7 
 #define APPCODE(x)	   ((((uint) 1) << x) - 1) 
 
 #define FLOWDESC    struct _app_stat
@@ -148,9 +147,9 @@ init(__unused void *mem, __unused size_t msize, char *args[])
         port2app[i] = SHARING;
     }
 
-    port2app[22]    = TERMINAL;         // SSH
-    port2app[23]    = TERMINAL;         // TELNET
-    port2app[992]   = TERMINAL;         // TELNET
+    port2app[22]    = NETWORK;         // SSH
+    port2app[23]    = NETWORK;         // TELNET
+    port2app[992]   = NETWORK;         // TELNET
 
     port2app[25]    = EMAIL;             //SMTP
     port2app[465]   = EMAIL;             //SMTPS
@@ -163,28 +162,28 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     port2app[119]   = EMAIL;             //NNTP
     port2app[563]   = EMAIL;             //NNTP
 
-    port2app[20]    = NETWORKDATA;	// FTP
-    port2app[21]    = NETWORKDATA;	// FTP
-    port2app[989]   = NETWORKDATA;	// FTP
-    port2app[990]   = NETWORKDATA;	// FTP
-    port2app[53]    = NETWORKDATA;      //DNS
-    port2app[161]   = NETWORKDATA;          //SNMP
-    port2app[162]   = NETWORKDATA;          //SNMP
-    port2app[123]   = NETWORKDATA;          //NTP
-    port2app[873]   = NETWORKDATA;    	//RSYNC
-    port2app[1110]  = NETWORKDATA;     //NFS
-    port2app[2049]  = NETWORKDATA;     //NFS
-    port2app[135]   = NETWORKDATA;        //NETBIOS
-    port2app[137]   = NETWORKDATA;        //NETBIOS
-    port2app[138]   = NETWORKDATA;        //NETBIOS
-    port2app[139]   = NETWORKDATA;        //NETBIOS
-    port2app[445]   = NETWORKDATA;        //NETBIOS
-    port2app[568]   = NETWORKDATA;        //NETBIOS
-    port2app[569]   = NETWORKDATA;        //NETBIOS
-    port2app[1512]  = NETWORKDATA;        //NETBIOS
-    port2app[311]   = NETWORKDATA;        //APPLETALK
-    port2app[387]   = NETWORKDATA;        //APPLETALK
-    port2app[548]   = NETWORKDATA;        //APPLETALK
+    port2app[20]    = NETWORK;	// FTP
+    port2app[21]    = NETWORK;	// FTP
+    port2app[989]   = NETWORK;	// FTP
+    port2app[990]   = NETWORK;	// FTP
+    port2app[53]    = NETWORK;      //DNS
+    port2app[161]   = NETWORK;          //SNMP
+    port2app[162]   = NETWORK;          //SNMP
+    port2app[123]   = NETWORK;          //NTP
+    port2app[873]   = NETWORK;    	//RSYNC
+    port2app[1110]  = NETWORK;     //NFS
+    port2app[2049]  = NETWORK;     //NFS
+    port2app[135]   = NETWORK;        //NETBIOS
+    port2app[137]   = NETWORK;        //NETBIOS
+    port2app[138]   = NETWORK;        //NETBIOS
+    port2app[139]   = NETWORK;        //NETBIOS
+    port2app[445]   = NETWORK;        //NETBIOS
+    port2app[568]   = NETWORK;        //NETBIOS
+    port2app[569]   = NETWORK;        //NETBIOS
+    port2app[1512]  = NETWORK;        //NETBIOS
+    port2app[311]   = NETWORK;        //APPLETALK
+    port2app[387]   = NETWORK;        //APPLETALK
+    port2app[548]   = NETWORK;        //APPLETALK
 
     port2app[4662]  = SHARING;              //E_DONKEY
     port2app[7070]  = SHARING;              //E_DONKEY
@@ -308,21 +307,20 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define GNUPLOTHDR 							\
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
     "set grid;"								\
-    "set ylabel \"Percentage\";"					\
+    "set ylabel \"%s\";"						\
     "set xlabel \"Time (H:M UTC)\";"					\
-    "set yrange [0:100];"						\
+    "set yrange [0:%s];"						\
     "set autoscale xfix;"						\
     "set key outside;"							\
     "set xdata time;"							\
     "set timefmt \"%%s\";"						\
     "set format x \"%%H:%%M\";"						\
-    "plot \"-\" using 1:16 with filledcurve x1 title \"Unknown\" lw 5,"	\
-    "     \"-\" using 1:14 with filledcurve x1 title \"P2P\" lw 5,"	\
-    "     \"-\" using 1:12 with filledcurve x1 title \"Games\" lw 5,"	\
-    "     \"-\" using 1:10 with filledcurve x1 title \"Stream\" lw 5,"	\
-    "     \"-\" using 1:8 with filledcurve x1 title \"Network\" lw 5,"	\
+    "plot \"-\" using 1:14 with filledcurve x1 title \"Unknown\" lw 5,"	\
+    "     \"-\" using 1:12 with filledcurve x1 title \"P2P\" lw 5,"	\
+    "     \"-\" using 1:10 with filledcurve x1 title \"Games\" lw 5,"	\
+    "     \"-\" using 1:8 with filledcurve x1 title \"Stream\" lw 5,"	\
     "     \"-\" using 1:6 with filledcurve x1 title \"Email\" lw 5,"	\
-    "     \"-\" using 1:4 with filledcurve x1 title \"Terminal\" lw 5,"	\
+    "     \"-\" using 1:4 with filledcurve x1 title \"Network\" lw 5,"	\
     "     \"-\" using 1:2 with filledcurve x1 title \"Web\" lw 5;\n"	
 
 #define GNUPLOTFOOTER	"e\n"
@@ -338,6 +336,7 @@ print(char *buf, size_t *len, char * const args[])
     static char * fmt; 
     static int granularity = 1; 
     static int no_records = 0;
+    static int isrelative = 0; 
     static app_t values;
     app_t * x; 
     int i; 
@@ -357,9 +356,14 @@ print(char *buf, size_t *len, char * const args[])
             } else if (!strcmp(args[n], "format=pretty")) {
 	        *len = sprintf(s, PRETTYHDR);  
                 fmt = PRETTYFMT;
-            } else if (!strcmp(args[n], "format=gnuplot")) {
-                *len = sprintf(s, GNUPLOTHDR); 
+            } else if (!strcmp(args[n], "format=gnuplot-absolute")) {
+                *len = sprintf(s, GNUPLOTHDR, "Mbps", "*"); 
                 fmt = GNUPLOTFMT;
+		isrelative = 0; 
+            } else if (!strcmp(args[n], "format=gnuplot-relative")) {
+                *len = sprintf(s, GNUPLOTHDR, "Percentage", "100"); 
+                fmt = GNUPLOTFMT;
+		isrelative = 1; 
             } else if (!strncmp(args[n], "granularity=", 10)) {
                 char * val = index(args[n], '=') + 1;
 
@@ -367,8 +371,7 @@ print(char *buf, size_t *len, char * const args[])
                  * communication messages.
                  */
                 granularity = MAX(atoi(val) / meas_ivl, 1);   
-            }
-
+            } 
         } 
 
 	bzero(&values, sizeof(app_t));
@@ -405,14 +408,20 @@ print(char *buf, size_t *len, char * const args[])
 	values.pkts[i] /= granularity;
     }
 
-    if (fmt == PRETTYFMT) 
+    if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, asctime(localtime((time_t *)&values.ts))); 
-    else 
+	for (i = 0; i < APPLICATIONS; i++) 
+	    *len += sprintf(s + *len, "%8llu %8llu ", 
+			    values.bytes[i], values.pkts[i]);
+    } else if (fmt == PLAINFMT) {  
 	*len = sprintf(s, fmt, values.ts) ; 
-
-    if (fmt == GNUPLOTFMT) { 
+	for (i = 0; i < APPLICATIONS; i++) 
+	    *len += sprintf(s + *len, "%8llu %8llu ", 
+			    values.bytes[i], values.pkts[i]);
+    } else if (fmt == GNUPLOTFMT  && isrelative) { 
 	/* 
-	 * in gnuplot we plot the percentage of traffic. 
+	 * we plot the percentage of traffic that we can 
+	 * map to each application.
 	 * we compute them here and then output. 
 	 */
 	float bytessum = 0; 
@@ -434,12 +443,24 @@ print(char *buf, size_t *len, char * const args[])
 
 	/* for the last value to be 100 */
 	*len += sprintf(s + *len, "%u %u ", 100, 100); 
-    } else {
-	/* print the value as they are */
-	for (i = 0; i < APPLICATIONS; i++) 
-	    *len += sprintf(s + *len, "%8llu %8llu ", 
-			    values.bytes[i], values.pkts[i]);
+    } else if (fmt == GNUPLOTFMT && !isrelative) { 
+	/* 
+	 * we do not need relative values but the absolute 
+	 * contribution of each application 
+	 */
+	float mbps = 0; 
+	uint64_t pkts = 0; 
+
+	/* now print the values */
+	for (i = 0; i < APPLICATIONS; i++) { 
+	    mbps += (((float) values.bytes[i]) * 8.0 / 1000000.0); 
+	    pkts += values.pkts[i]; 
+	    *len += sprintf(s + *len, "%.2f %llu ", mbps, pkts); 
+	}
     } 
+
+    /* reset the values */
+    bzero(&values, sizeof(app_t));
 
     *len += sprintf(s + *len, "\n"); 
     return s;
