@@ -251,30 +251,36 @@ load(char * buf, size_t len, timestamp_t * ts)
     "<html>\n"							\
     "<head>\n"							\
     "  <style type=\"text/css\">\n"				\
-    "   body,table,td,tr {\n"					\
-    "     font-size: 9pt; background-color: #ddd;\n"	        \
-    "     font-family: \"lucida sans unicode\", verdana, arial;}\n" \
+    "   body {margin: 0; padding: 0\n"				\
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     font-size: 9pt; scrollbar-face-color: #ddd}\n"        \
+    "   table,tr,td{\n"						\
+    "     margin: 1; font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     font-size: 9pt; background-color: #dddddd;}" 		\
+    "   a, a.visited { text-decoration: none;}\n"		\
     "   .netview {\n"						\
     "     top: 0px; width: 100%%; vertical-align:top;\n" 	\
     "     margin: 2; padding-left: 5px;\n" 			\
     "     padding-right: 5px; text-align:left;}\n" 		\
     "   .nvtitle {\n"						\
     "     font-weight: bold; padding-bottom: 3px;\n" 		\
-    "     color: #475677;}\n"					\
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     font-size: 9pt; color: #475677;}\n"			\
     "  </style>\n"						\
     "</head>\n"							\
-    "<body><div class=nvtitle>Alerts</div>\n"  				
+    "<body><div class=nvtitle style=\"border-top: 1px dashed;\">"  \
+    "Alerts</div>\n"  				
 
 #define HTMLHDR_ALERTS						\
     "<table class=netview>\n"                                   \
     "  <tr class=nvtitle>\n" 					\
     "    <td><b>Time</b></td>\n" 		                \
     "    <td><b>Type</b></td>\n" 				\
-    "    <td><b>Magnitude</b></td>\n" 				\
+    "    <td><b>Size</b></td>\n" 				\
     "  </tr>\n"                                         
 
 #define HTMLFMT							\
-    "<tr><td><a href=%s target=_top>%.24s</a></td><td>%s</td>"  \
+    "<tr><td><a href=%s target=_top>%s</a></td><td>%s</td>"  \
     "<td>%2u.%2u</td></tr>\n"
 
 #define HTMLFOOTER_ALERTS                                       \
@@ -364,11 +370,14 @@ print(char *buf, size_t *len, char * const args[])
 	*len += sprintf(s + *len, fmt, asctime(gmtime(&ts)), typestr, 
 			ch_int, ch_dec);
     } else if (fmt == HTMLFMT) {
+	char timestr[20]; 
         char tmp[2048] = "#";
 
         if (urlstr[0] != '#')
             sprintf(tmp, urlstr, ts - 3600, ts + 3600);
-	*len += sprintf(s + *len, fmt, tmp, asctime(gmtime(&ts)), typestr, 
+
+	strftime(timestr, sizeof(timestr), "%b %d %T", gmtime(&ts)); 
+	*len += sprintf(s + *len, fmt, tmp, timestr, typestr, 
 			ch_int, ch_dec); 
     } else {
 	*len += sprintf(s + *len, fmt, (long int)ts, typestr, ch_int, ch_dec); 

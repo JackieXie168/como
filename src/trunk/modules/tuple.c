@@ -223,10 +223,54 @@ load(char * buf, size_t len, timestamp_t * ts)
 
 #define PRETTYFMT       "%.24s %6d %15s %5u %15s %5u %8llu %8llu\n"
 
+#define HTMLHDR                                                 \
+    "<html>\n"                                                  \
+    "<head>\n"                                                  \
+    "  <style type=\"text/css\">\n"                             \
+    "   body { font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "          font-size: 9pt; margin: 0; padding: 0;}\n"       \
+    "   table, tr, td {background-color: #eee;\n"               \
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
+    "     font-size: 9pt;}\n"                           \
+    "   a, a:visited { color: #475677; text-decoration: none;}\n" \
+    "   .netviewbar{ \n"                                        \
+    "     color :#FFF; width :100%%; padding :2px; text-align:center;}\n" \
+    "   .netview {\n"                                           \
+    "     top: 0px; width: 98%%; vertical-align:top;\n"        \
+    "     margin: 2; padding-left: 5px;\n" \
+    "     padding-right: 5px; text-align:left;}\n" \
+    "   .nvtitle {\n"                                           \
+    "     font-weight: bold; font-size: 9pt; padding-bottom: 3px;\n" \
+    "     color: #475677;}\n"                                   \
+    "  </style>\n"                                              \
+    "</head>\n"                                                 \
+    "<body>\n"                                                  \
+    "<div class=nvtitle style=\"border-top: 1px solid;\">"      \
+    "Active connections</div>\n" \
+    "<table class=netview>\n"                                   \
+    "  <tr class=nvtitle>\n"					\
+    "    <td>Start Time</td>\n"               			\
+    "    <td>Protocol</td>\n"                 			\
+    "    <td>Source IP:Port</td>\n"                 		\
+    "    <td>Destination IP:Port</td>\n"                 	\
+    "    <td>Bytes</td>\n"                 			\
+    "    <td>Packets</td>\n"                 			\
+    "  </tr>\n"		
+
+#define HTMLFOOTER                                              \
+    "</table>\n"                                                \
+    "</body></html>\n"
+
+#define HTMLFMT                                                 \
+    "<tr><td>%.24s</td><td>%s</td><td>%15s:%u</td><td>%15s:%u</td>" \
+    "<td>%llu</td><td>%llu</td></tr>\n"
+
+
 static char *
 print(char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
+    static char * fmt;
     char src[20], dst[20];
     struct in_addr saddr, daddr;
     FLOWDESC *x; 
@@ -234,24 +278,38 @@ print(char *buf, size_t *len, char * const args[])
 
 
     if (buf == NULL && args != NULL) { 
+	int n; 
+
         *len = sprintf(s, PRETTYHDR); 
+	fmt = PRETTYFMT; 
+
+        /* first call of print, process the arguments and return */
+        for (n = 0; args[n]; n++) {
+            if (!strcmp(args[n], "format=html")) {
+                *len = sprintf(s, HTMLHDR);
+                fmt = HTMLFMT;
+	    } 
+	} 
+
         return s; 
     } 
 
     if (buf == NULL && args == NULL) { 
         *len = 0; 
+        if (fmt == HTMLFMT)
+            *len = sprintf(s, HTMLFOOTER);
         return s; 
     } 
 
     x = (FLOWDESC *) buf;
     ts = (time_t)ntohl(x->ts);
-    saddr.s_addr = N32(x->src_ip);
-    daddr.s_addr = N32(x->dst_ip);
+    saddr.s_addr = N32(x->src_ip) & 0x00ffffff;
+    daddr.s_addr = N32(x->dst_ip) & 0x00ffffff;
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 
-    *len = sprintf(s, PRETTYFMT, 
-		asctime(localtime(&ts)), (uint) x->proto, 
+    *len = sprintf(s, fmt, 
+		asctime(localtime(&ts)), getprotoname(x->proto), 
 		src, (uint) H16(x->src_port), 
 		dst, (uint) H16(x->dst_port), 
 	        NTOHLL(x->bytes), NTOHLL(x->pkts));

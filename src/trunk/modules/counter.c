@@ -113,6 +113,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "Date                     Timestamp          Bytes    Pkts\n"
 #define PRETTYFMT	"%.24s %12d.%06d %8llu %8llu\n"
 #define PLAINFMT	"%12ld %16llu %12llu %12llu\n"
+#define MBPSFMT		"%4.2f Mbps\n"
 #define GNUPLOTFMT	"%ld %f %llu\n"
 
 #define GNUPLOTHDR						\
@@ -124,6 +125,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "set y2tics nomirror;"						\
     "set ytics nomirror;"						\
     "set yrange [0:*];"							\
+    "set y2range [0:*];"						\
     "set autoscale xfix;"						\
     "set nokey;"							\
     "set xdata time;"							\
@@ -158,18 +160,19 @@ print(char *buf, size_t *len, char * const args[])
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
 		fmt = PLAINFMT;
-	    } 
-	    if (!strcmp(args[n], "format=gnuplot")) {
+	    } else if (!strcmp(args[n], "format=gnuplot")) {
 		*len = sprintf(s, GNUPLOTHDR); 
 		fmt = GNUPLOTFMT;
-	    } 
-	    if (!strncmp(args[n], "granularity=", 10)) {
+	    } else if (!strncmp(args[n], "granularity=", 10)) {
 		char * val = index(args[n], '=') + 1;
 
 		/* aggregate multiple records into one to reduce 
 		 * communication messages. 
 		 */
 		granularity = MAX(atoi(val) / meas_ivl, 1);
+	    } else if (!strcmp(args[n], "format=mbps")) {
+		*len = 0; 
+		fmt = MBPSFMT; 
 	    } 
 	} 
 
@@ -207,7 +210,10 @@ print(char *buf, size_t *len, char * const args[])
     } else if (fmt == GNUPLOTFMT) {
 	float mbps = 8.0 * (float) bytes / 1000000.0; 
 	*len = sprintf(s, fmt, (long int)t, mbps, pkts);
-    } else {
+    } else if (fmt == MBPSFMT) { 
+	float mbps = 8.0 * (float) bytes / 1000000.0; 
+	*len = sprintf(s, fmt, mbps); 
+    } else { 
 	*len = sprintf(s, fmt, (long int)t, ts, bytes, pkts); 
     } 
 	

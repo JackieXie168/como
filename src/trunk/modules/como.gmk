@@ -18,6 +18,8 @@ MODULES= \
 	anomaly-ewma.so \
 	ssid.so \
 	list.so \
+  	ports.so \
+	active-flows.so \
 	frames.so
 #    interarrival.so
 
