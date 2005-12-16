@@ -223,55 +223,27 @@ struct _callbacks {
     size_t ca_recordsize; 
     size_t ex_recordsize; 
     size_t st_recordsize;
-
-#if ((linux == 1) && (__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))
     pktdesc_t   * indesc;   /* packet requirements */
     pktdesc_t   * outdesc;  /* packet offer */
-#else
-    pktdesc_t   * const indesc;   /* packet requirements */
-    pktdesc_t   * const outdesc;  /* packet offer */
-#endif
 
     /* callbacks called by the capture process */
-#if ((linux == 1) && (__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))
     init_fn     * init;
     check_fn    * check;
     hash_fn     * hash;
     match_fn    * match;
     update_fn   * update;
-#else
-    init_fn     * const init;
-    check_fn    * const check;
-    hash_fn     * const hash;
-    match_fn    * const match;
-    update_fn   * const update;
-#endif    
 
     /* callbacks called by the export process */
-#if ((linux == 1) && (__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))
     ematch_fn   * ematch;  
     export_fn   * export;
     compare_fn  * compare;
     action_fn   * action;
     store_fn    * store;
-#else
-    ematch_fn   * const ematch;  
-    export_fn   * const export;
-    compare_fn  * const compare;
-    action_fn   * const action;
-    store_fn    * const store;
-#endif
 
     /* callbacks called by the query process */
-#if ((linux == 1) && (__GNUC__ == 3) && (__GNUC_MINOR__ >= 4))
     load_fn     * load;
     print_fn    * print;
     replay_fn   * replay;
-#else
-    load_fn     * const load;
-    print_fn    * const print;
-    replay_fn   * const replay;
-#endif
 };
 
 
