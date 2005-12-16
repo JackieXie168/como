@@ -94,8 +94,11 @@ _logmsg(int flags, const char *fmt, va_list ap)
         void send_string(char *str);
         send_string(buf);
     } else {
-	fprintf(stdout, "%s", buf);
-	fflush(stdout);
+	/* do not print messages to stdout when we are in inline mode */
+        if (!map.il_mode) {
+            fprintf(stdout, "%s", buf);
+            fflush(stdout);
+        }
     }
     free(fmt1);
     free(buf);

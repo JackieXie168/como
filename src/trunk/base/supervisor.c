@@ -341,10 +341,28 @@ supervisor_mainloop(int accept_fd)
             if (ret < 0)
                 panic("inline mode: write error: %s\n", strerror(errno));
 
-            /* read the reply */
+            /* read the reply while processing possible messages
+             * coming from other processes
+             */
             for (; ret > 0; ret = como_readn(cd, (char *)&data,
                                              strlen(data))) {
                 fprintf(stderr, "%s", data);
+                if (ret > 0) {
+                    r = valid_fds;
+                    n_ready = select(max_fd, &r, NULL, NULL, &to);
+                    for (i = 0; n_ready > 0 && i < max_fd; i++) {
+	                if (!FD_ISSET(i, &r))
+		            continue;
+
+	                n_ready--;
+                        /* receive & process messages */
+                        if (sup_recv_message(i) < 0) {
+                            close(i);
+                            del_fd(i, &valid_fds, max_fd);
+                            unregister_ipc_fd(i);
+                        }
+                    }
+                }
             }
             if (ret == 0) /* eof */
                 exit(0);                   
