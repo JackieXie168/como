@@ -31,22 +31,17 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * @(#) $Header$ (LBL)
  */
 
 /* 
  * this file is a stripped down version of /usr/include/pcap.h on 
- * linux systems that supports only the things we use in CoMo. 
+ * FreeBSD systems that supports only the things we use in CoMo. 
  * 
  * $Id$ 
  */
 
-
 #ifndef lib_pcap_h
 #define lib_pcap_h
-
-#include <sys/types.h>
-#include <sys/time.h>
 
 #include <stdio.h>
 
@@ -244,10 +239,5 @@ int	pcap_get_selectable_fd(pcap_t *);
 #define DLT_CISCO_IOS   118
 #define DLT_PRISM_HEADER        119
 #define DLT_AIRONET_HEADER      120
-
-
-
-
-
 
 #endif
