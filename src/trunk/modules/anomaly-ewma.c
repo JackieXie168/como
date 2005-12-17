@@ -78,8 +78,8 @@ EFLOWDESC {
     
 
 static int meas_ivl = 30;     		/* measurement interval */
-static float weight = 0.9;		/* weigth for EWMA */
-static float change_thresh = 3.0;	/* volume change threshold */ 
+static double weight = 0.9;		/* weigth for EWMA */
+static double change_thresh = 3.0;	/* volume change threshold */ 
 
 static timestamp_t 
 init(__unused void *mem, __unused size_t msize, char *args[])
@@ -92,10 +92,10 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 	    meas_ivl = atoi(val);
         } else if (strstr(args[i], "weight")) {
 	    char * val = index(args[i], '=') + 1;
-	    weight = strtof(val, NULL); 
+	    weight = strtod(val, NULL); 
         } else if (strstr(args[i], "change_thresh")) {
 	    char * val = index(args[i], '=') + 1;
-	    change_thresh = strtof(val, NULL); 
+	    change_thresh = strtod(val, NULL); 
         } 
     }
 

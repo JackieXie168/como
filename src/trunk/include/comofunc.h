@@ -194,15 +194,15 @@ void sup_wait_for_ack(int fd);
  */
 #ifdef RESOURCE_MANAGEMENT
 
-void resource_mgmt_init(void);
-char *resource_usage_report(void);
-void schedule(void);
+void resource_mgmt_init();
+char *resource_usage_report();
+void schedule();
 
 #else 
 
-#define resource_mgmt_init(x)
-#define resource_usage_report(x)
-#define schedule(x)
+#define resource_mgmt_init()
+#define resource_usage_report()
+#define schedule()
 
 #endif
 
