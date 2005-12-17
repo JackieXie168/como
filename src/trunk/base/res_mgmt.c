@@ -125,7 +125,7 @@ double peak_usages[RESOURCE_COUNT];
  * Initialize resource management-related data structures.
  */
 void
-resource_mgmt_init(void)
+resource_mgmt_init()
 {
     resource_t *res;
 
@@ -266,7 +266,7 @@ election(resource_t *limiting)
 }
 
 char *
-resource_usage_report(void)
+resource_usage_report()
 {
     char *buffer, *old;
     resource_t *res;
@@ -305,7 +305,7 @@ resource_usage_report(void)
  * enable it.
  */
 void
-schedule(void)
+schedule()
 {
     resource_t *over;
     int all_low, r, m;
