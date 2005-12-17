@@ -68,10 +68,12 @@ char *strndup(const char *s, unsigned int n);
 #endif /* FreeBSD */
 
 #if defined(__CYGWIN32__)
+
 #include <sys/types.h>
 #define _D_EXACT_NAMLEN(f) (strlen((f)->d_name)) /* XXX check this */
 extern char *mkdtemp(char *template);
 extern char *mktemp(char *template);
+
 #include <sys/stat.h>	// mkdir
 #define	ETHERTYPE_IP	0x0800
 #define	ETHER_ADDR_LEN	6
@@ -79,10 +81,14 @@ struct ether_addr {
 	unsigned char octet[ETHER_ADDR_LEN];
 };
 
+#define IPPROTO_ESP	50
+
 extern char *ether_ntoa(const struct ether_addr *n);
 const char *inet_ntop(int af, const void *src, char *dst, size_t size);
 
 extern const char *strcasestr(const char *s1, const char *s2);
+time_t timegm(struct tm * x); 
+
 #endif
  
 #endif /* _COMO_OS_H_ */

@@ -35,7 +35,6 @@
  * this file is included by como.h and can be ignored by all other 
  */
 
-#include "como.h"
 #include "comotypes.h"
 
 /*
@@ -121,7 +120,7 @@ int como_writen(int fd, const char *buf, size_t len);
 /* 
  * util-misc.c
  */
-char * getprotoname(int proto); 
+char *getprotoname(int proto);
 void *load_object(char *base_name, char *symbol);
 void *load_object_h(char *base_name, char *symbol, void **handle);
 void unload_object(void *handle);

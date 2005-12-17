@@ -87,8 +87,9 @@ send_status(__unused qreq_t * req, int client_fd)
 	    "Speed: %s\n"
 	    "Start: %u\n"
 	    "Current: %u\n",
-	    map.name, map.location, COMO_VERSION, __DATE__, __TIME__,
-	    map.linkspeed, TS2SEC(map.stats->first_ts), TS2SEC(map.stats->ts)); 
+	    map.name, map.location, 
+	    COMO_VERSION, __DATE__, __TIME__, map.linkspeed, 
+	    (uint) TS2SEC(map.stats->first_ts), (uint) TS2SEC(map.stats->ts)); 
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
 	panic("sending status to the client");   

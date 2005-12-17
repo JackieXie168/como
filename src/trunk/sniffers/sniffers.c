@@ -27,7 +27,6 @@
  */
 
 #include <sys/types.h>
-#include <net/ethernet.h> 
 #include "como.h"
 #include "comofunc.h"
 #include "stdpkt.h"

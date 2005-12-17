@@ -39,10 +39,10 @@
 #include <sys/types.h>
 #include <string.h>		/* bcopy */
 #include <stdio.h>		/* fprintf, stderr */
-#include <net/ethernet.h>	/* ether_addr, ether_ntoa */
 
-#include "pcap.h"		/* bpf_int32, etc. */
 #include "module.h"
+#include "stdpkt.h"		/* ethernet headers, etc. */
+#include "pcap.h"		/* bpf_int32, etc. */
 
 static const char *mgmt_subtypes[] = {
     "Association Request",
@@ -379,8 +379,8 @@ print(char *buf, size_t *len, char * const args[])
     hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
     mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
     ss = TS2SEC(COMO(ts)) % 60; 
-    *len = sprintf(s, "%02d:%02d:%02d.%06d ",
-		   hh, mm, ss, TS2USEC(COMO(ts))); 
+    *len = sprintf(s, "%02d:%02d:%02d.%06u ",
+		   hh, mm, ss, (uint) TS2USEC(COMO(ts))); 
 
     /* 
      * depending on the l3 type we print different 
@@ -416,8 +416,8 @@ print(char *buf, size_t *len, char * const args[])
 	    *len += sprintf(s + *len, 
 			" %s seq %u ack %u win %u", 
 			print_tcp_flags(TCP(flags)), 
-			(uint32_t) H32(TCP(seq)), 
-			(uint32_t) H32(TCP(ack)), 
+			(uint) H32(TCP(seq)), 
+			(uint) H32(TCP(ack)), 
 		 	(uint16_t) H16(TCP(win))); 
 	}
     } else if (WLANTYPE(COMO(l2type)) == WLANTYPE_MGMT || WLANTYPE_DATA || 
