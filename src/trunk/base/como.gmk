@@ -64,6 +64,11 @@ ifneq ($(shell uname),CYGWIN_NT-5.1)
 	SNIFFERS += pcap libpcap prism2
 endif
 
+ifeq ($(shell uname),CYGWIN_NT-5.1)
+	SNIFFERS += wpcap 
+	LIBS += wpcap
+endif
+
 # bpf, but Linux does not have bpf
 ifeq ($(shell uname),FreeBSD)
 	SNIFFERS += bpf

@@ -223,7 +223,7 @@ print_plain(FLOWDESC * x, char * s)
     size_t len; 
     int i;
 
-    len = sprintf(s, "%12d.%06d ", TS2SEC(x->ts), TS2USEC(x->ts));
+    len = sprintf(s, "%12u.%06u ", (uint) TS2SEC(x->ts), (uint) TS2USEC(x->ts));
     for (i = 0; i < IPPROTO_MAX; i++) 
 	len += sprintf(s + len, "%3d %8lld %8lld ", i, x->bytes[i], x->pkts[i]);
     len += sprintf(s + len, "\n"); 
@@ -284,7 +284,7 @@ print_gnuplot(FLOWDESC * x, char * s, int num_proto, uint8_t * proto)
     float bytes_prct; 
     int i;
 
-    len = sprintf(s, "%u ", TS2SEC(x->ts)); 
+    len = sprintf(s, "%u ", (uint) TS2SEC(x->ts)); 
 
     /* compute the sums of all bytes and packets */
     bytes_all = 0; 

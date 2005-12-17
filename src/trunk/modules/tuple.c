@@ -63,7 +63,7 @@ static pktdesc_t indesc, outdesc;
 static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
 {
-    timestamp_t flush_ivl = DEFAULT_CAPTURE_IVL;
+    timestamp_t flush_ivl = TIME2TS(1,0);
     int i; 
 
     /*

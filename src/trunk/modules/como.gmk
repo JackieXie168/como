@@ -9,19 +9,23 @@ MODULES= \
 	counter.so \
 	utilization.so \
 	topdest.so \
-	tuple.so \
 	connx.so \
-	trace.so \
 	application.so \
-	protocol.so \
         topports.so \
-	anomaly-ewma.so \
 	ssid.so \
 	list.so \
   	ports.so \
 	active-flows.so \
 	frames.so
 #    interarrival.so
+
+ifneq ($(shell uname),CYGWIN_NT-5.1)
+        MODULES += tuple.so \
+		   protocol.so \
+		   anomaly-ewma.so \
+		   trace.so 
+endif
+
 
 ifdef ENABLE_SNORT_MODULE
     MODULES += \

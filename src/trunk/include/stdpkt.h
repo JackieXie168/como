@@ -353,10 +353,10 @@ set_field(char *ptr, size_t size, uint64_t value)
  *
  */
 #define TS2SEC(ts)      ((uint32_t) ((ts) >> 32))
-#define TS2MSEC(ts)     ((u_int32_t) ((((ts) & 0xffffffff) * 1000) >> 32))
-#define TS2USEC(ts)     ((u_int32_t) ((((ts) & 0xffffffff) * 1000000) >> 32))
-#define TIME2TS(s, u)   ((((u_int64_t) (s)) << 32) + \
-                        ((((u_int64_t) (u)) << 32) / 1000000))
+#define TS2MSEC(ts)     ((uint32_t) ((((ts) & 0xffffffff) * 1000) >> 32))
+#define TS2USEC(ts)     ((uint32_t) ((((ts) & 0xffffffff) * 1000000) >> 32))
+#define TIME2TS(s, u)   ((((uint64_t) (s)) << 32) + \
+                        ((((uint64_t) (u)) << 32) / 1000000))
 #define TIMEVAL2TS(rec) (TIME2TS((rec)->unix_secs,(rec)->unix_nsecs))
 
 /*

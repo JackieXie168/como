@@ -257,7 +257,7 @@ print(char *buf, size_t *len, char * const args[])
     }
 
     count /= granularity; 
-    *len = sprintf(s, GNUPLOTFMT, ntohl(x->ts), count); 
+    *len = sprintf(s, GNUPLOTFMT, (uint) ntohl(x->ts), count); 
     count = 0; 
     return s;
 };
