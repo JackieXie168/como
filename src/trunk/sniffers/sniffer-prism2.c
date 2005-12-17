@@ -37,15 +37,9 @@
 #include <sys/socket.h>	/* socket for monitor mode */
 #include <net/if.h>	/* struct ifr */
 
-#ifndef BUILD_FOR_ARM
-#include <pcap.h>
-#else
-#include "pcap-stargate.h"
-#endif
-
-#include "stdwlan.h"
-#include "sniffers.h"
 #include "como.h"
+#include "sniffers.h"
+#include "pcap.h"
 
 
 /* 

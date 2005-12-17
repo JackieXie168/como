@@ -38,7 +38,6 @@
 #include <stdio.h>
 #include <time.h>
 #include "module.h"
-#include "como.h"
 
 /* 
  * the information we maintain in capture is just the 

@@ -36,20 +36,13 @@
  *
  */
 
-#include <time.h>
 #include <sys/types.h>
 #include <string.h>		/* bcopy */
 #include <stdio.h>		/* fprintf, stderr */
 #include <net/ethernet.h>	/* ether_addr, ether_ntoa */
-#ifdef BUILD_FOR_ARM
-#include "pcap-stargate.h"
-#else
-#include <pcap.h>		/* bpf_int32, etc. */
-#endif
 
-#include "como.h"
+#include "pcap.h"		/* bpf_int32, etc. */
 #include "module.h"
-#include "ieee80211.h"
 
 static const char *mgmt_subtypes[] = {
     "Association Request",

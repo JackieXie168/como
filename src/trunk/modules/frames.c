@@ -35,7 +35,6 @@
 
 #include <stdio.h>
 #include <time.h>
-#include "como.h"
 #include "module.h"
 
 static int meas_ivl = 1; /* measurement interval */

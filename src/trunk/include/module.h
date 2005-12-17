@@ -32,8 +32,8 @@
 #include <string.h>		/* memcpy */
 
 #include "stdpkt.h"
-#include "stdwlan.h"
 #include "comotypes.h"
+#include "comofunc.h"
 
 /*
  * Some useful macros to write modules
@@ -53,16 +53,6 @@
  * One more indirection is needed within compare_fn()
  */
 #define CMPEF(x) ((EFLOWDESC *)((*(char **) x) + sizeof(rec_t)))
-
-/*
- * Macros to convert a uint64_t from host to network byte order
- * and vice-versa
- */
-#define HTONLL(x)   ((uint64_t)htonl((uint32_t)((x) >> 32)) |   \
-            (uint64_t)htonl((uint32_t)((x) & 0xffffffff)) << 32)
-
-#define NTOHLL(x)   ((uint64_t)ntohl((uint32_t)(x >> 32)) |     \
-            (uint64_t)ntohl((uint32_t)(x & 0xffffffff)) << 32)
 
 /*
  * Macros to copy integers from host to network byte order. 

@@ -31,7 +31,7 @@
 #include "como.h"
 #include "comofunc.h"
 #include "sniffers.h"
-#include "stdwlan.h"
+#include "stdpkt.h"
 #include "ieee80211.h"
 
 /*
@@ -70,110 +70,75 @@ ieee80211_hdrlen(pkt_t *pkt, uint32_t type)
 
 
 /*
- * -- parse80211_frame
+ * -- parse80211_info_elemeents
  *
- * determines the 802.11 frame type and the header length 
- * for the captured packet 
+ * fill managment body structure with 802.11 variable size fields, used to 
+ * converge the ieee802.11 structures to a como defined structure
  */
 int
-parse80211_frame(pkt_t *pkt, char *buf, char *pl, uint32_t type)
+parse80211_info_elements(pkt_t *pkt, char * buf,  struct _p80211info *pi, 
+							mgmt_body_t *mgmt_body)
 {
-    struct _p80211info pi; 
+    /* information element types */
+    struct _ieee80211_info_element *ie;
+    struct _ieee80211_ssid *ssid_type;
+    struct _ieee80211_rates *rates_type;
+    struct _ieee80211_ds *ds_type;
+    struct _ieee80211_tim *tim_type;
 
-    ieee80211_hdrlen(pkt, type); /* capture header length in pkt->l2ofs */ 
+    int wh; /* buffer offset */
+
+    /* generic information element with ID + LEN fields */
+    ie = (struct _ieee80211_info_element *) buf;
     
-    /* pl is a pointer to packet payload */   
-    bcopy(buf, pl, pkt->caplen);
-    updateofs(pkt, type);
-
-    switch(FCTRL_TYPE(pkt->l2type)) {
-    case WLANTYPE_MGMT:
-	/* need to zero memory, otherwise garbage in mgmt_body 
-         */
-	bzero(pl, pkt->caplen); 
-
+    while(pi->rl >= (ie->len + 2)){
+	switch(ie->id) {
+	case SSID_TYPE:  
+	    ssid_type = (struct _ieee80211_ssid *) buf;
+	    mgmt_body->ssid_len = ssid_type->len;
+	    bcopy(ssid_type->ssid, mgmt_body->ssid, mgmt_body->ssid_len);
+	    wh = ssid_type->len + 2;
+	    break;
+	case RATES_TYPE: 
+	    rates_type = (struct _ieee80211_rates *) buf;
+	    mgmt_body->rates_len = rates_type->len;
+	    bcopy(rates_type->rates, mgmt_body->rates, mgmt_body->rates_len);
+	    wh = rates_type->len + 2;
+	    break;
+	case FH_TYPE:
+	    wh = FH_IE_LEN;       /* information element ignored */
+	    break;
+	case DS_TYPE:
+	    ds_type = (struct _ieee80211_ds *) buf;
+	    mgmt_body->ch = ds_type->ch;
+	    wh = DS_IE_LEN;
+	    break;
+	case CF_TYPE:
+	    wh = CF_IE_LEN;       /* information element ignored */
+	    break;
+	case IBSS_TYPE:
+	    wh = IBSS_IE_LEN;     /* information element ignored */
+	    break;
+	case TIM_TYPE:
+	    tim_type = (struct _ieee80211_tim *) buf;
+	    wh = tim_type->len + 2;
+	    break;
+	default: 
+	    /* reserved information elements ignored */
+	    ie = (struct _ieee80211_info_element *) buf;
+	    wh = ie->len + 2; /* fixed fields: element id + length field */
+	    break;          
+	}
+	buf += wh; 
 	/*
 	 * remaining packet length to parse, when zero the packet
 	 * parsing process is complete
 	 */
-	pi.rl = pkt->caplen;
-        return pkt->caplen = parse80211_mgmtframe(pkt, buf, pl, &pi);
-	break;
-    case WLANTYPE_CTRL:
-    case WLANTYPE_DATA:
-	/* this alignment fix is ARM specific */
-	if ((pkt->caplen % 4) == 0) 
-	    return pkt->caplen;
-	else 
-	    return pkt->caplen += (4 - (pkt->caplen % 4));
-	break;
-    default:
-	break;
+	pi->rl -= wh;
+	ie = (struct _ieee80211_info_element *)buf;
     }
-    return 0;
+    return pkt->l3ofs + sizeof(struct _como_wlan_mgmt_body);
 }
-
-
-/*
- * -- parse80211_mgmtframe
- *
- * determine the 802.11 management frame subtype
- * call parsing subtype routine to fill the management body structure with
- * 802.11 variable size fields, this is used to converge the iee802.11 
- * structures to a como defined structure
- *
- */
-int
-parse80211_mgmtframe(pkt_t *pkt, char *buf, char *pl, struct _p80211info *pi)
-{
-    /* remaining packet length to parse, when zero the packet
-     * parsing process is complete
-     */
-    pi->rl -= pkt->l3ofs; 
-    bcopy(buf, pl, pkt->l3ofs);
-    
-    /* update capture buffer and processed packets buffer pointers */
-    buf += pkt->l3ofs; pl += pkt->l3ofs;
-
-    switch(FCTRL_SUBTYPE(pkt->l2type)) {
-    case MGMT_SUBTYPE_ASSOC_REQ:
-	return parse80211_assoc_req(pkt, buf, pl, pi);
-	break;
-    case MGMT_SUBTYPE_ASSOC_RES:
-	return parse80211_assoc_res(pkt, buf, pl, pi);
-	break;
-    case MGMT_SUBTYPE_REASSOC_REQ:
-	return parse80211_reassoc_req(pkt, buf, pl, pi);
-	break;
-    case MGMT_SUBTYPE_REASSOC_RES:
-	return parse80211_reassoc_res(pkt, buf, pl, pi);
-	break;
-    case MGMT_SUBTYPE_PROBE_REQ:
-	return parse80211_probe_req(pkt, buf, pl, pi);      
-	break;
-    case MGMT_SUBTYPE_PROBE_RES:
-	return parse80211_probe_res(pkt, buf, pl, pi);
-	break;
-    case MGMT_SUBTYPE_BEACON:
-	return parse80211_beacon(pkt, buf, pl, pi);
-	break;
-    case MGMT_SUBTYPE_ATIM:
-	break;
-    case MGMT_SUBTYPE_DISASSOC:
-	return parse80211_disassoc(pkt, buf, pl);
-	break;
-    case MGMT_SUBTYPE_AUTH:
-	return parse80211_auth(pkt, buf, pl, pi);
-	break;
-    case MGMT_SUBTYPE_DEAUTH:
-	return parse80211_deauth(pkt, buf, pl);
-	break;
-    default:
-	return 0;
-    }
-  return 0;
-}
-
 
 /*
  * -- parse80211_assoc_req
@@ -414,74 +379,110 @@ parse80211_beacon(pkt_t *pkt, char * buf, char *pl, struct _p80211info *pi)
     return parse80211_info_elements(pkt, buf + BEACON_FIXED_LEN, pi, mgmt_body); 
 }
 
+
 /*
- * -- parse80211_info_elemeents
+ * -- parse80211_mgmtframe
  *
- * fill managment body structure with 802.11 variable size fields, used to 
- * converge the ieee802.11 structures to a como defined structure
+ * determine the 802.11 management frame subtype
+ * call parsing subtype routine to fill the management body structure with
+ * 802.11 variable size fields, this is used to converge the iee802.11 
+ * structures to a como defined structure
+ *
  */
 int
-parse80211_info_elements(pkt_t *pkt, char * buf,  struct _p80211info *pi, 
-							mgmt_body_t *mgmt_body)
+parse80211_mgmtframe(pkt_t *pkt, char *buf, char *pl, struct _p80211info *pi)
 {
-    /* information element types */
-    struct _ieee80211_info_element *ie;
-    struct _ieee80211_ssid *ssid_type;
-    struct _ieee80211_rates *rates_type;
-    struct _ieee80211_ds *ds_type;
-    struct _ieee80211_tim *tim_type;
-
-    int wh; /* buffer offset */
-
-    /* generic information element with ID + LEN fields */
-    ie = (struct _ieee80211_info_element *) buf;
+    /* remaining packet length to parse, when zero the packet
+     * parsing process is complete
+     */
+    pi->rl -= pkt->l3ofs; 
+    bcopy(buf, pl, pkt->l3ofs);
     
-    while(pi->rl >= (ie->len + 2)){
-	switch(ie->id) {
-	case SSID_TYPE:  
-	    ssid_type = (struct _ieee80211_ssid *) buf;
-	    mgmt_body->ssid_len = ssid_type->len;
-	    bcopy(ssid_type->ssid, mgmt_body->ssid, mgmt_body->ssid_len);
-	    wh = ssid_type->len + 2;
-	    break;
-	case RATES_TYPE: 
-	    rates_type = (struct _ieee80211_rates *) buf;
-	    mgmt_body->rates_len = rates_type->len;
-	    bcopy(rates_type->rates, mgmt_body->rates, mgmt_body->rates_len);
-	    wh = rates_type->len + 2;
-	    break;
-	case FH_TYPE:
-	    wh = FH_IE_LEN;       /* information element ignored */
-	    break;
-	case DS_TYPE:
-	    ds_type = (struct _ieee80211_ds *) buf;
-	    mgmt_body->ch = ds_type->ch;
-	    wh = DS_IE_LEN;
-	    break;
-	case CF_TYPE:
-	    wh = CF_IE_LEN;       /* information element ignored */
-	    break;
-	case IBSS_TYPE:
-	    wh = IBSS_IE_LEN;     /* information element ignored */
-	    break;
-	case TIM_TYPE:
-	    tim_type = (struct _ieee80211_tim *) buf;
-	    wh = tim_type->len + 2;
-	    break;
-	default: 
-	    /* reserved information elements ignored */
-	    ie = (struct _ieee80211_info_element *) buf;
-	    wh = ie->len + 2; /* fixed fields: element id + length field */
-	    break;          
-	}
-	buf += wh; 
+    /* update capture buffer and processed packets buffer pointers */
+    buf += pkt->l3ofs; pl += pkt->l3ofs;
+
+    switch(FCTRL_SUBTYPE(pkt->l2type)) {
+    case MGMT_SUBTYPE_ASSOC_REQ:
+	return parse80211_assoc_req(pkt, buf, pl, pi);
+	break;
+    case MGMT_SUBTYPE_ASSOC_RES:
+	return parse80211_assoc_res(pkt, buf, pl, pi);
+	break;
+    case MGMT_SUBTYPE_REASSOC_REQ:
+	return parse80211_reassoc_req(pkt, buf, pl, pi);
+	break;
+    case MGMT_SUBTYPE_REASSOC_RES:
+	return parse80211_reassoc_res(pkt, buf, pl, pi);
+	break;
+    case MGMT_SUBTYPE_PROBE_REQ:
+	return parse80211_probe_req(pkt, buf, pl, pi);      
+	break;
+    case MGMT_SUBTYPE_PROBE_RES:
+	return parse80211_probe_res(pkt, buf, pl, pi);
+	break;
+    case MGMT_SUBTYPE_BEACON:
+	return parse80211_beacon(pkt, buf, pl, pi);
+	break;
+    case MGMT_SUBTYPE_ATIM:
+	break;
+    case MGMT_SUBTYPE_DISASSOC:
+	return parse80211_disassoc(pkt, buf, pl);
+	break;
+    case MGMT_SUBTYPE_AUTH:
+	return parse80211_auth(pkt, buf, pl, pi);
+	break;
+    case MGMT_SUBTYPE_DEAUTH:
+	return parse80211_deauth(pkt, buf, pl);
+	break;
+    default:
+	return 0;
+    }
+  return 0;
+}
+
+
+/*
+ * -- parse80211_frame
+ *
+ * determines the 802.11 frame type and the header length 
+ * for the captured packet 
+ */
+int
+parse80211_frame(pkt_t *pkt, char *buf, char *pl, uint32_t type)
+{
+    struct _p80211info pi; 
+
+    ieee80211_hdrlen(pkt, type); /* capture header length in pkt->l2ofs */ 
+    
+    /* pl is a pointer to packet payload */   
+    bcopy(buf, pl, pkt->caplen);
+    updateofs(pkt, type);
+
+    switch(FCTRL_TYPE(pkt->l2type)) {
+    case WLANTYPE_MGMT:
+	/* need to zero memory, otherwise garbage in mgmt_body 
+         */
+	bzero(pl, pkt->caplen); 
+
 	/*
 	 * remaining packet length to parse, when zero the packet
 	 * parsing process is complete
 	 */
-	pi->rl -= wh;
-	ie = (struct _ieee80211_info_element *)buf;
+	pi.rl = pkt->caplen;
+        return pkt->caplen = parse80211_mgmtframe(pkt, buf, pl, &pi);
+	break;
+    case WLANTYPE_CTRL:
+    case WLANTYPE_DATA:
+	/* this alignment fix is ARM specific */
+	if ((pkt->caplen % 4) == 0) 
+	    return pkt->caplen;
+	else 
+	    return pkt->caplen += (4 - (pkt->caplen % 4));
+	break;
+    default:
+	break;
     }
-    return pkt->l3ofs + sizeof(struct _como_wlan_mgmt_body);
+    return 0;
 }
+
 

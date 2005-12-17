@@ -14,16 +14,22 @@ from different developers and then plugged into the systems dynamically. CoMo
 also provides a query interface to allow users to elicit the system to export 
 the results of the measurement performed. 
 
-Developers:
- . Pere Barlet Ros, pbarlet@cs.upc.es
- . Richard Gass, richard.gass@intel.com
- . Euan Harris, euan.harris@cl.cam.ac.uk
- . Gianluca Iannaccone, gianluca.iannaccone@intel.com
- . Luigi Rizzo, rizzo@iet.unipi.it
- . Steven Smith, sos22@cl.cam.ac.uk
- . Davide Vercelli, davide.vercelli@gmail.com 
-
-
+Contributors: 
+ . Jordi Alcantara
+ . Diego Amores Lopez
+ . Pere Barlet Ros
+ . Michael Dales
+ . Richard Gass
+ . Euan Harris
+ . Tristan Henderson 
+ . Theodore Hong
+ . Gianluca Iannaccone
+ . Josep Sanjuas
+ . Kevin McGrath
+ . Richard Mortier
+ . Luigi Rizzo
+ . Steven Smith
+ . Davide Vercelli
 
 Copyright (c) 2004-2005 Intel Corporation
 All rights reserved.

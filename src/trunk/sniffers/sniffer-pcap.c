@@ -37,15 +37,9 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 
-#ifndef BUILD_FOR_ARM
-#include <pcap.h>	/* DLT_* on linux */
-#else 
-#include "pcap-stargate.h"
-#endif 
-
 #include "como.h"
 #include "sniffers.h"
-#include "stdwlan.h"
+#include "pcap.h"
 
 
 /*

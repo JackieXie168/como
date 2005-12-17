@@ -33,14 +33,9 @@
 #include <errno.h>
 #include <dlfcn.h>	/* dlopen */
 
-#ifndef BUILD_FOR_ARM
-#include <pcap.h>
-#else
-#include "pcap-stargate.h"
-#endif
-
-#include "sniffers.h"
 #include "como.h"
+#include "sniffers.h"
+#include "pcap.h"
 
 
 /* 

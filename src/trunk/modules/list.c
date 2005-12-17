@@ -40,9 +40,7 @@
 
 #include <stdio.h>
 
-#include "como.h"
 #include "module.h"
-#include "ieee80211.h"
 
 /* phy types employed by ieee 802.11 devices */
 
@@ -78,7 +76,7 @@ FLOWDESC {
     uint8_t  channel;  /* current channel number */
     uint8_t  len;
     uint8_t  addr[MAC_ADDR_SIZE];
-    uint8_t  ssid[SSID_SIZE];
+    char ssid[SSID_SIZE];
 };
 
 
@@ -254,10 +252,9 @@ print(char *buf, size_t *len, char * const args[])
   
     if (fmt == PRETTYFMT) {
 	int n;
-        *len = sprintf(s, fmt, hh, mm, ss, TS2USEC(ts), (ntohl(x->signal)-256),
-		 (ntohl(x->noise)-256)); 
+        *len = sprintf(s, fmt, hh, mm, ss, TS2USEC(ts), 
+		   ntohl(x->signal)-256, ntohl(x->noise)-256); 
   
- 
 	for (n = 0; n < MAC_ADDR_SIZE; n++) 
 	    *len += sprintf(s + *len, "%02x%s", x->addr[n],	
 			n < (MAC_ADDR_SIZE-1) ? ":": "  ");

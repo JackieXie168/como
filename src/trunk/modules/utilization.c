@@ -39,7 +39,6 @@
 
 #include <stdio.h>
 #include <time.h>
-#include "como.h"
 #include "module.h"
 
 #define WATERMARK_IVL   TIME2TS(0, 100000)     /* watermark ivl */
