@@ -36,7 +36,6 @@
  */
 
 #include <stdio.h>
-#include "como.h"
 #include "module.h"
 
 

@@ -36,7 +36,6 @@
 
 #include <stdio.h>
 #include <time.h>
-#include "como.h"
 #include "module.h"
 
 #define FLOWDESC	struct _topports

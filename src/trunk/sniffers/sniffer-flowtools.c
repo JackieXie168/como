@@ -71,8 +71,8 @@ struct _snifferinfo {
     struct ftio ftio;		/* flow-tools I/O data structure */
     char buf[BUFSIZE];		/* buffer used between sniffer-next calls */
     uint nbytes; 		/* bytes used in the buffer */
-    int scale; 			/* scaling pkts/bytes for sampled Netflow */
-    int iface; 			/* interface of interest (SNMP index) */
+    uint16_t sampling; 		/* scaling pkts/bytes for sampled Netflow */
+    uint16_t iface; 		/* interface of interest (SNMP index) */
     int flags; 			/* options */
 }; 
 
@@ -121,7 +121,7 @@ netflow2ts(struct fts3rec_v5 * f, uint32_t ms)
  * replay of the flow record. 
  */
 static void
-cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow) 
+cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling) 
 {
     pkt_t * pkt = &flow->pkt; 
     
@@ -149,7 +149,7 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow)
     NF(tcp_flags) = f->tcp_flags;
     N16(NF(input)) = htons(f->input);
     N16(NF(output)) = htons(f->output);
-
+    NF(sampling) = sampling;
 
     /* IP header */
     IP(vhl) = 0x45; 
@@ -272,16 +272,10 @@ flowtools_read(source_t * src)
     if (info->iface && (info->iface != fr->input && info->iface != fr->output))
 	return (netflow2ts(fr, fr->Last));
 
-    /* 
-     * scale the bytes/pkts of this record 
-     */
-    fr->dPkts *= info->scale; 
-    fr->dOctets *= info->scale; 
-
     /* build a new flow record */
     flow = safe_calloc(1, sizeof(struct _flowinfo));
     flow->end_ts = netflow2ts(fr, fr->Last);
-    cookpkt(fr, flow); 
+    cookpkt(fr, flow, info->sampling); 
     flow->increment = (flow->end_ts - flow->pkt.ts) / fr->dPkts;
     flow->length_last = fr->dOctets % fr->dPkts;
 
@@ -341,16 +335,18 @@ configsniffer(char * args, struct _snifferinfo * info)
     }
 
     /* 
-     * "scale". 
-     * for sampled netflow set the scaling factor we need to apply
-     * to the packet and byte count present in the flow record.
+     * "sampling". 
+     * for sampled netflow we need to know the sampling rate applied 
+     * in order to include this information on the packet headers. 
+     * we expect a number that is actually the inverse of the sampling 
+     * rate (i.e., if sampling 1/1000, the value should be 1000). 
      */
-    wh = strstr(args, "scale");
+    wh = strstr(args, "sampling");
     if (wh != NULL) {
 	char * x = index(wh, '=');
 	if (x == NULL) 
 	    logmsg(LOGWARN, "sniffer-flowtools: invalid argument %s\n", wh);
-	info->scale = atoi(x + 1);
+	info->sampling = atoi(x + 1);
     }
 
     /*
@@ -398,7 +394,7 @@ sniffer_start(source_t * src)
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
     info->window = TIME2TS(300,0) ; 	/* default window is 5 minutes */
-    info->scale = 1;			/* default no scaling */
+    info->sampling = 1;			/* default no sampling */
 
     /* 
      * list all files that match the given pattern. 

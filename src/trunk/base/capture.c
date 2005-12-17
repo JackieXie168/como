@@ -179,104 +179,6 @@ flush_table(module_t * mdl, tailq_t * expired)
 }
 
 
-#if 0 // still working on this...
-
-/* 
- * -- freeze_module
- * 
- * This function is called if capture runs out of memory (this could
- * also be due to export being too slow in processing the expired flow
- * tables). It browses thru the module list and select one module to 
- * be frozen. The decision is based on static module priority (the weight 
- * parameter in the configuration file). If two modules have the same 
- * weight, the module that is using the most memory is frozen.
- * The frozen module loses all current data stored in CAPTURE and is set 
- * to run in passive mode until the memory usage drops below a certain 
- * threshold. The function returns the index of the module that has 
- * been frozen. 
- *     
- * XXX EXPORT is not informed of this. It will come for free if we 
- *     decide to put the _como_map in shared memory. Otherwise, we will
- *     have to add some explicit message. 
- */
-static int 
-freeze_module(void)
-{
-    module_t * freeze;
-    ctable_t * ct; 
-    int idx; 
-
-    freeze = &map.modules[0];
-    for (idx = 1; idx < map.module_count; idx++) { 
-	module_t * mdl = &map.modules[idx];
-
-	if (mdl->status != MDL_ACTIVE) 
-	    continue; 
-
- 	if (mdl->weight < freeze->weight) {
-	    freeze = mdl; 
-	} else if (mdl->weight == freeze->weight) {
-	    if (mdl->memusage > freeze->memusage) 
-		freeze = mdl;
-	} 
-    }
-
-    /* 
-     * freeze this module and free all memory that it is 
-     * currently used. 
-     * 
-     * XXX NOTE: this way we drop data that has already been processed. 
-     *     Unfortunately, we don't have a choice given that we cannot 
-     *     pass this table to EXPORT and have it process it because we 
-     *     are trying to allocate memory to a module that is currently 
-     *     serving packets. Anyway, the only alternative would be to 
-     *     freeze modules before the memory is exhausted. The end result
-     *     of these approaches would be more or less the same. 
-     */     
-    logmsg(LOGWARN, "freezing module %s to save memory\n", freeze->name); 
-    freeze->status = MDL_FROZEN; 
-
-    /* free all records in the capture table, one by one */
-    for (ct = mdl->ca_hashtable; ct->first_full < ct->size; ct->first_full++) {
-	rec_t * fh; 
-
-        fh = ct->bucket[ct->first_full];
-        while (fh != NULL) {
-            rec_t *end = fh->next;      /* Mark next record to scan */
-
-            /* Walk back to the oldest record */
-            while (fh->prev)
-                fh = fh->prev;
-
-            /*
-             * now save the entries for this flow one by one
-             */
-            while (fh != end) {
-                rec_t *p;
-
-                /* keep the next record because fh will be freed */
-                p = fh->next;
-
-                mfree_mem(ct->mem, fh, 0);  /* done, free this record */
-                fh = p;                 /* move to the next one */
-            }
-            /* done with the entry, move to next */
-            ct->bucket[ct->first_full] = fh;
-	}
-    }
-
-    /* free the table */
-    mfree_mem(NULL, ct, 0);
-
-    /* merge to the rest of the memory */
-    mem_merge_maps(NULL, mem);
-
-    return freeze->idx; 
-}
-
-#endif
-
-
 /*
  * -- capture_pkt
  *
@@ -759,7 +661,6 @@ capture_mainloop(int accept_fd)
     int active_sniffers;	/* how many sniffers are left ? */
     int sent2export = 0;	/* message sent to EXPORT */
     int export_fd; 		/* descriptor used to talk to EXPORT */
-    timestamp_t last_ts = 0; 	/* timestamp of the most recent packet seen */
     struct timeval tout;
     source_t *src;
     fd_set valid_fds;
@@ -783,6 +684,7 @@ capture_mainloop(int accept_fd)
      */
     for (src = map.sources; src; src = src->next) {
 	if (src->cb->sniffer_start(src) < 0) { 
+	    src->flags |= SNIFF_INACTIVE; 
 	    logmsg(LOGWARN, 
 		   "sniffer %s (%s): %s\n",
 		   src->cb->name, src->device, strerror(errno));
@@ -963,45 +865,16 @@ capture_mainloop(int accept_fd)
         }
 
 	/* 
-	 * Now we check the memory usage. We use three thresholds.
-	 * 
-	 * FLUSH_THRESHOLD indicates that we need to flush some more 
-	 * data so that export can process them and hopefully return them 
-	 * quickly. 
-	 * 
-	 * FREEZE_THRESHOLD is used to freeze one of the modules (the way we
-	 * decide to do this depends on several parameters -- check 
-	 * freeze_module() for details). 
-	 * 
-	 * UNFREEZE_THRESHOLD is used to restart modules that have been 
-	 * frozen once enough memory is available.  
+	 * we check the memory usage and stop any sniffer that is 
+  	 * running from file if the usage is above the FREEZE_THRESHOLD. 
+	 * this will give EXPORT some time to process the tables and free
+	 * memory. we resume as soon as memory usage goes below the 
+	 * threshold. 
 	 * 
 	 */
 	map.stats->mem_usage_cur = memory_usage(); 
 	map.stats->mem_usage_peak = memory_peak(); 
-	if (map.stats->mem_usage_cur > FLUSH_THRESHOLD(map.mem_size)) {
-	    /*
-	     * flush all tables respecting the min flush time if set. 
-	     */
-
-	    logmsg(LOGCAPTURE, "memory usage %d above threshold %d\n", 
-		map.stats->mem_usage_cur, FLUSH_THRESHOLD(map.mem_size));
-	    logmsg(0, "    looking for tables to flush\n"); 
-	    for (idx = 0; idx < map.module_count; idx++) {
-		module_t * mdl = &map.modules[idx];
-		ctable_t *ct = mdl->ca_hashtable;
-
-		if (ct && ct->records && last_ts > ct->ts + mdl->flush_ivl) {
-		    logmsg(0, "    flushing table for %s\n", mdl->name); 
-		    flush_table(mdl, &expired_tables); 
-		}
-	    } 
-
-	    /* 
-	     * also try stopping those sniffers that are reading from 
-	     * file. this will give EXPORT some time to process the 
-	     * tables and free memory.  
-	     */
+	if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size)) {
 	    for (src = map.sources; src; src = src->next) {
 		if (src->flags & SNIFF_INACTIVE) 
 		    continue; 

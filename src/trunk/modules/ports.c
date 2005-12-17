@@ -33,14 +33,11 @@
  * port number (source or destination) and returns the aggregate 
  * value per measurement interval. It can also produce a scatter
  * plot where each dot has coordinates (x,y) where x is the least 
- * significant byte of the port number, y is the most significant byte
- * and the color indicates how many bytes that port has observed. 
+ * significant byte of the port number, y is the most significant byte.
  *
  */
 
-#include <stdio.h>
-#include <time.h>
-#include "como.h"
+#include <stdio.h>		/* sprintf */
 #include "module.h"
 
 #define FLOWDESC	struct _ports

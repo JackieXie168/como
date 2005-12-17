@@ -85,6 +85,7 @@ struct _como {
 };
 
 
+
 /* log flags. The high bits are only set for verbose logging */
 #define	LOGUI		0x0001	/* normal warning msgs			*/
 #define	LOGWARN		0x0002	/* normal warning msgs			*/

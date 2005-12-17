@@ -117,10 +117,9 @@
 #include <stdio.h>      /* snprintf, fopen, fclose */
 #include <errno.h>      /* ENOMEM */
 #include <ctype.h>      /* isalpha, tolower */
-#include <pcap.h>       /* libpcap data types */
 
-#include "como.h"       /* needed by all CoMo modules */
 #include "module.h"     /* needed by all CoMo modules */
+#include "pcap.h"       /* libpcap data types */
 #include "snort.h"      /* prv_alloc, prv_free */
 
 #define MAX_SIMULT_HDRS 10

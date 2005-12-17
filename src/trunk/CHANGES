@@ -1,14 +1,141 @@
 $Id$
 
---------------------------------
----- CoMo v0.5-current (Oct 3rd, 2005)
+-----------------------------------------
+---- CoMo v0.5-current (Dec 16th, 2005)
 --
 
-TODOs
-. Anonymization
-. Porting to MAC OS and MS Windows
-. WLAN support
------------------------
+==================================  STILL NEED CHECKING
+
+. Implemented WINPCAP sniffer
+
+  Sniffer to support winpcap library. This sniffer is modelled on top of 
+  the sniffer-libpcap. NOTE: the file sniffer-wpcap.c comes with a Microsoft
+  Research Shared Source License instead of the BSD license used in the rest
+  of the CoMo release. 
+
+. Porting to MS Windows (w/Cygwin)
+
+  Ported (and tested) to Microsoft Windows under Cygwin environment. CoMo now
+  suports live traffic collection on MS systems using the winpcap library. 
+
+==================================  TESTED AND WORKING
+
+. Inline mode
+
+  It is now possible to run an instance of CoMo inline, i.e., it processes
+  a trace file or a live stream running one single module that outputs its
+  result directly to stdout. In inline mode CoMo provides the exact same 
+  features than the standard running mode. The objective is to present a 
+  first user interface that is very similar to tools like tcpdump, flow-tools, 
+  etc. For example, one can do 'como -I -M trace -s libpcap:eth0' to receive
+  an output that is very similar to 'tcpdump -i eth0'.
+
+. Reorganization of include files
+
+  Small reorganization of include files. Modules just need to include 
+  "module.h" and the packet headers are now split between linklayer (including
+  netflow), ipv4, ipv6 and wlan. 
+
+. Code ported and tested on gcc 2.9.5 to gcc 4.0.1
+
+  The code has been tested to compile correctly on any used version of 
+  the gcc compiler from 2.9.5 to 4.0.1. This required some minor changes
+  in the module callbacks data structure. 
+
+. Filter syntax
+
+  The syntax of the per-module packet filter has been modified and 
+  enriched. It now uses flex and bison to parse the string and supports
+  semantically equivalent filters that are syntaxically different. 
+  The new filters can have the form: "tcp and not src 10.0.0.1/24". 
+
+. Modified mechanism to load modules
+
+  Modules are now loaded by SUPERVISOR after all other processes (i.e., 
+  CAPTURE, EXPORT, STORAGE) have been created. This allows for loading 
+  modules on the fly without having to stop any of the processes.  
+
+. New module: topports.c
+ 
+  This module fings the top source/destination ports (in terms of bytes) 
+  observed during a measurement interval. It supports html output format. 
+
+. New module: ports.c
+
+  This module counts the number of packets that use a certain 
+  port number (source or destination) and returns the aggregate 
+  value per measurement interval. It can also produce a scatter
+  plot where each dot has coordinates (x,y) where x is the least 
+  significant byte of the port number, y is the most significant byte.
+  It support gnuplot output format. 
+
+. New module: netflow-anon.c 
+
+  This module processes information from a COMOTYPE_NF stream and prints 
+  out a set of fields chosen at query time. The source and destination 
+  addresses are anonymized by zero-ing out the least significant bits of 
+  the address using the network mask (i.e., a.b.c.d/24 becomes a.b.c.0/24). 
+
+. New module: interarrival.c 
+
+  This module classifies packets into 5-tuple flows and reports on the 
+  timestamp of each packet observed during a measurement interval for that 
+  flow. This way it is possible to compute the interarrival times of 
+  packets within a single flow. 
+
+. New module: list.c 
+ 
+  This modyle reports on the APs observed by the wireless card and outputs
+  the AP MAC address, SSID, SNR and other 802.11 specific information. 
+
+. New module: frames.c 
+
+  This module countes the number of 802.11 frames and breaks them down 
+  in management, control and data frames. It supports gnuplot format. 
+
+. New module: anomaly-ewma.c 
+
+  This module detects anomalies in the number of bytes or packets observed 
+  using an exponential wiegthed moving average to predict the number of 
+  bytes or packets the monitor should observe each interval. If the actual 
+  number differs by a configurable threshold the module raises an alert. 
+  This module supports html output format. 
+
+. New module: active-flows.c
+
+  This module computes the number of active flows in each measurement 
+  interval. An active flow is defined as a 5-tuple flow for which the 
+  monitor observed at least one packet. This module supports gnuplot output
+  format. 
+
+. Completed support for ARM-based platforms 
+
+  Fixed all alignment issues with ARM based platforms replacing all 
+  macros that were dealing with packet fields when the packet was not 
+  aligned to the double word (32 bit). 
+
+. PCAP sniffer supports big/little endian machines
+
+  sniffer-pcap.c now deals correctly with trace files stored on a big/little
+  endian machine and then processed by a little/big endian machine. This 
+  is a necessity given any trace collected using a MAC and processed on 
+  another system. 
+
+. HTML format in several modules
+ 
+  Several modules support HTML output (via format=html query). The modules
+  that now support this are topdest.c, topports.c, tuple.c and anomaly-ewma.c. 
+  This support required to change the query-ondemand.c to send the correct 
+  header back. 
+
+. IEEE 802.11 support
+
+  Implemented support for 802.11 frames and network cards in monitor mode. 
+  The support includes a large number of macros to directly access 802.11
+  information in management, control and data frames. It handles variable 
+  length headers and presents an interface to the module developer that 
+  makes it easy to implement new modules dealing with 802.11 networks. 
+
 . Re-using data from running modules
 
   Modules can now reuse data processed by other modules that implement

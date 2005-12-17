@@ -36,7 +36,7 @@
  * 
  */
 
-#include "como.h"       /* logmsg */
+#include "module.h"       /* logmsg */
 
 #define ASIZE 256       /* anything that can be represented with a char */
 #define OUTPUT(x) logmsg(LOGUI, "SNORT: string match position = %d\n", x) 

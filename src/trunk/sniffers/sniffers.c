@@ -30,8 +30,7 @@
 #include <net/ethernet.h> 
 #include "como.h"
 #include "comofunc.h"
-#include "stdwlan.h"
-#include "ieee80211.h"
+#include "stdpkt.h"
 
 /* 
  * this file includes some inline helper functions to be 

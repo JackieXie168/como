@@ -36,15 +36,7 @@
 
 #include <stdio.h>
 #include <time.h>
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>		/* IPPROTO_* */
-#include <arpa/inet.h>
-
-#include "como.h"
 #include "module.h"
-#include "stdipv6.h"
 
 #define FLOWDESC    struct _proto_stat
 

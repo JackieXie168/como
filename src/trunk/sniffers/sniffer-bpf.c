@@ -34,8 +34,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include <pcap.h>
 #include <net/if.h>
+#include <net/bpf.h>
 
 #include "sniffers.h"
 #include "como.h"

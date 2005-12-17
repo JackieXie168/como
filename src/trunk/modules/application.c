@@ -63,9 +63,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <time.h>
-#include <math.h>
 
-#include "como.h"
 #include "module.h"
 
 /*
@@ -356,7 +354,7 @@ print(char *buf, size_t *len, char * const args[])
             } else if (!strcmp(args[n], "format=pretty")) {
 	        *len = sprintf(s, PRETTYHDR);  
                 fmt = PRETTYFMT;
-            } else if (!strcmp(args[n], "format=gnuplot-absolute")) {
+            } else if (!strcmp(args[n], "format=gnuplot")) {
                 *len = sprintf(s, GNUPLOTHDR, "Mbps", "*"); 
                 fmt = GNUPLOTFMT;
 		isrelative = 0; 

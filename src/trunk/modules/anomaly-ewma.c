@@ -27,19 +27,14 @@
  */
 
 /*
- * Application/Volume anomaly detection module
+ * Volume anomaly detection module
  *
- * This module builds histograms for the number of packets each port
- * (source or destination) observes over time. At each interval it 
- * computes a forecast (using an exponential weighted moving average EWMA
- * method) for the value of the next interval using the history of 
- * bytes sent on that port number. If the new value is very different
- * from the estimate an alert is raised and stored to disk. 
+ * This module builds histograms for the number of packets and bytes 
+ * observed over time. At each interval it computes a forecast (using an 
+ * exponential weighted moving average EWMA) for the value of the next 
+ * interval. If the actual value is very different from the estimate an 
+ * alert is raised and stored to disk. 
  * Queries can then retrieve all alerts informations. 
- * 
- * The forecast is computed on a per port basis as well as over the entire
- * traffic (i.e., the sum of all ports). The query returns information on 
- * whether the anomaly is about "volume" or "application".
  * 
  * The module presents three configuration parameters: 
  *
@@ -51,9 +46,6 @@
  *      previous estimate.  
  *   .. change_thresh, the threshold value for the number of bytes, i.e., 
  *      an alert will be raised if b > change_threshold * x_i
- *   .. threshold, the number of times a port number must exceed the 
- *      change_threshold before raising an alert
- *            
  */
 
 #include <stdio.h>
