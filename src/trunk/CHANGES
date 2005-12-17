@@ -1,24 +1,20 @@
 $Id$
 
------------------------------------------
----- CoMo v0.5-current (Dec 16th, 2005)
+-------------------------------------
+---- CoMo v0.5 (Dec 16th, 2005)
 --
-
-==================================  STILL NEED CHECKING
 
 . Implemented WINPCAP sniffer
 
   Sniffer to support winpcap library. This sniffer is modelled on top of 
   the sniffer-libpcap. NOTE: the file sniffer-wpcap.c comes with a Microsoft
   Research Shared Source License instead of the BSD license used in the rest
-  of the CoMo release. 
+  of the CoMo release.
 
 . Porting to MS Windows (w/Cygwin)
 
   Ported (and tested) to Microsoft Windows under Cygwin environment. CoMo now
   suports live traffic collection on MS systems using the winpcap library. 
-
-==================================  TESTED AND WORKING
 
 . Inline mode
 
