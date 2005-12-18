@@ -46,9 +46,7 @@
  
 /* flush and freeze/unfreeze thresholds */
 #define MB(m)				((m)*1024*1024)
-#define FLUSH_THRESHOLD(mem)		(MB(mem) / 2) 
-#define FREEZE_THRESHOLD(mem)		(MB(mem) / 10)
-#define UNFREEZE_THRESHOLD(mem)		(MB(mem) - MB(mem) / 3) 
+#define FREEZE_THRESHOLD(mem)		(MB(mem)*3/4) 
 
 /* global state */
 extern struct _como map;
