@@ -1,0 +1,37 @@
+CoMo -- Continuous Monitoring
+
+CoMo is a passive network monitoring system. CoMo has been designed to be 
+the basic building block for a network monitoring infrastructure that will 
+allow researchers and network operators to easily process and share network 
+traffic statistics over multiple sites. The architecture of CoMo is designed
+to compute and report various performance metrics while sustaining high speed 
+traffic collection. There is a strict decoupling between the CoMo core system 
+and the measurement modules. The core system moves the data from the network 
+to memory and storage and manages the system resources. The measurement 
+modules simply pick packets of interest and compute a specific traffic metric. 
+CoMo is open in the sense that modules can be implemented independently and 
+from different developers and then plugged into the systems dynamically. CoMo 
+also provides a query interface to allow users to elicit the system to export 
+the results of the measurement performed. 
+
+Contributors: 
+ . Jordi Alcantara
+ . Diego Amores Lopez
+ . Pere Barlet Ros
+ . Michael Dales
+ . Richard Gass
+ . Euan Harris
+ . Tristan Henderson 
+ . Theodore Hong
+ . Gianluca Iannaccone
+ . Josep Sanjuas
+ . Kevin McGrath
+ . Richard Mortier
+ . Luigi Rizzo
+ . Steven Smith
+ . Davide Vercelli
+
+Copyright (c) 2004-2005 Intel Corporation
+All rights reserved.
+
+$Id$
