@@ -2,7 +2,7 @@
 /* 
  * CoMolive! configuration file 
  * 
- * $Id$ 
+ * $Id$
  */
 
 /* 
@@ -15,45 +15,48 @@ $TIMEPERIOD = 6*3600;
  * Define the granularity for all graphs (in seconds), i.e. 
  * all timestamps will be aligned to this granularity
  */
-$GRANULARITY = 300; 
+$TIMEBOUND = 300; 
+
+/*
+ * Define the resolutions of graphs, i.e. the number of points  
+ * to be present in a graph. This is just an indication to the  
+ * module of the desired resolution. The actual implementation is 
+ * module dependant.  
+ */
+$RESOLUTION = 200;
 
 /* 
  * where the results will reside for future accesses. path is 
  * relative to apache document root. apache needs to have write
  * access to it. 
  */
-$RESULTS = "/live/results"; 
+$RESULTS = "./results"; 
 
 /* 
  * directory with the node lists. the path is relative to  
  * document root and needs to be readable from apache. 
  * look into db/README for details. 
  */
-$NODEDB = "/live/db"; 
-
-/* 
- * CoMolive! needs to find three binaries: gnuplot, convert and gs. 
- * 
- * make sure their location is in the PATH environment variable for 
- * the user that is running httpd or specify the full path here. 
- * 
- * Note that gs is called from within convert and on certain system
- * it may not know where gs is. If no JPG image is shown, try creating
- * a symbolic link to gs in the /usr/bin directory. 
- * 
- */
+$NODEDB = "./db"; 
 
 /* gnuplot command */
 $GNUPLOT = "/usr/local/bin/gnuplot"; 
 
 /* convert command */
-$CONVERT = "/usr/local/bin/convert -density 600x600 -resize 600x450"; 
-//$CONVERT = "convert -density 600x600 -resize 600x450"; 
+// $CONVERT = "/usr/local/bin/convert -density 600x600 -resize 600x450"; 
+$CONVERT = "/usr/bin/convert -density 600x600 -resize 600x450"; 
 
 /* set error reporting level */
 error_reporting(E_ALL);
 
 /* select if using Flash or not */
-$USEFLASH = false; 
+$browser = $_SERVER['HTTP_USER_AGENT']; 
+if (stristr($browser, "msie")) {  
+    $USEFLASH = true; 
+} else { 
+    $USEFLASH = false; 
+}
 
+/* Customize your logo here */
+$MYLOGO = "./images/intel.gif";
 ?>

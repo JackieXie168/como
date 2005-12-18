@@ -6,15 +6,14 @@
      */
 
     /* where to find the image */
-    $info = "web=http://" . $_SERVER['SERVER_NAME'] . "$filename.jpg"; 
+    $docroot = dirname($_SERVER['SCRIPT_NAME']);
+    $info = "web=http://10.0.0.254"; 
+    $info .= $docroot . "/" . $filename . ".jpg"; 
 
     /* the query that the flash client needs to send back */
-    $info .= "&node=$host&module=$mdl&start=$stime&end=$etime&format=gnuplot";
-    if (!is_null($filter))
-	$info .= "&filter=$filter";
-    else
-	$info .= "&filter=all";
-
+    $info .= "&link=dashboard.php&comonode=$comonode&module=$module";
+    $info .= "&start=$stime&end=$etime&format=gnuplot&";
+    $info .= "$http_query_string";
 ?>
 
 <object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000" 
