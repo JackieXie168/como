@@ -1,34 +1,37 @@
 $Id$ 
 
-CoMolive! v0.1 
+CoMolive! v0.2
 Copyright (c) 2005 Intel Corporation
 All rights reserved. 
 
 --------------------------
 This is a graphical query interface for CoMo. 
-Still under development. 
 
-. Installation notes
+This is just meant to be a template and it requires a significant 
+amount of configuration and customization to adapt it to the 
+particular environment where it is supposed to run. 
 
- - Edit the comolive.conf file to set several variables 
-   needed to locate the files. 
+-- Installation notes
 
- - Edit the node database 
+ . Create a directory named 'results' and a directory 'db' where 
+   apache can write. 
+ . Edit the comolive.conf file to set several variables 
+   needed to locate the files and the directories results and db. 
 
-. Node database
+-- Edit the node database 
+ 
+ . The page gives the ability to add a CoMo node to the list of 
+   queryable nodes. However, it will give the option of sorting 
+   nodes by continent. This should be programmed according to your
+   needs. 
 
- The .list files in the $NODEDB directory contain the lists of
- nodes grouped according to continent (in the current
- definition given by list.php).
+-- Allow/Deny certain queries. 
 
- Each line in the .list files must contain the following
- information.
-
- (first line): <name of region>
- (second line): <headings of columns>
- (next lines): <host>; <name>; <location>; <interface>; <data feed>;
-
- The file list.php looks for files with names like europe.list, 
- north_america.list, etc. Change the names according to your 
- system settings. 
+ . By default, the web page will present four areas. One with the 
+   image that comes from a query to a set of modules. The modules will 
+   be chosen by querying initially the node to know with modules can be 
+   queried. Then an array in mainstage.php selects which ones will not be 
+   shown. Then on the side of the page there will be three more queries to 
+   the module alert, topdest, topports. If no modules with these names 
+   exists it will return an error. 
 
