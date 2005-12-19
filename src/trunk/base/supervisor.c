@@ -234,7 +234,7 @@ inline_mode(int accept_fd)
     fd_set valid_fds;
     int max_fd;
     int num_procs;
-    char *msg, *local, data[2048];
+    char *msg, *local, data[2];
     int ret, sd, cd, i, n_ready;
     pid_t pid;
     fd_set r;
@@ -288,13 +288,13 @@ inline_mode(int accept_fd)
 	exit(0);
     }
     
-    logmsg(LOGUI, "running CoMo in inline mode...\n");
+    logmsg(LOGWARN, "running CoMo in inline mode...\n");
     
     /*
      * tell processes to load the modules.
      */
     if (sup_send_new_modules() < 0) /* failed */
-	logmsg(LOGUI, "Failed to load modules\n");
+	logmsg(LOGWARN, "Failed to load modules\n");
     
     /* create the socket on which query-ondemand will accept the query */
     asprintf(&buf, "S:http://localhost:%d/", map.query_port);
@@ -310,15 +310,18 @@ inline_mode(int accept_fd)
 	logmsg(LOGWARN, "fork query-ondemand: %s\n", strerror(errno));
 
     if (pid == 0) {	/* here is the child... */
-	query_ondemand(sd);
+	close(accept_fd);
+        query_ondemand(sd);
 	exit(EXIT_SUCCESS);
     } 
 
     /* parent */
-
+    close(sd);
+    
     /* wait 5 seconds before starting the query */
-    logmsg(LOGUI, "waiting 5 seconds before starting the query...\n");
+    logmsg(LOGWARN, "waiting 5 seconds before starting the query...\n");
     sleep(5);
+    
     /* send the query string followed by "\n\n" */
     asprintf(&buf, "http://localhost:%d/?module=%s&filter=%s&%s",
 	     map.query_port, map.il_module->name,
@@ -332,10 +335,16 @@ inline_mode(int accept_fd)
     if (ret < 0)
 	panic("inline mode: write error: %s\n", strerror(errno));
 
+    map.il_inquery = 1;
+    
     /* 
      * read the reply while processing possible messages
      * coming from other processes
      */
+    memset(data, 0, 2);
+    ret = como_readn(cd, (char *)&data, 1);
+    if (ret < 0) /* eof */
+        panic("inline mode: error reading data");
     while (ret > 0) { 
 	fprintf(stderr, "%s", data);
 	r = valid_fds;
@@ -352,11 +361,13 @@ inline_mode(int accept_fd)
 		unregister_ipc_fd(i);
 	    }
 	}
-	ret = como_readn(cd, (char *)&data, strlen(data));
+	ret = como_readn(cd, (char *)&data, 1);
 	if (ret < 0) /* eof */
 	    panic("inline mode: error reading data");
     }
 
+    map.il_inquery = 0;
+    
     free(buf);
     free(local);
     free(msg);

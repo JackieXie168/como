@@ -1309,9 +1309,11 @@ query_ondemand(int client_fd)
          * as it is acting as our client now */
         struct sockaddr_in addr;
 	socklen_t slen;
+        int old_client_fd;
 	    
 	slen = sizeof(addr);
-	client_fd = accept(client_fd, (struct sockaddr *)&addr, &slen);
+        old_client_fd = client_fd;
+        client_fd = accept(old_client_fd, (struct sockaddr *)&addr, &slen);
 	if (client_fd < 0) {
 	    /* check if accept was unblocked by a signal */
 	    if (errno == EINTR) {
@@ -1323,8 +1325,10 @@ query_ondemand(int client_fd)
 	    logmsg(LOGWARN, "accepting connection: %s\n",
 		   strerror(errno));
 	}
-
-	logmsg(LOGQUERY, 
+        
+	close(old_client_fd);
+        
+        logmsg(LOGQUERY, 
 	       "query from %s on fd %d\n", 
                inet_ntoa(addr.sin_addr), client_fd);
     }
@@ -1445,7 +1449,7 @@ query_ondemand(int client_fd)
     /* get start offset. this is needed because we access the file via
      * csmap instead of csreadp (that is not implemented yet) 
      */
-    ofs = csgetofs(file_fd); 
+    ofs = csgetofs(file_fd);
 
     /*
      * initializations
