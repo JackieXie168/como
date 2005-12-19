@@ -78,17 +78,18 @@ isISL(pkt_t * pkt)
  * 
  * populates l3ofs and l4ofs values of a packet
  */
-static __inline__ void
+static void
 updatel4(pkt_t * pkt)
 {
-
-    pkt->l4ofs = 0; 
+    pkt->l3ofs = pkt->l4ofs = 0; 
 
     if (pkt->l3type == ETHERTYPE_IP) {
 	pkt->l3ofs = pkt->l4ofs = como_l2_len[pkt->type];
 	pkt->l4ofs += ((IP(vhl) & 0x0f) << 2);
 	pkt->l4type = IP(proto);
-    } else {
+    } 
+
+    if (pkt->type == COMOTYPE_RADIO || pkt->type == COMOTYPE_80211) { 
 	switch(FCTRL_TYPE(pkt->l2type)) { /* determine 802.11 frame type */
 	case WLANTYPE_MGMT:
 	    pkt->l3ofs = pkt->l2ofs + MGMT_HDR_LEN;
@@ -106,7 +107,7 @@ updatel4(pkt_t * pkt)
 	    pkt->l4ofs += pkt->l3ofs; 
             break;
          default:
-            logmsg(LOGWARN, "ieee802.11 frame type unknown");
+            logmsg(LOGWARN, "ieee802.11 frame type unknown\n");
 	    break;
 	}
     }
@@ -119,7 +120,7 @@ updatel4(pkt_t * pkt)
  * updates type and offset information in the pkt_t data structure. 
  * requires the type of interface as input. 
  */
-__inline__ void 
+void 
 updateofs(pkt_t * pkt, int type) 
 {
     pkt->type = type; 
@@ -148,8 +149,9 @@ updateofs(pkt_t * pkt, int type)
 	else
 	    pkt->l3type = 0;
         break;
+
     case COMOTYPE_RADIO:
-        pkt->l2type = H16(IEEE80211_HDR(fc)); /* 802.11 + XX byte capture hdr */
+        pkt->l2type = H16(IEEE80211_HDR(fc)); 
         if (FCTRL_TYPE(pkt->l2type) == WLANTYPE_DATA)
 	    pkt->l3type = H16(LLC_HDR(type));
 	else
@@ -160,6 +162,7 @@ updateofs(pkt_t * pkt, int type)
 	pkt->l3type = 0; 
         break; 
     } 
+
     updatel4(pkt); 
 }
 
