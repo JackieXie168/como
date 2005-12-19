@@ -122,6 +122,7 @@ main(int argc, char *argv[])
     map.location = strdup("Unknown"); 
     map.linkspeed = strdup("Unknown");
     map.il_mode = 0;
+    map.il_inquery = 0;
 
     /* write welcome message */ 
     logmsg(LOGUI, "----------------------------------------------------\n");

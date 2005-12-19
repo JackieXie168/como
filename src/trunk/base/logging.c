@@ -94,8 +94,10 @@ _logmsg(int flags, const char *fmt, va_list ap)
         void send_string(char *str);
         send_string(buf);
     } else {
-	/* do not print messages to stdout when we are in inline mode */
-        if (!map.il_mode) {
+	/* do not print messages to stdout when we are in inline mode
+         * and printing the results of a query
+         */
+        if (!map.il_inquery) {
             fprintf(stdout, "%s", buf);
             fflush(stdout);
         }

@@ -82,6 +82,8 @@ struct _como {
                              * inline mode */
     module_t * il_module;   /* module that needs to be run in inline mode */
     char * il_qargs;        /* query args for the inline mode */
+    int il_inquery;         /* tells whether we are printing the results of
+                             * the query while in inline mode */
 };
 
 
