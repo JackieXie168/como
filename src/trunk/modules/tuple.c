@@ -37,6 +37,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include "comofunc.h"
 #include "module.h"
 
 #define FLOWDESC    struct _tuple_stat
@@ -215,12 +216,14 @@ load(char * buf, size_t len, timestamp_t * ts)
     return sizeof(FLOWDESC);
 }
 
+#define PLAINFMT       "%10u %3d %15s %5u %15s %5u %8llu %8llu\n"
+
 #define PRETTYHDR       					\
     "Date                     "					\
     "Proto Source IP:Port      Destination IP:Port   " 		\
     "Bytes    Packets\n"
 
-#define PRETTYFMT       "%.24s %6d %15s %5u %15s %5u %8llu %8llu\n"
+#define PRETTYFMT       "%.24s %s %15s %5u %15s %5u %8llu %8llu\n"
 
 #define HTMLHDR                                                 \
     "<html>\n"                                                  \
@@ -287,7 +290,10 @@ print(char *buf, size_t *len, char * const args[])
             if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTMLHDR);
                 fmt = HTMLFMT;
-	    } 
+	    } else if (!strcmp(args[n], "format=plain")) {
+                *len = 0;
+                fmt = PLAINFMT;
+            }
 	} 
 
         return s; 
@@ -307,11 +313,18 @@ print(char *buf, size_t *len, char * const args[])
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 
-    *len = sprintf(s, fmt, 
-		asctime(localtime(&ts)), getprotoname(x->proto), 
-		src, (uint) H16(x->src_port), 
-		dst, (uint) H16(x->dst_port), 
-	        NTOHLL(x->bytes), NTOHLL(x->pkts));
+    if (fmt == PLAINFMT) {
+	*len = sprintf(s, fmt, ts, x->proto, 
+		    src, (uint) H16(x->src_port), 
+		    dst, (uint) H16(x->dst_port), 
+		    NTOHLL(x->bytes), NTOHLL(x->pkts));
+    } else { 
+	*len = sprintf(s, fmt, 
+		    asctime(localtime(&ts)), getprotoname(x->proto), 
+		    src, (uint) H16(x->src_port), 
+		    dst, (uint) H16(x->dst_port), 
+		    NTOHLL(x->bytes), NTOHLL(x->pkts));
+    } 
     return s;
 };
 
