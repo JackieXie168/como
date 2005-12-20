@@ -76,9 +76,9 @@ int rule_is_valid = 0;
  *
  */
 static int
-translate_proto(char *proto, uint8_t *p)
+translate_proto(char *proto, uint16_t *p)
 {
-    if (!strcmp(proto, "ip")) *p = IPPROTO_IP;
+    if (!strcmp(proto, "ip")) *p = ETHERTYPE_IP;
     else if (!strcmp(proto, "tcp")) *p = IPPROTO_TCP;
     else if (!strcmp(proto, "udp")) *p = IPPROTO_UDP;
     else if (!strcmp(proto, "icmp")) *p = IPPROTO_ICMP;
@@ -95,7 +95,6 @@ translate_proto(char *proto, uint8_t *p)
  * Dots and numbers notation -> Binary representation of an IP address
  *
  */
-
 static int
 translate_ip(char *ipstring, uint32_t *ip)
 {
@@ -151,7 +150,6 @@ uint32_t netmasks[33] =
  * CIDR notation -> integer representing the network mask
  *
  */
-
 static int
 translate_nm(char *nmstring, uint32_t *nm)
 {
@@ -307,7 +305,7 @@ snortkw_t snortkwds[] = {
     { "encap",      98 },
     { "pim",        103 },
     /* terminator */
-    { NULL,          	                0 }
+    { NULL,         0 }
 };
 
 /*
@@ -316,7 +314,6 @@ snortkw_t snortkwds[] = {
  * Translates a keyword string to an integer constant 
  *
  */
-
 static int
 translate_kw(char *string)
 {
@@ -355,8 +352,7 @@ hextochar(unsigned char *string)
                 }
             }
             i++;
-        }
-        else {
+        } else {
             string[j] = string[i];
             i++; j++;
         }
@@ -371,7 +367,6 @@ hextochar(unsigned char *string)
  * Adds a function to a rule's list of check functions
  *
  */
-
 static int 
 add_func(fpnode_t **list, unsigned int (*function)(ruleinfo_t *, pkt_t *))
 {
@@ -397,7 +392,6 @@ add_func(fpnode_t **list, unsigned int (*function)(ruleinfo_t *, pkt_t *))
  * Adds a variable to the hash table vi[]
  *
  */
-
 static int
 add_var(char *varname, varinfo_t var)
 {
@@ -420,9 +414,7 @@ add_var(char *varname, varinfo_t var)
         if (!var.type)
             vi[p]->value.ip = var.value.ip;
         else vi[p]->value.port = var.value.port;
-    }
-    
-    else {
+    } else {
         for (v = vi[p]; v; v = v->next) {
             if (!strcmp(v->name, varname)) {
                 yserror("Variable %s already exists", varname);
@@ -452,7 +444,6 @@ add_var(char *varname, varinfo_t var)
  * Gets a variable value from the hash table vi[]
  *
  */
- 
 static int
 get_var(char *varname, varinfo_t *varinfo)
 {
@@ -479,7 +470,6 @@ get_var(char *varname, varinfo_t *varinfo)
  * Adds the info of a dynamic rule
  *
  */
-
 static int
 add_dynamic_rule(opt_t *o)
 {
@@ -522,7 +512,8 @@ compare_ipset(ip_t a, ip_t b)
     ipnode_t *ipa, *ipb;
     
     if (a.negation != b.negation) return 0;
-    for (ipa = a.ipnode, ipb = b.ipnode; ipa && ipb; ipa = ipa->next, ipb = ipb->next) {
+    for (ipa = a.ipnode, ipb = b.ipnode; ipa && ipb;
+         ipa = ipa->next, ipb = ipb->next) {
         if (ipa->valid != ipb->valid ||
             ipa->ipaddr != ipb->ipaddr ||
             ipa->netmask != ipb->netmask)
@@ -556,9 +547,12 @@ find_pm_option(optnode_t *opts, optnode_t *optnode)
     optnode_t *onode_cand, *onode_aux;
     
     onode_cand = NULL;
-    for(onode_aux = opts; onode_aux && onode_aux != optnode; onode_aux = onode_aux->next) {
-        if (onode_aux->keyword == SNTOK_CONTENT || onode_aux->keyword == SNTOK_PCRE ||
-            onode_aux->keyword == SNTOK_BYTETEST || onode_aux->keyword == SNTOK_BYTEJUMP)
+    for (onode_aux = opts; onode_aux && onode_aux != optnode;
+         onode_aux = onode_aux->next) {
+        if (onode_aux->keyword == SNTOK_CONTENT ||
+            onode_aux->keyword == SNTOK_PCRE ||
+            onode_aux->keyword == SNTOK_BYTETEST ||
+            onode_aux->keyword == SNTOK_BYTEJUMP)
             onode_cand = onode_aux;
     }
     return onode_cand;
@@ -571,7 +565,6 @@ find_pm_option(optnode_t *opts, optnode_t *optnode)
  * The rule's options preprocessing is also done here.
  *
  */
-
 static int
 add_rule(uint8_t action, unsigned int proto,
          ip_t src_ips, portset_t src_ports, ip_t dst_ips, portset_t dst_ports,
@@ -590,8 +583,8 @@ add_rule(uint8_t action, unsigned int proto,
     ref_t *ref, *raux;
     unsigned int idx;
     
-    /* Needed for pcre expression compiling */
 #ifdef HAVE_PCRE
+    /* Needed for pcre expression compiling */
     pcre *regexp_aux;
     const char *pcre_error;
     int erroffset;
@@ -631,14 +624,14 @@ add_rule(uint8_t action, unsigned int proto,
     info->src_ports = src_ports;
     if (info->src_ports.valid) {
         switch(proto) {
-            case IPPROTO_TCP:
-                if (add_func(fp, check_tcp_src_port) == -1)
-                    return -1;
-                break;
-            case IPPROTO_UDP:
-                if (add_func(fp, check_udp_src_port) == -1)
-                    return -1;
-                break;
+        case IPPROTO_TCP:
+            if (add_func(fp, check_tcp_src_port) == -1)
+                return -1;
+            break;
+        case IPPROTO_UDP:
+            if (add_func(fp, check_udp_src_port) == -1)
+                return -1;
+            break;
         }
     }            
             
@@ -651,14 +644,14 @@ add_rule(uint8_t action, unsigned int proto,
     info->dst_ports = dst_ports;
     if (info->dst_ports.valid) {
         switch(proto) {
-            case IPPROTO_TCP:
-                if (add_func(fp, check_tcp_dst_port) == -1)
-                    return -1;
-                break;
-            case IPPROTO_UDP:
-                if (add_func(fp, check_udp_dst_port) == -1)
-                    return -1;
-                break;
+        case IPPROTO_TCP:
+            if (add_func(fp, check_tcp_dst_port) == -1)
+                return -1;
+            break;
+        case IPPROTO_UDP:
+            if (add_func(fp, check_udp_dst_port) == -1)
+                return -1;
+            break;
         }
     }            
 
@@ -672,9 +665,9 @@ add_rule(uint8_t action, unsigned int proto,
     optnode = opts;
     while (optnode != NULL) {
         switch(optnode->keyword) {
-            case SNTOK_PRIO:
-                has_prio = 1;
-                break;
+        case SNTOK_PRIO:
+            has_prio = 1;
+            break;
         }
         optnode = optnode->next;
     }
@@ -683,718 +676,711 @@ add_rule(uint8_t action, unsigned int proto,
     optnode = opts;
     while (optnode != NULL) {
         switch(optnode->keyword) {                   
-            case SNTOK_ACTIVATES:
-                /* Save which number to activate
-                   when a packet matches this rule */
-                has_actv = 1;
-                opt->activates = atoi(optnode->content);
-                break; 
-            case SNTOK_ACTVBY:
-                /* Add a pointer to this rule 
-                   to the correspondent list of dynamic rules
-                   (only for a dynamic rule) */
-                has_actvby = 1;
-                if (opt->action != SNTOK_DYN) {
-                    yserror("rule %d: activated-by option in non-dynamic rule",
+        case SNTOK_ACTIVATES:
+            /* Save which number to activate
+               when a packet matches this rule */
+            has_actv = 1;
+            opt->activates = atoi(optnode->content);
+            break; 
+        case SNTOK_ACTVBY:
+            /* Add a pointer to this rule 
+               to the correspondent list of dynamic rules
+               (only for a dynamic rule) */
+            has_actvby = 1;
+            if (opt->action != SNTOK_DYN) {
+                yserror("rule %d: activated-by option in non-dynamic rule",
+                        nrules);
+                return 0;
+            }
+            opt->actvby = atoi(optnode->content);
+            if (add_dynamic_rule(opt) == -1)
+                return -1;
+            break;
+        case SNTOK_COUNT:
+            /* Save the counter (only for a dynamic rule) */
+            has_count = 1;
+            if (opt->action != SNTOK_DYN) {
+                yserror("rule %d: count option in non-dynamic rule",
+                        nrules);
+                return 0;
+            }
+            opt->count = atoi(optnode->content);
+            break;
+        case SNTOK_MSG:
+            /* Save the message associated with this rule */
+            opt->msg = optnode->content;
+            break;
+        case SNTOK_REF:
+            /* Save the reference system id and the reference id */
+            ref = (ref_t *)prv_alloc(sizeof(ref_t));
+            if (ref == NULL) return -1;
+                
+            saux = index(optnode->content, ',');
+            if (saux == NULL) {
+                yserror("rule %d: wrong reference option", nrules);
+                return 0;
+            }
+            ref->id = saux + 1;
+            ref->systemid =
+                (char *)prv_alloc(strlen(optnode->content) - strlen(saux));
+            if (ref->systemid == NULL) return -1;
+            strncpy(ref->systemid, optnode->content,
+                    strlen(optnode->content) - strlen(saux));
+            ref->next = NULL;
+                
+            if (!opt->refs) opt->refs = ref;
+            else {
+                for (raux = opt->refs; raux->next; raux = raux->next);
+                raux->next = ref;
+            }
+            break;
+        case SNTOK_SID:
+            /* Save the rule unique identifier */
+            has_sid = 1;
+            opt->sid = atoi(optnode->content);
+            break;
+        case SNTOK_REV:
+            /* Save the revision of the rule */
+            if (!has_sid) {
+                yserror("rule %d: rev option without previous sid option",
+                        nrules);
+                return 0;
+            }
+            opt->rev = atoi(optnode->content);
+            break;
+        case SNTOK_CTYPE:
+            /* Save the rule's classtype and set the default priority
+               (high priority = 1, med priority = 2, low priority = 3) */
+            opt->ctype = optnode->content;
+            switch(translate_kw(optnode->content)) {
+            case SNTOK_HIGHPRIO:
+                if (!has_prio) opt->prio = 1;
+                break;
+            case SNTOK_MEDPRIO:
+                if (!has_prio) opt->prio = 2;
+                break;
+            case SNTOK_LOWPRIO:
+                if (!has_prio) opt->prio = 3;
+                break;                            
+            case SNTOK_NULL:
+                yserror("rule %d: wrong classtype", nrules);
+                return 0;
+            }
+            break;
+        case SNTOK_PRIO:
+            /* Save the rule priority */
+            opt->prio = atoi(optnode->content);
+            break;
+        case SNTOK_CONTENT:
+            /* Initialize content modifier variables */
+            optnode->nocase = 0;
+            optnode->depth = 0;
+            optnode->offset = 0;
+            optnode->has_distance = 0;
+            optnode->distance = 0;
+            optnode->has_within = 0;
+            optnode->within = 0;
+            optnode->relative = 0;
+            optnode->neg = 0;
+                
+            /* Preprocess the pattern to search */
+            caux = optnode->content[0];
+            if (caux == '!') {
+                optnode->neg = 1;
+                optnode->cnt = optnode->content + 1;
+            }
+            else optnode->cnt = optnode->content;
+            optnode->cntlen = hextochar(optnode->cnt);
+            preBmBc(optnode->cnt, optnode->cntlen, optnode->bmBc);
+            optnode->bmGs =
+                (int *)prv_alloc(optnode->cntlen * sizeof(int));
+            if (!(optnode->bmGs)) return -1;
+            preBmGs(optnode->cnt, optnode->cntlen, optnode->bmGs);
+            break;
+        case SNTOK_NOCASE:
+            onode_cand = find_pm_option(opts, optnode);
+            if (!onode_cand) {
+                yserror("rule %d: nocase option without previous "
+                        "pattern-matching option", nrules);
+                return 0;                    
+            }
+            onode_cand->nocase = 1;
+            lowercase(onode_cand->cnt, strlen(onode_cand->cnt));
+            /* If the previous pattern-matching option was a content option,
+             * we need to redo the Boyer-Moore preprocessing */
+            if (onode_cand->keyword == SNTOK_CONTENT) {
+                preBmBc(onode_cand->cnt, onode_cand->cntlen, onode_cand->bmBc);
+                prv_free(onode_cand->bmGs);
+                onode_cand->bmGs =
+                    (int *)prv_alloc(onode_cand->cntlen * sizeof(int));
+                if (!(onode_cand->bmGs)) return -1;
+                preBmGs(onode_cand->cnt, onode_cand->cntlen, onode_cand->bmGs);
+            }
+            break;
+        case SNTOK_DEPTH:
+            onode_cand = find_pm_option(opts, optnode);
+            if (!onode_cand) {
+                yserror("rule %d: depth option without previous "
+                        "pattern-matching option", nrules);
+                return 0;                
+            }
+            onode_cand->has_depth = 1;
+            onode_cand->depth = atoi(optnode->content);
+            break;
+        case SNTOK_OFFSET:
+            onode_cand = find_pm_option(opts, optnode);
+            if (!onode_cand) {
+                yserror("rule %d: offset option without previous "
+                        "pattern_matching option", nrules);
+                return 0;
+            }
+            onode_cand->offset = atoi(optnode->content);
+            break;
+        case SNTOK_DISTANCE:
+            onode_cand = find_pm_option(opts, optnode);
+            if (onode_cand) {
+                onode_cand_2 = find_pm_option(opts, onode_cand);
+                if (!onode_cand_2) {
+                    yserror("rule %d: distance option requires at least "
+                            "two previous pattern_matching options",
                             nrules);
                     return 0;
+                } else {
+                    onode_cand->has_distance = 1;
+                    onode_cand->distance = atoi(optnode->content);
                 }
-                opt->actvby = atoi(optnode->content);
-                if (add_dynamic_rule(opt) == -1)
-                    return -1;
-                break;
-            case SNTOK_COUNT:
-                /* Save the counter (only for a dynamic rule) */
-                has_count = 1;
-                if (opt->action != SNTOK_DYN) {
-                    yserror("rule %d: count option in non-dynamic rule",
-                            nrules);
-                    return 0;
-                }
-                opt->count = atoi(optnode->content);
-                break;
-            case SNTOK_MSG:
-                /* Save the message associated with this rule */
-                opt->msg = optnode->content;
-                break;
-            case SNTOK_REF:
-                /* Save the reference system id and the reference id */
-                ref = (ref_t *)prv_alloc(sizeof(ref_t));
-                if (ref == NULL) return -1;
-                
-                saux = index(optnode->content, ',');
-                if (saux == NULL) {
-                    yserror("rule %d: wrong reference option", nrules);
-                    return 0;
-                }
-                ref->id = saux + 1;
-                ref->systemid =
-                    (char *)prv_alloc(strlen(optnode->content) - strlen(saux));
-                if (ref->systemid == NULL) return -1;
-                strncpy(ref->systemid, optnode->content,
-                        strlen(optnode->content) - strlen(saux));
-                ref->next = NULL;
-                
-                if (!opt->refs) opt->refs = ref;
-                else {
-                    for (raux = opt->refs; raux->next; raux = raux->next);
-                    raux->next = ref;
-                }
-                break;
-            case SNTOK_SID:
-                /* Save the rule unique identifier */
-                has_sid = 1;
-                opt->sid = atoi(optnode->content);
-                break;
-            case SNTOK_REV:
-                /* Save the revision of the rule */
-                if (!has_sid) {
-                    yserror("rule %d: rev option without previous sid option",
-                            nrules);
-                    return 0;
-                }
-                opt->rev = atoi(optnode->content);
-                break;
-            case SNTOK_CTYPE:
-                /* Save the rule's classtype and set the default priority
-                   (high priority = 1, med priority = 2, low priority = 3) */
-                opt->ctype = optnode->content;
-                switch(translate_kw(optnode->content)) {
-                    case SNTOK_HIGHPRIO:
-                        if (!has_prio) opt->prio = 1;
-                        break;
-                    case SNTOK_MEDPRIO:
-                        if (!has_prio) opt->prio = 2;
-                        break;
-                    case SNTOK_LOWPRIO:
-                        if (!has_prio) opt->prio = 3;
-                        break;                            
-                    case SNTOK_NULL:
-                        yserror("rule %d: wrong classtype", nrules);
-                        return 0;
-                }
-                break;
-            case SNTOK_PRIO:
-                /* Save the rule priority */
-                opt->prio = atoi(optnode->content);
-                break;
-            case SNTOK_CONTENT:
-                /* Initialize content modifier variables */
-                optnode->nocase = 0;
-                optnode->depth = 0;
-                optnode->offset = 0;
-                optnode->has_distance = 0;
-                optnode->distance = 0;
-                optnode->has_within = 0;
-                optnode->within = 0;
-                optnode->relative = 0;
-                optnode->neg = 0;
-                
-                /* Preprocess the pattern to search */
-                caux = optnode->content[0];
-                if (caux == '!') {
-                    optnode->neg = 1;
-                    optnode->cnt = optnode->content + 1;
-                }
-                else optnode->cnt = optnode->content;
-                optnode->cntlen = hextochar(optnode->cnt);
-                preBmBc(optnode->cnt, optnode->cntlen, optnode->bmBc);
-                optnode->bmGs =
-                    (int *)prv_alloc(optnode->cntlen * sizeof(int));
-                if (!(optnode->bmGs)) return -1;
-                preBmGs(optnode->cnt, optnode->cntlen, optnode->bmGs);
-                break;
-            case SNTOK_NOCASE:
+            } else {
+                yserror("rule %d: distance option requires at least two "
+                        "previous pattern-matching options", nrules);
+                return 0;
+            }
+            break;
+        case SNTOK_WITHIN:
+            onode_cand = find_pm_option(opts, optnode);
+            if (onode_cand) {
+                onode_cand->has_within = 1;
+                onode_cand->within = atoi(optnode->content);                    
+            } else {
+                yserror("rule %d: within option without "
+                        "previous pattern-matching option", nrules);
+                return 0;
+            }
+            break;
+        case SNTOK_ISDATAAT:
+            optnode->isdataat = 0;
+            optnode->relative = 0;
+            saux = index(optnode->content, ',');
+            if (saux == NULL) {
+                optnode->isdataat = atoi(optnode->content);
+            } else if (!strcmp(saux + 1, "relative")) {
                 onode_cand = find_pm_option(opts, optnode);
                 if (!onode_cand) {
-                    yserror("rule %d: nocase option without previous "
-                            "pattern-matching option", nrules);
-                    return 0;                    
+                    yserror("rule %d: isdataat relative option without "
+                            "previous pattern-matching option", nrules);
+                    return 0;                        
+                } else {
+                    optnode->isdataat = atoi(optnode->content);
+                    optnode->relative = 1;
                 }
-                onode_cand->nocase = 1;
-                lowercase(onode_cand->cnt, strlen(onode_cand->cnt));
-                break;
-            case SNTOK_DEPTH:
-                onode_cand = find_pm_option(opts, optnode);
-                if (!onode_cand) {
-                    yserror("rule %d: depth option without previous "
-                            "pattern-matching option", nrules);
-                    return 0;                
-                }
-                onode_cand->has_depth = 1;
-                onode_cand->depth = atoi(optnode->content);
-                break;
-            case SNTOK_OFFSET:
-                onode_cand = find_pm_option(opts, optnode);
-                if (!onode_cand) {
-                    yserror("rule %d: offset option without previous "
-                            "pattern_matching option", nrules);
-                    return 0;
-                }
-                onode_cand->offset = atoi(optnode->content);
-                break;
-            case SNTOK_DISTANCE:
-                onode_cand = find_pm_option(opts, optnode);
-                if (onode_cand) {
-                    onode_cand_2 = find_pm_option(opts, onode_cand);
-                    if (!onode_cand_2) {
-                        yserror("rule %d: distance option requires at least "
-                                "two previous pattern_matching options",
+            } else {
+                yserror("rule %d: wrong isdataat option", nrules);
+                return 0;                    
+            }
+            break;
+        case SNTOK_PCRE:
+#ifdef HAVE_PCRE
+            optnode->relative = 0;
+            optnode->neg = 0;
+            /* Parse the option's content string */
+            caux = optnode->content[0];
+            if (caux == '!') optnode->neg = 1;
+            /* Find the perl-compatible regular expression */
+            saux = index(optnode->content, '/');
+            saux_2 = saux;
+            end = 0;
+            while (!end) {
+                saux_2 = index(saux_2 + 1, '/');
+                if (!saux_2)
+                    end = 1;
+                else if (strncmp(saux_2 - 1, "\\", 1))
+                    end = 1;
+            }
+            if (!saux || !saux_2) {
+                /* The pcre was not found */
+                yserror("rule %d: wrong pcre option", nrules);
+                return 0;                    
+            }
+            optnode->cnt = (char *)prv_alloc(saux_2 - saux);
+            strncpy(optnode->cnt, saux + 1, saux_2 - saux - 1);
+            strncpy(&(optnode->cnt[saux_2 - saux - 1]), "\0", 1);
+                
+            if (strlen(saux_2) > 1) {
+                /* There are pcre modifiers after the expression */
+                /* Perl-compatible modifiers */
+                saux = index(saux_2 + 1, 'i');
+                if (saux != NULL) pcre_opts |= PCRE_CASELESS;
+                saux = index(saux_2 + 1, 's');
+                if (saux != NULL) pcre_opts |= PCRE_DOTALL;
+                saux = index(saux_2 + 1, 'm');
+                if (saux != NULL) pcre_opts |= PCRE_MULTILINE;
+                saux = index(saux_2 + 1, 'x');
+                if (saux != NULL) pcre_opts |= PCRE_EXTENDED;
+                /* PCRE-compatible modifiers */
+                saux = index(saux_2 + 1, 'A');
+                if (saux != NULL) pcre_opts |= PCRE_ANCHORED;
+                saux = index(saux_2 + 1, 'E');
+                if (saux != NULL) pcre_opts |= PCRE_DOLLAR_ENDONLY;
+                saux = index(saux_2 + 1, 'G');
+                if (saux != NULL) pcre_opts |= PCRE_UNGREEDY;
+                /* Snort-only modifiers */
+                saux = index(saux_2 + 1, 'R');
+                if (saux != NULL) {
+                    /* Match relative to the end of the last pattern match */
+                    onode_cand = find_pm_option(opts, optnode);
+                    if (!onode_cand) {
+                        yserror("rule %d: pcre relative option without "
+                                "previous pattern-matching option",
                                 nrules);
                         return 0;
                     }
-                    else {
-                        onode_cand->has_distance = 1;
-                        onode_cand->distance = atoi(optnode->content);
-                    }
+                    else optnode->relative = 1;
                 }
-                else {
-                    yserror("rule %d: distance option requires at least two "
-                            "previous pattern-matching options", nrules);
-                    return 0;
-                }
-                break;
-            case SNTOK_WITHIN:
-                onode_cand = find_pm_option(opts, optnode);
-                if (onode_cand) {
-                    onode_cand->has_within = 1;
-                    onode_cand->within = atoi(optnode->content);                    
-                }
-                else {
-                    yserror("rule %d: within option without "
-                            "previous pattern-matching option", nrules);
-                    return 0;
-                }
-                break;
-            case SNTOK_ISDATAAT:
-                optnode->isdataat = 0;
-                optnode->relative = 0;
-                saux = index(optnode->content, ',');
-                if (saux == NULL) {
-                    optnode->isdataat = atoi(optnode->content);
-                }
-                else if (!strcmp(saux + 1, "relative")) {
-                    onode_cand = find_pm_option(opts, optnode);
-                    if (!onode_cand) {
-                        yserror("rule %d: isdataat relative option without "
-                                "previous pattern-matching option", nrules);
-                        return 0;                        
-                    }
-                    else {
-                        optnode->isdataat = atoi(optnode->content);
-                        optnode->relative = 1;
-                    }
-                }
-                else {
-                    yserror("rule %d: wrong isdataat option", nrules);
-                    return 0;                    
-                }
-                break;
-            case SNTOK_PCRE:
-#ifdef HAVE_PCRE
-                optnode->relative = 0;
-                optnode->neg = 0;
-                /* Parse the option's content string */
-                caux = optnode->content[0];
-                if (caux == '!') optnode->neg = 1;
-                /* Find the perl-compatible regular expression */
-                saux = index(optnode->content, '/');
-                saux_2 = saux;
-                end = 0;
-                while (!end) {
-                    saux_2 = index(saux_2 + 1, '/');
-                    if (!saux_2)
-                        end = 1;
-                    else if (strncmp(saux_2 - 1, "\\", 1))
-                        end = 1;
-                }
-                if (!saux || !saux_2) {
-                    /* The pcre was not found */
-                    yserror("rule %d: wrong pcre option", nrules);
-                    return 0;                    
-                }
-                optnode->cnt = (char *)prv_alloc(saux_2 - saux - 1);
-                strncpy(optnode->cnt, saux + 1, saux_2 - saux - 1);
+            }
                 
-                if (strlen(saux_2) > 1) {
-                    /* There are pcre modifiers after the expression */
-                    /* Perl-compatible modifiers */
-                    saux = index(saux_2 + 1, 'i');
-                    if (saux != NULL) pcre_opts |= PCRE_CASELESS;
-                    saux = index(saux_2 + 1, 's');
-                    if (saux != NULL) pcre_opts |= PCRE_DOTALL;
-                    saux = index(saux_2 + 1, 'm');
-                    if (saux != NULL) pcre_opts |= PCRE_MULTILINE;
-                    saux = index(saux_2 + 1, 'x');
-                    if (saux != NULL) pcre_opts |= PCRE_EXTENDED;
-                    /* PCRE-compatible modifiers */
-                    saux = index(saux_2 + 1, 'A');
-                    if (saux != NULL) pcre_opts |= PCRE_ANCHORED;
-                    saux = index(saux_2 + 1, 'E');
-                    if (saux != NULL) pcre_opts |= PCRE_DOLLAR_ENDONLY;
-                    saux = index(saux_2 + 1, 'G');
-                    if (saux != NULL) pcre_opts |= PCRE_UNGREEDY;
-                    /* Snort-only modifiers */
-                    saux = index(saux_2 + 1, 'R');
-                    if (saux != NULL) {
-                        /* Match relative to the end of the last pattern match */
-                        onode_cand = find_pm_option(opts, optnode);
-                        if (!onode_cand) {
-                            yserror("rule %d: pcre relative option without "
-                                    "previous pattern-matching option",
-                                    nrules);
-                            return 0;
-                        }
-                        else optnode->relative = 1;
-                    }
-                }
-                
-                /* Compile the pcre found in the rule */                
-                pcre_malloc = prv_alloc;
-                pcre_free = prv_free;
-                regexp_aux = pcre_compile(optnode->cnt, pcre_opts,
-                                          &pcre_error, &erroffset, NULL);
-                if (regexp_aux == NULL) {
-                    yserror("rule %d: wrong pcre expression, offset = %d, "
-                            "error = %s", nrules, erroffset, pcre_error);
-                    return 0;
-                } 
-                prv_free(optnode->cnt);
-                optnode->regexp = regexp_aux;
-#else
-                yserror("rule %d: pcre option found, but pcre support is "
-                        "disabled. please install libpcre and edit "
-                        "config_vars.local", nrules);
+            /* Compile the pcre found in the rule */                
+            pcre_malloc = prv_alloc;
+            pcre_free = prv_free;
+            regexp_aux = pcre_compile(optnode->cnt, pcre_opts,
+                                      &pcre_error, &erroffset, NULL);
+            if (regexp_aux == NULL) {
+                yserror("rule %d: wrong pcre expression, offset = %d, "
+                        "error = %s", nrules, erroffset, pcre_error);
                 return 0;
+            } 
+            prv_free(optnode->cnt);
+            optnode->regexp = regexp_aux;
+#else
+            yserror("rule %d: pcre option found, but pcre support is "
+                    "disabled. please install libpcre and edit "
+                    "config_vars.local", nrules);
+            return 0;
 #endif
-                break;
+            break;
+        case SNTOK_BYTETEST:
+            optnode->relative = 0;
+            optnode->byte_base = 0;
+            optnode->byte_isstring = 0;
+            /* We consider bytes in big-endian order by default */
+            optnode->byte_endian = BIGENDIAN;
+            optnode->byte_number = atoi(optnode->content);
+            saux = index(optnode->content, ',');
+            if (saux != NULL) {
+                tmpcnt = (char *)prv_alloc(2);
+                strncpy(tmpcnt, saux + 1, 1);
+                strncpy(tmpcnt + 1, "\0", 1); 
+                optnode->byte_op = translate_kw(tmpcnt);
+                prv_free(tmpcnt);
 
-            case SNTOK_BYTETEST:
-                optnode->relative = 0;
-                optnode->byte_base = 0;
-                optnode->byte_isstring = 0;
-                /* We consider bytes in big-endian order by default */
-                optnode->byte_endian = BIGENDIAN;
-                optnode->byte_number = atoi(optnode->content);
-                if (optnode->byte_number != 1 && optnode->byte_number != 2 &&
-                    optnode->byte_number != 4) {
-                    yserror("rule %d: the number of bytes in a byte_test "
-                            "option must be 1, 2 or 4", nrules);
-                    return 0;                    
-                }
-                saux = index(optnode->content, ',');
+                saux = index(saux + 1, ',');
                 if (saux != NULL) {
-                    tmpcnt = (char *)prv_alloc(1);
-                    strncpy(tmpcnt, saux + 1, 1);
-                    optnode->byte_op = translate_kw(tmpcnt);
-                    prv_free(tmpcnt);
-
-                    saux = index(optnode->content, ',');
+                    optnode->byte_value = atoi(saux + 1);
+                    saux = index(saux + 1, ',');
                     if (saux != NULL) {
-                        optnode->byte_value = atoi(saux + 1);
+                        optnode->byte_offset = atoi(saux + 1);
                         saux = index(saux + 1, ',');
                         if (saux != NULL) {
-                            optnode->byte_offset = atoi(saux + 1);
-                            saux = index(saux + 1, ',');
-                            if (saux != NULL) {
-                                if (strstr(saux + 1, "relative") != NULL) {
-                                    onode_cand = find_pm_option(opts, optnode);
-                                    if (!onode_cand) {
-                                        yserror("rule %d: byte_test relative "
-                                                "option without previous "
-                                                "pattern-matching option",
-                                                nrules);
-                                        return 0;
-                                    }                                    
-                                    else optnode->relative = 1;
-                                }
-                                if (strstr(saux + 1, "string") != NULL)
-                                    optnode->byte_isstring = 1;
-                                if (strstr(saux + 1, "hex") != NULL)
-                                    optnode->byte_base = 16;
-                                if (strstr(saux + 1, "dec") != NULL)
-                                    optnode->byte_base = 10;
-                                if (strstr(saux + 1, "oct") != NULL)
-                                    optnode->byte_base = 8;
-                                if (strstr(saux + 1, "big") != NULL)
-                                    optnode->byte_endian = BIGENDIAN;
-                                if (strstr(saux + 1, "little") != NULL)
-                                    optnode->byte_endian = LILENDIAN;
+                            if (strstr(saux + 1, "relative") != NULL) {
+                                onode_cand = find_pm_option(opts, optnode);
+                                if (!onode_cand) {
+                                    yserror("rule %d: byte_test relative "
+                                            "option without previous "
+                                            "pattern-matching option",
+                                            nrules);
+                                    return 0;
+                                }                                    
+                                else optnode->relative = 1;
                             }
+                            if (strstr(saux + 1, "string") != NULL)
+                                optnode->byte_isstring = 1;
+                            if (strstr(saux + 1, "hex") != NULL)
+                                optnode->byte_base = 16;
+                            if (strstr(saux + 1, "dec") != NULL)
+                                optnode->byte_base = 10;
+                            if (strstr(saux + 1, "oct") != NULL)
+                                optnode->byte_base = 8;
+                            if (strstr(saux + 1, "big") != NULL)
+                                optnode->byte_endian = BIGENDIAN;
+                            if (strstr(saux + 1, "little") != NULL)
+                                optnode->byte_endian = LILENDIAN;
                         }
-                        else {
-                            yserror("rule %d: insufficient parameters "
-                                    "in byte_test option", nrules);
-                            return 0;                            
-                        }
+                    } else {
+                        yserror("rule %d: insufficient parameters "
+                                "in byte_test option", nrules);
+                        return 0;                            
                     }
-                    else {
-                        yserror("rule %d: insufficient parameters in "
-                                "byte_test option", nrules);
-                        return 0;
-                    }
+                } else {
+                    yserror("rule %d: insufficient parameters in "
+                            "byte_test option", nrules);
+                    return 0;
                 }
-                else {
+            } else {
                     yserror("rule %d: insufficient parameters "
                             "in byte_test option", nrules);
                     return 0;
-                }
-                break;
-            case SNTOK_BYTEJUMP:
-                optnode->relative = 0;
-                optnode->byte_base = 0;
-                optnode->byte_isstring = 0;
-                /* We consider bytes in big-endian order by default */
-                optnode->byte_endian = BIGENDIAN;
-                optnode->byte_number = atoi(optnode->content);
-                if (optnode->byte_number != 1 && optnode->byte_number != 2 &&
-                    optnode->byte_number != 4) {
-                    yserror("rule %d: the number of bytes in a byte_test "
-                            "option must be 1, 2 or 4", nrules);
-                    return 0;                    
-                }
-                saux = index(optnode->content, ',');
+            }
+            if (!(optnode->byte_isstring) && optnode->byte_number != 1 &&
+                optnode->byte_number != 2 && optnode->byte_number != 4) {
+                yserror("rule %d: the number of bytes in a byte_test "
+                        "option must be 1, 2 or 4", nrules);
+                return 0;                    
+            }
+            break;
+        case SNTOK_BYTEJUMP:
+            optnode->relative = 0;
+            optnode->byte_base = 0;
+            optnode->byte_isstring = 0;
+            optnode->byte_multi = 1;
+            /* We consider bytes in big-endian order by default */
+            optnode->byte_endian = BIGENDIAN;
+            optnode->byte_number = atoi(optnode->content);
+            if (optnode->byte_number != 1 && optnode->byte_number != 2 &&
+                optnode->byte_number != 4) {
+                yserror("rule %d: the number of bytes in a byte_test "
+                        "option must be 1, 2 or 4", nrules);
+                return 0;                    
+            }
+            saux = index(optnode->content, ',');
+            if (saux != NULL) {
+                optnode->byte_offset = atoi(saux + 1);
+                saux = index(saux + 1, ',');
                 if (saux != NULL) {
-                    optnode->byte_offset = atoi(saux + 1);
-                    saux = index(saux + 1, ',');
-                    if (saux != NULL) {
-                        if (strstr(saux + 1, "relative") != NULL) {
-                            onode_cand = find_pm_option(opts, optnode);
-                            if (!onode_cand) {
-                                yserror("rule %d: byte_test relative option "
-                                        "without previous pattern-matching "
-                                        "option", nrules);
-                                return 0;
-                            }                                    
-                            else optnode->relative = 1;                        
-                        }
-                        if ((saux_2 = strstr(saux + 1, "multiplier")) != NULL) {
-                            optnode->byte_multi = atoi(saux_2 + 12);
-                        }
-                        if (strstr(saux + 1, "string") != NULL)
-                            optnode->byte_isstring = 1;
-                        if (strstr(saux + 1, "hex") != NULL)
-                            optnode->byte_base = 16;
-                        if (strstr(saux + 1, "dec") != NULL)
-                            optnode->byte_base = 10;
-                        if (strstr(saux + 1, "oct") != NULL)
-                            optnode->byte_base = 8;
-                        if (strstr(saux + 1, "big") != NULL)
-                            optnode->byte_endian = BIGENDIAN;
-                        if (strstr(saux + 1, "little") != NULL)
-                            optnode->byte_endian = LILENDIAN;
+                    if (strstr(saux + 1, "relative") != NULL) {
+                        onode_cand = find_pm_option(opts, optnode);
+                        if (!onode_cand) {
+                            yserror("rule %d: byte_test relative option "
+                                    "without previous pattern-matching "
+                                    "option", nrules);
+                            return 0;
+                        } else optnode->relative = 1;                        
                     }
-                }
-                else {
-                    yserror("rule %d: insufficient parameters in byte_jump "
-                            "option", nrules);
-                    return 0;
-                }
-                break;
-            case SNTOK_FROFFSET:
-                opt->fragoffcmp = 0;
-                opt->fragoffset = 0;
-                if (optnode->content[0] == '<' || optnode->content[0] == '>') { 
-                    tmpcnt = (char *)prv_alloc(1);
-                    strncpy(tmpcnt, optnode->content, 1);
-                    opt->fragoffcmp = translate_kw(tmpcnt);
-                    prv_free(tmpcnt);
-                    opt->fragoffset = atoi(optnode->content + 1);
-                }
-                else {
-                    opt->fragoffcmp = SNTOK_EQ;
-                    opt->fragoffset = atoi(optnode->content);
-                }
-                break;
-            case SNTOK_TTL:
-                opt->ttllow = 0;
-                opt->ttlhigh = 0;
-                opt->ttlcmp = 0;
-                if (optnode->content[0] == '<' || optnode->content[0] == '>' ||
-                    optnode->content[0] == '=') {
-                    tmpcnt = (char *)prv_alloc(1);
-                    strncpy(tmpcnt, optnode->content, 1);
-                    opt->ttlcmp = translate_kw(tmpcnt);
-                    prv_free(tmpcnt);
-                    opt->ttllow = atoi(optnode->content + 1);
-                }
-                else {
-                    saux = index(optnode->content, '-');
-                    if (saux == NULL) {
-                        opt->ttlcmp = SNTOK_EQ;
-                        opt->ttllow = atoi(optnode->content);
+                    if ((saux_2 = strstr(saux + 1, "multiplier")) != NULL) {
+                        optnode->byte_multi = atoi(saux_2 + 12);
                     }
-                    else {
-                        opt->ttlcmp = SNTOK_BETWEEN;
-                        opt->ttllow = atoi(optnode->content);
-                        opt->ttlhigh = atoi(saux + 1);
-                    }
+                    if (strstr(saux + 1, "string") != NULL)
+                        optnode->byte_isstring = 1;
+                    if (strstr(saux + 1, "hex") != NULL)
+                        optnode->byte_base = 16;
+                    if (strstr(saux + 1, "dec") != NULL)
+                        optnode->byte_base = 10;
+                    if (strstr(saux + 1, "oct") != NULL)
+                        optnode->byte_base = 8;
+                    if (strstr(saux + 1, "big") != NULL)
+                        optnode->byte_endian = BIGENDIAN;
+                    if (strstr(saux + 1, "little") != NULL)
+                        optnode->byte_endian = LILENDIAN;
                 }
-                break;
-            case SNTOK_TOS:
-                optnode->neg = 0;
-                opt->tos = 0;
-                if (optnode->content[0] == '!') {
-                    optnode->neg = 1;
-                    opt->tos = atoi(optnode->content + 1);
+            } else {
+                yserror("rule %d: insufficient parameters in byte_jump "
+                        "option", nrules);
+                return 0;
+            }
+            break;
+        case SNTOK_FROFFSET:
+            opt->fragoffcmp = 0;
+            opt->fragoffset = 0;
+            if (optnode->content[0] == '<' || optnode->content[0] == '>') { 
+                tmpcnt = (char *)prv_alloc(2);
+                strncpy(tmpcnt, optnode->content, 1);
+                strncpy(tmpcnt + 1, "\0", 1); 
+                opt->fragoffcmp = translate_kw(tmpcnt);
+                prv_free(tmpcnt);
+                opt->fragoffset = atoi(optnode->content + 1);
+            } else {
+                opt->fragoffcmp = SNTOK_EQ;
+                opt->fragoffset = atoi(optnode->content);
+            }
+            break;
+        case SNTOK_TTL:
+            opt->ttllow = 0;
+            opt->ttlhigh = 0;
+            opt->ttlcmp = 0;
+            if (optnode->content[0] == '<' || optnode->content[0] == '>' ||
+                optnode->content[0] == '=') {
+                tmpcnt = (char *)prv_alloc(2);
+                strncpy(tmpcnt, optnode->content, 1);
+                strncpy(tmpcnt + 1, "\0", 1); 
+                opt->ttlcmp = translate_kw(tmpcnt);
+                prv_free(tmpcnt);
+                opt->ttllow = atoi(optnode->content + 1);
+            } else {
+                saux = index(optnode->content, '-');
+                if (saux == NULL) {
+                    opt->ttlcmp = SNTOK_EQ;
+                    opt->ttllow = atoi(optnode->content);
+                } else {
+                    opt->ttlcmp = SNTOK_BETWEEN;
+                    opt->ttllow = atoi(optnode->content);
+                    opt->ttlhigh = atoi(saux + 1);
                 }
+            }
+            break;
+        case SNTOK_TOS:
+            optnode->neg = 0;
+            opt->tos = 0;
+            if (optnode->content[0] == '!') {
+                optnode->neg = 1;
+                opt->tos = atoi(optnode->content + 1);
+            } else
+                opt->tos = atoi(optnode->content);
+            break;
+        case SNTOK_IPID:
+            opt->ipid = atoi(optnode->content);
+            break;
+        case SNTOK_IPOPTS:
+            opt->ipopts = 0;
+            opt->ipopts_any = 0;
+            saux_2 = (char *)prv_alloc(MAX_STR_SIZE);
+            saux = strtok_r(optnode->content, "|", &saux_2);
+            while (saux != NULL) {
+                if (strstr(saux, "rr") != NULL)
+                    opt->ipopts |= IPOPT_RR;
+                if (strstr(saux, "eol") != NULL)
+                    opt->ipopts |= IPOPT_EOL;
+                if (strstr(saux, "nop") != NULL)
+                    opt->ipopts |= IPOPT_NOP;
+                if (strstr(saux, "ts") != NULL)
+                    opt->ipopts |= IPOPT_TS;
+                if (strstr(saux, "sec") != NULL)
+                    opt->ipopts |= IPOPT_SEC;
+                if (strstr(saux, "lsrr") != NULL)
+                    opt->ipopts |= IPOPT_LSRR;
+                if (strstr(saux, "ssrr") != NULL)
+                    opt->ipopts |= IPOPT_SSRR;
+                if (strstr(saux, "satid") != NULL)
+                    opt->ipopts |= IPOPT_SATID;
+                if (strstr(saux, "any") != NULL)
+                    opt->ipopts_any = 1;
+                saux = strtok_r(NULL, "|", &saux_2);
+            }
+            /* Add EOL option if it's not already present, as we will
+             * find it in any packets with options anyway
+             */
+            if ((opt->ipopts & IPOPT_EOL) != IPOPT_EOL)
+                opt->ipopts |= IPOPT_EOL;
+            if (!(opt->ipopts)) {
+                yserror("rule %d: empty or wrong ipopts option", nrules);
+                return 0;                
+            }
+            break;
+        case SNTOK_FRAGBITS:
+            opt->fragbits = 0;
+            opt->fragbitscmp = 0;
+            for (idx = 0; idx < strlen(optnode->content); idx++) {
+                switch (optnode->content[idx]) {
+                case 'M':
+                    opt->fragbits |= FB_MF;
+                    break;
+                case 'D':
+                    opt->fragbits |= FB_DF;
+                    break;
+                case 'R':
+                    opt->fragbits |= FB_RSV;
+                    break;
+                case '+':
+                    opt->fragbitscmp = FB_ALL;
+                    break;
+                case '*':
+                    opt->fragbitscmp = FB_ANY;
+                    break;
+                case '!':
+                    opt->fragbitscmp = FB_NOT;
+                    break;
+                }
+            }
+            break;
+        case SNTOK_DSIZE:
+            opt->dsizelow = 0;
+            opt->dsizehigh = 0;
+            opt->dsizecmp = 0;
+            if (optnode->content[0] == '>') {
+                opt->dsizelow = atoi(optnode->content + 1);
+                opt->dsizecmp = SNTOK_GT;
+            } else if (optnode->content[0] == '<') {
+                opt->dsizelow = atoi(optnode->content + 1);
+                opt->dsizecmp = SNTOK_LT;                        
+            } else if ((saux = strstr(optnode->content, "<>")) != NULL) {
+                opt->dsizelow = atoi(optnode->content);
+                opt->dsizehigh = atoi(saux + 2);
+                opt->dsizecmp = SNTOK_BETWEEN;
+            } else {
+                opt->dsizelow = atoi(optnode->content);
+                opt->dsizecmp = SNTOK_EQ;
+            }                    
+            break;                
+        case SNTOK_FLAGS:
+            if (info->proto != IPPROTO_TCP) {
+                yserror("rule %d: flags option not compatible with "
+                        "non-tcp rule", nrules);
+                return 0;                
+            }
+            opt->flags = 0;
+            opt->flagsnone = 0;
+            opt->flagscmp = 0;
+            for (idx = 0; idx < strlen(optnode->content); idx++) {
+                switch (optnode->content[idx]) {
+                case 'F':
+                    opt->flags |= FLG_FIN;
+                    break;
+                case 'S':
+                    opt->flags |= FLG_SYN;
+                    break;
+                case 'R':
+                    opt->flags |= FLG_RST;
+                    break;
+                case 'P':
+                    opt->flags |= FLG_PSH;
+                    break;
+                case 'A':
+                    opt->flags |= FLG_ACK;
+                    break;
+                case 'U':
+                    opt->flags |= FLG_URG;
+                    break;
+                case '1':
+                    opt->flags |= FLG_RSV1;
+                    break;
+                case '2':
+                    opt->flags |= FLG_RSV2;
+                    break;
+                case '0':
+                    opt->flagsnone = 1;
+                    break;
+                case '+':
+                    opt->flagscmp = FLG_ALL;
+                    break;
+                case '*':
+                    opt->flagscmp = FLG_ANY;
+                    break;
+                case '!':
+                    opt->flagscmp = FLG_NOT;
+                    break;
+                }
+            }
+            break;
+        case SNTOK_SEQ:
+            if (info->proto != IPPROTO_TCP) {
+                yserror("rule %d: seq option not compatible "
+                        "with non-tcp rule", nrules);
+                return 0;                
+            }                
+            opt->seq = atoi(optnode->content);
+            break;
+        case SNTOK_ACK:
+            if (info->proto != IPPROTO_TCP) {
+                yserror("rule %d: ack option not compatible "
+                        "with non-tcp rule", nrules);
+                return 0;                
+            }
+            opt->ack = atoi(optnode->content);
+            break;
+        case SNTOK_WINDOW:
+            if (info->proto != IPPROTO_TCP) {
+                yserror("rule %d: window option not compatible "
+                        "with non-tcp rule", nrules);
+                return 0;                
+            }
+            optnode->neg = 0;
+            if (optnode->content[0] == '!') {
+                optnode->neg = 1;
+                opt->window = atoi(optnode->content + 1);
+            } else
+                opt->window = atoi(optnode->content);
+            break;
+        case SNTOK_ITYPE:
+            if (info->proto != IPPROTO_ICMP) {
+                yserror("rule %d: itype option not compatible "
+                        "with non-icmp rule", nrules);
+                return 0;                
+            }                
+            opt->itypelow = 0;
+            opt->itypehigh = 0;
+            opt->itypecmp = 0;
+            if (optnode->content[0] == '>') {
+                opt->itypelow = atoi(optnode->content + 1);
+                opt->itypecmp = SNTOK_GT;
+            } else if (optnode->content[0] == '<') {
+                opt->itypelow = atoi(optnode->content + 1);
+                opt->itypecmp = SNTOK_LT;                        
+            } else if ((saux = strstr(optnode->content, "<>")) != NULL) {
+                opt->itypelow = atoi(optnode->content);
+                opt->itypehigh = atoi(saux + 2);
+                opt->itypecmp = SNTOK_BETWEEN;
+            } else {
+                opt->itypelow = atoi(optnode->content);
+                opt->itypecmp = SNTOK_EQ;
+            }                    
+            break;                
+        case SNTOK_ICODE:
+            if (info->proto != IPPROTO_ICMP) {
+                yserror("rule %d: icode option not compatible "
+                        "with non-icmp rule", nrules);
+                return 0;                
+            }                
+            opt->icodelow = 0;
+            opt->icodehigh = 0;
+            opt->icodecmp = 0;
+            if (optnode->content[0] == '>') {
+                opt->icodelow = atoi(optnode->content + 1);
+                opt->icodecmp = SNTOK_GT;
+            } else if (optnode->content[0] == '<') {
+                opt->icodelow = atoi(optnode->content + 1);
+                opt->icodecmp = SNTOK_LT;                        
+            } else if ((saux = strstr(optnode->content, "<>")) != NULL) {
+                opt->icodelow = atoi(optnode->content);
+                opt->icodehigh = atoi(saux + 2);
+                opt->icodecmp = SNTOK_BETWEEN;
+            } else {
+                opt->icodelow = atoi(optnode->content);
+                opt->icodecmp = SNTOK_EQ;
+            }                    
+            break;
+        case SNTOK_ICMPID:
+            if (info->proto != IPPROTO_ICMP) {
+                yserror("rule %d: icmp_id option not compatible "
+                        "with non-icmp rule", nrules);
+                return 0;                
+            }                
+            opt->icmpid = atoi(optnode->content);
+            break;
+        case SNTOK_ICMPSEQ:
+            if (info->proto != IPPROTO_ICMP) {
+                yserror("rule %d: icmp_seq option not compatible "
+                        "with non-icmp rule", nrules);
+                return 0;                
+            }                
+            opt->icmpseq = atoi(optnode->content);
+            break;
+        case SNTOK_IPPROTO:
+            opt->ipprotocmp = 0;
+            opt->ipproto = 0;
+            if (optnode->content[0] == '<' || optnode->content[0] == '>' ||
+                optnode->content[0] == '!') { 
+                tmpcnt = (char *)prv_alloc(2);
+                strncpy(tmpcnt, optnode->content, 1);
+                strncpy(tmpcnt + 1, "\0", 1); 
+                opt->ipprotocmp = translate_kw(tmpcnt);
+                prv_free(tmpcnt);
+                if (isdigit(optnode->content[1]))
+                    opt->ipproto = atoi(optnode->content + 1);
                 else
-                    opt->tos = atoi(optnode->content);
-                break;
-            case SNTOK_IPID:
-                opt->ipid = atoi(optnode->content);
-                break;
-            case SNTOK_IPOPTS:
-                opt->ipopts = 0;
-                opt->ipopts_any = 0;
-                saux_2 = (char *)prv_alloc(MAX_STR_SIZE);
-                saux = strtok_r(optnode->content, "|", &saux_2);
-                while (saux != NULL) {
-                    if (strstr(saux, "rr") != NULL)
-                        opt->ipopts |= IPOPT_RR;
-                    if (strstr(saux, "eol") != NULL)
-                        opt->ipopts |= IPOPT_EOL;
-                    if (strstr(saux, "nop") != NULL)
-                        opt->ipopts |= IPOPT_NOP;
-                    if (strstr(saux, "ts") != NULL)
-                        opt->ipopts |= IPOPT_TS;
-                    if (strstr(saux, "sec") != NULL)
-                        opt->ipopts |= IPOPT_SEC;
-                    if (strstr(saux, "lsrr") != NULL)
-                        opt->ipopts |= IPOPT_LSRR;
-                    if (strstr(saux, "ssrr") != NULL)
-                        opt->ipopts |= IPOPT_SSRR;
-                    if (strstr(saux, "satid") != NULL)
-                        opt->ipopts |= IPOPT_SATID;
-                    if (strstr(saux, "any") != NULL)
-                        opt->ipopts_any = 1;
-                    saux = strtok_r(NULL, "|", &saux_2);
-                }
-                if (!(opt->ipopts)) {
-                    yserror("rule %d: empty or wrong ipopts option", nrules);
-                    return 0;                
-                }
-                break;
-            case SNTOK_FRAGBITS:
-                opt->fragbits = 0;
-                opt->fragbitscmp = 0;
-                for (idx = 0; idx < strlen(optnode->content); idx++) {
-                    switch (optnode->content[idx]) {
-                        case 'M':
-                            opt->fragbits |= FB_MF;
-                            break;
-                        case 'D':
-                            opt->fragbits |= FB_DF;
-                            break;
-                        case 'R':
-                            opt->fragbits |= FB_RSV;
-                            break;
-                        case '+':
-                            opt->fragbitscmp = FB_ALL;
-                            break;
-                        case '*':
-                            opt->fragbitscmp = FB_ANY;
-                            break;
-                        case '!':
-                            opt->fragbitscmp = FB_NOT;
-                            break;
-                    }
-                }
-                break;
-            case SNTOK_DSIZE:
-                opt->dsizelow = 0;
-                opt->dsizehigh = 0;
-                opt->dsizecmp = 0;
-                if (optnode->content[0] == '>') {
-                    opt->dsizelow = atoi(optnode->content + 1);
-                    opt->dsizecmp = SNTOK_GT;
-                }
-                else if (optnode->content[0] == '<') {
-                    opt->dsizelow = atoi(optnode->content + 1);
-                    opt->dsizecmp = SNTOK_LT;                        
-                }
-                else if ((saux = strstr(optnode->content, "<>")) != NULL) {
-                    opt->dsizelow = atoi(optnode->content);
-                    opt->dsizehigh = atoi(saux + 2);
-                    opt->dsizecmp = SNTOK_BETWEEN;
-                }
-                else {
-                    opt->dsizelow = atoi(optnode->content);
-                    opt->dsizecmp = SNTOK_EQ;
-                }                    
-                break;                
-            case SNTOK_FLAGS:
-                if (info->proto != IPPROTO_TCP) {
-                    yserror("rule %d: flags option not compatible with "
-                            "non-tcp rule", nrules);
-                    return 0;                
-                }
-                opt->flags = 0;
-                opt->flagsnone = 0;
-                opt->flagscmp = 0;
-                for (idx = 0; idx < strlen(optnode->content); idx++) {
-                    switch (optnode->content[idx]) {
-                        case 'F':
-                            opt->flags |= FLG_FIN;
-                            break;
-                        case 'S':
-                            opt->flags |= FLG_SYN;
-                            break;
-                        case 'R':
-                            opt->flags |= FLG_RST;
-                            break;
-                        case 'P':
-                            opt->flags |= FLG_PSH;
-                            break;
-                        case 'A':
-                            opt->flags |= FLG_ACK;
-                            break;
-                        case 'U':
-                            opt->flags |= FLG_URG;
-                            break;
-                        case '1':
-                            opt->flags |= FLG_RSV1;
-                            break;
-                        case '2':
-                            opt->flags |= FLG_RSV2;
-                            break;
-                        case '0':
-                            opt->flagsnone = 1;
-                            break;
-                        case '+':
-                            opt->flagscmp = FLG_ALL;
-                            break;
-                        case '*':
-                            opt->flagscmp = FLG_ANY;
-                            break;
-                        case '!':
-                            opt->flagscmp = FLG_NOT;
-                            break;
-                    }
-                }
-                break;
-            case SNTOK_SEQ:
-                if (info->proto != IPPROTO_TCP) {
-                    yserror("rule %d: seq option not compatible "
-                            "with non-tcp rule", nrules);
-                    return 0;                
-                }                
-                opt->seq = atoi(optnode->content);
-                break;
-            case SNTOK_ACK:
-                if (info->proto != IPPROTO_TCP) {
-                    yserror("rule %d: ack option not compatible "
-                            "with non-tcp rule", nrules);
-                    return 0;                
-                }
-                opt->ack = atoi(optnode->content);
-                break;
-            case SNTOK_WINDOW:
-                if (info->proto != IPPROTO_TCP) {
-                    yserror("rule %d: window option not compatible "
-                            "with non-tcp rule", nrules);
-                    return 0;                
-                }
-                optnode->neg = 0;
-                if (optnode->content[0] == '!') {
-                    optnode->neg = 1;
-                    opt->window = atoi(optnode->content + 1);
-                }
+                    opt->ipproto = translate_kw(optnode->content + 1);
+            } else {
+                opt->ipprotocmp = SNTOK_EQ;
+                if (isdigit(optnode->content[0]))
+                    opt->ipproto = atoi(optnode->content);
                 else
-                    opt->window = atoi(optnode->content);
-                break;
-            case SNTOK_ITYPE:
-                if (info->proto != IPPROTO_ICMP) {
-                    yserror("rule %d: itype option not compatible "
-                            "with non-icmp rule", nrules);
-                    return 0;                
-                }                
-                opt->itypelow = 0;
-                opt->itypehigh = 0;
-                opt->itypecmp = 0;
-                if (optnode->content[0] == '>') {
-                    opt->itypelow = atoi(optnode->content + 1);
-                    opt->itypecmp = SNTOK_GT;
-                }
-                else if (optnode->content[0] == '<') {
-                    opt->itypelow = atoi(optnode->content + 1);
-                    opt->itypecmp = SNTOK_LT;                        
-                }
-                else if ((saux = strstr(optnode->content, "<>")) != NULL) {
-                    opt->itypelow = atoi(optnode->content);
-                    opt->itypehigh = atoi(saux + 2);
-                    opt->itypecmp = SNTOK_BETWEEN;
-                }
-                else {
-                    opt->itypelow = atoi(optnode->content);
-                    opt->itypecmp = SNTOK_EQ;
-                }                    
-                break;                
-            case SNTOK_ICODE:
-                if (info->proto != IPPROTO_ICMP) {
-                    yserror("rule %d: icode option not compatible "
-                            "with non-icmp rule", nrules);
-                    return 0;                
-                }                
-                opt->icodelow = 0;
-                opt->icodehigh = 0;
-                opt->icodecmp = 0;
-                if (optnode->content[0] == '>') {
-                    opt->icodelow = atoi(optnode->content + 1);
-                    opt->icodecmp = SNTOK_GT;
-                }
-                else if (optnode->content[0] == '<') {
-                    opt->icodelow = atoi(optnode->content + 1);
-                    opt->icodecmp = SNTOK_LT;                        
-                }
-                else if ((saux = strstr(optnode->content, "<>")) != NULL) {
-                    opt->icodelow = atoi(optnode->content);
-                    opt->icodehigh = atoi(saux + 2);
-                    opt->icodecmp = SNTOK_BETWEEN;
-                }
-                else {
-                    opt->icodelow = atoi(optnode->content);
-                    opt->icodecmp = SNTOK_EQ;
-                }                    
-                break;
-            case SNTOK_ICMPID:
-                if (info->proto != IPPROTO_ICMP) {
-                    yserror("rule %d: icmp_id option not compatible "
-                            "with non-icmp rule", nrules);
-                    return 0;                
-                }                
-                opt->icmpid = atoi(optnode->content);
-                break;
-            case SNTOK_ICMPSEQ:
-                if (info->proto != IPPROTO_ICMP) {
-                    yserror("rule %d: icmp_seq option not compatible "
-                            "with non-icmp rule", nrules);
-                    return 0;                
-                }                
-                opt->icmpseq = atoi(optnode->content);
-                break;
-            case SNTOK_IPPROTO:
-                opt->ipprotocmp = 0;
-                opt->ipproto = 0;
-                if (optnode->content[0] == '<' || optnode->content[0] == '>' ||
-                    optnode->content[0] == '!') { 
-                    tmpcnt = (char *)prv_alloc(1);
-                    strncpy(tmpcnt, optnode->content, 1);
-                    opt->ipprotocmp = translate_kw(tmpcnt);
-                    prv_free(tmpcnt);
-                    if (isdigit(optnode->content[1]))
-                        opt->ipproto = atoi(optnode->content + 1);
-                    else
-                        opt->ipproto = translate_kw(optnode->content + 1);
-                }
-                else {
-                    opt->ipprotocmp = SNTOK_EQ;
-                    if (isdigit(optnode->content[0]))
-                        opt->ipproto = atoi(optnode->content);
-                    else
-                        opt->ipproto = translate_kw(optnode->content);                    
-                }
-                break;
+                    opt->ipproto = translate_kw(optnode->content);                          }
+            break;
         }
         optnode = optnode->next;
     }
@@ -1422,8 +1408,7 @@ add_rule(uint8_t action, unsigned int proto,
             ri = info;
             opt->rule = ri;
             ri->opts = opt;
-        }
-        else {
+        } else {
             ricur = ri;
             riprev = NULL;
             do {
@@ -1468,7 +1453,8 @@ int yslex();
     ip_t            ip;
     portset_t       port;
     varinfo_t       varinfo;
-    uint8_t         uint;
+    uint8_t         uint8;
+    uint16_t        uint16;
     int             integer;
     optnode_t       *optnode;
 }
@@ -1507,8 +1493,8 @@ int yslex();
 %type <port>        portdescvar
 %type <varinfo>     var
 %type <integer>     action
-%type <uint>        proto
-%type <uint>        direction
+%type <uint16>      proto
+%type <uint8>       direction
 %type <optnode>     options
 %type <optnode>     optset
 %type <optnode>     option
@@ -1715,24 +1701,24 @@ optset : option {
                         $$->next = NULL;
                 }
        | option optset {
-                            if ($1 != NULL) {
-                                $$ = $1;
-                                optaux =
-                                    (optnode_t *)prv_alloc(sizeof(optnode_t));
-                                if (optaux == NULL) YYABORT;
-                                optaux->keyword = $2->keyword;
-                                if ($2->content != NULL) {
-                                    optaux->content =
-                                        (char *)prv_alloc(strlen($2->content)+1);                            
-                                    if (optaux->content == NULL) YYABORT;
-                                    strncpy(optaux->content, $2->content,
-                                            strlen($2->content)+1);
-                                } else
-                                    optaux->content = NULL;
-                                optaux->next = $2->next;
-                                $$->next = optaux;
+                        if ($1 != NULL) {
+                            $$ = $1;
+                            optaux =
+                                (optnode_t *)prv_alloc(sizeof(optnode_t));
+                            if (optaux == NULL) YYABORT;
+                            optaux->keyword = $2->keyword;
+                            if ($2->content != NULL) {
+                                optaux->content =
+                                    (char *)prv_alloc(strlen($2->content)+1);                            
+                                if (optaux->content == NULL) YYABORT;
+                                strncpy(optaux->content, $2->content,
+                                        strlen($2->content)+1);
                             } else
-                                $$ = $2;
+                                optaux->content = NULL;
+                            optaux->next = $2->next;
+                            $$->next = optaux;
+                        } else
+                            $$ = $2;
                        }
 
 option : KEYWORD CONTENT {
@@ -1766,14 +1752,15 @@ option : KEYWORD CONTENT {
 
 #include "snort-lexic.c"
 
-void yserror(char *fmt, ...)
+void
+yserror(char *fmt, ...)
 { 
     va_list ap;
     char error[255];
     
     va_start(ap, fmt);
     vsnprintf(error, sizeof(error), fmt, ap);
-    logmsg(LOGWARN, "SNORT module error: line %d: %s\n", linenum, error);
+    logmsg(LOGMODULE, "SNORT module error: line %d: %s\n", linenum, error);
     va_end(ap);
     rule_is_valid = 0;
 }

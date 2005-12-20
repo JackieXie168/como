@@ -47,13 +47,15 @@
  * Precalculate the first jump table
  *
  */
-void preBmBc(char *x, int m, int bmBc[]) {
-   int i;
+void
+preBmBc(char *x, int m, int bmBc[])
+{
+    int i;
  
-   for (i = 0; i < ASIZE; ++i)
-      bmBc[i] = m;
-   for (i = 0; i < m - 1; ++i)
-      bmBc[(unsigned char)x[i]] = m - i - 1;
+    for (i = 0; i < ASIZE; ++i)
+        bmBc[i] = m;
+    for (i = 0; i < m - 1; ++i)
+        bmBc[(unsigned char)x[i]] = m - i - 1;
 }
  
 /*
@@ -63,23 +65,25 @@ void preBmBc(char *x, int m, int bmBc[]) {
  * given string
  *
  */
-void suffixes(char *x, int m, int *suff) {
-   int f, g, i;
+void
+suffixes(char *x, int m, int *suff)
+{
+    int f, g, i;
  
-   suff[m - 1] = m;
-   g = m - 1;
-   for (i = m - 2; i >= 0; --i) {
-      if (i > g && suff[i + m - 1 - f] < i - g)
-         suff[i] = suff[i + m - 1 - f];
-      else {
-         if (i < g)
-            g = i;
-         f = i;
-         while (g >= 0 && x[g] == x[g + m - 1 - f])
-            --g;
-         suff[i] = f - g;
-      }
-   }
+    suff[m - 1] = m;
+    g = m - 1;
+    for (i = m - 2; i >= 0; --i) {
+        if (i > g && suff[i + m - 1 - f] < i - g)
+            suff[i] = suff[i + m - 1 - f];
+        else {
+            if (i < g)
+                g = i;
+            f = i;
+            while (g >= 0 && x[g] == x[g + m - 1 - f])
+                --g;
+            suff[i] = f - g;
+        }
+    }
 }
  
 /*
@@ -88,21 +92,23 @@ void suffixes(char *x, int m, int *suff) {
  * Precalculate the second jump table
  *
  */
-void preBmGs(char *x, int m, int bmGs[]) {
-   int i, j, suff[m];
+void
+preBmGs(char *x, int m, int bmGs[])
+{
+    int i, j, suff[m];
  
-   suffixes(x, m, suff);
+    suffixes(x, m, suff);
  
-   for (i = 0; i < m; ++i)
-      bmGs[i] = m;
-   j = 0;
-   for (i = m - 1; i >= -1; --i)
-      if (i == -1 || suff[i] == i + 1)
-         for (; j < m - 1 - i; ++j)
-            if (bmGs[j] == m)
-               bmGs[j] = m - 1 - i;
-   for (i = 0; i <= m - 2; ++i)
-      bmGs[m - 1 - suff[i]] = m - 1 - i;
+    for (i = 0; i < m; ++i)
+        bmGs[i] = m;
+    j = 0;
+    for (i = m - 1; i >= -1; --i)
+        if (i == -1 || suff[i] == i + 1)
+            for (; j < m - 1 - i; ++j)
+                if (bmGs[j] == m)
+                    bmGs[j] = m - 1 - i;
+    for (i = 0; i <= m - 2; ++i)
+        bmGs[m - 1 - suff[i]] = m - 1 - i;
 }
  
 
@@ -141,7 +147,7 @@ BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], uint *found)
 	 * will be the maximum between the shifts in the 
 	 * two precomputed tables
 	 */
-	k = bmBc[(uint) y[i + j]] - m + 1 + i; 
+	k = bmBc[(unsigned char) y[i + j]] - m + 1 + i; 
 	j += (bmGs[i] > k)? bmGs[i] : k; 
     }
 

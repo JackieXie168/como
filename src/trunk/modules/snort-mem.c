@@ -81,7 +81,6 @@ extern size_t prv_memsize;
  * Put block ap in free list
  *
  */
-
 void
 prv_free(void *ap)
 {
@@ -130,7 +129,6 @@ morecore(unsigned nunits)
  * space of the module
  *
  */
-
 void *
 prv_alloc(unsigned int nbytes)
 {
@@ -164,7 +162,6 @@ prv_alloc(unsigned int nbytes)
  * -- prv_realloc
  *
  */
-
 void *
 prv_realloc(void *ptr, unsigned int nbytes)
 {
