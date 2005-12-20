@@ -209,6 +209,7 @@ set_flags(uint32_t flags, char *arg)
 	{ "sniff",	0,	LOGSNIFFER	},
 	{ "timer",	0,	LOGTIMER	},
 	{ "debug",	0,	LOGDEBUG	},
+	{ "module",	0,	LOGMODULE	},
 	{ "all",	0,	LOGALL		},
 	{ NULL,		0,	0		}
     };

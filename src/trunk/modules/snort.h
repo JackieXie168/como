@@ -69,9 +69,9 @@
 #define IPOPT_SATID     128
 
 /* Constants for fragbits option */
-#define FB_MF   0x1000
-#define FB_DF   0x2000
-#define FB_RSV  0x4000
+#define FB_MF   0x2000
+#define FB_DF   0x4000
+#define FB_RSV  0x8000
 
 #define FB_NOT  1
 #define FB_ALL  2
@@ -287,7 +287,7 @@ typedef struct _opt opt_t;
 
 struct _ruleinfo {
     struct _ruleinfo    *next;
-    uint8_t	        proto;
+    uint16_t	        proto;
     ip_t                src_ips;
     ip_t    	        dst_ips;
     portset_t           src_ports;
