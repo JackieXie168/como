@@ -302,8 +302,8 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (FLOWDESC *) buf;
     ts = (time_t)ntohl(x->ts);
-    saddr.s_addr = N32(x->src_ip) & 0x00ffffff;
-    daddr.s_addr = N32(x->dst_ip) & 0x00ffffff;
+    saddr.s_addr = N32(x->src_ip);
+    daddr.s_addr = N32(x->dst_ip);
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 
