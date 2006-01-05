@@ -63,7 +63,7 @@ if (stristr($browser, "msie")) {
 $MYLOGO = "./images/intel.gif";
 
 /*  Absolute and Webroot directory location  */
-$WEB_ROOT = dirname($_SERVER['SCRIPT_NAME']);
-$ABS_ROOT = dirname($_SERVER['SCRIPT_FILENAME']);
+$WEBROOT = dirname($_SERVER['SCRIPT_NAME']);
+$ABSROOT = dirname($_SERVER['SCRIPT_FILENAME']);
 
 ?>
