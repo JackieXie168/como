@@ -136,7 +136,10 @@
             }
 	}
 
+
         ?>
+      Download: [<a href=<?=$filename?>.jpg>JPG</a>]
+                [<a href=<?=$filename?>.eps>EPS</a>]
       </center>
     </object>
   </body>

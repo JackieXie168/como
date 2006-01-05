@@ -23,7 +23,13 @@
 
 <?php
     /* comolive.conf is the global configuration file  */
-    include("comolive.conf");
+    if (file_exists("comolive.conf"))
+	include("comolive.conf");
+    else {
+        print "Please create a comolive.conf file";
+        exit;
+    }
+        
 
     if ($includebanner) {
 	print "<div id=header><a href=/>";

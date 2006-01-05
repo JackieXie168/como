@@ -8,6 +8,7 @@
     $hours = floor(($duration % 86400) / 3600);
     $mins = floor(($duration % 3600) / 60); 
     $secs = $duration % 60; 
+
 ?>
 
 <html>
@@ -56,14 +57,11 @@
             print "&nbsp; $endstr<br>\n"; 
 	    print "&nbsp; [${days}d ${hours}h ${mins}m ${secs}s]<br>\n"; 
         ?>
-      Download: [<a href=<?=$filename?>.jpg>JPG</a>]
-                [<a href=<?=$filename?>.eps>EPS</a>]
       </td>
       <td>
     <div class=nvtitle>Controls</div>
 <?php
     include("include/vcrbuttons.php.inc");
-
     $sec = $node->etime;
 
     $hr = $sec - 3600;
