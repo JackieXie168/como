@@ -48,7 +48,7 @@
     		exit;
     	    }
     
-    	   $tofile = "Node Name;Port;Location;Interface;Comments;\n";
+    	   $tofile = "Node Name:Port;Location;Interface;Comments;\n";
     	    if (fwrite ($fh, $tofile) === FALSE){
     		print "$NODEDB/$region.lst not writable";
     		exit;
