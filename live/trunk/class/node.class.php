@@ -1,6 +1,6 @@
-<!--  $Id$  -->
 <?php
 /*  node.class.php
+ *  $Id$ 
  *
  *  methods:
  *    PrintDebug()

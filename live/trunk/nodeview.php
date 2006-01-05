@@ -141,7 +141,10 @@ require_once("comolive.conf");
         $comment = $_GET['comment'];
     
     if (!(file_exists("$NODEDB/$region.lst"))){
-	$fh = fopen("$NODEDB/$region.lst", "w");
+	if (!($fh = fopen("$NODEDB/$region.lst", "w"))){
+            print "Unable to open file $NODEDB/$region.lst";
+            exit;
+        }
         $tofile = $region . "\n ;Name;Location;Interface;Data Source;\n";
         if (fwrite ($fh, $tofile) === FALSE){
             print "$NODEDB/$region.lst not writable";
