@@ -39,7 +39,7 @@
 		while (!feof($fp)) {
 		    $line = fgets($fp);
 		    if ($line != ""){
-			list($comonode ,  $loc, $iface, $comment) = split(';', $line);
+			list($comonode, $loc, $iface, $comment) = split(';', $line);
                         list ($name, $port) = split (":", $comonode);
 			print "<tr>";
 			print "<td width=200>";
