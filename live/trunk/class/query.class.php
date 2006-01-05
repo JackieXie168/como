@@ -30,6 +30,7 @@ class Query {
     var $GNUPLOT;
     var $CONVERT;
     var $granularity;
+    var $fullname;
 
     /*  Constructor  */
     function Query ($stime, $etime, $results_dir, $gp, $con, $res) { 

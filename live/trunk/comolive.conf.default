@@ -43,10 +43,12 @@ $NODEDB = "./db";
 $GNUPLOT = "/usr/local/bin/gnuplot"; 
 
 /* convert command */
-// $CONVERT = "/usr/local/bin/convert -density 600x600 -resize 600x450"; 
 $CONVERT = "/usr/bin/convert -density 600x600 -resize 600x450"; 
 
-/* set error reporting level */
+/*  
+ *  Error report values are defined on php.net
+ *  Set to 'E_ALL' for debugging or '0' for none
+ */
 error_reporting(E_ALL);
 
 /* select if using Flash or not */
@@ -59,4 +61,9 @@ if (stristr($browser, "msie")) {
 
 /* Customize your logo here */
 $MYLOGO = "./images/intel.gif";
+
+/*  Absolute and Webroot directory location  */
+$WEB_ROOT = dirname($_SERVER['SCRIPT_NAME']);
+$ABS_ROOT = dirname($_SERVER['SCRIPT_FILENAME']);
+
 ?>

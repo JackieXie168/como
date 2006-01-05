@@ -18,14 +18,12 @@ if (isset($_GET['comonode'])){
 
 
 $node = new Node ("$comonode", $TIMEPERIOD, $TIMEBOUND);
-
 require_once("include/getinputvars.php.inc"); 
 
 /*  Get Input Vars  */
 /*include("include/getinputvars.php.inc");*/
 
 require_once ("class/query.class.php");
-
 $query = new Query($stime, $etime, $RESULTS, $GNUPLOT, $CONVERT, $RESOLUTION);
 $query_string = $query->get_query_string($module, $format, $http_query_string);
 $data = $query->do_query ($node->comonode, $query_string);
