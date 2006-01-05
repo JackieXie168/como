@@ -32,7 +32,7 @@
         
 
     if ($includebanner) {
-	print "<div id=header><a href=/>";
+	print "<div id=header><a href=$WEBROOT>";
 	print "<img src=images/bannerlive.jpg></a></div>\n";
     } 
 ?>
