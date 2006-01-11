@@ -39,10 +39,10 @@ $RESULTS = "./results";
  */
 $NODEDB = "./db"; 
 
-/* gnuplot command */
-$GNUPLOT = "/usr/local/bin/gnuplot"; 
+/* gnuplot command -- check that this is the correct path */
+$GNUPLOT = "/usr/bin/gnuplot"; 
 
-/* convert command */
+/* convert command -- check that this is the correct path */
 $CONVERT = "/usr/bin/convert -density 600x600 -resize 600x450"; 
 
 /*  
@@ -66,4 +66,6 @@ $MYLOGO = "./images/intel.gif";
 $WEBROOT = dirname($_SERVER['SCRIPT_NAME']);
 $ABSROOT = dirname($_SERVER['SCRIPT_FILENAME']);
 
+/* Modules that do not have a gnuplot output */
+$DONOTSHOW = array(0 => "tuple", 1 => "topports", 2 => "trace"); 
 ?>

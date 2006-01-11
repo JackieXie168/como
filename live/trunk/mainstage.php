@@ -84,12 +84,7 @@
             /*  This is the number of buttons per row  */
             $NUMLINKS = 20;
 	    $special = "ports";
-	    $notshown[0] = "tuple"; 
-	    $notshown[1] = "topports"; 
-	    $notshown[2] = "topdest"; 
-	    $notshown[3] = "alert"; 
-	    $notshown[4] = "AP"; 
-	    $SKIP_MODULES = 5; 
+	    $SKIP_MODULES = count($DONOTSHOW); 
 
             $allmods = array_keys($node->loadedmodule); 
             
@@ -99,7 +94,7 @@
 
 		$skip = 0; 
 		for ($j = 0; $j < $SKIP_MODULES; $j++) { 
-		     if ($allmods[$i] == $notshown[$j]) 
+		     if ($allmods[$i] == $DONOTSHOW[$j]) 
 			$skip = 1; 
 		} 
 			
