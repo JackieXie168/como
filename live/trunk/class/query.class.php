@@ -120,11 +120,26 @@ class Query {
 		fwrite($fh, $output[1]);
 	    fclose($fh);
 
-	    /* now invoke gnuplot and convert to generate the .eps and .jpg files */
-	    system("sed \"s/\`//g\" $fullname.gp > $fullname.cleangp", $return);
-	    system("$this->GNUPLOT < $fullname.cleangp > $fullname.eps", $return);
+	    /* 
+             *  Now invoke gnuplot and convert to generate the 
+             * .eps and .jpg files 
+             */
+            if (!(file_exists($this -> GNUPLOT))) {
+                print "Please review comolive.conf and check path to "; 
+                print "gnuplot ({$this -> GNUPLOT})<br>";
+                exit;
+            }
+            $convert = explode (" ", $this -> CONVERT);
+            if (!(file_exists($convert[0]))) {
+                print "Please review comolive.conf and check path to "; 
+                print "convert ({$this -> CONVERT})<br>";
+                exit;
+            }
+	    system("sed \"s/\`//g\" $fullname.gp > $fullname.clngp", $return);
+	    system("$this->GNUPLOT < $fullname.clngp > $fullname.eps", $return);
 	    system("$this->CONVERT $fullname.eps $fullname.jpg", $return);
-	//    system("rm -f $fullname.gp", $return);
+	    system("rm -f $fullname.gp", $return);
+	    system("rm -f $fullname.clngp", $return);
 
 	}
         $this->fullname = $fullname;
