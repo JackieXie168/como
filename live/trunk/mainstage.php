@@ -33,7 +33,7 @@
 
 <html>
   <head>
-    <link rel="stylesheet" type="text/css" name="como" href="css/comolive.css">
+    <link rel="stylesheet" type="text/css" name="como" href="css/live.css">
     <style type="text/css">
       #nav ul {
 	border-bottom: 1px solid; 
@@ -133,6 +133,8 @@
 
 
         ?>
+      </center>
+      <center>
       Download: [<a href=<?=$filename?>.jpg>JPG</a>]
                 [<a href=<?=$filename?>.eps>EPS</a>]
       </center>
