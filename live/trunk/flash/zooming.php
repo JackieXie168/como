@@ -7,7 +7,7 @@
 
     /* where to find the image */
     $docroot = dirname($_SERVER['SCRIPT_NAME']);
-    $info = "web=http://10.0.0.254"; 
+    $info = "web=http://" . $_SERVER['HTTP_HOST']; 
     $info .= $docroot . "/" . $filename . ".jpg"; 
 
     /* the query that the flash client needs to send back */
