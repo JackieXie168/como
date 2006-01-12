@@ -67,5 +67,5 @@ $WEBROOT = dirname($_SERVER['SCRIPT_NAME']);
 $ABSROOT = dirname($_SERVER['SCRIPT_FILENAME']);
 
 /* Modules that do not have a gnuplot output */
-$DONOTSHOW = array(0 => "tuple", 1 => "topports", 2 => "trace"); 
+$DONOTSHOW = array(0 => "tuple", 1 => "topports", 2 => "trace", 3 => "alert", 4=> "topdest", 5 => "connx"); 
 ?>
