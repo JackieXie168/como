@@ -760,7 +760,7 @@ handle_close(__unused int s, csmsg_t * in)
 	 * in the S_CLOSE message)
 	 */
 	if (cl->region) { 
-	    off_t ofs = cl->region->bs_offset + in->size; 
+	    off_t ofs = cl->region->bs_offset + in->ofs; 
 	    csfile_t * cf = bs->file_last; 
 
 	    /* update the file size to wake up readers */
@@ -773,7 +773,7 @@ handle_close(__unused int s, csmsg_t * in)
 	     * by setting the wfd file descriptor value 
 	     */
 	    cl->region->wfd = bs->wfd;
-        cl->region->file = cf; /* XXX can be moved to new_csregion() */
+	    cl->region->file = cf; /* XXX can be moved to new_csregion() */
 
 	    append_to_wb(cl->region, bs);
 	} else { 

@@ -1593,5 +1593,5 @@ query_ondemand(int client_fd)
 
     /* close the socket and the file */
     close(client_fd);
-    csclose(file_fd); 
+    csclose(file_fd, 0); 
 }

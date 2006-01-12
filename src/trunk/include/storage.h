@@ -105,8 +105,9 @@ void storage_mainloop(int fd);
 int csopen(const char * name, int mode, off_t size, int sd);
 off_t csgetofs(int fd);
 void *csmap(int fd, off_t ofs, ssize_t * sz);
+void cscommit(int fd, off_t ofs);
 off_t csseek(int fd);
-void csclose(int fd);
+void csclose(int fd, off_t ofs);
 
 
 #ifdef _COMO_STORAGE_SERVER
