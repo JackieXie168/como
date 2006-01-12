@@ -67,9 +67,10 @@ four methods, and provides an mmap-like interface.
 	Moves to the beginning of the next file, unmapping any
 	mapped region.
 
-  void csclose(int fd)  
+  void csclose(int fd, off_t ofs)  
 
 	fd		is the file descriptor
+        ofs		last valid byte written to disk
 
 	Flushes any unmapped block, and closes the descriptor.
   
@@ -413,13 +414,6 @@ csmap(int fd, off_t ofs, ssize_t * sz)
      * check if we already have mmapped the requested region. 
      */
     if (ofs > cf->offset && ofs + *sz < cf->offset + cf->size) { 
-	/* 
-	 * if in write mode, inform the storage process that we 
-	 * are moving forward. 
-	 */
-	if (cf->mode == CS_WRITER) 
-	    _csinform(cf, ofs); 
-
         logmsg(V_LOGSTORAGE, 
 	    "ofs %lld sz %d silently approved (%lld:%d)\n", 
             ofs, *sz, cf->offset, cf->size); 
@@ -439,6 +433,37 @@ csmap(int fd, off_t ofs, ssize_t * sz)
 	*sz = newsz; 
     return addr; 
 }
+
+
+/* 
+ * -- cscommit
+ * 
+ * this function commits the number of bytes written so far 
+ * so that the storage process knows that we are moving forward 
+ * and can inform other readers. 
+ * 
+ */
+void
+cscommit(int fd, off_t ofs) 
+{
+    csfile_t * cf;
+
+    assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL);
+    cf = files[fd];
+
+    if (cf->mode != CS_WRITER) 
+	return; 		/* just for writers */
+
+    /*
+     * check if the offset if valid, i.e. within a mmapped region
+     */ 
+    if (ofs < cf->offset || ofs > cf->offset + cf->size) 
+	return; 
+
+    /* send the message to the STORAGE process */
+    _csinform(cf, ofs);
+}
+
 
 /* 
  * -- csseek
@@ -476,6 +501,7 @@ csreadp(int fd, void ** buf, size_t sz)
     ssize_t realsz = sz; 
 
     assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL); 
+    cf = files[fd];
 
     *buf = csmap(fd, cf->readofs + cf->readsz, &realsz); 
 
@@ -491,30 +517,37 @@ csreadp(int fd, void ** buf, size_t sz)
  * -- csclose
  *
  * Closes the file and sends the message to the server. 
+ * For writers it requires the last offset really written to 
+ * disk (i.e., with valid data given that one could mmap large
+ * portion of file and never write anything to them). 
+ * This offset is sent to the STORAGE process that uses it to 
+ * inform readers of the last valid byte to read. 
  */
 void
-csclose(int fd)
+csclose(int fd, off_t ofs)
 {
+    csfile_t * cf;
     csmsg_t m;
 
     assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL); 
-    memset(&m, 0, sizeof(m));
+    cf = files[fd];
+    files[fd] = NULL;
 
     /* unmap the current block and close the file, if any */
-    if (files[fd]->addr != NULL)
-	munmap(files[fd]->addr, files[fd]->size);
-    if (files[fd]->fd >= 0)
-	close(files[fd]->fd); 
+    if (cf->addr != NULL)
+	munmap(cf->addr, cf->size);
+    if (cf->fd >= 0)
+	close(cf->fd); 
 
     /* send the release message to the hfd */
+    memset(&m, 0, sizeof(m));
     m.type = S_CLOSE;
-    m.id = files[fd]->id; 
-    if (write(files[fd]->sd, (char *) &m, sizeof(m)) < 0) 
+    m.id = cf->id; 
+    m.ofs = ofs; 
+    if (write(cf->sd, (char *) &m, sizeof(m)) < 0) 
 	panic("sending message to storage: %s\n", strerror(errno)); 
 
-    free(files[fd]);
-    files[fd] = NULL;
-    return;
+    free(cf);
 }
 
 

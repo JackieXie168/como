@@ -198,10 +198,17 @@ call_store(module_t * mdl, rec_t *rp)
 
     /* call the store() callback */
     ret = mdl->callbacks.store(rp, dst, mdl->bsize);
-    if (ret < 0) 
+    if (ret < 0) {
 	logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
-    else
-	mdl->offset += ret;
+	return ret; 
+    } 
+
+    /*
+     * update the offset and commit the bytes written to 
+     * disk so far so that they are available to readers 
+     */
+    mdl->offset += ret;
+    cscommit(mdl->file, mdl->offset); 
 
     end_tsctimer(map.stats->ex_mapping_timer); 
     return ret;
@@ -560,7 +567,7 @@ ex_remove_module(module_t *mdl)
     if (mdl->status != MDL_DISABLED)
         ex_disable_module(mdl);
 
-    csclose(mdl->file);
+    csclose(mdl->file, mdl->offset);
 }
 
 /*
