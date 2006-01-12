@@ -38,7 +38,7 @@
             print "no como nodes saved";
         } else {
             if ($fp = fopen ($nodefile, "r")) {
-		print "<table cellpadding=0 cellspacing=0 border=0>";
+		print "<table cellpadding=0 cellspacing=2 border=0>";
 		while (!feof($fp)) {
 		    $line = fgets($fp);
 		    if ($line != ""){
