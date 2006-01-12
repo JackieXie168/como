@@ -48,18 +48,17 @@
     		exit;
     	    }
     
-    	   $tofile = "Node Name:Port;Location;Interface;Comments;\n";
+    	   $tofile = "Name;CoMo Name:Port;Location;Interface;Comments;\n";
     	    if (fwrite ($fh, $tofile) === FALSE){
-    		print "$NODEDB/$region.lst not writable";
+    		print "$NODEDB/$nodefile not writable";
     		exit;
     	    }
     	    fclose($fh);
     	} else {
     	    $fh = fopen("$NODEDB/$nodefile", "a");
-#                $var = split (":", $node -> comonode);
-#                $name = $var[0]; 
-#                $port = $var[1]; 
-    	    $tmp = $node -> comonode . ";" ;
+
+    	    $tmp = $node -> nodename . ";" ;
+    	    $tmp = $tmp . $node -> comonode . ";" ;
     	    $tmp = $tmp . $node -> nodeplace . ";" . $node -> linkspeed . ";" ;
     	    $tmp = $tmp . $node -> comment. "\n" ;
     	    $tofile = $tmp;
@@ -78,7 +77,7 @@
         $tofile = "";
         for ($i=0;$i<count($datafile);$i++){
             $val = explode (";", $datafile[$i]);
-            if ($comonode != $val[0]){
+            if ($comonode != $val[1]){
     	        $tofile = $tofile . $datafile[$i];
             }
         }

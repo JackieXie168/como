@@ -29,9 +29,12 @@
 <table class=fence>
   <tr>
     <td class=leftcontent>
-      <h2>Como Nodes</h2>
+      <h2>CoMo Nodes</h2>
     <?php
-        if (!file_exists($nodefile)) {
+        $x = file ($nodefile);
+        $entrycount = count($x);
+       
+        if ((!file_exists($nodefile)) || ($entrycount < 2)) {
             print "no como nodes saved";
         } else {
             if ($fp = fopen ($nodefile, "r")) {
@@ -39,25 +42,31 @@
 		while (!feof($fp)) {
 		    $line = fgets($fp);
 		    if ($line != ""){
-			list($comonode, $loc, $iface, $comment) = split(';', $line);
-                        list ($name, $port) = split (":", $comonode);
+			list($name, $comonode, $loc, $iface, $comment) 
+			    = split(';', $line);
+                        list ($host, $port) = split (":", $comonode);
 			print "<tr>";
-			print "<td width=200>";
-		    if ($name != "Node Name")
-			print "<a href=dashboard.php?comonode=$comonode>$name</a>";
-		    else
+			print "<td width=200 valign=top>";
+		    if ($name != "Name") {
+			print "<a href=dashboard.php?comonode=$comonode>";
+                        print "$name</a>";
+		    } else {
 			print "$name";
-
+                    }
 		    print "</td>";
-		    print "<td width=250>$port</td>";
-		    print "<td width=250>$loc</td>";
-		    print "<td width=150>$iface</td>";
-		    print "<td width=400>$comment</td>";
-		    if ($name != "Node Name")
-			print "<td><a href=managenode.php?action=delete&comonode=$name:$port>Remove</a></td>";
-                    else 
-			print "<td width=200>&nbsp;<td>";
+		    print "<td width=100 valign=top>$port</td>";
+		    print "<td width=150 valign=top>$loc</td>";
+		    print "<td width=150 valign=top>$iface</td>";
+		    print "<td width=500 valign=top>$comment</td>";
+		    if ($name != "Name") {
+			print "<td valign=top>";
+                        print "<a href=managenode.php?action=delete";
+                        print "&comonode=$comonode>Remove</a></td>";
+                    } else  {
+			print "<td width=200 valign=top>&nbsp;<td>";
+                    }
 		    print "</tr>";
+                   
             }
         }
         print "</table>";
