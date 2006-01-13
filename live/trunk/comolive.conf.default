@@ -62,6 +62,14 @@ if (stristr($browser, "msie")) {
 /* Customize your logo here */
 $MYLOGO = "./images/intel.gif";
 
+/* Use file caching 
+ * Some pages will have the opportunity to write data to files.
+ * Use this option to utilize this feature or turn it 
+ * off to force a regeneration of the data. 
+ * It usually should be on.
+ */
+$USECACHE = 1;
+
 /*  Absolute and Webroot directory location  */
 $WEBROOT = dirname($_SERVER['SCRIPT_NAME']);
 $ABSROOT = dirname($_SERVER['SCRIPT_FILENAME']);
