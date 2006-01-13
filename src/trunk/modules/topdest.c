@@ -49,6 +49,7 @@ FLOWDESC {
 
 static uint32_t meas_ivl = 5;  		  /* interval (secs) */
 static int topn = 20;                     /* number of top destinations */
+static uint32_t mask = 0xffffffff;        /* prefix mask */
 
 static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
@@ -68,6 +69,10 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 	    len = index(args[i], '=') + 1;
 	    topn = atoi(len);
 	}
+	if (strstr(args[i], "mask")) {
+	    len = index(args[i], '=') + 1;
+	    mask <<= atoi(len); 
+	}
     }
 
     return TIME2TS(meas_ivl, 0);
@@ -76,14 +81,14 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static uint32_t
 hash(pkt_t *pkt)
 {
-    return (N32(IP(dst_ip)) & 0x00ffffff); 
+    return (H32(IP(dst_ip)) & mask);
 }
 
 static int
 match(pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
-    return ((H32(IP(dst_ip)) & 0xffffff00) == x->dst_ip);
+    return ((H32(IP(dst_ip)) & mask) == x->dst_ip);
 }
 
 static int
@@ -93,7 +98,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
-        x->dst_ip = H32(IP(dst_ip)) & 0xffffff00;
+        x->dst_ip = H32(IP(dst_ip)) & mask; 
         x->bytes = 0;
         x->pkts = 0;
     }
