@@ -43,7 +43,7 @@
 		    $line = fgets($fp);
 		    if ($line != ""){
 			list($name, $comonode, $loc, $iface, $comment) 
-			    = split(';', $line);
+			    = split(';;', $line);
                         list ($host, $port) = split (":", $comonode);
 			print "<tr>";
 			print "<td width=200 valign=top>";

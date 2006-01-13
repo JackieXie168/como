@@ -48,7 +48,7 @@
     		exit;
     	    }
     
-    	   $tofile = "Name;CoMo Name:Port;Location;Interface;Comments;\n";
+    	   $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;\n";
     	    if (fwrite ($fh, $tofile) === FALSE){
     		print "$NODEDB/$nodefile not writable";
     		exit;
@@ -57,9 +57,10 @@
     	} else {
     	    $fh = fopen("$NODEDB/$nodefile", "a");
 
-    	    $tmp = $node -> nodename . ";" ;
-    	    $tmp = $tmp . $node -> comonode . ";" ;
-    	    $tmp = $tmp . $node -> nodeplace . ";" . $node -> linkspeed . ";" ;
+    	    $tmp = $node -> nodename . ";;" ;
+    	    $tmp = $tmp . $node -> comonode . ";;" ;
+    	    $tmp = $tmp . $node -> nodeplace . ";;" ;
+            $tmp = $tmp . $node -> linkspeed . ";;" ;
     	    $tmp = $tmp . $node -> comment. "\n" ;
     	    $tofile = $tmp;
     	    if (fwrite ($fh, $tofile) === FALSE) {
