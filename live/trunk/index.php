@@ -78,7 +78,7 @@
 
     ?>
     </td>
-    <td class=nodeselect>
+    <td class=nodeselect valign=top>
       Select node by IP address
       <form align=middle action=dashboard.php method=get>
 	<input type=text name=comonode size=21 value="comonode:44444"
