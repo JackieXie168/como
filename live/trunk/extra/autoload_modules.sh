@@ -19,7 +19,14 @@ HTTPGET="/usr/bin/wget -p -q -O"
 WEBROOT="~rgass/como"
 ABSPATH="/home/rgass/public_html/como"
 
+##  Select to use current time or module time
+##  Once this feature is implemented, you can get the current time 
+##  of the module
+##  Current system time
 sec=$(date +%s)
+##  Current module time
+#sec=$($HTTPGET - http://$comonode/?status 2> /dev/null | grep Current: | awk '{print $2}');
+
 tmp=$(expr $sec % 300)
 etime=$(expr $sec - $tmp)
 stime=$(($etime-$TIMEPERIOD))
