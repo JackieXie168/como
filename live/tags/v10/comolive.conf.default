@@ -1,0 +1,79 @@
+<?php
+/* 
+ * CoMolive! configuration file 
+ * 
+ * $Id$
+ */
+
+/* 
+ * The default amount of time that CoMo should 
+ * query initially (in seconds)
+ */
+$TIMEPERIOD = 6*3600;
+
+/* 
+ * Define the granularity for all graphs (in seconds), i.e. 
+ * all timestamps will be aligned to this granularity
+ */
+$TIMEBOUND = 300; 
+
+/*
+ * Define the resolutions of graphs, i.e. the number of points  
+ * to be present in a graph. This is just an indication to the  
+ * module of the desired resolution. The actual implementation is 
+ * module dependant.  
+ */
+$RESOLUTION = 200;
+
+/* 
+ * where the results will reside for future accesses. path is 
+ * relative to apache document root. apache needs to have write
+ * access to it. 
+ */
+$RESULTS = "./results"; 
+
+/* 
+ * directory with the node lists. the path is relative to  
+ * document root and needs to be readable from apache. 
+ * look into db/README for details. 
+ */
+$NODEDB = "./db"; 
+
+/* gnuplot command -- check that this is the correct path */
+$GNUPLOT = "/usr/bin/gnuplot"; 
+
+/* convert command -- check that this is the correct path */
+$CONVERT = "/usr/bin/convert -density 600x600 -resize 600x450"; 
+
+/*  
+ *  Error report values are defined on php.net
+ *  Set to 'E_ALL' for debugging or '0' for none
+ */
+error_reporting(E_ALL);
+
+/* select if using Flash or not */
+$browser = $_SERVER['HTTP_USER_AGENT']; 
+if (stristr($browser, "msie")) {  
+    $USEFLASH = true; 
+} else { 
+    $USEFLASH = false; 
+}
+
+/* Customize your logo here */
+$MYLOGO = "./images/intel.gif";
+
+/* Use file caching 
+ * Some pages will have the opportunity to write data to files.
+ * Use this option to utilize this feature or turn it 
+ * off to force a regeneration of the data. 
+ * It usually should be on.
+ */
+$USECACHE = 1;
+
+/*  Absolute and Webroot directory location  */
+$WEBROOT = dirname($_SERVER['SCRIPT_NAME']);
+$ABSROOT = dirname($_SERVER['SCRIPT_FILENAME']);
+
+/* Modules that do not have a gnuplot output */
+$DONOTSHOW = array(0 => "tuple", 1 => "topports", 2 => "trace", 3 => "alert", 4=> "topdest", 5 => "connx"); 
+?>
