@@ -77,7 +77,7 @@
         $datafile = file ("$NODEDB/$nodefile");
         $tofile = "";
         for ($i=0;$i<count($datafile);$i++){
-            $val = explode (";", $datafile[$i]);
+            $val = explode (";;", $datafile[$i]);
             if ($comonode != $val[1]){
     	        $tofile = $tofile . $datafile[$i];
             }
