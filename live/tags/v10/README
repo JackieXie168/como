@@ -1,0 +1,38 @@
+$Id$ 
+
+CoMolive! v1.0
+Copyright (c) 2005, 2006 Intel Corporation
+All rights reserved. 
+
+--------------------------
+This is a graphical query interface for CoMo. 
+
+This is just meant to be a template and it requires a significant 
+amount of configuration and customization to adapt it to the 
+particular environment where it is supposed to run. 
+
+-- Installation notes
+
+ . Create a directory named 'results' and a directory 'db' where 
+   apache can write. 
+ . Edit the comolive.conf file to set several variables 
+   needed to locate the files and the directories results and db. 
+ . PHP must be >= 4.3.0
+ . GNUPLOT must be >= 4.0
+ . CONVERT must be available (from ImageMagick) 
+
+-- Edit the node database 
+ 
+ . The page gives the ability to add a CoMo node to the list of 
+   queryable nodes.
+
+-- Allow/Deny certain queries. 
+
+ . By default, the web page will present four areas corresponding to 
+   four queries. The main area with a JPEG image will have a set of tabs 
+   corresponding to all modules running on the CoMo node. In order to remove
+   a tab update the variable $DONOTSHOW in the comolive.conf file, e.g., to 
+   remove the "trace" module from the tab list add
+     '$DONOTSHOW = array(0 => "trace");' 
+
+
