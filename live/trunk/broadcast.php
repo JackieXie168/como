@@ -3,7 +3,6 @@ include ("include/header.php.inc");
 include ("class/node.class.php");
 include ("class/query.class.php");
 include ("comolive.conf");
-error_reporting(0);
 
 #
 # GET input variables
@@ -56,14 +55,11 @@ $duration = $etime - $stime;
 $list = array();
 
 /*  XXX Need to handle this better  */
-$dafile = file("$NODEDB/europe.lst");
+$dafile = file("$NODEDB/nodes.lst");
 
-for ($i = 0; $i < count($dafile); $i++) {
-    $daline = explode(";", $dafile[$i]);
-    if (count($daline) > 4 ) {
-        if (!($daline[0]) == "")
-	    array_push($list, $daline[0]);
-    } 
+for ($i = 1; $i < count($dafile); $i++) {
+    $daline = explode(";;", $dafile[$i]);
+    array_push($list, $daline[1]);
 }
 
 $query = new Query ($stime, $etime, $RESULTS, $GNUPLOT, $CONVERT, $RESOLUTION);
