@@ -40,10 +40,12 @@
 	$data = $query->do_query ($node->comonode, $query_string);
 
 	/*  Write html out to a file so we dont have to query all the time */
-	$fullname = "{$query -> rootdir}/{$query->results_dir}/$filename";
-	$fh = fopen ($fullname, "w");
-	fwrite ($fh, $data[1]);
-	fclose ($fh);
+        if ($data[0]){
+	    $fullname = "{$query -> rootdir}/{$query->results_dir}/$filename";
+	    $fh = fopen ($fullname, "w");
+	    fwrite ($fh, $data[1]);
+	    fclose ($fh);
+        }
     }
  
     /*  Stream out the data to the iframe  */
