@@ -1722,5 +1722,6 @@ callbacks_t callbacks = {
     store:      store,
     load:       load,
     print:      print,
-    replay:     NULL
+    replay:     NULL,
+    formats:    "log alert ulog ualert como gnuplot debug"
 };

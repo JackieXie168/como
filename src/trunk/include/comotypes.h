@@ -245,6 +245,8 @@ struct _callbacks {
     load_fn     * load;
     print_fn    * print;
     replay_fn   * replay;
+
+    char * formats; 
 };
 
 
@@ -276,9 +278,11 @@ struct _module {
     int index;          	/* order in the array of classifiers */
     char * name;		/* name of the module */
     char * description;		/* module description */
+
     treenode_t * filter_tree;   /* filter data */
     char * filter_str;          /* filter expression */
     char * filter_cmp;          /* filter expression to compare with queries */
+
     char * output;              /* output file basename */
     char ** args;               /* parameters for the module */
     char * source;              /* filename of the shared lib. */

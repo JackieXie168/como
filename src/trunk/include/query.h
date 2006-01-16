@@ -72,5 +72,9 @@ typedef struct _query_req qreq_t;
  */
 void query_ondemand(int);
 qreq_t * qryrecv(int, timestamp_t); 
+void replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd); 
+void  init_ondemand_module(module_t ** mdl, char ** args);
+void printrecord(module_t * mdl, char * ptr, char * args[], int client);
+
 
 #endif /* _COMO_QUERY_H */

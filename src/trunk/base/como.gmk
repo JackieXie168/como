@@ -20,6 +20,7 @@ SRCS_como := \
 	como.c \
 	config.c \
 	memory.c \
+	query.c \
 	query-comms.c \
 	query-ondemand.c \
 	supervisor.c \

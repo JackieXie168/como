@@ -338,6 +338,7 @@ callbacks_t callbacks = {
     store: store,
     load: load,
     print: print,
-    replay: NULL
+    replay: NULL,
+    formats: "plain pretty html"
 };
 
