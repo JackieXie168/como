@@ -531,6 +531,7 @@ callbacks_t callbacks = {
     store: store,
     load: load,
     print: print,
-    replay: replay 
+    replay: replay,
+    formats: "plain pretty gnuplot gnuplot-relative"
 };
 

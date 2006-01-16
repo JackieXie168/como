@@ -343,6 +343,7 @@ check_module(module_t *mdl)
 	free(p);
     }
 
+
     if (mdl->ex_hashsize == 0) { /* hash size */
 	logmsg(LOGWARN, "config: module %s needs a hash size\n", mdl->name);
         return 0;
@@ -397,6 +398,9 @@ check_module(module_t *mdl)
             return 0;
         }
     }
+
+    if (cb->formats == NULL) 
+	asprintf(&cb->formats, "plain"); 
 
     logmsg(LOGDEBUG, "module %s checks ok\n");
     return 1;
