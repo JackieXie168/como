@@ -8,17 +8,14 @@
     $hours = floor(($duration % 86400) / 3600);
     $mins = floor(($duration % 3600) / 60); 
     $secs = $duration % 60; 
-
 ?>
-
 <html>
   <head>
     <style type="text/css">
       .netviewbar{
         color :#FFF;
         width :100%;
-        padding :2px;
-        text-align:center;
+        text-align:right;
       }
       .netview {
         top: 0px;
@@ -30,9 +27,6 @@
         padding-right: 5px;
         font-size: 9pt;
         text-align:left;
-        border:0px,0px,1px,0px;
-        border-style:solid;
-        border-color:grey;
       }
       .nvtitle {
         font-weight: bold;
@@ -40,7 +34,9 @@
         padding-bottom: 3px;
         color: #475677;
       }
-      #controls {
+      .seperator {
+          padding-left : 12px;
+          border-left : 1px solid grey;
       }
 
     </style>
@@ -49,7 +45,7 @@
 <div class=netviewbar>
 <table class=netview>
   <tr valign=top>
-    <td>
+    <td class=seperator>
     <div class=nvtitle>Current Network View</div>
       Time interval (UTC):<br>
         <?php
@@ -58,7 +54,7 @@
 	    print "&nbsp; [${days}d ${hours}h ${mins}m ${secs}s]<br>\n"; 
         ?>
       </td>
-      <td>
+      <td class=seperator>
     <div class=nvtitle>Controls</div>
 <?php
     include("include/vcrbuttons.php.inc");

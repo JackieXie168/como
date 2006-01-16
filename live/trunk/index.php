@@ -31,8 +31,10 @@
     <td class=leftcontent>
       <h2>CoMo Nodes</h2>
     <?php
-        $x = file ($nodefile);
-        $entrycount = count($x);
+        if (file_exists($nodefile)) {
+	    $x = file ($nodefile);
+	    $entrycount = count($x);
+        }
        
         if ((!file_exists($nodefile)) || ($entrycount < 2)) {
             print "no como nodes saved";
@@ -59,7 +61,7 @@
 		    print "<td width=150 valign=top>$iface</td>";
 		    print "<td width=500 valign=top>$comment</td>";
 		    if ($name != "Name") {
-			print "<td valign=top>";
+			print "<td valign=top align=right>";
                         print "<a href=managenode.php?action=delete";
                         print "&comonode=$comonode>Remove</a></td>";
                     } else  {
