@@ -22,6 +22,7 @@ class Node {
     var $status;
     var $module;
     var $filter;
+    var $formats;
     var $stime;
     var $etime;
     var $timeperiod;
@@ -62,6 +63,9 @@ class Node {
 		    strtok(":\n\t");
 		    $filter = trim(strtok(":\n\t"));
                     $this->loadedmodule[$module] = $filter;
+		    strtok(":\n\t");
+		    $formats = trim(strtok(":\n\t"));
+                    $this->formats[$module] = $formats;
 		}
 		$tok = strtok(":\n");
 	    } 

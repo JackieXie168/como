@@ -15,18 +15,36 @@
 	exit;
     }
 
-
+    require_once ("comolive.conf");
+    require_once ("class/node.class.php");
+    $node = new Node($comonode, $TIMEPERIOD, $TIMEBOUND);
+    /*
+    * GET input variables
+    */
+    $special = "ports";
+    include("include/getinputvars.php.inc");
 ?>
 
 <body>
-<table class=fence>
+<table class=fence border=0 cellpadding=0 cellspacing=0>
+  <tr>
+    <td colspan=2>
+    <table class=topcontent border=0 cellpadding=0 cellspacing=0>
+      <tr>
+	<td valign=top width=50%>
+	  <?php include("sysinfo.php"); ?>
+	</td>
+	<td valign=top>
+	  <?php include("netview.php"); ?>
+	</td>
+      </tr>
+    </table>
+  </td>
   <tr>
     <td class=leftcontent>
-      <?php include("sysinfo.php"); ?>
       <iframe width=620 height=520 frameborder=0
 	      src=mainstage.php?<?=$_SERVER['QUERY_STRING']?>>
       </iframe>
-    </td>
     <td class=rightcontent>
       <?php 
 	  /* 
@@ -38,14 +56,6 @@
 	   *     "topdest" and "topports". 
 	   * 
 	   */
-	  $node = new Node($comonode, $TIMEPERIOD, $TIMEBOUND);
-
-	  /*
-	   * GET input variables
-	   */
-	  include("include/getinputvars.php.inc");
-	  $special = "ports";
-	  include("netview.php"); 
           $interval=$etime-$stime;
 	
           print "<iframe width=100% frameborder=0 ";

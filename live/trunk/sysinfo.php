@@ -17,7 +17,8 @@
       }
       .sysinfo {
 	top: 0px;
-	width: 80%;
+	width: 100%;
+        vertical-align:top;
 	background-color: #FFF;
 	margin: 2;
 	padding-left: 5px;
@@ -31,6 +32,15 @@
 	padding-bottom: 3px;
 	color: #475677;
       }
+      .seperator {
+        padding-left : 12px;
+        border-left : 1px solid grey;
+      }
+      .customize {
+	font-weight: bold;
+	font-size: 9pt;
+	color: #d71e48;
+      }
     </style>
   </head>
 
@@ -43,7 +53,7 @@
       exit;
     }
 
-    include ("class/node.class.php");
+    require_once ("class/node.class.php");
     /*  Query the CoMo node  */
 
     $node = new Node($comonode,$TIMEPERIOD, $TIMEBOUND);
@@ -71,12 +81,15 @@
   <div class="sysinfobar">
     <table class=sysinfo>
       <tr valign=top>
-	<td valign=top>
+	<td valign=top class=seperator>
 	    <div class=title>Location</div>
 	    <?= $node->nodename ?><br>
 	    <?= $node->nodeplace ?><br>
+            <a href="#" onClick="return customize=window.open('customize.php','customize','toolbar=no,width=450,height=650,status=no'); return false;">
+	    <div class=customize>Customize CoMoLive!</div>
+            </a>
 	</td>
-	<td>
+	<td class=seperator>
 	  <div class=title>System Information</div>
 	  Software: <?= $node->version ?><br>
           Online Since: <?= gmstrftime("%a %b %d %T %Y", $node->start);?><br>
