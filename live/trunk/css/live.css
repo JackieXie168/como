@@ -70,6 +70,7 @@ img {
 .rightcontent{
     width:40%;
     text-align:left;
+    vertical-align : top;
     left:10px;
     padding-left:5px;
     padding-right:5px;

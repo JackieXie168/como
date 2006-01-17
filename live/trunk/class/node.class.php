@@ -118,6 +118,10 @@ class Node {
         }
         return $this->stime;
     }
+    /*  Return a list of modules that support different features  
+     *  needle may be gnuplot, html, etc.  This info is captured
+     *  on a per module basis.  
+     */
     function GetModules ($needle) {
         $keys = array_keys($this -> formats);
         $modules = array();
@@ -129,5 +133,32 @@ class Node {
         }
         return ($modules);
     }
+    /*  Return an array with the modules that a user
+     *  has chosen that are saved in a config file.  
+     *  Appropriate values for value are
+     *  "main" for the main window  and "secondary"
+     *  for the right hand queries
+     */
+    function GetConfigModules ($comonode, $NODEDB, $value) {
+        if ($value == "main")
+	    $needle = "main_mods";
+        if ($value == "secondary")
+	    $needle = "sec_mods";
+
+	if (file_exists("$NODEDB/$comonode.conf")){
+	    $dafile = file ("$NODEDB/$comonode.conf");
+	    for ($i=0;$i<count($dafile);$i++){
+		if (strstr($dafile[$i], $needle)) {
+		    $dafile = $dafile[$i];
+		}
+	    }
+            $val = explode (";;", $dafile);
+            return ($val);
+            
+	} else {
+	    return (0);
+	}
+    }
+
 }
 ?>

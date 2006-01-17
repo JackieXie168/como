@@ -48,47 +48,72 @@
     <td class=rightcontent>
       <?php 
 	  /* 
-	   * this is the right side of the page. it will contain three 
+	   * this is the right side of the page. it will contain some
 	   * iframes to include the time range the page refers to (netview)
-	   * and three other queries to the CoMo system.
 	   * 
-	   * XXX right now the queries are hard coded and will be "alert", 
-	   *     "topdest" and "topports". 
+	   * XXX  This is a config option now
 	   * 
 	   */
+
+          $sec_array = $node -> GetConfigModules 
+                                ($comonode, $NODEDB, "secondary");
+
           $interval=$etime-$stime;
-	
-          print "<iframe width=100% frameborder=0 ";
-          print "src=generic_query.php?comonode=$comonode&";
-          print "module=alert&format=html&";
- 	  print "&stime=$stime&etime=$etime&url=dashboard.php&";
-          print "urlargs=comonode=$comonode&";
-	  print "urlargs=module=$module&";
-	  if ($module == $special) {
-	      print "urlargs=source=tuple&urlargs=interval=$interval&";
+print_r($sec_array);
+          for ($i=1;$i<count($sec_array);$i++) {
+print "working on $sec_array[$i]<br>";
+#print "<pre>";
+#print_r($node);
+#print "</pre>";
+print "module={$sec_array[$i]}&format=html&";
+              if ($sec_array[$i] != "\n"){
+		  print "<iframe width=100% frameborder=0 ";
+		  print "src=generic_query.php?comonode=$comonode&";
+		  print "module={$sec_array[$i]}&format=html&";
+		  print "&stime=$stime&etime=$etime";
+
+                  print "&url=dashboard.php&";
+		  print "urlargs=comonode=$comonode&";
+		  print "urlargs=module=$module&";
+		  if ($module == $special) {
+		      print "urlargs=source=tuple&urlargs=interval=$interval&";
+		  }
+		  print "urlargs=filter={$node->loadedmodule[$module]}>";
+		  print "</iframe>\n";
+	      }
 	  }
-	  print "urlargs=filter={$node->loadedmodule[$module]}>";
-          print "</iframe>\n";
-
-      	  print "<iframe width=100% frameborder=0 "; 
-          print "src=generic_query.php?comonode=$comonode&";
-          print "module=topdest&format=html&";
-	  print "filter=ip&topn=5&source=tuple&interval=$interval";
- 	  print "&stime=$stime&etime=$etime&url=broadcast.php&";
-	  print "urlargs=stime=$stime&urlargs=etime=$etime&";
-	  print "urlargs=module=$module&";
-	  print "urlargs=filter={$node->loadedmodule[$module]}>";
-          print "</iframe>\n";
-
-      	  print "<iframe width=100% height=150 frameborder=0 "; 
-          print "src=generic_query.php?comonode=$comonode&";
-          print "module=topports&format=html&";
-	  print "filter=tcp%20or%20udp&topn=5&source=tuple&interval=$interval";
- 	  print "&stime=$stime&etime=$etime&url=broadcast.php&";
-	  print "urlargs=stime=$stime&urlargs=etime=$etime&";
-	  print "urlargs=module=$module&";
-	  print "urlargs=filter={$node->loadedmodule[$module]}>";
-          print "</iframe>\n";
+#	
+#          print "<iframe width=100% frameborder=0 ";
+#          print "src=generic_query.php?comonode=$comonode&";
+#          print "module=alert&format=html&";
+# 	  print "&stime=$stime&etime=$etime&url=dashboard.php&";
+#          print "urlargs=comonode=$comonode&";
+#	  print "urlargs=module=$module&";
+#	  if ($module == $special) {
+#	      print "urlargs=source=tuple&urlargs=interval=$interval&";
+#	  }
+#	  print "urlargs=filter={$node->loadedmodule[$module]}>";
+#          print "</iframe>\n";
+#
+#      	  print "<iframe width=100% frameborder=0 "; 
+#          print "src=generic_query.php?comonode=$comonode&";
+#          print "module=topdest&format=html&";
+#	  print "filter=ip&topn=5&source=tuple&interval=$interval";
+# 	  print "&stime=$stime&etime=$etime&url=broadcast.php&";
+#	  print "urlargs=stime=$stime&urlargs=etime=$etime&";
+#	  print "urlargs=module=$module&";
+#	  print "urlargs=filter={$node->loadedmodule[$module]}>";
+#          print "</iframe>\n";
+#
+#      	  print "<iframe width=100% height=150 frameborder=0 "; 
+#          print "src=generic_query.php?comonode=$comonode&";
+#          print "module=topports&format=html&";
+#	  print "filter=tcp%20or%20udp&topn=5&source=tuple&interval=$interval";
+# 	  print "&stime=$stime&etime=$etime&url=broadcast.php&";
+#	  print "urlargs=stime=$stime&urlargs=etime=$etime&";
+#	  print "urlargs=module=$module&";
+#	  print "urlargs=filter={$node->loadedmodule[$module]}>";
+#          print "</iframe>\n";
       ?>
     </td>
   </tr>
