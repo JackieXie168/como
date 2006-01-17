@@ -137,7 +137,11 @@ class Query {
             }
 	    system("sed \"s/\`//g\" $fullname.gp > $fullname.clngp", $return);
 	    system("$this->GNUPLOT < $fullname.clngp > $fullname.eps", $return);
-	    system("$this->CONVERT $fullname.eps $fullname.jpg", $return);
+            /*  If eps file has filesize of 0, do not create jpg  */
+            
+            if (filesize("$fullname.eps"))
+		system("$this->CONVERT $fullname.eps $fullname.jpg", $return);
+
 	    system("rm -f $fullname.gp", $return);
 	    system("rm -f $fullname.clngp", $return);
 

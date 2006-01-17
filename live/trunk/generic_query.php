@@ -38,7 +38,6 @@
 	$query_string = $query->get_query_string($module, $format, 
 						 $http_query_string);
 	$data = $query->do_query ($node->comonode, $query_string);
-
 	/*  Write html out to a file so we dont have to query all the time */
         if ($data[0]){
 	    $fullname = "{$query -> rootdir}/{$query->results_dir}/$filename";
