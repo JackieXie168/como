@@ -118,5 +118,16 @@ class Node {
         }
         return $this->stime;
     }
+    function GetModules ($needle) {
+        $keys = array_keys($this -> formats);
+        $modules = array();
+        for ($i=0;$i<count($keys); $i++) {
+            $haystack = $this -> formats[$keys[$i]];
+            if (strstr($haystack, $needle)) {
+                array_push ($modules, $keys[$i]);
+            }
+        }
+        return ($modules);
+    }
 }
 ?>
