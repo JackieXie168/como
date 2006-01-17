@@ -49,7 +49,8 @@
     if (isset($_GET['comonode'])) {
       $comonode = $_GET['comonode'];
     } else {
-      print "sysinfo.php requires the comonode=host:port arg passed to it";
+      print "{$_SERVER['SCRIPT_FILENAME']}";
+      print " requires the comonode=host:port arg passed to it";
       exit;
     }
 
@@ -85,7 +86,7 @@
 	    <div class=title>Location</div>
 	    <?= $node->nodename ?><br>
 	    <?= $node->nodeplace ?><br>
-            <a href="#" onClick="return customize=window.open('customize.php','customize','toolbar=no,width=450,height=650,status=no'); return false;">
+            <a href="#" onClick="return customize=window.open('customize.php?comonode=<?=$comonode?>','customize','toolbar=no,width=450,height=650,status=no'); return false;">
 	    <div class=customize>Customize CoMoLive!</div>
             </a>
 	</td>
