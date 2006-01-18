@@ -369,13 +369,15 @@ static void
 ca_init_module(module_t *mdl)
 {
     source_t *src;
+    char * str; 
     
     /* Default values for filter stuff */
     mdl->filter_tree = NULL;
-    mdl->filter_cmp = strdup("all");
     
     /* Parse the filter string from the configuration file */
-    parse_filter(mdl->filter_str, &(mdl->filter_tree), &(mdl->filter_cmp));
+    str = safe_strdup("all");
+    parse_filter(mdl->filter_str, &(mdl->filter_tree), &str); 
+    free(str);
     
     /*
      * we browse the list of sniffers to make sure that this module

@@ -509,8 +509,7 @@ ex_init_module(module_t *mdl)
     asprintf(&nm, "%s", mdl->output);
     mdl->file = csopen(nm, CS_WRITER, mdl->streamsize, storage_fd);
     if (mdl->file < 0) 
-        panic("cannot open file %s for %s (%s)\n", 
-            nm, mdl->name, strerror(errno));
+        panic("cannot open file %s for %s", nm, mdl->name);
     free(nm);
     mdl->offset = csgetofs(mdl->file);
 }

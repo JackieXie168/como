@@ -75,9 +75,10 @@ enum tokens {
     TOK_PRIORITY,
     TOK_NAME,   
     TOK_LOCATION,
-    TOK_LINKSPEED,
+    TOK_TYPE,
     TOK_COMMENT,
-    TOK_MAXFILESIZE
+    TOK_MAXFILESIZE,
+    TOK_VIRTUAL 
 };
 
 /*
@@ -107,6 +108,7 @@ int cfg_state;
 #define CTX_NONE        0x00
 #define CTX_GLOBAL      0x01
 #define CTX_MODULE      0x02
+#define CTX_VIRTUAL	0x04		/* virtual node section */
 
 /*
  * this structure is a dictionary of symbols that can be
@@ -138,23 +140,24 @@ keyword_t keywords[] = {
     { "logflags",    TOK_LOGFLAGS,    2, CTX_GLOBAL },
     { "module",      TOK_MODULE,      2, CTX_GLOBAL },
     { "module-limit",TOK_MODULE_MAX,  2, CTX_GLOBAL },
-    { "query-port",  TOK_QUERYPORT,   2, CTX_GLOBAL },
+    { "query-port",  TOK_QUERYPORT,   2, CTX_GLOBAL|CTX_VIRTUAL },
     { "sniffer",     TOK_SNIFFER,     3, CTX_GLOBAL },
     { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL|CTX_MODULE },
     { "output",      TOK_OUTPUT,      2, CTX_MODULE },
     { "hashsize",    TOK_HASHSIZE,    2, CTX_MODULE },
     { "source",      TOK_SOURCE,      2, CTX_MODULE },
-    { "filter",      TOK_FILTER,      2, CTX_GLOBAL|CTX_MODULE },
+    { "filter",      TOK_FILTER,      2, CTX_GLOBAL|CTX_VIRTUAL|CTX_MODULE },
     { "description", TOK_DESCRIPTION, 2, CTX_MODULE },
-    { "end",         TOK_END,         1, CTX_MODULE },
+    { "end",         TOK_END,         1, CTX_MODULE|CTX_GLOBAL|CTX_VIRTUAL },
     { "streamsize",  TOK_STREAMSIZE,  2, CTX_MODULE },
     { "args",        TOK_ARGS,        2, CTX_MODULE },
     { "priority",    TOK_PRIORITY,    1, CTX_MODULE },
     { "name",        TOK_NAME,        2, CTX_GLOBAL },
-    { "location",    TOK_LOCATION,    2, CTX_GLOBAL },
-    { "linkspeed",   TOK_LINKSPEED,   2, CTX_GLOBAL },
-    { "comment",     TOK_COMMENT,     2, CTX_GLOBAL },
-    { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL },
+    { "location",    TOK_LOCATION,    2, CTX_GLOBAL|CTX_VIRTUAL },
+    { "type",        TOK_TYPE,        2, CTX_GLOBAL|CTX_VIRTUAL },
+    { "comment",     TOK_COMMENT,     2, CTX_GLOBAL|CTX_VIRTUAL },
+    { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL|CTX_VIRTUAL },
+    { "virtual-node",TOK_VIRTUAL,     2, CTX_GLOBAL },
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -324,16 +327,18 @@ load_callbacks(module_t *mdl)
  * Check the configuration of a module, supply default values.
  */
 static int
-check_module(module_t *mdl)
+check_module(module_t *mdl, __unused node_t * node)
 {
     callbacks_t *cb;
     int idx;
 
-    for (idx = 0; idx < map.module_count; idx++) { /* name is unique */
-        if (! strcmp(map.modules[idx].name, mdl->name)) {
-            logmsg(LOGWARN, "config: module name '%s' already present\n",
-                    mdl->name);
-            return 0;
+    /* check that module names are unique within a node */
+    for (idx = 0; idx < map.module_count; idx++) { 
+        if (!strcmp(map.modules[idx].name, mdl->name) && 
+					map.modules[idx].node == mdl->node) {
+	    logmsg(LOGWARN, "config: module name '%s' already present\n",
+		mdl->name);
+	    return 0;
         }
     }
 
@@ -456,7 +461,8 @@ free_module(module_t *mdl)
     int i;
 
     free(mdl->name);
-    free(mdl->description);
+    if (mdl->description != NULL) 
+	free(mdl->description);
     free(mdl->output);
     free(mdl->source);
     free(mdl->mem);
@@ -555,7 +561,7 @@ new_module(char *name, __unused char * opt)
     /* allocate new module */
     mdl = safe_calloc(1, sizeof(module_t));
     mdl->name = strdup(name);
-    mdl->description = strdup("");
+    mdl->description = NULL; 
     mdl->status = MDL_UNUSED; 
 
     /* set some default values */
@@ -563,13 +569,50 @@ new_module(char *name, __unused char * opt)
     mdl->ex_hashsize = mdl->ca_hashsize = 1; 
     mdl->args = NULL;
     mdl->priority = 5;
-    mdl->filter_tree = NULL;
     mdl->filter_str = strdup("all");
-    mdl->filter_cmp = strdup("all");
+    mdl->filter_tree = NULL;
     mdl->output = strdup(mdl->name);
     asprintf(&mdl->source, "%s.so", mdl->name);
 
     return mdl;
+}
+
+
+/* 
+ * -- commit_module 
+ *
+ * load the callbacks, check if the module configuration is 
+ * correct and initialize its state. It returns the index in 
+ * the module array where this module should go or -1 in case 
+ * of error. 
+ */
+static int
+commit_module(module_t * mdl, node_t * node)
+{
+    int i; 
+
+    if (!load_callbacks(mdl)) {
+	logmsg(LOGWARN, "cannot load callbacks module '%s'\n", mdl->name);
+	return -1; 
+    } 
+
+    if (!check_module(mdl, node)) {
+	logmsg(LOGWARN, "module '%s' incorrectly configured\n", mdl->name);
+	unload_object(mdl->cb_handle);  /* unload callbacks */
+	return -1;
+    }
+
+    /*
+     * module loaded ok.
+     * locate first unused entry in map.modules.
+     */
+    for (i = 0; i < map.module_count; i++) {
+	if (map.modules[i].status == MDL_UNUSED) {
+	    break;
+	}
+    }
+
+    return i;
 }
 
 
@@ -624,9 +667,10 @@ parse_size(const char *arg)
 static void
 do_config(int argc, char *argv[])
 {
-    static int scope = CTX_GLOBAL;      /* scope of current keyword */
-    static module_t * mdl = NULL;       /* module currently open */
-    static int module_is_new;           /* is the module new? */
+    static int scope = CTX_GLOBAL;      	/* scope of current keyword */
+    static struct _node *node = &map.node;	/* node currently used */
+    static module_t * mdl = NULL;       	/* module currently open */
+    static int module_is_new;           	/* is the module new? */
     keyword_t *t;
     int i;
 
@@ -672,7 +716,8 @@ do_config(int argc, char *argv[])
             if (t->action == TOK_END) /* if TOK_END, update scope */
                 scope = CTX_GLOBAL;
             else                      /* otherwise, ignore token */
-                logmsg(V_LOGDEBUG, "Ignoring module cfg token \"%s\"\n", argv[0]);
+                logmsg(V_LOGDEBUG, 
+		    "Ignoring module cfg token \"%s\"\n", argv[0]);
             return;
         }
     }
@@ -698,7 +743,7 @@ do_config(int argc, char *argv[])
 	break;
 
     case TOK_QUERYPORT:
-	map.query_port = atoi(argv[1]);
+	node->query_port = atoi(argv[1]);
 	break;
 
     case TOK_DESCRIPTION:
@@ -706,74 +751,60 @@ do_config(int argc, char *argv[])
 	break;
 
     case TOK_END:
-        {
-        int idx;
+	if (scope == CTX_MODULE) { 
+	    /*
+	     * "end" of a module configuration.  run some checks depending 
+	     * on context to make sure that all mandatory fields are there
+	     * and set default values
+	     */
+	    int idx; 
 
-	/*
-	 * "end" of a module configuration.  run some checks depending 
-	 * on context to make sure that all mandatory fields are there
-	 * and set default values
-	 */
-        if (!load_callbacks(mdl)) {
-            logmsg(LOGWARN, "cannot load callbacks module '%s'\n", mdl->name);
-            free_module(mdl); /* free the module_t */
-            free(mdl);
-            scope = CTX_GLOBAL;
-            break;
-        }
+	    idx = commit_module(mdl, node); 
+ 	    if (idx < 0) {
+		free_module(mdl); /* free the module_t */
+		free(mdl);
+		scope = CTX_GLOBAL;
+		break;
+	    }
 
-        if (!check_module(mdl)) {
-            logmsg(LOGWARN, "module '%s' incorrectly configured\n", mdl->name);
-            unload_object(mdl->cb_handle);  /* unload callbacks */
-            free_module(mdl);               /* free the module_t */
-            free(mdl);
-            scope = CTX_GLOBAL;
-            break;
-        }
-
-        /*
-         * module loaded ok.
-         * locate first unused entry in map.modules.
-         */
-        idx = map.module_count;
-        for (i = 0; i < idx; i++) {
-            if (map.modules[i].status == MDL_UNUSED) {
-                idx = i;
-                break;
-            }
-        }
+	    /*
+	     * load module in that index
+	     */
+	    mdl = load_module(mdl, idx);
         
-        /*
-         * load module in that index
-         */
-        mdl = load_module(mdl, idx);
-        
-        /*
-         * MDL_LOADING is a temporary status that is used by
-         * reconfigure() to recognize new modules in the modules
-         * array.
-         */
-        if (map.il_mode)
-            map.il_module = mdl;
-	mdl->status = MDL_LOADING;
-        mdl->seen = 1;
+	    /*
+	     * MDL_LOADING is a temporary status that is used by
+	     * reconfigure() to recognize new modules in the modules
+	     * array.
+	     */
+	    if (map.il_mode)
+		map.il_module = mdl;
+	    mdl->status = MDL_LOADING;
+	    mdl->seen = 1;
 
-        logmsg(LOGUI, "... module %-16s ", mdl->name); 
-        if (mdl->description != NULL) 
-                logmsg(LOGUI,"[%s]", mdl->description); 
-        logmsg(LOGUI, "\n    - prio %d; filter %s; out %s (max %uMB)\n", 
-                mdl->priority, mdl->filter_str, mdl->output,
+	    logmsg(LOGUI, "... module %-16s [node %d]", mdl->name, mdl->node); 
+	    if (mdl->description != NULL) 
+		    logmsg(LOGUI,"[%s]", mdl->description); 
+	    logmsg(LOGUI, "\n    - prio %d; filter %s; out %s (max %uMB)\n", 
+		    mdl->priority, mdl->filter_str, mdl->output,
                 mdl->streamsize / (1024*1024));
 
-        scope = CTX_GLOBAL;
+	    scope = CTX_GLOBAL;
+        } else if (scope == CTX_VIRTUAL) { 
+	    map.virtual_nodes++;
+	    node->id = map.virtual_nodes;
+	    node = &map.node;
+	    scope = CTX_GLOBAL; 
+	}
 	break;
-        }
+	    
 
     case TOK_FILTER:
 	if (scope == CTX_MODULE) {
             safe_dup(&mdl->filter_str, argv[1]);
-            parse_filter(argv[1], &(mdl->filter_tree), &(mdl->filter_cmp));
-        }
+        } else if (scope == CTX_VIRTUAL) { 
+	    safe_dup(&node->filter_str, argv[1]);
+	}
 	break;
 
     case TOK_HASHSIZE:
@@ -806,18 +837,15 @@ do_config(int argc, char *argv[])
         break;
 
     case TOK_MODULE:
-        {
-        int idx;
-
         /*
          * check if this module name is known
          */
-        for (idx = 0; idx < map.module_count; idx++) {
-            if (! strcmp(map.modules[idx].name, argv[1]))
+        for (i = 0; i < map.module_count; i++) {
+            if (! strcmp(map.modules[i].name, argv[1]))
                 break;
         }
 
-        if (idx == map.module_count) { /* not found, new module  */
+        if (i == map.module_count) { /* not found, new module  */
 
             if (map.module_count == map.module_max) { /* too many modules */
                 logmsg(LOGWARN, "too many modules. current limit is %d\n",
@@ -826,18 +854,19 @@ do_config(int argc, char *argv[])
 
             } else { /* new module */
                 mdl = new_module(argv[1], (argc > 2)? argv[2] : NULL);
+		mdl->node = node->id;
                 module_is_new = 1;
             }
 
         } else { /* found, not a new module */
-            map.modules[idx].seen = 1;
-            //mdl = &map.modules[idx];
+            map.modules[i].seen = 1;
+            //mdl = &map.modules[i];
             module_is_new = 0;
         }
         /* change scope */
         scope = CTX_MODULE;
         break;
-        }
+        
     case TOK_MODULE_MAX:
 	map.module_max = atoi(argv[1]);
 	map.modules = 
@@ -866,59 +895,67 @@ do_config(int argc, char *argv[])
 	break;
 
     case TOK_ARGS:
-    mdl->args = safe_calloc(argc, sizeof(char *));
-    for (i = 1; i < argc; i++) {
-        if (argv[i][0] == '$') {
-		    FILE *auxfp;
-		    char line[512];
+	mdl->args = safe_calloc(argc, sizeof(char *));
+	for (i = 1; i < argc; i++) {
+	    if (argv[i][0] == '$') {
+		FILE *auxfp;
+		char line[512];
 
-            /* The arg must be read from an auxiliar file */
-                
-            /* Open the file */
-            if((auxfp = fopen(&argv[i][1], "r")) == NULL)
-                panic("Error opening auxiliar file: %s\n", &argv[i][1]);
-                
-            /* Dump its content into a string */
-            mdl->args[i-1] = safe_calloc(1, sizeof(char));
-            strncpy(mdl->args[i-1], "\0", 1);
-            while(fgets(line, sizeof(line), auxfp)) {
-		        int sz; 
-                sz = strlen(mdl->args[i-1]) + strlen(line) + 1; 
-                mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], sz); 
-                strncat(mdl->args[i-1], line, strlen(line));
-            }
-            /* Close the file */
-            fclose(auxfp);
-        } else 
-		    safe_dup(&(mdl->args[i-1]), argv[i]);
-    }
+		/* The arg must be read from an auxiliar file */
+		    
+		/* Open the file */
+		if((auxfp = fopen(&argv[i][1], "r")) == NULL)
+		    panic("Error opening auxiliar file: %s\n", &argv[i][1]);
+		    
+		/* Dump its content into a string */
+		mdl->args[i-1] = safe_calloc(1, sizeof(char));
+		strncpy(mdl->args[i-1], "\0", 1);
+		while(fgets(line, sizeof(line), auxfp)) {
+		    int sz; 
+		    sz = strlen(mdl->args[i-1]) + strlen(line) + 1; 
+		    mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], sz); 
+		    strncat(mdl->args[i-1], line, strlen(line));
+		}
+		/* Close the file */
+		fclose(auxfp);
+	    } else 
+		safe_dup(&(mdl->args[i-1]), argv[i]);
+	}
 
-    /* 
-     * Last position is set to null to be able to know
-     * when args finish from the modules
-     */
-    mdl->args[i-1] = NULL;
-    break;
+	/* 
+	 * Last position is set to null to be able to know
+	 * when args finish from the modules
+	 */
+	mdl->args[i-1] = NULL;
+	break;
     
     case TOK_PRIORITY: 
         mdl->priority = atoi(argv[1]);
 	break; 
 
     case TOK_NAME: 
-        safe_dup(&map.name, argv[1]);
+        safe_dup(&node->name, argv[1]);
 	break; 
 
     case TOK_LOCATION:
-        safe_dup(&map.location, argv[1]);
+        safe_dup(&node->location, argv[1]);
 	break; 
 
-    case TOK_LINKSPEED:
-        safe_dup(&map.linkspeed, argv[1]);
+    case TOK_TYPE:
+        safe_dup(&node->type, argv[1]);
 	break; 
 
     case TOK_COMMENT: 
-        safe_dup(&map.comment, argv[1]);
+        safe_dup(&node->comment, argv[1]);
 	break; 
+
+    case TOK_VIRTUAL: 
+	node = safe_calloc(1, sizeof(struct _node)); 
+	node->next = map.node.next;
+	map.node.next = node; 
+        safe_dup(&node->name, argv[1]);
+	scope = CTX_VIRTUAL; 
+ 	break;
 
     default:
 	logmsg(LOGWARN, "unknown keyword %s\n", argv[0]);
@@ -1179,6 +1216,7 @@ static int need_default_cfgfile;
 int
 parse_cmdline(int argc, char *argv[])
 {
+    struct _node * node;
     int c;
     DIR *d;
 
@@ -1326,7 +1364,7 @@ parse_cmdline(int argc, char *argv[])
 	    break;
 
 	case 'p':
-	    map.query_port = atoi(optarg);
+	    map.node.query_port = atoi(optarg);
 	    break;
 
         case 's':   /* sniffer */
@@ -1361,21 +1399,81 @@ parse_cmdline(int argc, char *argv[])
             errx(EXIT_FAILURE, usage, argv[0]);
         }
     }
+
     /* if we were doing module configuration, end it */
     if (mod_conf) {
 	static char *argv_end[] = { "end" };
 	do_config(1, argv_end);
     }
-    /* open basedir */
-    if (map.basedir == NULL)
-	panic("missing basedir");
-    d = opendir(map.basedir);
-    if (d == NULL) 
-	createdir(map.basedir); 
-    else 
-	closedir(d);
 
-    /* XXX Do we need to check the modules configuration here ? */
+    /* 
+     * open the basedir for all nodes (virtual ones included) 
+     */
+    for (node = &map.node; node; node = node->next) { 
+	if (map.basedir == NULL)
+	    panic("missing basedir");
+	d = opendir(map.basedir);
+	if (d == NULL) 
+	    createdir(map.basedir); 
+	else 
+	    closedir(d);
+    } 
+
+    /* 
+     * for each virtual node we have to replicate the 
+     * list of modules. these new modules will have the 
+     * same name but will be running the additional filter 
+     * associated with the virtual node and save data in the 
+     * virtual node basedir.  
+     */
+    for (node = map.node.next; node != NULL; node = node->next) { 
+	int i, n; 
+
+	n = map.module_count; 
+	for (i = 0; i < n; i++) { 
+	    module_t * mdl; 
+	    int idx; 
+
+	    /* allocate new module */
+	    mdl = safe_calloc(1, sizeof(module_t));
+     
+	    /* copy all values and pointers. note that at this stage not NULL
+	     * pointers are just the ones that point to constant strings that
+	     * are shared among virtual copies of the same modules.
+	     */
+	    memcpy(mdl, &map.modules[i], sizeof(module_t));
+            mdl->status = MDL_LOADING;
+            mdl->seen = 1;
+	    mdl->node = node->id;
+	    
+	    /* append node id to module's output file */
+	    asprintf(&mdl->output, "%s-%d", mdl->output, mdl->node); 
+	    
+	    /* add the node filter to the module filter */
+	    if (node->filter_str) {
+		char * flt;
+		if (!strcmp(mdl->filter_str, "all"))
+		    asprintf(&flt, "%s", node->filter_str);
+		else 
+		    asprintf(&flt,"%s and (%s)", 
+				node->filter_str, mdl->filter_str);
+		free(mdl->filter_str);
+		mdl->filter_str = flt; 
+	    } 
+
+	    idx = commit_module(mdl, node);
+	    mdl = load_module(mdl, idx);
+
+            logmsg(LOGUI, "... module %-16s [node:%d]", mdl->name, mdl->node);
+            if (mdl->description != NULL)
+                    logmsg(LOGUI,"[%s]", mdl->description);
+            logmsg(LOGUI, 
+		   "\n    - prio %d; filter %s; out %s (max %uMB)\n",
+                   mdl->priority, mdl->filter_str, mdl->output,
+                   mdl->streamsize / (1024*1024));
+	}
+    }
+
     return 0;
 }
 

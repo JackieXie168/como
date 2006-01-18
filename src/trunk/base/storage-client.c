@@ -193,6 +193,7 @@ csopen(const char * name, int mode, off_t size, int sd)
 
     if (m.type == S_ERROR) {
 	logmsg(LOGWARN, "error opening file %s: %s\n", name, strerror(m.arg));
+	errno = m.arg;
 	return -1;
     }
 
