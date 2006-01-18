@@ -57,30 +57,35 @@
 
           $sec_array = $node -> GetConfigModules 
                                 ($comonode, $NODEDB, "secondary");
-
           $interval=$etime-$stime;
-print_r($sec_array);
           for ($i=1;$i<count($sec_array);$i++) {
-print "working on $sec_array[$i]<br>";
-#print "<pre>";
-#print_r($node);
-#print "</pre>";
-print "module={$sec_array[$i]}&format=html&";
-              if ($sec_array[$i] != "\n"){
-		  print "<iframe width=100% frameborder=0 ";
-		  print "src=generic_query.php?comonode=$comonode&";
-		  print "module={$sec_array[$i]}&format=html&";
-		  print "&stime=$stime&etime=$etime";
-
-                  print "&url=dashboard.php&";
-		  print "urlargs=comonode=$comonode&";
-		  print "urlargs=module=$module&";
-		  if ($module == $special) {
-		      print "urlargs=source=tuple&urlargs=interval=$interval&";
-		  }
-		  print "urlargs=filter={$node->loadedmodule[$module]}>";
-		  print "</iframe>\n";
+	      /*  Hard code module specific options here  */
+	      $modargs = "";
+	      if ($sec_array[$i] == "alert"){
+		  $modargs = "url=dashboard.php&";
 	      }
+	      if ($sec_array[$i] == "topdest"){
+		  $modargs = "filter={$node->loadedmodule[$sec_array[$i]]}&";
+		  $modargs = $modargs . "source=tuple&";
+		  $modargs = $modargs . "interval=$interval&";
+		  $modargs = $modargs . "topn=5&";
+		  $modargs = $modargs . "url=broadcast.php&";
+	      }
+	      if ($sec_array[$i] == "topports"){
+		  $modargs = "filter={$node->loadedmodule[$sec_array[$i]]}&";
+		  $modargs = $modargs . "topn=5&";
+		  $modargs = $modargs . "source=tuple&";
+		  $modargs = $modargs . "interval=$interval&";
+	      }
+	      print "<iframe width=100% frameborder=0 ";
+	      print "src=generic_query.php?comonode=$comonode&";
+	      print "module={$sec_array[$i]}&format=html&";
+	      print "stime=$stime&etime=$etime&";
+	      print "$modargs";
+	      print "urlargs=comonode=$comonode&";
+	      print "urlargs=module=$module&";
+	      print "urlargs=filter={$node->loadedmodule[$sec_array[$i]]}>";
+	      print "</iframe>\n";
 	  }
 #	
 #          print "<iframe width=100% frameborder=0 ";

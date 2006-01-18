@@ -43,19 +43,21 @@
 /*  Write out new config file  */
     if ($action == "submit"){
 	$val = explode ("&", $_SERVER['QUERY_STRING']);
-	$secfile = "sec_mods;;";
-	$mainfile = "main_mods;;";
+	$secfile = "sec_mods";
+	$mainfile = "main_mods";
 	for ($i=0;$i<count($val);$i++){
 	    if (strstr($val[$i], "mainmods")){
+		$mainfile = $mainfile . ";;";
 		$mod = explode ("=", $val[$i]);
-		$mainfile = $mainfile . $mod[1] . ";;";
+		$mainfile = $mainfile . $mod[1];
 	    }
 	}
 	$mainfile = $mainfile . "\n";
 	for ($i=0;$i<count($val);$i++){
 	    if (strstr($val[$i], "secmods")){
+		$secfile = $secfile . ";;";
 		$mod = explode ("=", $val[$i]);
-		$secfile = $secfile . $mod[1] . ";;";
+		$secfile = $secfile . $mod[1];
 	    }
 	}
 	$secfile = $secfile . "\n";
@@ -77,12 +79,6 @@
                 $mainfile = $dafile[$i];
 	    }
         }
-    } else {
-    /*  Create a default file  */
-	$val = "main_mods;;traffic;;application;;protocol;;utilization;;";
-	$val = $val . "sec_mods;;alert;;topdest;;topports;;";
-	$fh = fopen ("$NODEDB/$comonode.conf", "w");
-	fwrite ($fh, $val);
     }
 ?>
 <style>

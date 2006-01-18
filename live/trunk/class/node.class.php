@@ -62,7 +62,9 @@ class Node {
 		    $module = trim(strtok(":\n\t"));
 		    strtok(":\n\t");
 		    $filter = trim(strtok(":\n\t"));
-                    $this->loadedmodule[$module] = $filter;
+                    /*  Replace spaces with %20  */ 
+                    $str = preg_replace ('/ /', '%20', $filter);
+                    $this->loadedmodule[$module] = $str;
 		    strtok(":\n\t");
 		    $formats = trim(strtok(":\n\t"));
                     $this->formats[$module] = $formats;
@@ -149,14 +151,25 @@ class Node {
 	    $dafile = file ("$NODEDB/$comonode.conf");
 	    for ($i=0;$i<count($dafile);$i++){
 		if (strstr($dafile[$i], $needle)) {
-		    $dafile = $dafile[$i];
+		    $tmp = $dafile[$i];
 		}
 	    }
-            $val = explode (";;", $dafile);
+            $val = explode (";;", $tmp);
+
+            /*  Trim out the new line  */
+            for ($i=0;$i<count($val);$i++) 
+                $val[$i] = trim($val[$i]);
+
             return ($val);
             
 	} else {
-	    return (0);
+	    /*  Create a default file  */
+	    $val = "main_mods;;traffic;;application;;protocol;;utilization\n";
+	    $val = $val . "sec_mods;;alert;;topdest;;topports\n";
+	    $fh = fopen ("$NODEDB/$comonode.conf", "w");
+	    fwrite ($fh, $val);
+            /*  Re-call this function  */
+            return ($this -> GetConfigModules($comonode, $NODEDB, $value));
 	}
     }
 
