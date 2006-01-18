@@ -83,23 +83,18 @@
             /*  This is the number of buttons per row  */
             $NUMLINKS = 20;
 	    $special = "ports";
-	    $SKIP_MODULES = count($DONOTSHOW); 
 
-            $allmods = array_keys($node->loadedmodule); 
+            /*  Use the config file to decide how many modules to show  */
+            #$allmods = array_keys($node->loadedmodule); 
+            $allmods = $node -> GetConfigModules ($comonode, $NODEDB, "main");
             
-            for ($i = 0; $i < count($allmods); $i++) {
+            for ($i = 1; $i < count($allmods); $i++) {
                 if (($i % $NUMLINKS == 0) && ($i != 0))
                     print "</ul>\n<ul>\n";
 
-		$skip = 0; 
-		for ($j = 0; $j < $SKIP_MODULES; $j++) { 
-		     if ($allmods[$i] == $DONOTSHOW[$j]) 
-			$skip = 1; 
-		} 
-			
                 if ($module == $allmods[$i]) {
 		    print "<li class=\"selected\">$allmods[$i]</li>";
-                } else if (!$skip) {
+                } else {
 		    print "<li><a href=\"mainstage.php?";
 		    print "comonode=$node->comonode&module=$allmods[$i]&";
 		    if ($allmods[$i] == $special) {
