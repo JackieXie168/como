@@ -817,6 +817,10 @@ expr: expr AND expr
       {
         $$ = tree_make(Tnot, Tnone, $3, NULL, NULL);
       }
+    | OPENBR expr CLOSEBR
+      {
+        $$ = tree_copy($2);
+      }
     | ip
       {
         $$ = tree_make(Tpred, Tip, NULL, NULL, (nodedata_t *)&$1);

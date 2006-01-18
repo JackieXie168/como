@@ -61,13 +61,20 @@ extern struct _como map;
  * and some load information (memory usage, no. of modules, average traffic). 
  */
 static void
-send_status(__unused qreq_t * req, int client_fd) 
+send_status(int client_fd, int node_id) 
 {
-    char buf[1024]; 
+    char buf[2048]; 
+    module_t * mdl;
+    node_t * node;
     int ret; 
     int len; 
-    module_t *mdl;
     int idx;
+
+    /* first find the node */ 
+    for (node = &map.node; node && node->id != node_id; node = node->next)
+	; 
+    if (node == NULL)
+	panicx("cannot find virtual node %d", node_id); 
 
     /* send HTTP header */
     ret = como_writen(client_fd, 
@@ -87,9 +94,15 @@ send_status(__unused qreq_t * req, int client_fd)
 	    "Speed: %s\n"
 	    "Start: %u\n"
 	    "Current: %u\n",
-	    map.name, map.location, 
-	    COMO_VERSION, __DATE__, __TIME__, map.linkspeed, 
+	    node->name, node->location, 
+	    COMO_VERSION, __DATE__, __TIME__, node->type, 
 	    (uint) TS2SEC(map.stats->first_ts), (uint) TS2SEC(map.stats->ts)); 
+
+    /* add comments if any */
+    if (node->comment != NULL) 
+	len += sprintf(buf + len, "Comment: %s\n", node->comment); 
+
+    /* send the results */
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
 	panic("sending status to the client");   
@@ -98,20 +111,15 @@ send_status(__unused qreq_t * req, int client_fd)
     for (idx = 0; idx < map.module_count; idx++) { 
 	mdl = &map.modules[idx]; 
 
+	if (mdl->node != node_id)
+	    continue; 
+
 	len = sprintf(buf, "Module: %-20s\tFilter: %s\tFormats: %s\n", 
 			mdl->name, mdl->filter_str, mdl->callbacks.formats);
 	ret = como_writen(client_fd, buf, len);
 	if (ret < 0)
 	    panic("sending status to the client");
     } 
-
-    /* send comments if any */
-    if (map.comment != NULL) { 
-	len = sprintf(buf, "Comment: %s\n", map.comment); 
-	ret = como_writen(client_fd, buf, len);
-	if (ret < 0)
-	    panic("sending status to the client");
-    }
 
 #if 0 
     /* send usage information */
@@ -281,7 +289,7 @@ replayrecord(module_t * mdl, char * ptr, int client)
  *
  */
 static char * 
-validate_query(qreq_t * req)
+validate_query(qreq_t * req, int node_id)
 {
     static char httpstr[8192];
     int idx;
@@ -315,8 +323,11 @@ validate_query(qreq_t * req)
     for (idx = 0; idx < map.module_count; idx++) {
         req->mdl = &map.modules[idx];
 
+	if (node_id != req->mdl->node) 
+	    continue; 
+
         /* check module name */
-        if (!strcmp(req->module, req->mdl->name))
+        if (!strcmp(req->module, req->mdl->name)) 
 	    break;
     }
 
@@ -369,23 +380,18 @@ validate_query(qreq_t * req)
      *     during the interval of interest.
      */
     if (!req->source) { 
+	char * running_filter; 
+
+	running_filter = safe_strdup("all");
+	parse_filter(req->mdl->filter_str, NULL, &running_filter); 
+
 	/* 
 	 * source is not defined, hence we just want to read 
-	 * the output file. check the filter of the running modules 
+	 * the output file. check the filter of the running modules. 
+	 * it needs to be the same as the requested one otherwise the 
+	 * query result would not be the ones we are looking for.  
 	 */
-	for (idx = 0; idx < map.module_count; idx++) {
-	    req->mdl = &map.modules[idx];
-
-	    /* check module name */
-	    if (strcmp(req->module, req->mdl->name))
-		continue;
-	 
-	    /* check filter string */
-	    if (!strcmp(req->filter_cmp, req->mdl->filter_cmp))
-		break;  /* found! */
-	}
-
-	if (idx == map.module_count) {
+	if (strcmp(req->filter_cmp, running_filter)) { 
 	    /*
 	     * the module is not present in the configuration file 
 	     */
@@ -398,11 +404,16 @@ validate_query(qreq_t * req)
 		    req->module, req->filter_str);
 	    return httpstr;
 	}
+	free(running_filter);
     } else { 
 	/* 
 	 * a source is defined. go look for it and forget about the 
 	 * filter defined in the query. we will have to instantiate a
 	 * new module anyway. 
+	 * 
+	 * XXX we are assuming that whoever posts the query is aware 
+	 *     of the filtering that the source module could have done
+	 *     on the data and we don't do any checks on that.
 	 */
         for (idx = 0; idx < map.module_count; idx++) {
             req->src = &map.modules[idx];
@@ -446,9 +457,9 @@ validate_query(qreq_t * req)
 
 
 /*
- * -- query_ondemand
+ * -- query
  *
- * This function is used for on-demand queries. It is called by
+ * This function is used for all queries. It is called by
  * supervisor_mainloop() and runs in a new process. It is in charge of
  * authenticating the query, finding the relevant module output
  * data and send them back to the requester. 
@@ -469,7 +480,7 @@ validate_query(qreq_t * req)
  *
  */
 void
-query_ondemand(int client_fd)
+query(int client_fd, int node_id)
 {
     qreq_t *req;
     int storage_fd, file_fd;
@@ -485,8 +496,8 @@ query_ondemand(int client_fd)
 
     /* connect to the supervisor so we can send messages */
     map.supervisor_fd = create_socket("supervisor.sock", NULL);
-    logmsg(V_LOGWARN, "starting query-ondemand #%d: fd[%d] pid %d\n",
-	client_fd, client_fd, getpid()); 
+    logmsg(V_LOGWARN, "starting query-ondemand #%d: fd[%d] node %d pid %d\n",
+	client_fd, client_fd, node_id, getpid()); 
 
     if (map.debug) {
 	if (strstr(map.debug, map.procname) != NULL) {
@@ -543,7 +554,7 @@ query_ondemand(int client_fd)
 	 * back the information about this CoMo instance (i.e., name, 
 	 * location, version, etc.) 
 	 */
-	send_status(req, client_fd);
+	send_status(client_fd, node_id);
 	close(client_fd);
 	return; 
     }
@@ -562,7 +573,7 @@ query_ondemand(int client_fd)
      * cycle. 
      * 
      */
-    httpstr = validate_query(req);
+    httpstr = validate_query(req, node_id);
     if (httpstr != NULL) { 
 	if (como_writen(client_fd, httpstr, 0) < 0) 
 	    panic("sending data to the client [%d]", client_fd); 

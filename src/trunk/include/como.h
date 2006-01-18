@@ -35,6 +35,29 @@
 #include "comofunc.h"
 #include "sniffers.h"
 
+/* 
+ * this structure contains the node specific 
+ * information (name, location, etc.). It is a 
+ * list given that one can define multiple virtual 
+ * nodes to run in parallel. They will run the same 
+ * modules and respond on different to query on 
+ * different port. a virtual node may apply a filter on 
+ * all packets before the module process them. 
+ */
+struct _node { 
+    int id;			/* virtual node id (starts from 1) */
+    char * name; 
+    char * location; 
+    char * type; 
+    char * comment;
+    int query_port;		/* port for incoming queries */
+    char * filter_str;          /* filter expression */
+    struct _node * next; 	/* next node */
+};
+
+typedef struct _node	node_t; 
+
+    
 /*
  * Data structure containing all the configuration parameters
  * loaded from the default config file(s) and the command line.
@@ -42,27 +65,29 @@
  * modules and classifiers as well.
  */
 struct _como {
-    char * procname;    /* process using this instance */
-    char * basedir;     /* base directory for output files */
-    char * libdir;      /* base directory for classifiers */
-    char * workdir;	/* work directory for templates etc. */
-    size_t mem_size;    /* memory size for capture/export (MB) */
-    int logflags;       /* log flags (i.e., what to log) */
+    char * procname;   	 	/* process using this instance */
+    char * workdir;		/* work directory for templates etc. */
+    char * basedir;     	/* base directory for output files */
+    char * libdir;		/* base directory for modules */
+    size_t mem_size;    	/* memory size for capture/export (MB) */
+    int logflags;       	/* log flags (i.e., what to log) */
 
-    stats_t * stats; 	/* statistic counters */
+    int virtual_nodes;		/* no. of virtual nodes */
+    node_t node;		/* node information */
 
-    source_t *sources;	/* list of input data feeds */
+    stats_t * stats; 		/* statistic counters */
 
-    module_t * modules; /* array of modules */ 
-    int module_max;  	/* max no. of modules */
-    int module_count;   /* current no. of modules */
+    source_t *sources;		/* list of input data feeds */
 
-    size_t maxfilesize; /* max file size in one bytestream */
+    module_t * modules; 	/* array of modules */ 
+    int module_max;  		/* max no. of modules */
+    int module_count;   	/* current no. of modules */
+
+    size_t maxfilesize; 	/* max file size in one bytestream */
 
     int maxqueries;
-    int query_port;
 
-    int supervisor_fd;	/* util routines etc */
+    int supervisor_fd;		/* util routines etc */
 
     char *debug;		/* debug mode */
 	/*
@@ -72,18 +97,10 @@ struct _como {
 	 * matching function.
 	 */
 
-    /* node information */
-    char * name; 
-    char * location; 
-    char * linkspeed; 
-    char * comment;
-
-    int il_mode;            /* tells whether CoMo has been started in
-                             * inline mode */
-    module_t * il_module;   /* module that needs to be run in inline mode */
-    char * il_qargs;        /* query args for the inline mode */
-    int il_inquery;         /* tells whether we are printing the results of
-                             * the query while in inline mode */
+    int il_mode;            	/* flag set if running in inline mode */
+    module_t * il_module;	/* module that needs to be run in inline mode */
+    char * il_qargs;		/* query args for the inline mode */
+    int il_inquery;		/* flag set if query is printing in inline mode */
 };
 
 

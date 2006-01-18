@@ -276,12 +276,12 @@ typedef int *(filter_fn)(void *pkt_buf, int n_packets, int n_outputs,
  */
 struct _module {
     int index;          	/* order in the array of classifiers */
+    int node;			/* node this module is running for */
     char * name;		/* name of the module */
     char * description;		/* module description */
 
     treenode_t * filter_tree;   /* filter data */
     char * filter_str;          /* filter expression */
-    char * filter_cmp;          /* filter expression to compare with queries */
 
     char * output;              /* output file basename */
     char ** args;               /* parameters for the module */

@@ -114,15 +114,13 @@ main(int argc, char *argv[])
     map.logflags = DEFAULT_LOGFLAGS; 
     map.mem_size = DEFAULT_MEMORY; 
     map.maxfilesize = DEFAULT_FILESIZE; 
-    map.query_port = DEFAULT_QUERY_PORT; 
     map.module_max = DEFAULT_MODULE_MAX; 
     map.modules = safe_calloc(map.module_max, sizeof(module_t)); 
     map.workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
-    map.name = strdup("CoMo Node"); 
-    map.location = strdup("Unknown"); 
-    map.linkspeed = strdup("Unknown");
-    map.il_mode = 0;
-    map.il_inquery = 0;
+    map.node.name = strdup("CoMo Node"); 
+    map.node.location = strdup("Unknown"); 
+    map.node.type = strdup("Unknown");
+    map.node.query_port = DEFAULT_QUERY_PORT; 
 
     /* write welcome message */ 
     logmsg(LOGUI, "----------------------------------------------------\n");

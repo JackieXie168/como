@@ -297,7 +297,7 @@ inline_mode(int accept_fd)
 	logmsg(LOGWARN, "Failed to load modules\n");
     
     /* create the socket on which query-ondemand will accept the query */
-    asprintf(&buf, "S:http://localhost:%d/", map.query_port);
+    asprintf(&buf, "S:http://localhost:%d/", map.node.query_port);
     sd = create_socket(buf, NULL);
     if (sd < 0)
 	panic("inline mode: cannot create server socket: %s\n",
@@ -311,7 +311,7 @@ inline_mode(int accept_fd)
 
     if (pid == 0) {	/* here is the child... */
 	close(accept_fd);
-        query_ondemand(sd);
+        query(sd, 0);
 	exit(EXIT_SUCCESS);
     } 
 
@@ -324,7 +324,7 @@ inline_mode(int accept_fd)
     
     /* send the query string followed by "\n\n" */
     asprintf(&buf, "http://localhost:%d/?module=%s&filter=%s&%s",
-	     map.query_port, map.il_module->name,
+	     map.node.query_port, map.il_module->name,
 	     map.il_module->filter_str, map.il_qargs);
     cd = create_socket(buf, &local);
     if (cd < 0)
@@ -384,30 +384,35 @@ void
 supervisor_mainloop(int accept_fd)
 {
     fd_set valid_fds;
+    node_t * node;
     int max_fd;
-    int client_fd;	/* for http queries */
+    int *client_fd;	/* for http queries */
     int num_procs;
-    char *buf;
     
     if (map.il_mode) {
         inline_mode(accept_fd); 
 	return; 
     } 
 
-    /* 
-     * Start listening for query requests.
-     */
-    asprintf(&buf, "S:http://localhost:%d/", map.query_port);
-    client_fd = create_socket(buf, NULL);
-    if (client_fd < 0)
-        panic("creating the socket %s: %s\n", buf, strerror(errno));
-    free(buf);
-
     max_fd = 0;
     num_procs = 0;
     FD_ZERO(&valid_fds);
     max_fd = add_fd(accept_fd, &valid_fds, max_fd);
-    max_fd = add_fd(client_fd, &valid_fds, max_fd);
+
+    /* 
+     * Start listening for query requests destined to all nodes.
+     */
+    client_fd = safe_calloc(map.virtual_nodes + 1, sizeof(int));
+    for (node = &map.node; node; node = node->next) { 
+	char *buf;
+
+	asprintf(&buf, "S:http://localhost:%d/", node->query_port);
+	client_fd[node->id] = create_socket(buf, NULL);
+	if (client_fd[node->id] < 0)
+	    panic("creating the socket %s: %s\n", buf, strerror(errno));
+	max_fd = add_fd(client_fd[node->id], &valid_fds, max_fd);
+	free(buf);
+    }
 
     /*
      * initialize resource management and
@@ -460,6 +465,8 @@ supervisor_mainloop(int accept_fd)
 	fprintf(stderr, "%78s\r", ""); /* clean the line */
 
 	for (i = 0; n_ready > 0 && i < max_fd; i++) {
+	    int id; 
+
 	    if (!FD_ISSET(i, &r))
 		continue;
 
@@ -486,14 +493,17 @@ supervisor_mainloop(int accept_fd)
 		continue;
 	    }
 
-	    if (i == client_fd) { 
+	    for (id = 0; id <= map.virtual_nodes && i != client_fd[id]; id++) 
+		;
+
+	    if (i == client_fd[id]) { 
 		struct sockaddr_in addr;
 		socklen_t len;
 		int cd;
 		pid_t pid;
 	    
 		len = sizeof(addr);
-		cd = accept(client_fd, (struct sockaddr *)&addr, &len); 
+		cd = accept(client_fd[id], (struct sockaddr *)&addr, &len); 
 		if (cd < 0) {
 		    /* check if accept was unblocked by a signal */
 		    if (errno == EINTR)
@@ -517,7 +527,7 @@ supervisor_mainloop(int accept_fd)
 		    for (i=0; i < max_fd; i++)
 			if (i != cd)
 			    close(i);
-		    query_ondemand(cd); 
+		    query(cd, id); 
 		    exit(EXIT_SUCCESS); 
 		} else	/* parent */
 		    close(cd);
