@@ -77,6 +77,12 @@
                 $mainfile = $dafile[$i];
 	    }
         }
+    } else {
+    /*  Create a default file  */
+	$val = "main_mods;;traffic;;application;;protocol;;utilization;;";
+	$val = $val . "sec_mods;;alert;;topdest;;topports;;";
+	$fh = fopen ("$NODEDB/$comonode.conf", "w");
+	fwrite ($fh, $val);
     }
 ?>
 <style>
