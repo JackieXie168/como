@@ -70,6 +70,9 @@ $MYLOGO = "./images/intel.gif";
  */
 $USECACHE = 1;
 
+/* Allow customization of CoMoLive!
+$ALLOWCUSTOMIZE = 1;
+
 /*  Absolute and Webroot directory location  */
 $WEBROOT = dirname($_SERVER['SCRIPT_NAME']);
 $ABSROOT = dirname($_SERVER['SCRIPT_FILENAME']);

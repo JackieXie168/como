@@ -4,6 +4,13 @@
     include ("include/header.php.inc");
     require_once("comolive.conf");
     require_once("class/node.class.php");
+  
+    if (!($ALLOWCUSTOMIZE)){
+        print "Customization of CoMoLive is NOT allowed<br>";
+        print "Please check your comolive.conf file<br>";
+        exit;
+
+    }
 
     /* get the node hostname and port number */
     if (isset($_GET['comonode'])) {
@@ -175,3 +182,4 @@
 </table>
 </form>
 </body>
+
