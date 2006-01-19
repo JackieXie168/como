@@ -70,6 +70,8 @@
 		  $modargs = $modargs . "interval=$interval&";
 		  $modargs = $modargs . "topn=5&";
 		  $modargs = $modargs . "url=broadcast.php&";
+		  $modargs = $modargs . "urlargs=stime=$stime&";
+		  $modargs = $modargs . "urlargs=etime=$etime&";
 	      }
 	      if ($sec_array[$i] == "topports"){
 		  $modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";

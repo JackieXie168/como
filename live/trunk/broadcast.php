@@ -4,6 +4,15 @@ include ("class/node.class.php");
 include ("class/query.class.php");
 include ("comolive.conf");
 
+/*  get the node hostname and port number */
+#if (isset($_GET['comonode'])) {
+#    $comonode = $_GET['comonode'];
+#} else {
+#    print "sysinfo.php requires the comonode=host:port arg passed to it";
+#    exit;
+#}
+
+#$node = new Node($comonode, $TIMEPERIOD, $TIMEBOUND);
 #
 # GET input variables
 #
