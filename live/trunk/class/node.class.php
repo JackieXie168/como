@@ -18,11 +18,10 @@ class Node {
     var $builddate;
     var $start;
     var $curtime;
-    var $loadedmodule;
+    var $modinfo;
     var $status;
     var $module;
     var $filter;
-    var $formats;
     var $stime;
     var $etime;
     var $timeperiod;
@@ -64,10 +63,13 @@ class Node {
 		    $filter = trim(strtok(":\n\t"));
                     /*  Replace spaces with %20  */ 
                     $str = preg_replace ('/ /', '%20', $filter);
-                    $this->loadedmodule[$module] = $str;
+                    $this->modinfo[$module]['filter'] = $str;
 		    strtok(":\n\t");
-		    $formats = trim(strtok(":\n\t"));
-                    $this->formats[$module] = $formats;
+		    $str = trim(strtok(":\n\t"));
+                    $this->modinfo[$module]['formats'] = $str;
+		    strtok(":\n\t");
+		    $str = trim(strtok(":\n\t"));
+                    $this->modinfo[$module]['stime'] = $str;
 		}
 		$tok = strtok(":\n");
 	    } 
@@ -125,10 +127,10 @@ class Node {
      *  on a per module basis.  
      */
     function GetModules ($needle) {
-        $keys = array_keys($this -> formats);
+        $keys = array_keys($this -> modinfo);
         $modules = array();
         for ($i=0;$i<count($keys); $i++) {
-            $haystack = $this -> formats[$keys[$i]];
+            $haystack = $this -> modinfo[$keys[$i]]['formats'];
             if (strstr($haystack, $needle)) {
                 array_push ($modules, $keys[$i]);
             }
