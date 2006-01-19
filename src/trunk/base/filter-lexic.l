@@ -56,9 +56,10 @@ DIR             src|dst
 PORTDIR         sport|dport
 IPADDR          ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
 NETMASK         "/"({DIGIT}){1,2}
-PORT            {DIGIT}+
+NUMBER          {DIGIT}+
 LEVEL3          ip
 LEVEL4          tcp|udp|icmp
+IFACE		input|output
 
 %option noyywrap
 %option nounput
@@ -78,6 +79,14 @@ LEVEL4          tcp|udp|icmp
 
 %%
 
+{IFACE}		{
+                if (!strcmp(yytext, "input"))
+                    yflval.byte = 0;
+                else /* output */
+                    yflval.byte = 1;
+                return(IFACE);
+                }
+		
 {DIR}           {
                 if (!strcmp(yytext, "src"))
                     yflval.byte = 0;
@@ -102,10 +111,10 @@ LEVEL4          tcp|udp|icmp
                 yflval.dword = atoi(yytext + 1);
                 return(NETMASK); 
                 }
-{PORT}          {
-                /* Copy the port number */
+{NUMBER}        {
+                /* Copy the number */
                 yflval.word = atoi(yytext);
-                return(PORT); 
+                return(NUMBER); 
                 }
 {LEVEL3}        {
                 /* For now there is only the IP protocol */

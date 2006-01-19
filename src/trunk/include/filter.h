@@ -58,10 +58,17 @@ struct _portrange {
 };
 typedef struct _portrange portrange_t;
 
+struct _iface { 
+    uint8_t direction; 
+    uint16_t index;
+};
+typedef struct _iface iface_t;
+
 union _nodedata {
     ipaddr_t ipaddr;
     portrange_t ports;
     uint16_t proto;
+    iface_t iface;
 };
 typedef union _nodedata nodedata_t;
 
@@ -82,5 +89,6 @@ typedef struct _treenode treenode_t;
 #define FILTER_DSTIP    0x0004
 #define FILTER_SRCPORT  0x0008
 #define FILTER_DSTPORT  0x0010
+#define FILTER_IFACE	0x0020
 
 #endif /* _COMO_FILTER_H */

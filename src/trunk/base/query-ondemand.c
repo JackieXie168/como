@@ -796,9 +796,7 @@ init_ondemand_module(module_t ** mdl, char ** args)
      */
     x = safe_calloc(1, sizeof(module_t));
     x->filter_str = safe_strdup(p->filter_str);
-    str = safe_strdup("all");
     parse_filter(x->filter_str, &(x->filter_tree), &str);
-    free(str);
     x->source = safe_strdup(p->source);
     x->msize = p->msize;
     if (x->msize)

@@ -382,7 +382,6 @@ validate_query(qreq_t * req, int node_id)
     if (!req->source) { 
 	char * running_filter; 
 
-	running_filter = safe_strdup("all");
 	parse_filter(req->mdl->filter_str, NULL, &running_filter); 
 
 	/* 
