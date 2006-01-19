@@ -427,6 +427,9 @@ print(char *buf, size_t *len, char * const args[])
 	float bytes = 0; 
 	float pkts = 0; 
 
+	/* print the timestamp */
+	*len = sprintf(s, "%u ", values.ts) ; 
+
 	for (i = 0; i < APPLICATIONS; i++) {
 	    bytessum += values.bytes[i]; 
 	    pktssum += values.pkts[i]; 
@@ -448,6 +451,9 @@ print(char *buf, size_t *len, char * const args[])
 	 */
 	float mbps = 0; 
 	uint64_t pkts = 0; 
+
+	/* print the timestamp */
+	*len = sprintf(s, "%u ", values.ts) ; 
 
 	/* now print the values */
 	for (i = 0; i < APPLICATIONS; i++) { 
