@@ -202,11 +202,8 @@ handle_children(void)
 	}
     }
 
-    if (j == sizeof(my_children)) { 
-	/* this must be a query-ondemand */
-	logmsg(V_LOGWARN, "query terminated\n");
+    if (j == sizeof(my_children))
 	return; 
-    } 
 
     if (WIFEXITED(statbuf)) 
 	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (status: %d)\n",

@@ -66,6 +66,7 @@ send_status(int client_fd, int node_id)
     char buf[2048]; 
     module_t * mdl;
     node_t * node;
+    int storage_fd;
     int ret; 
     int len; 
     int idx;
@@ -107,18 +108,53 @@ send_status(int client_fd, int node_id)
     if (ret < 0)
 	panic("sending status to the client");   
 
+    /* 
+     * connect to the storage process, open the module output file 
+     * and then start reading the file and send the data back 
+     */
+    storage_fd = create_socket("storage.sock", NULL);
+
     /* send list of loaded modules */
     for (idx = 0; idx < map.module_count; idx++) { 
+	int file_fd; 
+	off_t ofs; 
+	size_t rlen, sz;
+	timestamp_t ts; 
+	char * ptr;
+
 	mdl = &map.modules[idx]; 
 
 	if (mdl->node != node_id)
 	    continue; 
 
-	len = sprintf(buf, "Module: %-20s\tFilter: %s\tFormats: %s\n", 
-			mdl->name, mdl->filter_str, mdl->callbacks.formats);
+	/* we now look at the very first record for this module 
+    	 * to get an idea on how far in the past a query could go. 
+ 	 */
+	file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0, storage_fd);
+	if (file_fd < 0)
+	    panic("opening file %s", mdl->output);
+
+	/* get start offset */
+	ofs = csgetofs(file_fd);
+	
+	/* read first record */
+	ts = 0;
+	rlen = mdl->bsize;
+	ptr = csmap(file_fd, ofs, &rlen);
+	if (ptr && rlen > 0) {
+	    /* we got something, give the record to load() */
+	    sz = mdl->callbacks.load(ptr, rlen, &ts);
+	}
+
+	len = sprintf(buf, 
+		"Module: %-20s\tFilter: %s\tFormats: %s\tStart: %12u\n", 
+		mdl->name, mdl->filter_str, mdl->callbacks.formats, TS2SEC(ts));
+
 	ret = como_writen(client_fd, buf, len);
 	if (ret < 0)
 	    panic("sending status to the client");
+
+	csclose(file_fd, 0);
     } 
 
 #if 0 
@@ -495,8 +531,8 @@ query(int client_fd, int node_id)
 
     /* connect to the supervisor so we can send messages */
     map.supervisor_fd = create_socket("supervisor.sock", NULL);
-    logmsg(V_LOGWARN, "starting query-ondemand #%d: fd[%d] node %d pid %d\n",
-	client_fd, client_fd, node_id, getpid()); 
+    logmsg(V_LOGWARN, "starting process QUERY #%d: node %d pid %d\n",
+	client_fd, node_id, getpid()); 
 
     if (map.debug) {
 	if (strstr(map.debug, map.procname) != NULL) {

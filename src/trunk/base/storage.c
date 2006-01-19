@@ -1553,11 +1553,11 @@ storage_mainloop(int accept_fd)
 	    /* process the incoming message */
 	    bzero(&m, sizeof(m));
 	    ret = read(i, &m, sizeof(m));
-	    if (ret <= 0) {	/* end of file on a socket ? */
-		logmsg(LOGWARN, "storage reading fd[%d] got %d (%s)\n", 
-			i, ret, strerror(errno));
-		cs_state.max_fd = del_fd(i, &cs_state.valid_fds,
-                                         cs_state.max_fd);
+	    if (ret <= 0) {
+		/* the other process left, remove this file descriptor 
+		 * from the list
+		 */
+		cs_state.max_fd = del_fd(i,&cs_state.valid_fds,cs_state.max_fd);
 		close(i);
 		continue;
 	    }

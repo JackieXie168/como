@@ -72,7 +72,7 @@ cleanup()
     char *cmd;
 
     if (strcmp(map.procname, "su")) {
-	logmsg(LOGUI, "cleanup: %s, just dying\n", map.procname);
+	logmsg(V_LOGWARN, "terminating normally\n", map.procname);
 	return;
     }
     logmsg(LOGUI, "\n\n\n--- about to exit... remove work directory %s\n",
