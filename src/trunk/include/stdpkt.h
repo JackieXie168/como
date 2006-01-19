@@ -68,6 +68,8 @@ struct _como_pkt {
     uint64_t ts;		/* timestamp */
     uint32_t len;		/* length on the wire */
     uint32_t caplen;		/* capture length */
+    uint8_t input;		/* input sniffer id */
+    uint8_t reserved[3];	/* reserved (padding for now) */
     uint16_t type; 		/* packet type (COMOTYPE_*) */
     uint16_t dropped;		/* dropped packets since last (max 0xffff) */ 
     uint16_t l2type; 		/* layer2 type using mac codes */ 

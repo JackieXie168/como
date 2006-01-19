@@ -102,6 +102,7 @@
 #define Tip    5
 #define Tport  6
 #define Tproto 7
+#define Tiface 8
 
 struct _listnode
 {
@@ -243,6 +244,12 @@ tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
         case Tproto:
             asprintf(&(t->string), "proto %d", data->proto);
             t->data->proto = data->proto;
+            break;
+        case Tiface:
+            asprintf(&(t->string), "iface %d %d", 
+		    data->iface.direction, data->iface.index);
+            t->data->iface.direction = data->iface.direction;
+            t->data->iface.index = data->iface.index;
             break;
         }
     }
@@ -689,6 +696,13 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
                          H16(UDP(dst_port)) <= t->data->ports.highport);
             }
             break;
+   	case Tiface: 
+	    if (COMO(type) != COMOTYPE_NF) 
+		return 0; 
+	    if (t->data->iface.direction == 0) 
+		z = (H16(NF(input)) == t->data->iface.index); 
+	    else 
+		z = (H16(NF(output)) == t->data->iface.index); 
         case Tproto:
             switch(t->data->proto) {
             case ETHERTYPE_IP:
@@ -758,20 +772,22 @@ int evaluate(treenode_t *t, pkt_t *pkt)
     treenode_t *tree;
     ipaddr_t ipaddr;
     portrange_t portrange;
+    iface_t iface;
 }
 
 /* Data types and tokens used by the parser */
 
 %token NOT AND OR OPENBR CLOSEBR COLON ALL
 %left NOT AND OR /* Order of precedence */
-%token <byte> DIR PORTDIR
-%token <word> PORT LEVEL3 LEVEL4
+%token <byte> DIR PORTDIR IFACE
+%token <word> LEVEL3 LEVEL4 NUMBER
 %token <dword> NETMASK
 %token <string> IPADDR 
 %type <tree> expr
 %type <ipaddr> ip
 %type <portrange> port
-%type <word> proto
+%type <word> proto 
+%type <iface> iface
 %start filter
 
 %%
@@ -783,13 +799,15 @@ filter: expr
         if (filter_tree != NULL)
             *filter_tree = tree_copy($1);
         $1 = cnf($1);
-        *filter_cmp = tree_to_string($1);
+        if (filter_cmp != NULL)
+	    *filter_cmp = tree_to_string($1);
         }
       | ALL
         {
         if (filter_tree != NULL)
             *filter_tree = NULL;
-        asprintf(filter_cmp, "all");
+        if (filter_cmp != NULL)
+	    asprintf(filter_cmp, "all");
         }
           
 expr: expr AND expr
@@ -833,6 +851,10 @@ expr: expr AND expr
       {
         $$ = tree_make(Tpred, Tproto, NULL, NULL, (nodedata_t *)&$1);
       }
+    | iface
+      {
+        $$ = tree_make(Tpred, Tiface, NULL, NULL, (nodedata_t *)&$1);
+      }
 
 ip: DIR IPADDR
     {
@@ -851,25 +873,25 @@ ip: DIR IPADDR
             YYABORT;
     }
 
-port: PORTDIR PORT
+port: PORTDIR NUMBER
       {
         $$.direction = $1;
         $$.lowport = $2;
         $$.highport = $2;
       } 
-    | PORTDIR PORT COLON
+    | PORTDIR NUMBER COLON
       {
         $$.direction = $1;
         $$.lowport = $2;
         $$.highport = 65535;
       }
-    | PORTDIR COLON PORT
+    | PORTDIR COLON NUMBER
       {
         $$.direction = $1;
         $$.lowport = 1;
         $$.highport = $3;
       }
-    | PORTDIR PORT COLON PORT
+    | PORTDIR NUMBER COLON NUMBER
       {
         $$.direction = $1;
         $$.lowport = $2;
@@ -885,7 +907,12 @@ proto: LEVEL3
         $$ = $1;
        }
         
-
+iface: IFACE NUMBER
+       {
+        $$.direction = $1;
+	$$.index = $2;
+       }
+        
 %%
 
 #include "filter-lexic.c"
