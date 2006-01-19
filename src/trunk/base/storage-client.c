@@ -70,7 +70,7 @@ four methods, and provides an mmap-like interface.
   void csclose(int fd, off_t ofs)  
 
 	fd		is the file descriptor
-        ofs		last valid byte written to disk
+        ofs		last valid byte written to disk (CS_WRITER only)
 
 	Flushes any unmapped block, and closes the descriptor.
   
