@@ -70,7 +70,7 @@ $MYLOGO = "./images/intel.gif";
  */
 $USECACHE = 1;
 
-/* Allow customization of CoMoLive!
+/* Allow customization of CoMoLive! */
 $ALLOWCUSTOMIZE = 1;
 
 /*  Absolute and Webroot directory location  */
