@@ -123,7 +123,9 @@
 		print "<!-- Using flash here -->";
 		include("flash/zooming.php");
             }
-	}
+	} else {
+	    print "<img src=images/blankplot.jpg>";
+        }
 
 
         ?>
