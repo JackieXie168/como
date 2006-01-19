@@ -101,7 +101,7 @@
 			$duration = $node->etime - $node->stime; 
 			print "source=tuple&interval=$duration&"; 
 		    } 
-                    print "filter={$node->loadedmodule[$allmods[$i]]}&";
+                    print "filter={$node->modinfo[$allmods[$i]]['filter']}&";
 		    print "stime=$node->stime&etime=$node->etime\">";
 		    print "$allmods[$i]</a></li>\n";
                 }

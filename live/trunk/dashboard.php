@@ -65,14 +65,14 @@
 		  $modargs = "url=dashboard.php&";
 	      }
 	      if ($sec_array[$i] == "topdest"){
-		  $modargs = "filter={$node->loadedmodule[$sec_array[$i]]}&";
+		  $modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
 		  $modargs = $modargs . "source=tuple&";
 		  $modargs = $modargs . "interval=$interval&";
 		  $modargs = $modargs . "topn=5&";
 		  $modargs = $modargs . "url=broadcast.php&";
 	      }
 	      if ($sec_array[$i] == "topports"){
-		  $modargs = "filter={$node->loadedmodule[$sec_array[$i]]}&";
+		  $modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
 		  $modargs = $modargs . "topn=5&";
 		  $modargs = $modargs . "source=tuple&";
 		  $modargs = $modargs . "interval=$interval&";
@@ -84,7 +84,7 @@
 	      print "$modargs";
 	      print "urlargs=comonode=$comonode&";
 	      print "urlargs=module=$module&";
-	      print "urlargs=filter={$node->loadedmodule[$sec_array[$i]]}>";
+	      print "urlargs=filter={$node->modinfo[$sec_array[$i]]['filter']}>";
 	      print "</iframe>\n";
 	  }
 #	
