@@ -370,7 +370,6 @@ q_process_batch(pkt_t *pkts, int count, tailq_t *expired, module_t *mdl)
      * future...
      *
      */
-    assert(mdl->name != NULL);
     logmsg(V_LOGDEBUG, "sending %d packets to module %s for processing\n",
 	   count, mdl->name);
 
