@@ -39,7 +39,7 @@
 						 $http_query_string);
 	$data = $query->do_query ($node->comonode, $query_string);
 	/*  Write html out to a file so we dont have to query all the time */
-        if ($data[0]){
+        if (($data[0]) && ($USECACHE)){
 	    $fullname = "{$query -> rootdir}/{$query->results_dir}/$filename";
 	    $fh = fopen ($fullname, "w");
 	    fwrite ($fh, $data[1]);
