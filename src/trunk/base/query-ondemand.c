@@ -504,12 +504,15 @@ q_export_record(module_t * mdl, rec_t * rp, __unused int client_fd)
 static int
 q_call_print(module_t * mdl, rec_t *rp, int client_fd)
 {
-    char dst[65536];
-    char *p;
+    static char * buf = NULL;
+    char * p;
     ssize_t ret; 
     size_t left; 
 
-    ret = mdl->callbacks.store(rp, dst, mdl->bsize);
+    if (buf == NULL) 
+	buf = safe_malloc(mdl->bsize);
+
+    ret = mdl->callbacks.store(rp, buf, mdl->bsize);
     if (ret < 0) 
         logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
 
@@ -518,7 +521,7 @@ q_call_print(module_t * mdl, rec_t *rp, int client_fd)
      * in a single call. we pass this pointer to the load callback
      * to get that information. 
      */
-    p = dst; 
+    p = buf;
     left = (size_t) ret; 
     while (left > 0) { 
 	size_t sz; 
@@ -534,7 +537,6 @@ q_call_print(module_t * mdl, rec_t *rp, int client_fd)
 	left -= sz; 
     } 
     
-    free(dst);
     return (int) ret;
 }
 
