@@ -61,8 +61,8 @@ _smalloc(const char * file, const int line, size_t sz)
 
     v = malloc(sz);
     if (v == NULL) {
-        fprintf(stderr, "[%2s]  **** PANIC: malloc (%s:%d): %s\n",
-            map.procname, file, line, strerror(errno));
+        fprintf(stderr, "[%2s]  **** PANIC: malloc %u bytes (%s:%d): %s\n",
+            map.procname, sz, file, line, strerror(errno));
         abort();
     }
 
@@ -87,8 +87,8 @@ _scalloc(const char * file, const int line, int n, size_t sz)
 
     v = calloc((unsigned int) n, sz);
     if (v == NULL) {
-	fprintf(stderr, "[%2s]  **** PANIC: calloc (%s:%d)\n", 
-	    map.procname, file, line);
+	fprintf(stderr, "[%2s]  **** PANIC: calloc n:%d sz:%u (%s:%d)\n", 
+	    map.procname, n, sz, file, line);
 	abort();
     }
 
