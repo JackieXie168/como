@@ -60,11 +60,21 @@ enum msg_ids {
 __inline__ static int
 write_str(int fd, char *str)
 {
-    int len = (int) strlen(str) + 1;
+    int len; 
+
+    if (str == NULL) { 
+	len = 0;
+	if (sizeof(len) != write_var(fd, len))
+	    return -1; /* err */
+	return 0;
+    }
+
+    len = (int) strlen(str) + 1;
     if (sizeof(len) != write_var(fd, len))
         return -1; /* err */
-    if (como_writen(fd, str, len) != len)
-        return -1; /* err */
+    if (len != 0)
+	if (como_writen(fd, str, len) != len)
+	    return -1; /* err */
     return 0;      /* ok */
 }
 
@@ -74,6 +84,8 @@ read_str_(int fd, char **str)
     int len;
     if (sizeof(len) != read_var(fd, len))
         return -1; /* err */
+    if (len == 0) 
+	return 0; 
     *str = safe_calloc(1, len);
     if (como_readn(fd, *str, len) != len)
         return -1; /* err */
