@@ -35,7 +35,7 @@ if (isset($_GET['etime']) && ($_GET['etime'] != "")){
 if(isset($_GET['stime']) && ($_GET['stime'] != "")){
     $stime = $_GET['stime'];
     if (isset($node)){
-	$stime = $node->CheckFirstPacket($stime);
+	$stime = $node->CheckFirstPacket($stime,$module);
 	$node->SetStarttime($stime);
     }
 } else

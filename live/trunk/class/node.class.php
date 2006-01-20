@@ -114,9 +114,9 @@ class Node {
     function SetEndtime ($etime) {
         $this->etime = $etime;
     }
-    function CheckFirstPacket ($stime) {
-        if ($stime < $this->start){
-            $this->stime = $this->start;
+    function CheckFirstPacket ($stime,$mod) {
+        if ($stime < $this->modinfo[$mod]['stime']){
+            $this->stime = $this->modinfo[$mod]['stime'];
         } else {
             $this->stime = $stime;
         }
