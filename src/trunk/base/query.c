@@ -720,9 +720,9 @@ query(int client_fd, int node_id)
 	 * If lost sync, move to the next file and try again. 
 	 */
 	if (ptr == GR_LOSTSYNC) {
-	    logmsg(LOGQUERY, "lost sync, trying next file %s\n", 
-		req->src->output); 
 	    ofs = csseek(file_fd);
+	    logmsg(LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
+		req->src->output, ofs); 
 	    continue;
 	}
 
