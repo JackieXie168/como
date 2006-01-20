@@ -96,7 +96,7 @@ class Query {
 
         /*  See if the plot is already there  */
         $image = $this->results_dir . "/" . $this->filename . ".jpg";
-        if (!($this->plot_exists("$image"))){
+        if (!($this->plot_exists("$image"))) {
 	    /*
 	     * in order to plot correctly, we need to replicate the data
 	     * we have received from the CoMo node (in $query_output) a number 
