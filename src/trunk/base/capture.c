@@ -716,6 +716,7 @@ capture_mainloop(int accept_fd)
      * no pending communication with export.
      */
     for (;;) {
+	struct timeval t; 
 	fd_set r; 
 	int n_ready; 
 
@@ -775,7 +776,8 @@ capture_mainloop(int accept_fd)
 
 	/* wait for messages, sniffers or up to the polling interval */
 	r = valid_fds;
-	n_ready = select(max_fd, &r, NULL, NULL, &tout);
+	t = tout; 
+	n_ready = select(max_fd, &r, NULL, NULL, &t);
 	if (n_ready < 0)
 	    panic("select"); 
 
