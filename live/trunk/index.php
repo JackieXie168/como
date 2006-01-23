@@ -24,11 +24,17 @@
 	padding-left:5px;
 	padding-right:5px;
     }
+    .leftmain {
+	width:70%;
+	vertical-align:top
+	padding:10px;
+    }
+
 </style>
 <body>
 <table class=fence>
   <tr>
-    <td class=leftcontent>
+    <td class=leftmain>
       <h2>CoMo Nodes</h2>
     <?php
         if (file_exists($nodefile)) {
@@ -40,7 +46,7 @@
             print "no como nodes saved";
         } else {
             if ($fp = fopen ($nodefile, "r")) {
-		print "<table cellpadding=0 cellspacing=2 border=0>";
+		print "<table cellpadding=0 cellspacing=2>";
 		while (!feof($fp)) {
 		    $line = fgets($fp);
 		    if ($line != ""){
@@ -60,13 +66,11 @@
 		    print "<td width=150 valign=top>$loc</td>";
 		    print "<td width=150 valign=top>$iface</td>";
 		    print "<td width=500 valign=top>$comment</td>";
-		    if ($name != "Name") {
+		    if ($name != "Name" && $ALLOWCUSTOMIZE) {
 			print "<td valign=top align=right>";
                         print "<a href=managenode.php?action=delete";
                         print "&comonode=$comonode>Remove</a></td>";
-                    } else  {
-			print "<td width=200 valign=top>&nbsp;<td>";
-                    }
+                    } 
 		    print "</tr>";
                    
             }
@@ -87,13 +91,16 @@
          onFocus=clearText(this);>
 	<input type=image src=images/go.jpg>
       </form>
+
+    <?  if ($ALLOWCUSTOMIZE) { ?>
       <br>
       Add a new CoMo node
       <form align=middle action=managenode.php method=get>
-	<input type=text name=comonode "size=21 value="comonode:44444"
+	<input type=text name=comonode size=21 value="comonode:44444"
          onFocus=clearText(this);>
 	<input type=image src=images/go.jpg >
       </form>
+    <? } ?>
     </td>
   </tr>
 </table>
