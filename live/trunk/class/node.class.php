@@ -85,6 +85,10 @@ class Node {
 	     */
 	    $stime = $etime - $this->timeperiod;
 
+            /*  Make sure start time is not before the module start time  */
+            if ($stime < $this -> modinfo[$module]['stime'])
+                $stime = $this -> modinfo[$module]['stime'];
+
 	    /*
 	     *  all timestamps are always aligned to the timebound
 	     *  defined in the comolive.conf file.
