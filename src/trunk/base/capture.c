@@ -159,14 +159,29 @@ flush_table(module_t * mdl, tailq_t * expired)
     assert(ct != NULL); 
     assert(ct->records > 0); 
 
-    if (ct->records > ct->size)
-	logmsg(LOGWARN,
-	    "flush_table table '%s' overfull (%d vs %d) -- %d live\n",
-	    mdl->name, ct->records, ct->size, ct->live_buckets);
-
     logmsg(V_LOGCAPTURE,
 	"flush_tables %p(%s) buckets %d records %d live %d\n", ct,
 	mdl->name, ct->size, ct->records, ct->live_buckets);
+
+    /* update the hash table size for next time if it is underutilized 
+     * or overfull. 
+     */
+
+    if (ct->records > ct->size) { 
+	/* hashtable underprovisioned, try resize it */
+	mdl->ca_hashsize <<= 2; 
+	logmsg(LOGCAPTURE,
+	    "table '%s' overfull (%d vs %d) -- %d live : new size %d\n",
+	    mdl->name, ct->records, ct->size, 
+	    ct->live_buckets, mdl->ca_hashsize);
+    } else if (ct->records < ct->size >> 5) { 
+	/* the hashtable is overprovisioned. try resize it */ 
+	mdl->ca_hashsize >>= 2; 
+	logmsg(LOGCAPTURE,
+	    "table '%s' underused (%d vs %d) -- %d live : new size %d\n",
+	    mdl->name, ct->records, ct->size, 
+	    ct->live_buckets, mdl->ca_hashsize);
+    } 
 
     /* add to linked list and remove from here. */
     TQ_APPEND(expired, ct, next_expired);
@@ -230,9 +245,13 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	}
 	if (!mdl->ca_hashtable) {
 	    mdl->ca_hashtable = create_table(mdl, pkt->ts); 
-	    if (!mdl->ca_hashtable) 
-		continue;		/* XXX no memory, we keep going. 
-					 *     need better solution! */
+	    if (!mdl->ca_hashtable) {
+		/* XXX no memory, we keep going. 
+		 *     need better solution! */
+		logmsg(LOGWARN, "out of memory for %s, skipping pkt\n",
+		    mdl->name);
+		continue;	
+	    } 
 	}
 
         if (which[i] == 0)
