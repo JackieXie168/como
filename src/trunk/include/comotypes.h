@@ -489,11 +489,13 @@ struct _como_pktdesc {
     uint16_t flags;                     /* flags for several options */
 #define COMO_AVG_PKTLEN         0x0001  /* pkt len are averaged */
 #define COMO_FULL_PKT           0x0002  /* full packet capture */
+#define COMO_FLOW_PACKETS	0x0004	/* one packet per 5-tuple flow */
 
     struct _como_isl isl;               /* Cisco ISL bitmask */
     struct _como_eth eth;               /* Ethernet bitmask */
     struct _como_hdlc hdlc;             /* Cisco HDLC bitmask */
     struct _como_vlan vlan;             /* 802.1q bitmask */
+    struct _como_nf nf;			/* NetFlow bitmask */
     struct _como_iphdr ih;              /* IP header bitmask */
     struct _como_tcphdr tcph;           /* TCP header bitmask */
     struct _como_udphdr udph;           /* UDP header bitmask */

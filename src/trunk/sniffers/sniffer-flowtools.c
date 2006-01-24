@@ -79,14 +79,19 @@ struct _snifferinfo {
 
 /* sniffer options */
 #define FLOWTOOLS_STREAM 	0x01	/* always wait for more files */
+#define FLOWTOOLS_COMPACT	0x02	/* just one packet per flow */
 
+#define NF_PAYLOAD			\
+    (sizeof(struct _como_nf) + 		\
+     sizeof(struct _como_iphdr) +	\
+     sizeof(struct _como_tcphdr)) 
 /* 
  * This data structure is saved in the heap and contains the flow 
  * information as derived by the flow-tools record. 
  */
 struct _flowinfo { 
     pkt_t pkt;			/* next packet that will be generated */
-    char payload[48]; 		/* payload (NF + IP + TCP header) */
+    char payload[NF_PAYLOAD]; 	/* payload (NF + IP + TCP header) */
     uint32_t length_last;	/* length of last packet */
     timestamp_t increment; 	/* timestamp increment at each packet */
     timestamp_t end_ts;		/* timestamp of last packet */
@@ -149,7 +154,10 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
     NF(tcp_flags) = f->tcp_flags;
     N16(NF(input)) = htons(f->input);
     N16(NF(output)) = htons(f->output);
-    NF(sampling) = sampling;
+    NF(flags) = COMONF_FIRST;
+    N32(NF(pktcount)) = f->dPkts * sampling; 
+    N64(NF(bytecount)) = f->dOctets * sampling; 
+    N32(NF(duration)) = TS2MSEC(flow->end_ts - pkt->ts); 
 
     /* IP header */
     IP(vhl) = 0x45; 
@@ -369,6 +377,14 @@ configsniffer(char * args, struct _snifferinfo * info)
     wh = strstr(args, "stream");
     if (wh != NULL) 
 	info->flags |= FLOWTOOLS_STREAM; 
+
+    /* 
+     * "compact" 
+     * compact mode. generate just the first packet of each flow. 
+     */
+    wh = strstr(args, "compact");
+    if (wh != NULL) 
+	info->flags |= FLOWTOOLS_COMPACT; 
 }
 
 
@@ -462,6 +478,8 @@ sniffer_start(source_t * src)
     p->ts = TIME2TS(120, 0);
     p->caplen = sizeof(struct _como_iphdr) + sizeof(struct _como_tcphdr); 
     p->flags = COMO_AVG_PKTLEN; 
+    if (info->flags & FLOWTOOLS_COMPACT) 
+	p->flags |= COMO_FLOW_PACKETS;
     N16(p->ih.len) = 0xffff;
     p->ih.proto = 0xff;
     N32(p->ih.src_ip) = 0xffffffff;
@@ -570,12 +588,16 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 * update the lenght of the packet and free this data 
 	 * structure 
 	 */
-	if (flow->pkt.ts >= flow->end_ts) { 
+	if (info->flags & FLOWTOOLS_COMPACT) {
+	    free(flow);
+	} else if (flow->pkt.ts >= flow->end_ts) { 
+	    NF(flags) &= ~COMONF_FIRST;
 	    pkt->ts = flow->end_ts; 
 	    pkt->len += flow->length_last; 
 	    N16(IP(len)) = htons((uint16_t) pkt->len); 
 	    free(flow); 
 	} else {  
+	    NF(flags) &= ~COMONF_FIRST;
 	    flow->pkt.ts += flow->increment; 
 	    heap_insert(info->heap, flow); 
 	} 

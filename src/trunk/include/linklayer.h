@@ -91,19 +91,25 @@ struct _como_isl {
  * 
  */
 struct _como_nf { 
-    n32_t exaddr;         /* Exporter IP Address */
-    n32_t nexthop;        /* Next hop router's IP Address */
-    n16_t src_as;	  /* source AS (could be peer AS or origin AS) */
-    n16_t dst_as; 	  /* destination AS (peer AS or origin AS for dst IP) */
-    n16_t input; 	  /* Input interface index */
-    n16_t output; 	  /* Output interface index */
-    uint8_t tcp_flags;    /* OR of TCP header bits */
-    uint8_t src_mask;	  /* source prefix mask */
-    uint8_t dst_mask; 	  /* destination prefix mask */
-    uint8_t engine_type;  /* Type of flow switching engine (RP,VIP,etc.) */
-    uint8_t engine_id;    /* Slot number of the flow switching engine) */
-    uint16_t sampling; 	  /* sampling rate applied to incoming packet stream */
+    n32_t exaddr;         	/* exporter IP Address */
+    n32_t nexthop;        	/* next hop router's IP Address */
+    n16_t src_as;	  	/* source AS */
+    n16_t dst_as; 	  	/* destination AS for dst IP */
+    n16_t input; 	  	/* input interface index */
+    n16_t output; 	  	/* output interface index */
+    uint8_t tcp_flags;    	/* OR'ed TCP header bits */
+    uint8_t src_mask;	  	/* source prefix mask */
+    uint8_t dst_mask; 	  	/* destination prefix mask */
+    uint8_t engine_type;  	/* type of switching engine (RP,VIP,etc.) */
+    uint8_t engine_id;    	/* slot number of the flow switching engine */
+    uint8_t flags;		/* packet flags (e.g., first pkt of flow) */
+    uint16_t reserved;		/* padding, unused bits */
+    n32_t pktcount;	  	/* no. pkts represented (compact mode) */
+    n64_t bytecount;	  	/* no. bytes represented (compact mode)*/
+    n32_t duration;		/* flow duration (in milliseconds) */
 };
+
+#define COMONF_FIRST	0x01		/* first pkt of flow */
  
 
 #endif/* _COMO_LINKLAYER_H */
