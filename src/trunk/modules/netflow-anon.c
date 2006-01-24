@@ -43,6 +43,7 @@
 
 FLOWDESC {
     timestamp_t ts;
+    uint32_t duration;
     uint32_t src_ip;
     uint32_t dst_ip;
     uint16_t src_port;
@@ -73,6 +74,19 @@ init(__unused void *mem, __unused size_t msize, __unused char *args[])
     return TIME2TS(300,0);
 }
 
+
+static int
+check(pkt_t * pkt)
+{
+    /*
+     * if the stream contains per-flow information,
+     * drop all packets after the first.
+     */
+    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
+        return 0;
+ 
+    return 1;
+}
 
 static uint32_t
 hash(pkt_t *pkt)
@@ -116,11 +130,6 @@ match(pkt_t *pkt, void *fh)
     );
 }
 
-static int
-check(pkt_t *pkt)
-{
-    return pkt->l3type == ETHERTYPE_IP;
-}
 
 static int
 update(pkt_t *pkt, void *fh, int isnew)
@@ -129,6 +138,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
         x->ts = pkt->ts;
+	x->duration = H32(NF(duration));
         x->bytes = 0;
         x->pkts = 0;
         x->proto = IP(proto);
@@ -156,12 +166,10 @@ update(pkt_t *pkt, void *fh, int isnew)
         } else {
             x->src_port = x->dst_port = 0;
         }
-
-        if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP) {
-        }
     }
-    x->bytes += H16(IP(len));
-    x->pkts++;
+
+    x->bytes += H64(NF(bytecount));
+    x->pkts += (uint64_t) H32(NF(pktcount));
 
     return 0;
 }
@@ -181,6 +189,7 @@ store(void *efh, char *buf, size_t len)
     dst = x->dst_ip & (0xffffffff << (32 - x->dst_mask));
 
     PUTH64(buf, x->ts);
+    PUTH32(buf, x->duration);
     PUTH32(buf, src);
     PUTH32(buf, dst);
     PUTH16(buf, x->src_port);
@@ -274,7 +283,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 }
 
 #define PRETTYHDR                                                   \
-    "                                Timestamp  "                   \
+    "                                Timestamp Duration "           \
     "Proto     Source IP/Mask  Port  Destination IP/Mask  Port    " \
     "Bytes  Packets    "                                            \
     "SrcAS    DstAS      TCP Flags  "                               \
@@ -283,7 +292,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "Input/Output Iface Index\n"
 
 #define PRETTYFMT                                                \
-    "%.24s %12u.%03u %6d %15s/%d %5u %17s/%d %5u %8llu "         \
+    "%.24s %12u.%03u %6.3f %6d %15s/%d %5u %17s/%d %5u %8llu "         \
     "%8llu %8d %8d %4d(%s)%15s %15s %13d/%d %22d/%d\n"
 
 #define USAGE                                                    \
@@ -348,6 +357,7 @@ print(char *buf, size_t *len, char * const args[])
     static uint32_t printflags;
     FLOWDESC *x;
     time_t ts;
+    float duration;
     int n;
     *len = 0;
     printflags |= PRINTDEF;
@@ -366,12 +376,12 @@ print(char *buf, size_t *len, char * const args[])
                 flag=0;
                 if (strstr(args[n], "datetime")){
                     printflags |= PRINTPRETTYTS;
-                    *len += sprintf(s + *len, "Human Readable Timestamp");
+                    *len += sprintf(s+*len,"Human Readable Timestamp Duration");
                     flag++;
                 }
                 if (strstr(args[n], "timestamp")){
                     printflags |= PRINTTS;
-                    *len += sprintf(s + *len, "       Timestamp");
+                    *len += sprintf(s + *len, "       Timestamp Duration");
                     flag++;
                 }
                 if (strstr(args[n], "proto")){
@@ -494,6 +504,7 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (FLOWDESC *) buf;
     ts = (time_t) TS2SEC(NTOHLL(x->ts));
+    duration = ((float) ntohl(x->duration)) / 1000.0; 
     addr.s_addr = x->src_ip;
     sprintf(src, "%s", inet_ntoa(addr));
     addr.s_addr = x->dst_ip;
@@ -505,10 +516,11 @@ print(char *buf, size_t *len, char * const args[])
      
     if (flag){
 	if (printflags & PRINTPRETTYTS)
-	    *len += sprintf(s + *len, "%.24s", asctime(gmtime(&ts))); 
+	    *len += sprintf(s + *len, "%.24s %6.3f ", 
+			    asctime(gmtime(&ts)), duration); 
 	if (printflags & PRINTTS)
-	    *len += sprintf(s + *len, "%12u.%03u", 
-                            (uint32_t) ts, TS2MSEC(NTOHLL(x->ts))); 
+	    *len += sprintf(s + *len, "%12u.%03u %6.3f ", 
+                            (uint32_t) ts, TS2MSEC(NTOHLL(x->ts)), duration); 
 	if (printflags & PRINTPROTO)
 	    *len += sprintf(s + *len, "%7d", (uint) x->proto); 
 	if (printflags & PRINTSRCIP)
@@ -558,7 +570,7 @@ print(char *buf, size_t *len, char * const args[])
 	     || (printflags & PRINTALL)){
 	    *len = sprintf(s + *len, PRETTYFMT,
             asctime(gmtime(&ts)), (uint32_t) ts, TS2MSEC(NTOHLL(x->ts)),
-            (uint) x->proto,
+	    duration, (uint) x->proto,
             src, x->src_mask, (uint) ntohs(x->src_port),
             dst, x->dst_mask, (uint) ntohs(x->dst_port),
             NTOHLL(x->bytes), NTOHLL(x->pkts), 
