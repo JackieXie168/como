@@ -580,7 +580,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	bcopy(pkt->payload, info->buf + info->nbytes, pkt->caplen); 
 	pkt->payload = info->buf + info->nbytes; 
 	info->nbytes += pkt->caplen; 
-	info->last_ts = pkt->ts; 
 
 	/* 
 	 * check if this flow has more packets. If so, update the 
@@ -616,6 +615,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    break; 
     }
 
+    info->last_ts = pkt->ts; 
     return npkts;
 }
 
