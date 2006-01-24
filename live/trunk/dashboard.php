@@ -23,7 +23,6 @@
     */
     $special = "ports";
     include("include/getinputvars.php.inc");
-
 ?>
 
 <body>

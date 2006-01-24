@@ -1,8 +1,8 @@
 <?php
     require_once("comolive.conf");
-    $startstr = gmstrftime("%a %b %d %T %Y", $node->modinfo[$module]['stime']);
-    $endstr = gmstrftime("%a %b %d %T %Y", $node->etime);
-    $firstpacket = gmstrftime("%a %b %d %T %Y", $node->start);
+    $startstr = gmstrftime("%a %b %d %T %Y", $stime);
+    $endstr = gmstrftime("%a %b %d %T %Y", $etime);
+    $firstpacket = gmstrftime("%a %b %d %T %Y", $node->modinfo[$module]['stime']);
     $duration = $etime - $stime;
     $days = floor($duration / 86400); 
     $hours = floor(($duration % 86400) / 3600);
