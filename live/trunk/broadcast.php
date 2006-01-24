@@ -71,10 +71,10 @@ for ($i = 1; $i < count($dafile); $i++) {
     array_push($list, $daline[1]);
 }
 
+$node = new Node($list[0], $TIMEPERIOD, $TIMEBOUND);
 $query = new Query ($stime, $etime, $RESULTS, $GNUPLOT, $CONVERT, $RESOLUTION);
-$query_plot = $query->get_query_string($module, $format, "filter=$filter"); 
-
-$counter_str = "filter=dst $ip&interval=$duration&source=tuple&granularity=1";
+$query_plot = $query->get_query_string($module, $format, "filter=$node->modinfo[$module]['filter']"); 
+$counter_str = urlencode("filter=dst $ip&interval=$duration&source=tuple&granularity=1");
 $query_counter = $query->get_query_string("traffic", "mbps", $counter_str);  
 
 for ($i=0;$i<count($list);$i++){
@@ -109,6 +109,7 @@ for ($i=0;$i<count($list);$i++){
             </td>
           </tr>
         </table> 
+        <hr>
         <center>
        <? 
     }
