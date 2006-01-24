@@ -292,7 +292,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "Input/Output Iface Index\n"
 
 #define PRETTYFMT                                                \
-    "%.24s %12u.%03u %6.3f %6d %15s/%d %5u %17s/%d %5u %8llu "         \
+    "%.24s %12u.%03u %8.3f %6d %15s/%d %5u %17s/%d %5u %8llu "         \
     "%8llu %8d %8d %4d(%s)%15s %15s %13d/%d %22d/%d\n"
 
 #define USAGE                                                    \
@@ -516,10 +516,10 @@ print(char *buf, size_t *len, char * const args[])
      
     if (flag){
 	if (printflags & PRINTPRETTYTS)
-	    *len += sprintf(s + *len, "%.24s %6.3f ", 
+	    *len += sprintf(s + *len, "%.24s %8.3f ", 
 			    asctime(gmtime(&ts)), duration); 
 	if (printflags & PRINTTS)
-	    *len += sprintf(s + *len, "%12u.%03u %6.3f ", 
+	    *len += sprintf(s + *len, "%12u.%03u %8.3f ", 
                             (uint32_t) ts, TS2MSEC(NTOHLL(x->ts)), duration); 
 	if (printflags & PRINTPROTO)
 	    *len += sprintf(s + *len, "%7d", (uint) x->proto); 
