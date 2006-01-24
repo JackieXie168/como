@@ -108,6 +108,19 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     return flush_ivl;
 }
 
+static int
+check(pkt_t * pkt)
+{
+    /*
+     * if the stream contains per-flow information, 
+     * drop all packets after the first. 
+     */
+    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST)) 
+	return 0;
+
+    return 1; 
+}
+
 
 static uint32_t
 hash(pkt_t *pkt)
@@ -175,8 +188,13 @@ update(pkt_t *pkt, void *fh, int isnew)
 	}
     }
 
-    x->bytes += H16(IP(len));
-    x->pkts++;
+    if (COMO(type) == COMOTYPE_NF) {
+	x->bytes += H64(NF(bytecount)); 
+	x->pkts += (uint64_t) H32(NF(pktcount));
+    } else {
+	x->bytes += H16(IP(len));
+	x->pkts++;
+    } 
 
     return 0;
 }
@@ -428,7 +446,7 @@ callbacks_t callbacks = {
     indesc: &indesc,
     outdesc: &outdesc,
     init: init,
-    check: NULL,
+    check: check,
     hash: hash,
     match: match,
     update: update,
