@@ -155,9 +155,10 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
     N16(NF(input)) = htons(f->input);
     N16(NF(output)) = htons(f->output);
     NF(flags) = COMONF_FIRST;
-    N32(NF(pktcount)) = f->dPkts * sampling; 
-    N64(NF(bytecount)) = f->dOctets * sampling; 
-    N32(NF(duration)) = TS2MSEC(flow->end_ts - pkt->ts); 
+    N32(NF(pktcount)) = htonl(f->dPkts * sampling); 
+    N64(NF(bytecount)) = HTONLL((uint64_t) f->dOctets * sampling); 
+    N32(NF(duration)) = htonl(TS2SEC(flow->end_ts - pkt->ts) * 1000 + 
+			      TS2MSEC(flow->end_ts - pkt->ts)); 
 
     /* IP header */
     IP(vhl) = 0x45; 
