@@ -43,7 +43,7 @@
 FLOWDESC {
     timestamp_t ts;
     uint64_t bytes[IPPROTO_MAX];
-    uint64_t pkts[IPPROTO_MAX];
+    uint32_t pkts[IPPROTO_MAX];
 };
 
 static int meas_ivl = 1;     /* measurement interval */
@@ -73,8 +73,13 @@ update(pkt_t *pkt, void *fh, int isnew)
         bzero(x->pkts, sizeof(x->pkts));
     }
 
-    x->bytes[IP(proto)] += H16(IP(len));
-    x->pkts[IP(proto)]++;
+    if (COMO(type) == COMOTYPE_NF) {
+        x->bytes[IP(proto)] += H64(NF(bytecount)) * (uint64_t)H16(NF(sampling));
+        x->pkts[IP(proto)] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } else {
+        x->bytes[IP(proto)] += H16(IP(len)); 
+        x->pkts[IP(proto)]++;
+    }
 
     return 0;
 }
@@ -93,7 +98,7 @@ store(void *fh, char *buf, size_t len)
     for (i = 0; i < IPPROTO_MAX; i++) 
         PUTH64(buf, x->bytes[i]);
     for (i = 0; i < IPPROTO_MAX; i++) 
-        PUTH64(buf, x->pkts[i]);
+        PUTH32(buf, x->pkts[i]);
 
     return sizeof(FLOWDESC);
 }
@@ -225,7 +230,7 @@ print_plain(FLOWDESC * x, char * s)
 
     len = sprintf(s, "%12u.%06u ", (uint) TS2SEC(x->ts), (uint) TS2USEC(x->ts));
     for (i = 0; i < IPPROTO_MAX; i++) 
-	len += sprintf(s + len, "%3d %8lld %8lld ", i, x->bytes[i], x->pkts[i]);
+	len += sprintf(s + len, "%3d %8llu %8u ", i, x->bytes[i], x->pkts[i]);
     len += sprintf(s + len, "\n"); 
     return len; 
 }
@@ -341,7 +346,7 @@ print(char *buf, size_t *len, __unused char * const args[])
     /* aggregate records if needed */
     for (i = 0; i < IPPROTO_MAX; i++) { 
 	values.bytes[i] += NTOHLL(x->bytes[i]); 
-	values.pkts[i] += NTOHLL(x->pkts[i]); 
+	values.pkts[i] += ntohl(x->pkts[i]); 
     } 
     no_records++;
     if (no_records % granularity != 0) {

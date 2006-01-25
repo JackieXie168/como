@@ -44,7 +44,7 @@ FLOWDESC {
     uint32_t ts;	/* timestamp of last packet */
     uint32_t dst_ip;	/* destination IP address */
     uint64_t bytes;	/* number of bytes */
-    uint64_t pkts;	/* number of packets */
+    uint32_t pkts;	/* number of packets */
 };
 
 static uint32_t meas_ivl = 5;  		  /* interval (secs) */
@@ -78,6 +78,20 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     return TIME2TS(meas_ivl, 0);
 }
 
+static int
+check(pkt_t * pkt)
+{ 
+    /*
+     * if the stream contains per-flow information,
+     * drop all packets after the first.
+     */
+    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
+        return 0;
+
+    return 1;
+}
+
+
 static uint32_t
 hash(pkt_t *pkt)
 {
@@ -103,8 +117,13 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->pkts = 0;
     }
 
-    x->bytes += H16(IP(len));
-    x->pkts ++;
+    if (COMO(type) == COMOTYPE_NF) { 
+	x->bytes += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling)); 
+	x->pkts += H32(NF(pktcount)) * H16(NF(sampling)); 
+    } else { 
+	x->bytes += H16(IP(len));
+	x->pkts++;
+    } 
 
     return 0;
 }
@@ -181,7 +200,7 @@ store(void *efh, char *buf, size_t len)
     PUTH32(buf, ex->ts);
     PUTH32(buf, ex->dst_ip);
     PUTH64(buf, ex->bytes);
-    PUTH64(buf, ex->pkts);
+    PUTH32(buf, ex->pkts);
 
     return sizeof(EFLOWDESC);
 }
@@ -202,9 +221,9 @@ load(char *buf, size_t len, timestamp_t *ts)
 #define PRETTYHDR	\
     "Date                     Destination IP  Bytes      Packets   \n"
 
-#define PRETTYFMT 	"%.24s %15s %10llu %10llu\n"
+#define PRETTYFMT 	"%.24s %15s %10llu %8u\n"
 
-#define PLAINFMT	"%12u %15s %10llu %10llu\n"
+#define PLAINFMT	"%12u %15s %10llu %8u\n"
 
 #define HTMLHDR							\
     "<html>\n"							\
@@ -301,7 +320,7 @@ print(char *buf, size_t *len, char * const args[])
     addr.s_addr = x->dst_ip;
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
-		   NTOHLL(x->bytes), NTOHLL(x->pkts));
+		   NTOHLL(x->bytes), ntohl(x->pkts));
     } else if (fmt == HTMLFMT) { 
         float mbps; 
 	char tmp[2048] = "#";
@@ -313,7 +332,7 @@ print(char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, tmp, inet_ntoa(addr), mbps);
     } else { 
 	*len = sprintf(s, fmt, ts, inet_ntoa(addr), 
-		   NTOHLL(x->bytes), NTOHLL(x->pkts));
+		   NTOHLL(x->bytes), ntohl(x->pkts));
     } 
 	
     return s;
@@ -327,7 +346,7 @@ callbacks_t callbacks = {
     indesc: NULL, 
     outdesc: NULL, 
     init: init,
-    check: NULL,
+    check: check,
     hash: hash,
     match: match,
     update: update,

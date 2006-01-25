@@ -75,6 +75,13 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static int
 check(pkt_t *pkt)
 {
+    /*
+     * if the stream contains per-flow information,
+     * drop all packets after the first.
+     */
+    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
+        return 0;
+
     return (isTCP || isUDP); 	/* accept only TCP or UDP packets */
 }
 
@@ -83,22 +90,29 @@ static int
 update(pkt_t *pkt, void *rp, int isnew)
 {
     FLOWDESC *x = F(rp);
+    uint64_t newbytes = H16(IP(len)); 
+    uint32_t newpkts = 1; 
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC)); 
 	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
     }
 
+    if (COMO(type) == COMOTYPE_NF) {
+        newbytes = H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
+        newpkts = H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } 
+
     if (isTCP) {
-	x->bytes[H16(TCP(src_port))] += H16(IP(len));
-	x->bytes[H16(TCP(dst_port))] += H16(IP(len));
-	x->pkts[H16(TCP(src_port))]++;
-	x->pkts[H16(TCP(dst_port))]++;
+	x->bytes[H16(TCP(src_port))] += newbytes; 
+	x->bytes[H16(TCP(dst_port))] += newbytes; 
+	x->pkts[H16(TCP(src_port))] += newpkts;
+	x->pkts[H16(TCP(dst_port))] += newpkts; 
     } else { 
-	x->bytes[H16(UDP(src_port))] += H16(IP(len));
-	x->bytes[H16(UDP(dst_port))] += H16(IP(len));
-	x->pkts[H16(UDP(src_port))]++;
-	x->pkts[H16(UDP(dst_port))]++;
+	x->bytes[H16(UDP(src_port))] += newbytes; 
+	x->bytes[H16(UDP(dst_port))] += newbytes;
+	x->pkts[H16(UDP(src_port))] += newpkts; 
+	x->pkts[H16(UDP(dst_port))] += newpkts; 
     } 
 
     return 0;

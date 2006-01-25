@@ -155,8 +155,9 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
     N16(NF(input)) = htons(f->input);
     N16(NF(output)) = htons(f->output);
     NF(flags) = COMONF_FIRST;
-    N32(NF(pktcount)) = htonl(f->dPkts * sampling); 
-    N64(NF(bytecount)) = HTONLL((uint64_t) f->dOctets * sampling); 
+    N16(NF(sampling)) = htons(sampling); 
+    N32(NF(pktcount)) = htonl(f->dPkts); 
+    N64(NF(bytecount)) = HTONLL((uint64_t) f->dOctets); 
     N32(NF(duration)) = htonl(TS2SEC(flow->end_ts - pkt->ts) * 1000 + 
 			      TS2MSEC(flow->end_ts - pkt->ts)); 
 
@@ -590,16 +591,19 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 */
 	if (info->flags & FLOWTOOLS_COMPACT) {
 	    free(flow);
-	} else if (flow->pkt.ts >= flow->end_ts) { 
+	} else { 
 	    NF(flags) &= ~COMONF_FIRST;
-	    pkt->ts = flow->end_ts; 
-	    pkt->len += flow->length_last; 
-	    N16(IP(len)) = htons((uint16_t) pkt->len); 
-	    free(flow); 
-	} else {  
-	    NF(flags) &= ~COMONF_FIRST;
-	    flow->pkt.ts += flow->increment; 
-	    heap_insert(info->heap, flow); 
+	    N64(NF(bytecount)) = 1; 
+	    N32(NF(pktcount)) = 1;  
+	    if (flow->pkt.ts >= flow->end_ts) { 
+		pkt->ts = flow->end_ts; 
+		pkt->len += flow->length_last; 
+		N16(IP(len)) = htons((uint16_t) pkt->len); 
+		free(flow); 
+	    } else {  
+		flow->pkt.ts += flow->increment; 
+		heap_insert(info->heap, flow); 
+	    } 
 	} 
 
 	/* update the minimum timestamp from the root of the heap */
