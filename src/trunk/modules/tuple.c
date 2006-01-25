@@ -62,6 +62,7 @@ FLOWDESC {
  */    
 static pktdesc_t indesc, outdesc;
 static int compact = 0;
+static uint32_t mask = ~0;
 
 static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
@@ -81,6 +82,10 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 	}
 	if (strstr(args[i], "compact")) {
 	    compact = 1;
+	}
+        if (strstr(args[i], "mask")) { 
+	    x = index(args[i], '=') + 1; 
+	    mask <<= atoi(x);
 	}
     }
 
@@ -322,7 +327,7 @@ print(char *buf, size_t *len, char * const args[])
 	    } else if (!strcmp(args[n], "format=plain")) {
                 *len = 0;
                 fmt = PLAINFMT;
-            }
+	    }
 	} 
 
         return s; 
@@ -337,8 +342,8 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (FLOWDESC *) buf;
     ts = (time_t)ntohl(x->ts);
-    saddr.s_addr = N32(x->src_ip);
-    daddr.s_addr = N32(x->dst_ip);
+    saddr.s_addr = htonl(H32(x->src_ip) & mask);
+    daddr.s_addr = htonl(H32(x->dst_ip) & mask);
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 

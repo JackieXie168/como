@@ -95,14 +95,14 @@ check(pkt_t * pkt)
 static uint32_t
 hash(pkt_t *pkt)
 {
-    return (H32(IP(dst_ip)) & mask);
+    return (H32(IP(dst_ip)));
 }
 
 static int
 match(pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
-    return ((H32(IP(dst_ip)) & mask) == x->dst_ip);
+    return (H32(IP(dst_ip)) == x->dst_ip);
 }
 
 static int
@@ -112,7 +112,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
-        x->dst_ip = H32(IP(dst_ip)) & mask; 
+        x->dst_ip = H32(IP(dst_ip)); 
         x->bytes = 0;
         x->pkts = 0;
     }
@@ -317,7 +317,7 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (EFLOWDESC *) buf; 
     ts = (time_t) ntohl(x->ts);
-    addr.s_addr = x->dst_ip;
+    addr.s_addr = x->dst_ip & htonl(mask);
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
 		   NTOHLL(x->bytes), ntohl(x->pkts));
