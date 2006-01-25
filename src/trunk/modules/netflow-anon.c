@@ -283,7 +283,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 }
 
 #define PRETTYHDR                                                   \
-    "                                Timestamp Duration "           \
+    "                                Timestamp  Duration  "          \
     "Proto     Source IP/Mask  Port  Destination IP/Mask  Port    " \
     "Bytes  Packets    "                                            \
     "SrcAS    DstAS      TCP Flags  "                               \
@@ -292,7 +292,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "Input/Output Iface Index\n"
 
 #define PRETTYFMT                                                \
-    "%.24s %12u.%03u %8.3f %6d %15s/%d %5u %17s/%d %5u %8llu "         \
+    "%.24s %12u.%03u %9.3f %6d %15s/%d %5u %17s/%d %5u %8llu "         \
     "%8llu %8d %8d %4d(%s)%15s %15s %13d/%d %22d/%d\n"
 
 #define USAGE                                                    \
@@ -376,12 +376,12 @@ print(char *buf, size_t *len, char * const args[])
                 flag=0;
                 if (strstr(args[n], "datetime")){
                     printflags |= PRINTPRETTYTS;
-                    *len += sprintf(s+*len,"Human Readable Timestamp Duration");
+                    *len += sprintf(s+*len,"Human Readable Timestamp  Duration");
                     flag++;
                 }
                 if (strstr(args[n], "timestamp")){
                     printflags |= PRINTTS;
-                    *len += sprintf(s + *len, "       Timestamp Duration");
+                    *len += sprintf(s + *len, "       Timestamp  Duration");
                     flag++;
                 }
                 if (strstr(args[n], "proto")){
@@ -446,7 +446,7 @@ print(char *buf, size_t *len, char * const args[])
                 }
                 if (strstr(args[n], "exaddr")){
                     printflags |= PRINTEXADDR;
-                    *len += sprintf(s + *len, "  Exporter Addr  ");
+                    *len += sprintf(s + *len, "  Exporter Addr");
                     flag++;
                 }
                 if (strstr(args[n], "nexthop")){
@@ -476,7 +476,7 @@ print(char *buf, size_t *len, char * const args[])
                 }
                 if (strstr(args[n], "fivetuple")){
                     printflags |= PRINTFIVETUP;
-                    *len += sprintf(s + *len, "    Source IP/Mask  Port  "
+                    *len += sprintf(s + *len, "     Source IP/Mask  Port  "
                                     "Destination IP/Mask  Port  Proto ");
                     flag++;
                 }
@@ -516,10 +516,10 @@ print(char *buf, size_t *len, char * const args[])
      
     if (flag){
 	if (printflags & PRINTPRETTYTS)
-	    *len += sprintf(s + *len, "%.24s %8.3f ", 
+	    *len += sprintf(s + *len, "%.24s %9.3f", 
 			    asctime(gmtime(&ts)), duration); 
 	if (printflags & PRINTTS)
-	    *len += sprintf(s + *len, "%12u.%03u %8.3f ", 
+	    *len += sprintf(s + *len, "%12u.%03u %9.3f", 
                             (uint32_t) ts, TS2MSEC(NTOHLL(x->ts)), duration); 
 	if (printflags & PRINTPROTO)
 	    *len += sprintf(s + *len, "%7d", (uint) x->proto); 
