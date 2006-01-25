@@ -85,7 +85,7 @@
 FLOWDESC {
     timestamp_t ts;
     uint64_t bytes[UNKNOWN + 1];
-    uint64_t pkts[UNKNOWN + 1];
+    uint32_t pkts[UNKNOWN + 1];
 };
 
 /* 
@@ -94,7 +94,7 @@ FLOWDESC {
 typedef struct {
     uint32_t ts;
     uint64_t bytes[APPLICATIONS];
-    uint64_t pkts[APPLICATIONS];
+    uint32_t pkts[APPLICATIONS];
 } app_t;
 
 
@@ -240,6 +240,19 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 
 
 static int
+check(pkt_t * pkt)
+{
+    /*
+     * if the stream contains per-flow information,
+     * drop all packets after the first.
+     */
+    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
+        return 0;
+
+    return 1;
+}
+
+static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
@@ -253,8 +266,13 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     if (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_TCP) {
 	app = port2app[H16(TCP(src_port))] & port2app[H16(TCP(dst_port))];
-	x->bytes[app] += H16(IP(len));
-	x->pkts[app]++;
+	if (COMO(type) == COMOTYPE_NF) {
+	    x->bytes[app] += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
+	    x->pkts[app] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+	} else {
+	    x->bytes[app] += pkt->len;
+	    x->pkts[app]++;
+	}
     }
 
     return 0;
@@ -274,7 +292,7 @@ store(void *fh, char *buf, size_t len)
     for (i = 0; i < APPLICATIONS; i++) 
 	PUTH64(buf, x->bytes[APPCODE(i)] / meas_ivl);
     for (i = 0; i < APPLICATIONS; i++) 
-	PUTH64(buf, x->pkts[APPCODE(i)] / meas_ivl);
+	PUTH32(buf, x->pkts[APPCODE(i)] / meas_ivl);
     return sizeof(app_t);
 }
 
@@ -392,7 +410,7 @@ print(char *buf, size_t *len, char * const args[])
     values.ts = ntohl(x->ts);
     for (i = 0; i < APPLICATIONS; i++) { 
         values.bytes[i] += NTOHLL(x->bytes[i]); 
-	values.pkts[i] += NTOHLL(x->pkts[i]); 
+	values.pkts[i] += ntohl(x->pkts[i]); 
     }
 
     no_records++;
@@ -409,12 +427,12 @@ print(char *buf, size_t *len, char * const args[])
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, asctime(localtime((time_t *)&values.ts))); 
 	for (i = 0; i < APPLICATIONS; i++) 
-	    *len += sprintf(s + *len, "%8llu %8llu ", 
+	    *len += sprintf(s + *len, "%8llu %8u ", 
 			    values.bytes[i], values.pkts[i]);
     } else if (fmt == PLAINFMT) {  
 	*len = sprintf(s, fmt, values.ts) ; 
 	for (i = 0; i < APPLICATIONS; i++) 
-	    *len += sprintf(s + *len, "%8llu %8llu ", 
+	    *len += sprintf(s + *len, "%8llu %8u ", 
 			    values.bytes[i], values.pkts[i]);
     } else if (fmt == GNUPLOTFMT  && isrelative) { 
 	/* 
@@ -450,7 +468,7 @@ print(char *buf, size_t *len, char * const args[])
 	 * contribution of each application 
 	 */
 	float mbps = 0; 
-	uint64_t pkts = 0; 
+	uint32_t pkts = 0; 
 
 	/* print the timestamp */
 	*len = sprintf(s, "%u ", values.ts) ; 
@@ -459,7 +477,7 @@ print(char *buf, size_t *len, char * const args[])
 	for (i = 0; i < APPLICATIONS; i++) { 
 	    mbps += (((float) values.bytes[i]) * 8.0 / 1000000.0); 
 	    pkts += values.pkts[i]; 
-	    *len += sprintf(s + *len, "%.2f %llu ", mbps, pkts); 
+	    *len += sprintf(s + *len, "%.2f %u ", mbps, pkts); 
 	}
     } 
 
@@ -497,7 +515,7 @@ replay(char *buf, char *out, size_t * len, int *count)
 							 pkt->l3ofs);
 	nbytes = 0; 
 	for (i = 0; i < APPLICATIONS; i++) { 
-	    npkts += NTOHLL(app->pkts[i]); 
+	    npkts += ntohl(app->pkts[i]); 
 	    nbytes += NTOHLL(app->bytes[i]); 
 	} 
 	if (npkts > 0)
@@ -526,7 +544,7 @@ callbacks_t callbacks = {
     indesc: &indesc,
     outdesc: &outdesc,
     init: init,
-    check: NULL,
+    check: check,
     hash: NULL,
     match: NULL,
     update: update,

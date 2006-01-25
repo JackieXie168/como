@@ -49,7 +49,8 @@ FLOWDESC {
     n16_t src_port;
     n16_t dst_port;
     uint8_t proto;
-    char padding[3];
+    char padding;
+    uint16_t sampling;
     uint64_t bytes;
     uint64_t pkts;
 };
@@ -60,6 +61,7 @@ FLOWDESC {
  * the packets from given sniffer
  */    
 static pktdesc_t indesc, outdesc;
+static int compact = 0;
 
 static timestamp_t
 init(__unused void *mem, __unused size_t msize, char *args[])
@@ -71,9 +73,14 @@ init(__unused void *mem, __unused size_t msize, char *args[])
      * process input arguments
      */
     for (i = 0; args && args[i]; i++) {
+	char * x; 
+
 	if (strstr(args[i], "interval")) {
-	    char * len = index(args[i], '=') + 1; 
-	    flush_ivl = TIME2TS(atoi(len), 0);
+	    x = index(args[i], '=') + 1; 
+	    flush_ivl = TIME2TS(atoi(x), 0);
+	}
+	if (strstr(args[i], "compact")) {
+	    compact = 1;
 	}
     }
 
@@ -104,6 +111,9 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     N16(outdesc.tcph.dst_port) = 0xffff;
     N16(outdesc.udph.src_port) = 0xffff;
     N16(outdesc.udph.dst_port) = 0xffff;
+    N64(outdesc.nf.bytecount) = ~0;
+    N32(outdesc.nf.pktcount) = ~0;
+    outdesc.nf.flags = COMONF_FIRST;
     
     return flush_ivl;
 }
@@ -189,9 +199,11 @@ update(pkt_t *pkt, void *fh, int isnew)
     }
 
     if (COMO(type) == COMOTYPE_NF) {
+	x->sampling = H16(NF(sampling));
 	x->bytes += H64(NF(bytecount)); 
 	x->pkts += (uint64_t) H32(NF(pktcount));
     } else {
+	x->sampling = 1;
 	x->bytes += H16(IP(len));
 	x->pkts++;
     } 
@@ -213,9 +225,8 @@ store(void *efh, char *buf, size_t len)
     PUTN16(buf, N16(x->src_port));
     PUTN16(buf, N16(x->dst_port));
     PUTH8(buf, x->proto);
-    PUTH8(buf, x->padding[0]);
-    PUTH8(buf, x->padding[1]);
-    PUTH8(buf, x->padding[2]);
+    PUTH8(buf, x->padding);
+    PUTH16(buf, x->sampling); 
     PUTH64(buf, x->bytes);
     PUTH64(buf, x->pkts);
 
@@ -335,7 +346,8 @@ print(char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, ts, x->proto, 
 		    src, (uint) H16(x->src_port), 
 		    dst, (uint) H16(x->dst_port), 
-		    NTOHLL(x->bytes), NTOHLL(x->pkts));
+		    NTOHLL(x->bytes), 
+		    NTOHLL(x->pkts));
     } else { 
 	*len = sprintf(s, fmt, 
 		    asctime(localtime(&ts)), getprotoname(x->proto), 
@@ -388,16 +400,21 @@ replay(char *buf, char *out, size_t * len, int *count)
 	COMOX(ts, TIME2TS(ntohl(x->ts), 0)); 
 	COMOX(caplen, sizeof(struct _como_iphdr) +
                         sizeof(struct _como_udphdr));
-	COMOX(type, COMOTYPE_NONE);
+	COMOX(type, COMOTYPE_NF);
 	COMOX(l3type, ETHERTYPE_IP);
-	COMOX(l3ofs, 0); 
+	COMOX(l3ofs, sizeof(struct _como_nf)); 
 	COMOX(l4type, x->proto); 
-	COMOX(l4ofs, sizeof(struct _como_iphdr));
+	COMOX(l4ofs, sizeof(struct _como_nf) + sizeof(struct _como_iphdr));
 
 	COMOX(len, (uint32_t) nbytes/npkts); 
 	if (howmany == (int) npkts) 
 	    COMOX(len, COMO(len) + ((uint32_t) nbytes % npkts)); 
 
+	NFX(flags, outlen == 0? COMONF_FIRST : 0); 
+	NFX(sampling, x->sampling);
+	NFX(bytecount, x->bytes); 
+	NFX(pktcount, htonl((uint32_t) npkts));
+	
         IPX(proto, x->proto);
 	IPX(len, htons((uint16_t) COMO(len))); 
         IPX(src_ip, x->src_ip);
@@ -410,7 +427,7 @@ replay(char *buf, char *out, size_t * len, int *count)
 
 	COMO(ts) = TIME2TS(ntohl(x->ts), 0); 
 	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
-	COMO(type) = COMOTYPE_NONE;
+	COMO(type) = COMOTYPE_NF;
 	COMO(l3type) = ETHERTYPE_IP;
 	COMO(l3ofs) = 0; 
 	COMO(l4type) = x->proto; 
@@ -419,6 +436,11 @@ replay(char *buf, char *out, size_t * len, int *count)
 	COMO(len) = (uint32_t) nbytes/npkts; 
 	if (howmany == (int) npkts) 
 	    COMO(len) += (uint32_t) nbytes % npkts; 
+
+	NF(flags) = (outlen == 0)? COMONF_FIRST : 0; 
+	N16(NF(sampling)) = x->sampling;
+	N64(NF(bytecount)) = x->bytes;
+	N32(NF(pktcount)) = htonl((uint32_t) npkts);
 
         IP(proto) = x->proto;
 	N16(IP(len)) = htons((uint16_t) COMO(len)); 
@@ -431,11 +453,14 @@ replay(char *buf, char *out, size_t * len, int *count)
 #endif
 
 	outlen += pktsz; 
+
+	if (compact) 	/* just one packet per flow */
+	    break;
     } 
 
     *len = outlen;
     *count = howmany;
-    return (npkts - howmany);
+    return (compact? 0 : (npkts - howmany));
 }
 
 

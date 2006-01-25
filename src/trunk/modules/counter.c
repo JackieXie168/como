@@ -43,7 +43,7 @@
 FLOWDESC {
     timestamp_t ts;
     uint64_t    bytes;
-    uint64_t    pkts;
+    uint32_t    pkts;
 };
 
 static int meas_ivl = 1;     /* measurement interval */
@@ -64,6 +64,19 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 }
 
 static int
+check(pkt_t * pkt)
+{
+    /*
+     * if the stream contains per-flow information,
+     * drop all packets after the first.
+     */
+    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
+        return 0;
+  
+    return 1;
+}
+
+static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
@@ -74,8 +87,13 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->pkts = 0;
     }
 
-    x->bytes += pkt->len; 
-    x->pkts++;
+    if (COMO(type) == COMOTYPE_NF) {
+        x->bytes += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
+        x->pkts += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } else {
+        x->bytes += pkt->len; 
+        x->pkts++;
+    }
 
     return 0;
 }
@@ -90,7 +108,7 @@ store(void *rp, char *buf, size_t len)
 
     PUTH64(buf, x->ts);
     PUTH64(buf, x->bytes/meas_ivl);
-    PUTH64(buf, x->pkts/meas_ivl);
+    PUTH32(buf, x->pkts/meas_ivl);
 
     return sizeof(FLOWDESC);
 }
@@ -110,10 +128,10 @@ load(char * buf, size_t len, timestamp_t * ts)
 
 #define PRETTYHDR		\
     "Date                     Timestamp          Bytes    Pkts\n"
-#define PRETTYFMT	"%.24s %12d.%06d %8llu %8llu\n"
-#define PLAINFMT	"%12ld %16llu %12llu %12llu\n"
+#define PRETTYFMT	"%.24s %12d.%06d %8llu %8u\n"
+#define PLAINFMT	"%12ld %16llu %12llu %12u\n"
 #define MBPSFMT		"%4.2f Mbps\n"
-#define GNUPLOTFMT	"%ld %f %llu\n"
+#define GNUPLOTFMT	"%ld %f %u\n"
 
 #define GNUPLOTHDR						\
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
@@ -190,7 +208,7 @@ print(char *buf, size_t *len, char * const args[])
     t = (time_t) TS2SEC(ts); 
 
     /* aggregate records if needed */
-    pkts += NTOHLL(x->pkts);
+    pkts += ntohl(x->pkts);
     bytes += NTOHLL(x->bytes);
     no_records++;
     if (no_records % granularity != 0) { 
@@ -227,7 +245,7 @@ callbacks_t callbacks = {
     indesc: NULL, 
     outdesc: NULL,
     init: init,
-    check: NULL,
+    check: check,
     hash: NULL,
     match: NULL,
     update: update,
