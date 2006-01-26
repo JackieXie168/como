@@ -1421,12 +1421,16 @@ scheduler(void)
 	 * 
 	 * we do this only if there is an active writer. 
 	 */
-	while (bs->the_writer && bs->size > bs->sizelimit) { 
+	if (bs->the_writer && bs->size > bs->sizelimit) { 
 	    csfile_t * cf; 
 
 	    cf = bs->file_first; 
-	    if (cf->clients == NULL)  
+	    if (cf->clients == NULL) 
 		delete_csfile(cf);
+	    else 
+		logmsg(LOGWARN, 
+		    "file %s above sizelimit. waiting for reader to complete\n",
+		    bs->name); 
 	}
 
 	/* 
@@ -1438,13 +1442,13 @@ scheduler(void)
 	    csbytestream_t *p, *q; 
 
 	    /* close all files */
-        while (bs->file_first) {
-            cf = bs->file_first;
-            bs->file_first = cf->next;
+	    while (bs->file_first) {
+		cf = bs->file_first;
+		bs->file_first = cf->next;
 
-		    if (cf->rfd >= 0) 
-		        close(cf->rfd); 
-		    free(cf);
+		if (cf->rfd >= 0) 
+		    close(cf->rfd); 
+		free(cf);
 	    } 
 	    
 	    /* remove the bytestream from the list */
