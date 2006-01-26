@@ -756,7 +756,7 @@ capture_mainloop(int accept_fd)
 	    if (src->flags & SNIFF_TOUCHED) { 
 		active_sniffers = setup_sniffers(map.sources, &valid_fds, 
 					 &max_fd, &tout); 
-		if (active_sniffers == 0) 
+		if (active_sniffers == 0)  
 		    logmsg(LOGWARN, "no sniffers left. waiting for queries\n");
 		break;
 	    } 
@@ -796,7 +796,7 @@ capture_mainloop(int accept_fd)
 	/* wait for messages, sniffers or up to the polling interval */
 	r = valid_fds;
 	t = tout; 
-	n_ready = select(max_fd, &r, NULL, NULL, &t);
+	n_ready = select(max_fd, &r, NULL, NULL, active_sniffers? &t : NULL);
 	if (n_ready < 0)
 	    panic("select"); 
 
