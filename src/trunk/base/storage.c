@@ -230,7 +230,7 @@ open_file(csfile_t *cf, int mode)
     int flags;
     int fd;
 
-    logmsg(LOGSTORAGE, "open_file %016llx mode %s rfd %d wfd %d\n",
+    logmsg(V_LOGSTORAGE, "open_file %016llx mode %s rfd %d wfd %d\n",
 	cf->bs_offset, (mode == CS_READER ? "CS_READER":"CS_WRITER"),
 	cf->rfd, cf->bs->wfd);
 
@@ -586,7 +586,7 @@ handle_open(int s, csmsg_t * in)
     csclient_t *cl;
     off_t ofs_ack;
 
-    logmsg(LOGSTORAGE, "in: OPEN [%s] %s\n", in->name,
+    logmsg(V_LOGSTORAGE, "in: OPEN [%s] %s\n", in->name,
 	    in->arg == CS_WRITER ? "CS_WRITER" : "CS_READER"); 
 
     /* 
@@ -721,7 +721,7 @@ client_unlink(csclient_t *cl)
  *
  */
 static void
-handle_close(int s, csmsg_t * in)
+handle_close(__unused int s, csmsg_t * in)
 {
     csbytestream_t * bs;
     csclient_t * cl;
@@ -800,7 +800,6 @@ handle_close(int s, csmsg_t * in)
      */ 
     client_unlink(cl); 
     free(cl); 
-    close(s);
 }
     
 
@@ -850,7 +849,7 @@ handle_seek(int s, csmsg_t * in)
     csclient_t * cl;
     csfile_t * cf;
 
-    logmsg(LOGSTORAGE, "seek: id %d, arg %d, ofs %lld\n", 
+    logmsg(V_LOGSTORAGE, "seek: id %d, arg %d, ofs %lld\n", 
 	   in->id, in->arg, in->ofs);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
@@ -1310,7 +1309,7 @@ handle_region(int s, csmsg_t * in)
 {
     csclient_t * cl;
 
-    logmsg(LOGSTORAGE, "S_REGION: id %d; ofs %12lld; size %7d;\n", 
+    logmsg(V_LOGSTORAGE, "S_REGION: id %d; ofs %12lld; size %7d;\n", 
 	in->id, in->ofs, in->size);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
