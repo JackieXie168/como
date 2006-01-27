@@ -434,9 +434,9 @@ replay(char *buf, char *out, size_t * len, int *count)
 	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
 	COMO(type) = COMOTYPE_NF;
 	COMO(l3type) = ETHERTYPE_IP;
-	COMO(l3ofs) = 0; 
+	COMO(l3ofs) = sizeof(struct _como_nf); 
 	COMO(l4type) = x->proto; 
-	COMO(l4ofs) = sizeof(struct _como_iphdr);
+	COMO(l4ofs) = sizeof(struct _como_nf) + sizeof(struct _como_iphdr);
 
 	COMO(len) = (uint32_t) nbytes/npkts; 
 	if (howmany == (int) npkts) 
