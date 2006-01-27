@@ -135,10 +135,11 @@ static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
-
+    timestamp_t end_ts;
+    uint32_t ms; 
+  
     if (isnew) {
         x->ts = pkt->ts;
-	x->duration = H32(NF(duration));
         x->bytes = 0;
         x->pkts = 0;
         x->proto = IP(proto);
@@ -168,6 +169,9 @@ update(pkt_t *pkt, void *fh, int isnew)
         }
     }
 
+    ms = H32(NF(duration));
+    end_ts = pkt->ts + TIME2TS(ms / 1000, (ms % 1000) * 1000); 
+    x->duration = TS2SEC(end_ts - x->ts) * 1000 + TS2MSEC(end_ts - x->ts);
     x->bytes += H64(NF(bytecount));
     x->pkts += (uint64_t) H32(NF(pktcount));
 
@@ -184,7 +188,7 @@ store(void *efh, char *buf, size_t len)
     if (len < sizeof(FLOWDESC))
         return -1;
 
-    /*  Anonyimize the address with mask  */
+    /* anonyimize the address with mask  */
     src = x->src_ip & (0xffffffff << (32 - x->src_mask));
     dst = x->dst_ip & (0xffffffff << (32 - x->dst_mask));
 
@@ -211,9 +215,10 @@ store(void *efh, char *buf, size_t len)
     PUTH16(buf, x->input);
     PUTH16(buf, x->output);
 
-
     return sizeof(FLOWDESC);
 }
+
+
 /*
  * utility function used to pretty print tcp's control bits status
  */
