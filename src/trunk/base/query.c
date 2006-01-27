@@ -619,12 +619,12 @@ query(int client_fd, int node_id)
     } 
 	
     /* 
-     * if we have to retried the data using the replay callback of
+     * if we have to retrieve the data using the replay callback of
      * another module instead of reading the output file of the module,
      * we need to create a new instance of the module itself. 
      */
     if (req->source) {
-	init_ondemand_module(&req->mdl, req->args); 
+	init_ondemand_module(req); 
     } else { 
 	req->src = req->mdl; 	/* the source is the same as the module */
     } 
