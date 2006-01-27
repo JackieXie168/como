@@ -633,8 +633,14 @@ setup_sniffers(source_t *src, fd_set *fds, int *max_fd, struct timeval *tout)
                 
 	active++; 
 
-	if (src->flags & SNIFF_FROZEN) 
+	if (src->flags & SNIFF_FROZEN)
 	    continue; 		/* do nothing */
+
+	if (src->flags & SNIFF_COMPLETE) {
+	    tout->tv_sec = 0; 
+	    tout->tv_usec = 0;
+	    continue;		/* go to next one */
+	}
 
 	/*  
 	 * if this sniffer uses polling, check if the polling interval 
