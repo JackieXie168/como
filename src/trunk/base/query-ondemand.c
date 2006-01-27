@@ -784,26 +784,22 @@ q_init_export_tables(module_t *mdl)
  * 
  */
 void
-init_ondemand_module(module_t ** mdl, char ** args)
+init_ondemand_module(qreq_t * req) 
 {
-    module_t * p = *mdl; 
     module_t * x;
-    char * str;
-    int narg, arg; 
 
     /*
      * create a new instance of the module and initialize it. 
      * we initialize only those fields that we need to run. 
      */
     x = safe_calloc(1, sizeof(module_t));
-    x->filter_str = safe_strdup(p->filter_str);
-    parse_filter(x->filter_str, &(x->filter_tree), &str);
-    x->source = safe_strdup(p->source);
-    x->msize = p->msize;
+    x->filter_str = req->filter_str;
+    parse_filter(x->filter_str, &(x->filter_tree), NULL); 
+    x->source = safe_strdup(req->mdl->source);
+    x->msize = req->mdl->msize;
     if (x->msize)
 	x->mem = safe_calloc(1, x->msize);
-    x->ca_hashsize = p->ca_hashsize;
-    x->ex_hashsize = p->ex_hashsize;
+    x->ca_hashsize = x->ex_hashsize = req->mdl->ex_hashsize;
 
     /* we get the new module arguments from the request command.
      *
@@ -812,11 +808,7 @@ init_ondemand_module(module_t ** mdl, char ** args)
      *     just ignore any argument they do not understand
      *
      */
-    for (narg = 0; args[narg]; narg++)
-	;
-    x->args = safe_calloc(narg + 1, sizeof(char *));
-    for (arg = 0; arg < narg; arg++)
-	x->args[arg] = safe_strdup(args[arg]);
+    x->args = req->args; 
 
     load_callbacks(x);
     x->flush_ivl = DEFAULT_CAPTURE_IVL; 
@@ -833,7 +825,7 @@ init_ondemand_module(module_t ** mdl, char ** args)
     q_init_export_tables(x);
 
     /* replace the pointer in the query request */
-    *mdl = x;
+    req->mdl = x;
 }
 
 
