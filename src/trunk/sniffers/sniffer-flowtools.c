@@ -200,7 +200,8 @@ flowtools_next(int ofd, char * device, struct _snifferinfo * info)
     if (info->curfile == (int) info->in.gl_pathc) {
 	/*
 	 * no files left. check again the input directory to
-	 * see if new files are there. if not return 0.
+	 * see if new files are there. in any care return -1 
+	 * and wait for the next call to process these new files.
 	 */
 	ret = glob(device, GLOB_ERR|GLOB_TILDE, NULL, &info->in);
 	if (ret != 0) 
@@ -266,7 +267,7 @@ flowtools_read(source_t * src)
 	if (fd < 0)
 	    return 0; 
 
-	src->fd = fd; 
+	src->fd = fd;
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);  
 	if (fr == NULL) {
 	    logmsg(LOGWARN, "error reading flowtools file: %s\n", 
@@ -453,23 +454,12 @@ sniffer_start(source_t * src)
     info->heap = heap_init(flow_cmp);
 
     /* 
-     * read a full window of netflow records and populate the heap. 
-     * We do this now so that the first time sniffer_next will be
-     * called there will be something in the heap to process right away. 
+     * read the first file just to put at least one flow record 
+     * in the heap for sniffer_next().
      */
-    info->min_ts = (timestamp_t) ~0; 
-    info->max_ts = (timestamp_t) 0; 
-    do { 
-	if (!flowtools_read(src)) {
-	    src->fd = -1;
-	    if (info->flags & FLOWTOOLS_STREAM) 
-		src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_POLL; 
-	    else 
-		src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_INACTIVE; 
-	    break; 		/* EOF */
-	} 
-    } while (info->max_ts - info->min_ts < info->window);
-
+    info->min_ts = ~0;
+    info->max_ts = 0;
+    flowtools_read(src);
     info->last_ts = info->min_ts; 
 
     /*  
@@ -520,10 +510,12 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     /* first check if the heap is empty, 
      * if so we are done. 
      */
-    if (heap_root(info->heap) == NULL && !(info->flags & FLOWTOOLS_STREAM))
+    if (heap_root(info->heap) == NULL && !(info->flags & FLOWTOOLS_STREAM)) {
+	src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_INACTIVE; 
 	return -1;  
+    }
 
-    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) {
+    for (npkts = 0, pkt = out; npkts < max_no; pkt++) {
 	struct _flowinfo * flow; 
 
 	/* 
@@ -531,17 +523,18 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
  	 * of flows in the heap. 
 	 */ 
 	while (info->max_ts - info->min_ts < info->window) {
-	    if (src->flags & SNIFF_INACTIVE) 
+	    if (src->flags & (SNIFF_INACTIVE|SNIFF_COMPLETE)) 
 		break; 
 
 	    if (!flowtools_read(src)) { 
 		/* 
-		 * no more flow records to be read. if we are 
-		 * in stream mode, give to CAPTURE whatever we have
-	 	 * got so far and try again later. otherwise, process 
-		 * the flow records left in the heap. 
+		 * no more flow records to be read. 
+		 * in stream mode move to polling mode waiting for the 
+		 * next file to come. otherwise, mark this sniffer as complete
+		 * so that capture will return to process all flows that 
+		 * are still in the heap. 
 		 */
-		src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_INACTIVE; 
+		src->flags = SNIFF_TOUCHED|SNIFF_FILE|SNIFF_COMPLETE; 
 		if (info->flags & FLOWTOOLS_STREAM) { 
 		    /* we don't have files to process anymore. write a 
 		     * message and sleep for 10 mins. 
@@ -612,6 +605,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    break; 		/* we are done; next time we will stop */
 	info->min_ts = flow->pkt.ts;
 
+	npkts++;
+
 	/* if we have processed more than one second worth of
 	 * packets stop and return to CAPTURE so that it can 
  	 * process EXPORT messages, etc. 
@@ -637,7 +632,7 @@ sniffer_stop(source_t * src)
 
     heap_close(info->heap); 
     if (src->fd > 0) { 
-	ftio_close(&info->ftio);
+	// ftio_close(&info->ftio); 
 	close(src->fd); 
     } 
     free(src->ptr); 

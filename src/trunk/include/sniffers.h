@@ -97,11 +97,12 @@ struct _source {
 };
 
 #define SNIFF_TOUCHED	0x8000	/* set if the the flags have changed */
-#define	SNIFF_SELECT	0x0001	/* device must be polled */
+#define	SNIFF_SELECT	0x0001	/* device supports select() */
 #define	SNIFF_POLL	0x0002	/* device must be polled */
 #define	SNIFF_FILE	0x0004	/* device reads from file */
-#define SNIFF_INACTIVE	0x0008	/* sniffer is inactive */
-#define SNIFF_FROZEN	0x0010	/* sniffer is frozen (only for SNIFF_FILE) */
+#define SNIFF_INACTIVE	0x0008	/* inactive, i.e. do not select() */
+#define SNIFF_FROZEN	0x0010	/* frozen to slow down (only for SNIFF_FILE) */
+#define SNIFF_COMPLETE  0x0020  /* complete, i.e. finish the buffer */
 
 
 /* generic function used by sniffer-*.c */
