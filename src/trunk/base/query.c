@@ -176,6 +176,8 @@ send_status(int client_fd, int node_id)
     if (ret < 0)
         panic("sending status to the client");
 #endif
+
+    close(storage_fd);
 }
 
 
@@ -787,4 +789,5 @@ query(int client_fd, int node_id)
     /* close the socket and the file */
     close(client_fd);
     csclose(file_fd, 0); 
+    close(storage_fd);
 }
