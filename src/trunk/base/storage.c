@@ -199,7 +199,7 @@ delete_csfile(csfile_t * cf)
     bs->size -= cf->cf_size; 
     bs->file_first = cf->next; 
     if (bs->file_first == NULL) 
-	panicx("reducing bytestream to zero size"); 
+	panicx("reducing bytestream %s to zero size", bs->name); 
 
     if (cf->rfd >= 0)
 	close(cf->rfd); 
@@ -707,7 +707,6 @@ client_unlink(csclient_t *cl)
     return cf;
 }
 
-
 /** 
  * -- handle_close 
  * 
@@ -722,7 +721,7 @@ client_unlink(csclient_t *cl)
  *
  */
 static void
-handle_close(__unused int s, csmsg_t * in)
+handle_close(int s, csmsg_t * in)
 {
     csbytestream_t * bs;
     csclient_t * cl;
@@ -801,6 +800,7 @@ handle_close(__unused int s, csmsg_t * in)
      */ 
     client_unlink(cl); 
     free(cl); 
+    close(s);
 }
     
 
@@ -943,7 +943,7 @@ handle_read(int s, csmsg_t * in, csclient_t *cl)
     /* check the first two easy cases */
     if (bs->file_first == NULL) {	/* no files... */
 	if (bs->the_writer != NULL)
-	    panic("impossible case in handle_read\n");
+	    panicx("impossible case in handle_read\n");
 
 	/* send an EOF */
 	sendack(s, in->id, (off_t)0, (size_t)0); 
@@ -1425,12 +1425,18 @@ scheduler(void)
 	    csfile_t * cf; 
 
 	    cf = bs->file_first; 
-	    if (cf->clients == NULL) 
+	    if (cf->clients == NULL) {
 		delete_csfile(cf);
-	    else 
-		logmsg(LOGWARN, 
-		    "file %s above sizelimit. waiting for reader to complete\n",
-		    bs->name); 
+	    } else if (bs->size > bs->sizelimit * 12 / 10) { 
+		csclient_t * cl;
+
+		logmsg(LOGWARN, "file %s exceeding limit by 20%%\n", bs->name); 
+
+		/* remove all clients accessing this file */
+		for (cl = cf->clients; cf->clients; cl = cf->clients)
+		    client_unlink(cl); 
+		delete_csfile(cf);
+	    } 
 	}
 
 	/* 
