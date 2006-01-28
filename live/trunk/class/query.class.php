@@ -53,14 +53,13 @@ class Query {
 
     function get_query_string ($module, $format, $args) {
        $query="";
-
 	/* parse the args information */
         $a = explode("&", $args);
         for ($i=0; $i<count($a);$i++){
             $var = explode("=", $a[$i]);
-            if (!(("stime" === $var[0]) || ("etime" === $var[0]) || 
-		  ("comonode" === $var[0]) || ("module" === $var[0]) ||
-		  ("format" === $var[0]))) {
+            if (!(("stime" == $var[0]) || ("etime" == $var[0]) || 
+		  ("comonode" == $var[0]) || ("module" == $var[0]) ||
+		  ("format" == $var[0]))) {
                 $query .= "&" . $a[$i];
             }
         }

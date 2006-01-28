@@ -62,7 +62,8 @@ class Node {
 		    strtok(":\n\t");
 		    $filter = trim(strtok(":\n\t"));
                     /*  Replace spaces with %20  */ 
-                    $str = preg_replace ('/ /', '%20', $filter);
+                    #$str = str_replace (" ", "%20", $filter);
+                    $str = urlencode($filter);
                     $this->modinfo[$module]['filter'] = $str;
 		    strtok(":\n\t");
 		    $str = trim(strtok(":\n\t"));
