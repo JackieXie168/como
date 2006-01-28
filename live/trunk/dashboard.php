@@ -43,7 +43,7 @@
   <tr>
     <td class=leftcontent>
       <iframe width=620 height=520 frameborder=0
-	      src=mainstage.php?<?=$_SERVER['QUERY_STRING']?>>
+	      src=mainstage.php?<?=$http_query_string?>>
       </iframe>
     <td class=rightcontent>
       <?php 
