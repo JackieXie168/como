@@ -407,7 +407,7 @@ check_module(module_t *mdl, __unused node_t * node)
     if (cb->formats == NULL) 
 	asprintf(&cb->formats, "plain"); 
 
-    logmsg(LOGDEBUG, "module %s checks ok\n");
+    logmsg(LOGCONFIG, "module %s checks ok\n");
     return 1;
 }
 
@@ -422,6 +422,9 @@ module_t *
 load_module(module_t *mdl, int idx)
 {
     callbacks_t *cb;
+
+    if (idx == map.module_max) 
+	panicx("too many modules, cannot load %s", mdl->name);
 
     /* 
      * copy the module into the array and free the allocated module_t
@@ -1217,7 +1220,7 @@ int
 parse_cmdline(int argc, char *argv[])
 {
     struct _node * node;
-    int c;
+    int c, n;
     DIR *d;
 
     /*
@@ -1426,10 +1429,10 @@ parse_cmdline(int argc, char *argv[])
      * associated with the virtual node and save data in the 
      * virtual node basedir.  
      */
+    n = map.module_count; 
     for (node = map.node.next; node != NULL; node = node->next) { 
-	int i, n; 
+	int i; 
 
-	n = map.module_count; 
 	for (i = 0; i < n; i++) { 
 	    module_t * mdl; 
 	    int idx; 
@@ -1457,7 +1460,6 @@ parse_cmdline(int argc, char *argv[])
 		else 
 		    asprintf(&flt,"%s and (%s)", 
 				node->filter_str, mdl->filter_str);
-		free(mdl->filter_str);
 		mdl->filter_str = flt; 
 	    } 
 
@@ -1466,7 +1468,7 @@ parse_cmdline(int argc, char *argv[])
 
             logmsg(LOGUI, "... module %-16s [node:%d]", mdl->name, mdl->node);
             if (mdl->description != NULL)
-                    logmsg(LOGUI,"[%s]", mdl->description);
+                logmsg(LOGUI,"[%s]", mdl->description);
             logmsg(LOGUI, 
 		   "\n    - prio %d; filter %s; out %s (max %uMB)\n",
                    mdl->priority, mdl->filter_str, mdl->output,
