@@ -68,6 +68,7 @@ struct _snifferinfo {
     timestamp_t min_ts; 	/* min start time in the heap (root) */
     timestamp_t max_ts; 	/* max start time in the heap */
     timestamp_t window; 	/* min diff between max_ts and min_ts */
+    int fd; 			/* actual file descriptor used */
     struct ftio ftio;		/* flow-tools I/O data structure */
     char buf[BUFSIZE];		/* buffer used between sniffer-next calls */
     uint nbytes; 		/* bytes used in the buffer */
@@ -185,15 +186,16 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
  * -1 in case of failures. 
  *
  */
-int 
-flowtools_next(int ofd, char * device, struct _snifferinfo * info) 
+static int 
+flowtools_next(char * device, struct _snifferinfo * info) 
 {
-    int fd; 
     int ret; 
 
-    if (ofd >= 0) {
+    if (info->fd >= 0) {
 	/* close current file and move to next */
 	ftio_close(&info->ftio); 
+	close(info->fd);
+	info->fd = -1; 
 	info->curfile++;  
     } 
   
@@ -212,26 +214,22 @@ flowtools_next(int ofd, char * device, struct _snifferinfo * info)
     }
 
     logmsg(LOGSNIFFER, "opening file %s\n", info->in.gl_pathv[info->curfile]);
-    fd = open(info->in.gl_pathv[info->curfile], O_RDONLY);
-    if (fd < 0) {
+    info->fd = open(info->in.gl_pathv[info->curfile], O_RDONLY);
+    if (info->fd < 0) {
         logmsg(LOGWARN, "sniffer-flowtools: opening %s: %s\n", 
 	    info->in.gl_pathv[info->curfile], strerror(errno)); 
         return -1;
     }
 
-    /* reuse the old file descriptor */
-    if (ofd >= 0) 
-	fd = dup2(fd, ofd); 
-
     /* init flowtools library */
-    ret = ftio_init(&info->ftio, fd, FT_IO_FLAG_READ);
+    ret = ftio_init(&info->ftio, info->fd, FT_IO_FLAG_READ);
     if (ret < 0) {
         logmsg(LOGWARN, "sniffer-flowtools: initializing %s: %s\n", 
 	    info->in.gl_pathv[info->curfile], strerror(errno)); 
         return -1;
     }
 
-    return fd; 
+    return info->fd; 
 }
 
 
@@ -258,16 +256,13 @@ flowtools_read(source_t * src)
 
     /* get next flow record */
     fr = NULL; 
-    if (src->fd >= 0) 
+    if (info->fd >= 0) 
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);
     while (fr == NULL) {
-	int fd; 
-
-	fd = flowtools_next(src->fd, src->device, info); 
-	if (fd < 0)
+	if (flowtools_next(src->device, info) < 0) 
 	    return 0; 
 
-	src->fd = fd;
+	src->fd = info->fd;
 	fr = (struct fts3rec_v5 *) ftio_read(&info->ftio);  
 	if (fr == NULL) {
 	    logmsg(LOGWARN, "error reading flowtools file: %s\n", 
@@ -434,12 +429,14 @@ sniffer_start(source_t * src)
 	
     /* open the first file */
     info->curfile = 0;
-    src->fd = flowtools_next(-1, src->device, info); 
-    if (src->fd < 0) {
+    info->fd = -1;
+    if (flowtools_next(src->device, info) < 0) {
 	globfree(&info->in);
 	free(src->ptr);
+	src->fd = -1; 
 	return -1; 
     } 
+    src->fd = info->fd;
 
     /* 
      * set the config values 
