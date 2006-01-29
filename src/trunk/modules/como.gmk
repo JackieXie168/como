@@ -16,7 +16,9 @@ MODULES= \
 	list.so \
   	ports.so \
 	active-flows.so \
-	frames.so
+	frames.so \
+	trace-nf.so 
+
 #    interarrival.so
 
 ifneq ($(shell uname),CYGWIN_NT-5.1)
