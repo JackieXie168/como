@@ -228,7 +228,7 @@ findfile(int fd, qreq_t * req)
 	 * at the first or last file. return the 
 	 * offset of this file and be done. 
 	 */
-	if ((int64_t) ofs == -1) {
+	if (ofs == -1) {
 	    ofs = csgetofs(fd);
 	    found = 1;
 	}
@@ -756,7 +756,7 @@ query(int client_fd, int node_id)
         ptr = getrecord(file_fd, &ofs, req->src->callbacks.load, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
 	    if (len == -1) 
-		panic("reading from file %s\n", req->src->output); 
+		panic("reading from file %s ofs %lld", req->src->output, ofs); 
 
 	    if (len == 0) {
 		/* notify the end of stream to the module */

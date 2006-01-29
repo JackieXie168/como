@@ -262,7 +262,9 @@ _csinform(csfile_t * cf, off_t ofs)
  * of the region. 
  *
  * _csmap is the back-end for csmap, csreadp, csseek. 
- * 
+ *
+ * XXX how is the error condition notified/used? just returning NULL? 
+ *     or *sz must be -1 as well?  
  */
 static void * 
 _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg) 
@@ -294,7 +296,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
     switch (in.type) { 
     case S_ERROR: 
 	errno = in.arg;
-	*sz = -1;
+	*sz = -1;		
 	return NULL;
 
     case S_ACK: 
@@ -320,7 +322,6 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
 	    close(cf->fd);
 	    cf->off_file = in.ofs;
 	    cf->fd = -1;
-	    *sz = (size_t)in.ofs;	/* return value */
 	    return NULL;		/* we are done */
 	}
 	break;
@@ -475,11 +476,14 @@ csseek(int fd, csmethod_t where)
     retval = 0;
     _csmap(fd, 0, &retval, S_SEEK, (int) where);
 
+    if (retval < 0) 
+	return -1;
+
     /* reset read values */
     files[fd]->readofs = files[fd]->offset; 
     files[fd]->readsz = 0;   
 
-    return (off_t)retval;
+    return files[fd]->off_file; 
 }
 
 
