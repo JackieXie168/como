@@ -82,13 +82,13 @@ typedef struct {
 
 typedef enum {
     CS_SEEK_NONE,		/* error */
-#if 0 /* unimplemented */
+    CS_SEEK_FILE_NEXT,		/* goto next file */
+    CS_SEEK_FILE_PREV,		/* goto prev file */
+
+#if 0	/* XXX unimplemented */
     CS_SEEK_SET,		/* seek from the first byte */
     CS_SEEK_CUR,		/* seek from the current byte */
     CS_SEEK_END,		/* seek from the last byte */
-#endif
-    CS_SEEK_FILE_NEXT,	/* goto next file */
-#if 0	/* XXX unimplemented */
     CS_SEEK_FILE_SET,	/* seek from the first file */
     CS_SEEK_FILE_CUR,	/* seek from the current file */
     CS_SEEK_FILE_END,	/* seek from the last file */
@@ -96,7 +96,7 @@ typedef enum {
     CS_SEEK_TIME_CUR,	/* seek from the current timestamp */
     CS_SEEK_TIME_END,	/* seek from the last timestamp */
 #endif
-} cs_method_t;
+} csmethod_t;
 
 /* 
  * Function prototypes 
@@ -106,7 +106,7 @@ int csopen(const char * name, int mode, off_t size, int sd);
 off_t csgetofs(int fd);
 void *csmap(int fd, off_t ofs, ssize_t * sz);
 void cscommit(int fd, off_t ofs);
-off_t csseek(int fd);
+off_t csseek(int fd, csmethod_t wh);
 void csclose(int fd, off_t ofs);
 
 

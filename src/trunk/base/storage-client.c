@@ -60,11 +60,12 @@ four methods, and provides an mmap-like interface.
 	Flushes any unmapped block, and returns a new one.
 	Returns a pointer to the mapped region.
 
-  off_t csseek(int fd)
+  off_t csseek(int fd, csmethod_t where)
 
 	fd		is the file descriptor
+	where		what to seek (next file or prev file)
 
-	Moves to the beginning of the next file, unmapping any
+	Moves to the beginning of the next/prev file, unmapping any
 	mapped region.
 
   void csclose(int fd, off_t ofs)  
@@ -264,7 +265,7 @@ _csinform(csfile_t * cf, off_t ofs)
  * 
  */
 static void * 
-_csmap(int fd, off_t ofs, ssize_t * sz, int method) 
+_csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg) 
 {
     csfile_t * cf;
     csmsg_t out, in;
@@ -275,17 +276,10 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method)
 
     /* Package the request and send it to the server */
     out.id = cf->id;
-    if (method == S_REGION) {
-	out.arg = 0; 
-	out.type = method;
-	out.size = *sz;
-	out.ofs = ofs; /* the map offset */
-    } else {	/* all the seek variants */
-	out.type = S_SEEK;
-	out.arg = CS_SEEK_FILE_NEXT;
-	out.size = 0; 
-	out.ofs = 0; 
-    }
+    out.type = method;
+    out.arg = arg;
+    out.size = *sz;
+    out.ofs = ofs; /* the map offset */
 
     /* send the request out */
     if (write(cf->sd, &out, sizeof(out)) < 0) {
@@ -299,7 +293,6 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method)
 
     switch (in.type) { 
     case S_ERROR: 
-	logmsg(LOGWARN, "csmap error in %s: %s\n", cf->name, strerror(in.arg));
 	errno = in.arg;
 	*sz = -1;
 	return NULL;
@@ -338,7 +331,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method)
     }
 
     if ((ssize_t)in.size == -1)
-	panic("unexpected return from storage process");
+	panicx("unexpected return from storage process");
 
     /*
      * now check if the requested block is in the same file (i.e., 
@@ -429,7 +422,7 @@ csmap(int fd, off_t ofs, ssize_t * sz)
      * requested size; 
      */
     newsz = (*sz < CS_OPTIMALSIZE)? CS_OPTIMALSIZE : *sz; 
-    addr = _csmap(fd, ofs, &newsz, S_REGION);
+    addr = _csmap(fd, ofs, &newsz, S_REGION, 0);
     if (newsz < *sz) 
 	*sz = newsz; 
     return addr; 
@@ -473,12 +466,14 @@ cscommit(int fd, off_t ofs)
  * 
  */
 off_t
-csseek(int fd)
+csseek(int fd, csmethod_t where)
 {
     ssize_t retval;
 
     assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL); 
-    _csmap(fd, 0, &retval, S_SEEK);
+
+    retval = 0;
+    _csmap(fd, 0, &retval, S_SEEK, (int) where);
 
     /* reset read values */
     files[fd]->readofs = files[fd]->offset; 

@@ -881,18 +881,37 @@ handle_seek(int s, csmsg_t * in)
 	    cf = cl->bs->file_first;
 	else
 	    cf = cf->next;
-	if (cf == NULL) { /* no more data */
-	    senderr(s, in->id, ENODATA); 
-	    return;
-	}
-	/* append this client to the list of clients */
-	cl->file = cf;
-	cl->next = cf->clients;
-	cf->clients = cl;
-	open_file(cl->file, CS_READER);
-	sendack(s, in->id, cf->bs_offset, in->size);
+	break;
 
+    case CS_SEEK_FILE_PREV:
+	if (cf == NULL) { 
+	    /* never did a map or seek, get the last file */
+	    cf = cl->bs->file_last;
+	} else { 
+	    csfile_t *p, *q;
+
+	    /* find the file before the current one */
+	    p = NULL;
+	    q = cl->bs->file_first;
+	    while (q && q != cf) {
+		p = q; 
+		q = q->next;
+	    }
+	    cf = p; 
+	} 
+	break;
     }
+
+    if (cf == NULL) { /* no more data */
+	senderr(s, in->id, ENODATA); 
+	return;
+    }
+    /* append this client to the list of clients */
+    cl->file = cf;
+    cl->next = cf->clients;
+    cf->clients = cl;
+    open_file(cl->file, CS_READER);
+    sendack(s, in->id, cf->bs_offset, in->size);
 }
 
 /** 
