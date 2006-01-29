@@ -181,6 +181,58 @@ send_status(int client_fd, int node_id)
 }
 
 
+/* 
+ * -- findfile
+ * 
+ * This function looks into the first record of each file until it 
+ * find the one with the closest start time to the requested one. 
+ * We do a linear search (instead of a faster binary search) because
+ * right now csseek only supports CS_SEEK_FILE_PREV and CS_SEEK_FILE_NEXT. 
+ * The function returns the offset of the file to be read or -1 in case
+ * of error.
+ */
+static off_t 
+findfile(int fd, qreq_t * req)
+{
+    ssize_t len; 
+    load_fn * ld; 
+    off_t ofs; 
+
+    ld = req->src->callbacks.load; 
+    len = req->src->bsize; 
+    ofs = csgetofs(fd);
+
+    for (;;) { 
+	timestamp_t ts;
+	char * ptr; 
+
+	/* read the first record */
+	ptr = csmap(fd, ofs, &len); 
+	if (ptr == NULL) 
+	    return -1;
+
+	/* give the record to load() */
+	ld(ptr, len, &ts); 
+
+	if (TS2SEC(ts) < req->start) {
+	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
+	} else {
+	    ofs = csseek(fd, CS_SEEK_FILE_PREV);
+	    if ((int64_t) ofs == -1) {
+		/* we are on the first file, return the 
+		 * offset of the current one 
+		 */
+		ofs = csgetofs(fd);
+	    }
+		
+	    break;
+	} 
+    }
+
+    return ofs;
+}
+
+
 /*
  * -- getrecord
  *
@@ -643,10 +695,6 @@ query(int client_fd, int node_id)
     if (file_fd < 0) 
 	panic("opening file %s", req->src->output);
 
-    /* get start offset. this is needed because we access the file via
-     * csmap instead of csreadp (that is not implemented yet) 
-     */
-    ofs = csgetofs(file_fd);
 
     /*
      * initializations
@@ -692,14 +740,9 @@ query(int client_fd, int node_id)
         break;
     }
 
-    /*  
-     * now look for the start time in the file 
-     * 
-     * XXX we do this without seeking the file. we read all the
-     *     records one by one to find the beginning. very inefficient.
-     *     one day STORAGE will support timestamp-based seeks.
-     *  
-     */
+    /* quickly seek the file from which to start the search */
+    ofs = findfile(file_fd, req); 
+
     for (;;) { 
 	timestamp_t ts;
 	char * ptr; 
@@ -724,7 +767,7 @@ query(int client_fd, int node_id)
 	 * If lost sync, move to the next file and try again. 
 	 */
 	if (ptr == GR_LOSTSYNC) {
-	    ofs = csseek(file_fd);
+	    ofs = csseek(file_fd, CS_SEEK_FILE_NEXT);
 	    logmsg(LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
 		req->src->output, ofs); 
 	    continue;
