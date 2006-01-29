@@ -454,6 +454,8 @@ validate_query(qreq_t * req, int node_id)
 	 */
         for (idx = 0; idx < map.module_count; idx++) {
             req->src = &map.modules[idx];
+	    if (node_id != req->src->node) 
+		continue; 
             if (!strcmp(req->source, req->src->name))
 		break;
         }
@@ -581,8 +583,8 @@ query(int client_fd, int node_id)
     } 
 
     logmsg(V_LOGQUERY,
-        "got query (%d bytes); mdl: %s filter: %s\n",  
-        ntohs(req->len), req->module, req->filter_str); 
+        "got query (%d bytes); node: %d mdl: %s filter: %s\n",  
+        node_id, ntohs(req->len), req->module, req->filter_str); 
     logmsg(0, "    from %d to %d\n", req->start, req->end); 
 
     if (req->format == Q_STATUS) { 
