@@ -197,12 +197,13 @@ findfile(int fd, qreq_t * req)
     ssize_t len; 
     load_fn * ld; 
     off_t ofs; 
+    int found;
 
     ld = req->src->callbacks.load; 
     len = req->src->bsize; 
     ofs = csgetofs(fd);
-
-    for (;;) { 
+    found = 0;
+    while (!found) { 
 	timestamp_t ts;
 	char * ptr; 
 
@@ -217,16 +218,20 @@ findfile(int fd, qreq_t * req)
 	if (TS2SEC(ts) < req->start) {
 	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
 	} else {
+	    /* found. go one file back; */
 	    ofs = csseek(fd, CS_SEEK_FILE_PREV);
-	    if ((int64_t) ofs == -1) {
-		/* we are on the first file, return the 
-		 * offset of the current one 
-		 */
-		ofs = csgetofs(fd);
-	    }
-		
-	    break;
+	    found = 1;
 	} 
+
+	/* 
+	 * if the seek failed it means we are
+	 * at the first or last file. return the 
+	 * offset of this file and be done. 
+	 */
+	if ((int64_t) ofs == -1) {
+	    ofs = csgetofs(fd);
+	    found = 1;
+	}
     }
 
     return ofs;
