@@ -62,7 +62,8 @@
 	      /*  Hard code module specific options here  */
 	      $modargs = "";
 	      if ($sec_array[$i] == "alert"){
-		  $modargs = "url=dashboard.php&";
+		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
+		$modargs = $modargs . "url=dashboard.php&";
 	      }
 	      if ($sec_array[$i] == "topdest"){
 		  $modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
