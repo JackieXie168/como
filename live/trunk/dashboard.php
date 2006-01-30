@@ -66,19 +66,21 @@
 		$modargs = $modargs . "url=dashboard.php&";
 	      }
 	      if ($sec_array[$i] == "topdest"){
-		  $modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
-		  $modargs = $modargs . "source=tuple&";
-		  $modargs = $modargs . "interval=$interval&";
-		  $modargs = $modargs . "topn=5&";
-		  $modargs = $modargs . "url=broadcast.php&";
-		  $modargs = $modargs . "urlargs=stime=$stime&";
-		  $modargs = $modargs . "urlargs=etime=$etime&";
+		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
+		$modargs = $modargs . "source=tuple&";
+		$modargs = $modargs . "interval=$interval&";
+		$modargs = $modargs . "topn=5&";
+		$modargs = $modargs . "url=generic_query.php&";
+		$modargs = $modargs . "urlargs=stime=$stime&";
+		$modargs = $modargs . "urlargs=etime=$etime&";
+		$modargs = $modargs . "urlargs=module=tuple&";
+		$modargs = $modargs . "urlargs=source=tuple&";
 	      }
 	      if ($sec_array[$i] == "topports"){
-		  $modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
-		  $modargs = $modargs . "topn=5&";
-		  $modargs = $modargs . "source=tuple&";
-		  $modargs = $modargs . "interval=$interval&";
+		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
+		$modargs = $modargs . "topn=5&";
+		$modargs = $modargs . "source=tuple&";
+		$modargs = $modargs . "interval=$interval&";
 	      }
 	      print "<iframe width=100% frameborder=0 ";
 	      print "src=generic_query.php?comonode=$comonode&";
@@ -86,7 +88,7 @@
 	      print "stime=$stime&etime=$etime&";
 	      print "$modargs";
 	      print "urlargs=comonode=$comonode&";
-	      print "urlargs=module=$module&";
+#	      print "urlargs=module=$module&";
 	      print "urlargs=filter={$node->modinfo[$sec_array[$i]]['filter']}>";
 	      print "</iframe>\n";
 	  }

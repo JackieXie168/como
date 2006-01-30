@@ -21,6 +21,35 @@
     /*  Get Input Vars  */
     require_once("include/getinputvars.php.inc"); 
 
+    /*  This we catch if ip=addr is passed back from the 
+     *  module.  If it is, rewrite the filter to include
+     *  the ip address that is returned
+     */
+    if (isset($ip)) {
+        $format = "html";
+        $var = explode ("&", $http_query_string);
+        $http_query_string = "";
+        for ($i=0;$i<count($var);$i++) {
+            if (strstr($var[$i],"filter=")) {
+                $tmp_filter = explode ("=", $var[$i]);
+            } else if (strstr($var[$i], "ip=")) {
+                $tmp_ip = explode ("=", $var[$i]);
+                /*  This will need to be removed once CoMo returns
+                 *  the ip without the mask
+                 */
+                $x  = explode ("/", $tmp_ip[1]);
+                $daip = $x[0];
+            } else {
+                $http_query_string = $http_query_string . $var[$i];
+                $http_query_string = $http_query_string . "&";
+            }
+        }
+        $http_query_string = $http_query_string . "&filter="; 
+        $http_query_string = $http_query_string . $tmp_filter[1] ;
+        $http_query_string = $http_query_string . " and dst ";
+        $http_query_string = $http_query_string . $daip; 
+    }
+
     $filename=$comonode . "_" . $module . "_" . $stime . "_" . 
 	      $etime . ".html";
 
