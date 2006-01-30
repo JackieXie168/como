@@ -290,7 +290,7 @@ query_parse(char *buf, timestamp_t now)
 	return NULL; 
     }
 
-    logmsg(LOGQUERY, "Good request %s\n", p);
+    logmsg(V_LOGQUERY, "Good request %s\n", p);
     p = urldecode(p);
     while ( (p1 = strsep(&p, "?&")) != NULL) {
 	logmsg(V_LOGQUERY, "Token %s %s\n", p1, p);

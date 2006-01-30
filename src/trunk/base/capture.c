@@ -166,7 +166,7 @@ flush_table(module_t * mdl, tailq_t * expired)
     /* update the hash table size for next time if it is underutilized 
      * or overfull. 
      */
-
+#ifdef ADAPTIVE_HASH_TABLES
     if (ct->records > ct->size) { 
 	/* hashtable underprovisioned, try resize it */
 	mdl->ca_hashsize <<= 2; 
@@ -182,6 +182,7 @@ flush_table(module_t * mdl, tailq_t * expired)
 	    mdl->name, ct->records, ct->size, 
 	    ct->live_buckets, mdl->ca_hashsize);
     } 
+#endif
 
     /* add to linked list and remove from here. */
     TQ_APPEND(expired, ct, next_expired);

@@ -871,6 +871,11 @@ replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd)
     do {
 	count = 0;
         len = DEFAULT_REPLAY_BUFSIZE;
+
+	/* not that ptr could be NULL. this is to give a signal 
+	 * to the module to clear all buffers if any and that no
+	 * more records will come. 
+	 */
 	left = src->callbacks.replay(ptr, out, &len, &count);
 	if (left < 0)
 	    panicx("%s.replay() returns error", src->name);
