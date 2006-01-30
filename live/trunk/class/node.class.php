@@ -171,7 +171,13 @@ class Node {
             
 	} else {
 	    /*  Create a default file  */
-	    $val = "main_mods;;traffic;;application;;protocol;;utilization\n";
+            $usable_mods = $this -> GetModules("gnuplot");
+	    $val = "main_mods";
+            for ($i=0;$i<count($usable_mods);$i++) {
+                $val = $val . ";;"; 
+                $val = $val . $usable_mods[$i];
+            }
+	    $val = $val . "\n"; 
 	    $val = $val . "sec_mods;;alert;;topdest;;topports\n";
 	    $fh = fopen ("$NODEDB/$comonode.conf", "w");
 	    fwrite ($fh, $val);
