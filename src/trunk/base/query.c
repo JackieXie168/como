@@ -639,10 +639,16 @@ query(int client_fd, int node_id)
 	return; 
     } 
 
-    logmsg(V_LOGQUERY,
-        "got query (%d bytes); node: %d mdl: %s filter: %s\n",  
-        node_id, ntohs(req->len), req->module, req->filter_str); 
+    logmsg(LOGQUERY,
+        "query (%d bytes); node: %d mdl: %s filter: %s\n",  
+        ntohs(req->len), node_id, req->module, req->filter_str); 
     logmsg(0, "    from %d to %d\n", req->start, req->end); 
+    if (req->args != NULL) { 
+	int n; 
+
+        for (n = 0; req->args[n]; n++) 
+	    logmsg(0, "    args: %s\n", req->args[n]); 
+    } 
 
     if (req->format == Q_STATUS) { 
 	/* 
@@ -762,7 +768,7 @@ query(int client_fd, int node_id)
 		/* notify the end of stream to the module */
 		if (req->format == Q_OTHER || req->format == Q_HTML) 
 		    printrecord(req->mdl, NULL, NULL, client_fd); 
-		logmsg(LOGQUERY, "reached end of file %s\n", req->src->output); 
+		logmsg(V_LOGQUERY, "reached end of file %s\n", req->src->output); 
 		break;
 	    }
 	}
@@ -787,26 +793,25 @@ query(int client_fd, int node_id)
 	     * no more records so that it can cleanup data 
 	     * structures and send the last messages if needed
 	     */
-	    if (req->source) {
+	    if (req->source) 
 		replay_source(req->mdl, req->src, NULL, client_fd);
-	    } else { 
-	       /* 
-	        * ask the module to send the message footer if it 
-		* has any to send. 
-	        */  
-		switch (req->format) { 
-		case Q_OTHER:
-		case Q_HTML:
-		    printrecord(req->mdl, NULL, NULL, client_fd); 
-		    break;
 
-		case Q_COMO: 
-		    replayrecord(req->src, NULL, client_fd);
-		    break;
-	    
-		default:
-		    break;
-		} 
+	    /* 
+	     * ask the module to send the message footer if it 
+	     * has any to send. 
+	     */  
+	    switch (req->format) { 
+	    case Q_OTHER:
+	    case Q_HTML:
+		printrecord(req->mdl, NULL, NULL, client_fd); 
+		break;
+
+	    case Q_COMO: 
+		replayrecord(req->src, NULL, client_fd);
+		break;
+	
+	    default:
+		break;
 	    } 
 
 	    logmsg(LOGQUERY, "query completed\n"); 

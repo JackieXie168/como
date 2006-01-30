@@ -125,7 +125,6 @@ export(void *erp, void *rp, int isnew)
     FLOWDESC *x = F(rp);
     uint64_t b = x->bytes / meas_ivl;
     uint64_t p = x->pkts / meas_ivl;
-    time_t ts;
 
     if (isnew) {
 	bzero(ex, sizeof(EFLOWDESC));
@@ -143,11 +142,6 @@ export(void *erp, void *rp, int isnew)
 	ex->alert |= ALERT_BYTES; 
     if (ex->diff_pkts > change_thresh)
 	ex->alert |= ALERT_PKTS; 
-
-    ts = (time_t) TS2SEC(ex->ts);
-    logmsg(LOGMODULE, "ts: %.24s; alert: %d, past: %d, diff: %.2f, %.2f\n", 
-	asctime(gmtime(&ts)), ex->alert, ex->past_alert, 
-	ex->diff_bytes, ex->diff_pkts); 
 
     /* update the moving average for the sum */
     ex->bytes = (uint64_t) ((1.0 - weight) * (float) ex->bytes + 
@@ -200,8 +194,6 @@ store(void *rp, char *buf, size_t len)
 	PUTH32(buf, TS2SEC(ex->ts));
 	PUTH16(buf, ALERT_BYTES);
 	PUTH16(buf, ch);
-	logmsg(LOGUI, "ts: %.24s; ewma: %llu; type: bytes diff: %.2f\n", 
-	       asctime(gmtime(&ts)), ex->bytes, ex->diff_bytes);
 	count++;
     } 
 
@@ -210,8 +202,6 @@ store(void *rp, char *buf, size_t len)
 	PUTH32(buf, TS2SEC(ex->ts));
 	PUTH16(buf, ALERT_PKTS);
 	PUTH16(buf, ch);
-	logmsg(LOGUI, "ts: %.24s; ewma: %llu; type: packets diff: %.2f\n", 
-	       asctime(gmtime(&ts)), ex->pkts, ex->diff_pkts);
 	count++;
     } 
 
