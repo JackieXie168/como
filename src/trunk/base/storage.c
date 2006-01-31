@@ -231,7 +231,7 @@ open_file(csfile_t *cf, int mode)
     int fd;
 
     logmsg(V_LOGSTORAGE, "open_file %016llx mode %s rfd %d wfd %d\n",
-	cf->bs_offset, (mode == CS_READER ? "CS_READER":"CS_WRITER"),
+	cf->bs_offset, (mode == CS_WRITER ? "CS_WRITER" : "CS_READER"), 
 	cf->rfd, cf->bs->wfd);
 
     /* 
@@ -241,7 +241,7 @@ open_file(csfile_t *cf, int mode)
      * write, lseek, etc., hence we can use one file descriptor for all 
      * clients). 
      */
-    if (mode == CS_READER && cf->rfd >= 0)
+    if ((mode == CS_READER || mode == CS_READER_NOBLOCK) && cf->rfd >= 0)
 	return cf->rfd;
     else if (mode == CS_WRITER && cf->bs->wfd >= 0)
 	return cf->bs->wfd;
@@ -251,9 +251,9 @@ open_file(csfile_t *cf, int mode)
      * mode instead we would like O_WRONLY|O_CREAT
      */
 #ifdef linux	/* we need O_RDWR */
-    flags = (mode == CS_READER)? O_RDWR : O_RDWR|O_CREAT|O_APPEND;
+    flags = (mode == CS_WRITER)? O_RDWR|O_CREAT|O_APPEND : O_RDWR;
 #else
-    flags = (mode == CS_READER)? O_RDONLY : O_WRONLY|O_CREAT|O_APPEND;
+    flags = (mode == CS_WRITER)? O_WRONLY|O_CREAT|O_APPEND : O_RDONLY;
 #endif
 
     /* open the file */
@@ -263,10 +263,10 @@ open_file(csfile_t *cf, int mode)
         panic("opening file %s: %s\n", name, strerror(errno));
     free(name);
 
-    if (mode == CS_READER)
-	cf->rfd = fd;
-    else
+    if (mode == CS_WRITER)
 	cf->bs->wfd = fd;	/* writer info is in the csbytestream_t */
+    else
+	cf->rfd = fd;
 
     return fd;
 }
@@ -308,7 +308,7 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
          * If in read mode return an error. In write mode, we 
 	 * assume O_CREAT by default so we create it empty.
          */
-	if (mode == CS_READER) { 
+	if (mode != CS_READER) { 
 	    logmsg(LOGWARN, "get_fileinfo: file %s does not exist\n", name); 
 	    return EINVAL; 
 	} 
@@ -486,6 +486,7 @@ new_csclient(csbytestream_t *bs, int mode)
     cl = safe_calloc(1, sizeof(csclient_t));
     cl->bs = bs;
     cl->mode = mode;
+    cl->timeout = CS_DEFAULT_TIMEOUT; 
     cl->id = new_id(cl);
     bs->client_count++;
     return cl;
@@ -703,6 +704,15 @@ client_unlink(csclient_t *cl)
         free_region(cl->region);
         cl->region = NULL;
     }
+
+    if (cf->clients == NULL) { 
+	/* close the file descriptor if it is open */
+	if (cf->rfd >= 0) { 
+	    close(cf->rfd);  
+	    cf->rfd = -1;
+	} 
+    } 
+
     cl->file = NULL;
     return cf;
 }
@@ -823,6 +833,7 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
      *     requested offset will be reached 
      */
     client_unlink(cl); 
+    cl->blocked = 1; 
 
     /* create a new blocked element */
     p = safe_calloc(1, sizeof(csblocked_t)); 
@@ -846,8 +857,8 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
 static void
 handle_seek(int s, csmsg_t * in)
 {
-    csclient_t * cl;
     csfile_t * cf;
+    csclient_t * cl;
 
     logmsg(V_LOGSTORAGE, "seek: id %d, arg %d, ofs %lld\n", 
 	   in->id, in->arg, in->ofs);
@@ -870,6 +881,7 @@ handle_seek(int s, csmsg_t * in)
 	return; 
     }
     cf = client_unlink(cl);
+    cl->timeout = CS_DEFAULT_TIMEOUT; 
 
     switch (in->arg) {	/* determine where to seek */
     default:
@@ -903,14 +915,17 @@ handle_seek(int s, csmsg_t * in)
     }
 
     if (cf == NULL) { /* no more data */
+	logmsg(LOGSTORAGE, "id: %d,%s; seek reached the end of file\n", 
+	    in->id, cl->bs->name); 
 	senderr(s, in->id, ENODATA); 
 	return;
     }
+
     /* append this client to the list of clients */
     cl->file = cf;
     cl->next = cf->clients;
     cf->clients = cl;
-    open_file(cl->file, CS_READER);
+    open_file(cl->file, cl->mode);
     sendack(s, in->id, cf->bs_offset, in->size);
 }
 
@@ -972,6 +987,7 @@ handle_read(int s, csmsg_t * in, csclient_t *cl)
      * we have files, check request against available data 
      */
     if (in->ofs < bs->file_first->bs_offset) {	/* before first byte */
+	logmsg(LOGSTORAGE, "id: %d, %s no data available\n", in->id, bs->name);
 	senderr(s, in->id, ENODATA); 
 	return; 
     } else if (in->ofs >= bs->file_first->bs_offset + bs->size) { 
@@ -1034,7 +1050,7 @@ handle_read(int s, csmsg_t * in, csclient_t *cl)
 	cl->file = cf;
 	cl->next = cf->clients;
 	cf->clients = cl;
-	open_file(cl->file, CS_READER);
+	open_file(cl->file, cl->mode);
     }
 
     cf = cl->file;
@@ -1096,6 +1112,8 @@ wakeup_clients(csbytestream_t *bs)
         csblocked_t *p = waking;
   
 	logmsg(V_LOGSTORAGE, "waking up id: %d\n", p->client->id); 
+	p->client->blocked = 0; 
+	p->client->timeout = CS_DEFAULT_TIMEOUT; 
         handle_read(p->sock, &p->msg, p->client);
         
         /* free this element and move to next */
@@ -1118,6 +1136,7 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
 {
     off_t bs_offset, want, have;
     size_t reg_size;
+    csbytestream_t *bs; 
     csfile_t *cf;
     int diff;
      
@@ -1126,7 +1145,8 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
      * file of bytestream. if there are no files, create
      * one.
      */
-    cf = cl->bs->file_last;
+    bs = cl->bs; 
+    cf = bs->file_last;
     assert(cf != NULL); 
 
     /*
@@ -1145,12 +1165,15 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
                 
     /* overwriting is not allowed */
     if (in->ofs < bs_offset) {
+	logmsg(LOGSTORAGE, "id: %d, %s; overwriting not allowed\n", 
+	    in->id, bs->name); 
         senderr(s, in->id, EINVAL);
         return;
     }
         
     /* gaps are not allowed */
     if (in->ofs > bs_offset + reg_size) {
+	logmsg(LOGSTORAGE, "id: %d, %s; gaps not allowed\n", in->id, bs->name); 
         senderr(s, in->id, EINVAL);
         return;
     }
@@ -1161,7 +1184,7 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
      * some blocked readers.
      */
     cf->cf_size = in->ofs - cf->bs_offset;
-    cl->bs->size = in->ofs - cl->bs->file_first->bs_offset; 
+    bs->size = in->ofs - bs->file_first->bs_offset; 
 
     /*
      * append the current region to the write buffer (the scheduler
@@ -1169,7 +1192,7 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
      * the head of the list and mmap the region of file requested.
      */
     if (cl->region != NULL) 
-	append_to_wb(cl->region, cl->bs);
+	append_to_wb(cl->region, bs);
 
     /*
      * now check if we need to increase the OS file size beyond the
@@ -1202,9 +1225,9 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
 		 * keeps only the OS fd of the current file. 
 		 */
 		cl->region->file = cf; 
-                cl->region->wfd = cl->bs->wfd;
-		append_to_wb(cl->region, cl->bs);
-                cl->bs->wfd = -1; /* we will need a new one */
+                cl->region->wfd = bs->wfd;
+		append_to_wb(cl->region, bs);
+                bs->wfd = -1; /* we will need a new one */
             }
 
 	    /* update the size of the current file */
@@ -1214,16 +1237,16 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
              * now create a descriptor for the new file and create
              * it empty so we can extend it afterwards
              */
-            cf = new_csfile(cl->bs, in->ofs, (size_t)0);
+            cf = new_csfile(bs, in->ofs, (size_t)0);
             open_file(cf, CS_WRITER); /* XXX error checking */
             ext = in->size;
         }
 
         /* finally, prepare to extend the file */
         buf = safe_calloc(ext, 1); 
-        if (write(cl->bs->wfd, buf, ext) < 0) {
-            logmsg(LOGWARN, "write to extend file failed: %s\n",
-                strerror(errno));
+        if (write(bs->wfd, buf, ext) < 0) {
+            logmsg(LOGWARN, "id: %d,%s; write to extend file failed: %s\n",
+                in->id, bs->name, strerror(errno));
             senderr(s, in->id, errno);
             return;
         }
@@ -1285,6 +1308,7 @@ handle_inform(csmsg_t * in)
     cl = cs_state.clients[in->id];
     assert(cl != NULL);
     assert(cl->mode == CS_WRITER);
+    cl->timeout = CS_DEFAULT_TIMEOUT; 
 
     /*
      * the writer is always operating on the last file of bytestream. 
@@ -1354,6 +1378,7 @@ handle_region(int s, csmsg_t * in)
     /* 
      * we consider the read/write mode separately. 
      */ 
+    cl->timeout = CS_DEFAULT_TIMEOUT; 
     if (cl->mode == CS_WRITER)  	/* write mode */
 	handle_write(s, in, cl);
     else
@@ -1417,9 +1442,10 @@ handlemsg(int s, csmsg_t * in)
  *
  */
 static void
-scheduler(void)
+scheduler(timestamp_t elapsed)
 {
     csbytestream_t * bs; 
+    int i; 
              
     /*
      * browse the list of bytestreams and clean up the data 
@@ -1489,6 +1515,39 @@ scheduler(void)
 
 	bs = bs->next; 
     }
+
+    /* now browse the list of clients and remove all the readers 
+     * that are not blocked and for which the timeout expired. 
+     * this is to catch all QUERY processes that died before being 
+     * able to send a S_CLOSE message. 
+     */
+    for (i = 0; i < cs_state.client_count; i++) { 
+	csclient_t * cl = cs_state.clients[i]; 
+
+	if (cl == NULL || cl->mode == CS_WRITER || cl->blocked) 
+	    continue; 
+
+	if (cl->timeout < elapsed) {
+	    /* remove this client and recover the record */
+	    client_unlink(cl); 
+    
+	    /* remove this client from the bytestream */
+	    bs = cl->bs;
+	    bs->client_count--;
+
+	    /* remove client from array of clients */
+	    cs_state.clients[cl->id] = NULL;
+	    cs_state.client_count--;
+
+	    free(cl);
+
+	    logmsg(LOGSTORAGE, 
+		"client timeout. file %s, clients %d, total %d\n", 	
+		bs->name, bs->client_count, cs_state.client_count); 
+	} 
+
+	cl->timeout -= elapsed; 
+    }
 }
 
 /*
@@ -1532,7 +1591,9 @@ storage_mainloop(int accept_fd)
     for (;;) {
         fd_set r = cs_state.valid_fds;
 	struct timeval * pto;
+	struct timeval last; 
 	struct timeval to = { 5, 200000 };	// XXX just to put something?
+	timestamp_t elapsed; 
         int n_ready;
 	int i;
 
@@ -1542,6 +1603,7 @@ storage_mainloop(int accept_fd)
 	 */
         pto = (cs_state.client_count > 0) ? &to : NULL; 
 
+	gettimeofday(&last, 0); 
 	n_ready = select(cs_state.max_fd, &r, NULL, NULL, pto); 
 	if (n_ready < 0) 
 	    panic("waiting for select (%s)\n", strerror(errno)); 
@@ -1598,8 +1660,14 @@ storage_mainloop(int accept_fd)
 	 * the blocks to be pre-fetched and then prefetch 
 	 * pages into memory. 
 	 */
-	if (cs_state.client_count > 0) 
-	    scheduler(); 
+	if (cs_state.client_count > 0) {
+	    struct timeval now; 
+
+	    gettimeofday(&now, 0); 
+	    elapsed = TIME2TS(now.tv_sec, now.tv_usec) - 
+		      TIME2TS(last.tv_sec, last.tv_usec); 
+	    scheduler(elapsed); 
+	}
     }
 } 
 /* end of file */
