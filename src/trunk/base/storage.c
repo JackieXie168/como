@@ -308,7 +308,7 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
          * If in read mode return an error. In write mode, we 
 	 * assume O_CREAT by default so we create it empty.
          */
-	if (mode != CS_READER) { 
+	if (mode != CS_WRITER) { 
 	    logmsg(LOGWARN, "get_fileinfo: file %s does not exist\n", name); 
 	    return EINVAL; 
 	} 
