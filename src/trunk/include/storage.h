@@ -39,8 +39,9 @@
 #include <fcntl.h>
 #include <sys/types.h>
 
-#define CS_MAXCLIENTS   500            	/* max no. of open bytestreams */
-#define CS_OPTIMALSIZE	(1024*1024)	/* size for mmap() */
+#define CS_MAXCLIENTS   	500            	/* max no. of clients/files */
+#define CS_OPTIMALSIZE		(1024*1024)	/* size for mmap() */
+#define CS_DEFAULT_TIMEOUT	TIME2TS(60,0)	/* readers' timeout */
 
 /*
  * Modes for opening a bytestream.
@@ -181,9 +182,11 @@ struct _csclient {
     csclient_t * next;		/* next client */
     int id; 			/* client id */
     int mode;			/* access mode */
+    int blocked; 		/* set if blocked waiting for a write */
     csbytestream_t *bs;		/* the bytestream */
     csfile_t *file;		/* the current file (readers only) */
     csregion_t *region; 	/* the memory mapped region */
+    timestamp_t timeout; 	/* watchdog timeout for broken clients */
 };
 
 

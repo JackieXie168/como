@@ -842,7 +842,7 @@ query(int client_fd, int node_id)
     }
 
     /* close the socket and the file */
-    close(client_fd);
     csclose(file_fd, 0); 
+    close(client_fd);
     close(storage_fd);
 }
