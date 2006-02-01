@@ -61,15 +61,13 @@ init(__unused void *mem, __unused size_t msize, char *args[])
      * process input arguments 
      */
     for (i = 0; args && args[i]; i++) { 
-	if (strstr(args[i], "interval")) {
+	if (!strncmp(args[i], "interval", 8)) {
 	    len = index(args[i], '=') + 1; 
 	    meas_ivl = atoi(len); 
-	} 
-	if (strstr(args[i], "topn")) {
+	} else if (!strncmp(args[i], "topn", 4)) {
 	    len = index(args[i], '=') + 1;
 	    topn = atoi(len);
-	}
-	if (strstr(args[i], "mask")) {
+	} else if (!strncmp(args[i], "mask", 4)) {
 	    len = index(args[i], '=') + 1;
 	    mask <<= atoi(len); 
 	}
