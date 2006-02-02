@@ -87,7 +87,7 @@
 	    <?= $node->nodename ?><br>
 	    <?= $node->nodeplace ?><br>
             <?  if ($ALLOWCUSTOMIZE) { ?>
-            <a href="#" onClick="return customize=window.open('customize.php?comonode=<?=$comonode?>','customize','toolbar=no,width=450,height=450,status=no'); return false;">
+            <a href="#" onClick="return customize=window.open('customize.php?comonode=<?=$comonode?>','customize','width=700,height=450,status=no'); return false;">
 	    <div class=customize>Customize CoMoLive!</div>
             </a>
             <? } ?>
