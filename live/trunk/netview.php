@@ -66,10 +66,10 @@
     $month = $sec - 30*86400*7;
 
     print "<a href=\"dashboard.php?comonode=$comonode&module=$module&";
-    if ($module == $special) {
-	$interval = $sec - $hr; 
-        print "source=tuple&interval=$interval&";
-    }
+#    if ($module == $special) {
+#	$interval = $sec - $hr; 
+#        print "source=tuple&interval=$interval&";
+#    }
     if (!is_null($filter))
         print "filter=$filter&";
     else
@@ -78,10 +78,10 @@
     print "View last hour</a><br>\n";
 
     print "<a href=\"dashboard.php?comonode=$comonode&module=$module";
-    if ($module == $special) {
-	$interval = $sec - $day; 
-        print "&source=tuple&interval=$interval";
-    }
+#    if ($module == $special) {
+#	$interval = $sec - $day; 
+#        print "&source=tuple&interval=$interval";
+#    }
     if (!is_null($filter))
         print "&filter=$filter";
     else
@@ -90,10 +90,10 @@
     print "View last 24 hours</a><br>\n";
 
     print "<a href=\"dashboard.php?comonode=$comonode&module=$module";
-    if ($module == $special) {
-	$interval = $sec - $week; 
-        print "&source=tuple&interval=$interval";
-    }
+#    if ($module == $special) {
+#	$interval = $sec - $week; 
+#        print "&source=tuple&interval=$interval";
+#    }
     if (!is_null($filter))
         print "&filter=$filter";
     else
