@@ -12,10 +12,10 @@
 	$zetime = $etime - floor($interval/4);
 	print "<a href=\"dashboard.php?comonode=$comonode";
         print "&module=$module";
-	if ($module == $special) {
-	    $duration = $zetime - $zstime; 
-	    print "&source=tuple&interval=$interval";
-	}
+#	if ($module == $special) {
+#	    $duration = $zetime - $zstime; 
+#	    print "&source=tuple&interval=$interval";
+#	}
 	if (!is_null($filter)) 
 	    print "&filter=$filter";
 	else 
@@ -37,10 +37,10 @@
 	$zetime = $now;
 
     print "<a href=\"dashboard.php?comonode=$comonode&module=$module";
-    if ($module == $special) {
-	$duration = $zetime - $zstime; 
-	print "&source=tuple&interval=$interval";
-    }
+#    if ($module == $special) {
+#	$duration = $zetime - $zstime; 
+#	print "&source=tuple&interval=$interval";
+#    }
     if (!is_null($filter)) 
 	print "&filter=$filter";
     else 
@@ -64,10 +64,10 @@
     $bstime = $stime - floor($interval/2);
     $betime = $etime - floor($interval/2);
     print "<a href=\"dashboard.php?comonode=$comonode&module=$module";
-    if ($module == $special) {
-	$duration = $zetime - $zstime; 
-	print "&source=tuple&interval=$interval";
-    }
+#    if ($module == $special) {
+#	$duration = $zetime - $zstime; 
+#	print "&source=tuple&interval=$interval";
+#    }
     if (!is_null($filter)) 
 	print "&filter=$filter";
     else 
@@ -82,10 +82,10 @@
 	$fstime = $stime + floor($interval/2);
 	$fetime = $etime + floor($interval/2);
 	print "<a href=\"dashboard.php?comonode=$comonode&module=$module";
-	if ($module == $special) {
-	    $duration = $zetime - $zstime; 
-	    print "&source=tuple&interval=$interval";
-	}
+#	if ($module == $special) {
+#	    $duration = $zetime - $zstime; 
+#	    print "&source=tuple&interval=$interval";
+#	}
 	if (!is_null($filter)) 
 	    print "&filter=$filter";
 	else 
