@@ -1,3 +1,5 @@
+<!-- $id --> 
+
 <?php
     $pagetitle="Customize CoMo";
     $includebanner=0;
@@ -5,6 +7,10 @@
     require_once("comolive.conf");
     require_once("class/node.class.php");
   
+    /*
+     * if the configuration file prohibits customization, 
+     * return an error message and exit. 
+     */
     if (!($ALLOWCUSTOMIZE)){
         print "Customization of CoMoLive is NOT allowed<br>";
         print "Please check your comolive.conf file<br>";
@@ -12,7 +18,10 @@
 
     }
 
-    /* get the node hostname and port number */
+    /* 
+     * get the node hostname and port number from the HTTP 
+     * query string and initialize the new node. 
+     */
     if (isset($_GET['comonode'])) {
 	$comonode = $_GET['comonode'];
     } else {
@@ -20,9 +29,12 @@
         print " requires the comonode=host:port arg passed to it";
 	exit;
     }
-    $node = new Node($comonode,$TIMEPERIOD, $TIMEBOUND);
 
-    include ("include/getinputvars.php.inc");
+    /* 
+     * initialize a new node by querying the node for the current 
+     * status. If the query fails return an error message. 
+     */
+    $node = new Node($comonode,$TIMEPERIOD, $TIMEBOUND);
     if ($node->status == "FAIL") {
         /*
          * query failed. write error message and exit
@@ -40,6 +52,12 @@
         include("include/footer.php.inc");
         exit;
     }
+
+    /* 
+     * build two arrays with nodes that support images (and can be 
+     * on the main stage) and nodes that can return html files (and can 
+     * go in the side boxes). 
+     */
     $mainmods = $node -> GetModules("gnuplot");
     $secmods = $node -> GetModules("html");
 
@@ -47,12 +65,13 @@
 	$action = $_GET['action'];
     else
 	$action = "NORM";
+
 /*  Write out new config file  */
     if ($action == "submit"){
 	$val = explode ("&", $_SERVER['QUERY_STRING']);
 	$secfile = "sec_mods";
 	$mainfile = "main_mods";
-	for ($i=0;$i<count($val);$i++){
+	for ($i = 0; $i < count($val); $i++) {
 	    if (strstr($val[$i], "mainmods")){
 		$mainfile = $mainfile . ";;";
 		$mod = explode ("=", $val[$i]);
@@ -60,7 +79,7 @@
 	    }
 	}
 	$mainfile = $mainfile . "\n";
-	for ($i=0;$i<count($val);$i++){
+	for ($i = 0; $i < count($val); $i++) {
 	    if (strstr($val[$i], "secmods")){
 		$secfile = $secfile . ";;";
 		$mod = explode ("=", $val[$i]);
@@ -95,91 +114,164 @@
         margin : 0; 
         padding : 0;
     }
-    table, tr, td {
-	background-color : #DDD;
+    table {
 	font-family : "lucida sans unicode", verdana, arial;
         font-size : 9pt;
         width : 95%;
     }
+    tr, td {
+	background-color : #DDD;
+	font-family : "lucida sans unicode", verdana, arial;
+        font-size : 9pt;
+    } 
     a, a:visited { 
 	color : #475677; 
         text-decoration: none;
     }
-    .nvtitle {
+    .box { 
+	background-color : #FFF;
+        padding : 0; 
+	margin: 0; 
+	border: 0; 
+    } 
+    .module_normal {
+	background-color : #FFF;
+        padding : 0; 
+	border: 0;
+	margin: 1;
+    }
+    .module_selected {
+	background-color : #DDD;
+        padding : 0; 
+	border: 0;
+	margin: 1;
+    } 
+    .region { 
+	background-color : #FFF;
+        border-top: 1px dashed #AAA;
+        padding: 0;
+        font-size : 12px;
         font-weight : bold;  
-	font-size: 10pt; 
-        padding-bottom: 3px;
-        color: #475677;
-        text-align : center;
-    }
-    .nvcontent {
-	background-color : #FFF;
-        padding : 0px 10px 0px 10px ;
-    }
-    .nvheader {
-	background-color : #FFF;
-        padding : 0px 10px 0px 10px ;
+	color : #475677;
+    } 
+    .nodename {
+	background-color : #475677;
+        padding : 0px 10px 10px 10px ;
         font-size : 20px;
-        text-align : center;
+        color: #FFF; 
+        font-weight : bold;  
+        text-align : left;
+        width: 50%;
     }
-
+    .buttons {
+	background-color : #DDD;
+        padding : 0px 10px 10px 10px ;
+        font-size : 10px;
+        text-align : left;
+    }
 
 </style>
 
 <body>
 <form action="customize.php" method="GET">
-<table class=customize>
+<table>
   <tr>
-    <td class=nvheader>
-      Configuration File for : <?=$comonode?>
+    <td class=nodename>
+      <?=$node->nodename?> 
+    </td>
+    <td class=buttons>
+      Tick on the boxes below to customize the view of the main CoMo page. <br>
+      <p align=right>
+      <input type=submit value="Save"> 
+      <input type=submit value="Done" OnClick=window.close(this);>
+      <input type=hidden name=comonode value=<?=$comonode?>>
+      <input type=hidden name=action value=submit>
     </td>
   </tr>
   <tr>
-    <td class=nvtitle>
+    <td class=region>
       Main Window 
     </td>
+    <td class=region>
+      Side Boxes
+    </td>
   </tr>
-  <tr>
-    <td class=nvcontent>
-      Please select the main plot<br>
+  <tr valign=top>
+    <td class=box>
       <?php
-	  for ($i=0;$i<count($mainmods);$i++) {
+	  /* 
+	   * browse the list of modules and print the name, the first 
+	   * available timestamp, the filter and the description. modules
+	   * that are currently shown will have the box checked and a
+	   * different color. 
+	   */
+	  for ($i = 0; $i < count($mainmods); $i++) {
+	      $cl = "module_normal"; 
+              if (strstr($mainfile, $mainmods[$i]))
+		  $cl = "module_selected"; 
+              print "<table class=$cl style=\"border:1px dashed; width:100%\">\n";
+	      print "<tr><td colspan=2 class=$cl>\n";
 	      print "<input name=mainmods ";
 	      if (strstr($mainfile, $mainmods[$i]))
 		  print " checked ";
 	      print "type=checkbox value=$mainmods[$i]>";
-	      print "$mainmods[$i]<br>\n";
+	      print "$mainmods[$i]"; 
+	      print "</td></tr>\n";
+              print "<tr><td class=$cl>\n";
+	      print "Description goes here</td>\n"; 
+              print "<td class=$cl>\n";
+	      print "Online since: <br>\n"; 
+	      $st = $node->modinfo[$mainmods[$i]]['stime'];
+	      $timestr = gmstrftime("%a %b %d %T %Y", $st);
+	      print "<i>$timestr</i><br>\n"; 
+	      print "Running filter: <br>\n"; 
+	      $fl = $node->modinfo[$mainmods[$i]]['filter'];
+              $fl = urldecode($fl);
+	      print "<i>'$fl'</i>";
+	      print "</td></tr>\n";
+	      print "</table>\n";
 	  }
       ?>
     </td>
-  </tr>
-  <tr>
-    <td class=nvtitle>
-        Secondary Window
-    </td>
-  <tr>
-    <td class=nvcontent>
-         Please select the modules that you want shown <br>
-        <?php
-            for ($i=0;$i<count($secmods);$i++) {
-                print "<input name=secmods ";
-                if (strstr($secfile, $secmods[$i]))
-		    print " checked ";
-		print "type=checkbox value=$secmods[$i]>";
-                print "$secmods[$i]<br>\n";
-            }
-        ?>
-            <input type=hidden name=comonode value=<?=$comonode?>>
-            <input type=hidden name=action value=submit>
-    </td>
-  </tr>
-  <tr>
-    <td style=text-align:center;>
-            <input type=submit value="Save Changes">
-            <input type=submit value="Finished" OnClick=window.close(this);>
+    <td class=box>
+      <?php
+          /*
+           * browse the list of modules and print the name, the first
+           * available timestamp, the filter and the description. modules
+           * that are currently shown will have the box checked and a
+           * different color.
+           */
+          for ($i = 0; $i < count($secmods); $i++) {
+	      $cl = "module_normal"; 
+              if (strstr($secfile, $secmods[$i]))
+		  $cl = "module_selected"; 
+              print "<table class=$cl style=\"border:1px dashed; width:100%;\">\n";
+	      print "<tr><td colspan=2 class=$cl>\n";
+              print "<input name=secmods ";
+              if (strstr($secfile, $secmods[$i]))
+                  print " checked ";
+              print "type=checkbox value=$secmods[$i]>";
+              print "$secmods[$i]";
+              print "</td></tr>\n";
+              print "<tr><td class=$cl>\n";
+              print "Description goes here</td>\n";
+              print "<td class=$cl>\n";
+              print "Online since: <br>\n";
+              $st = $node->modinfo[$secmods[$i]]['stime'];
+              $timestr = gmstrftime("%a %b %d %T %Y", $st);
+              print "<i>$timestr</i><br>\n";
+              print "Running filter: <br>\n";
+              $fl = $node->modinfo[$secmods[$i]]['filter'];
+              $fl = urldecode($fl);
+              print "<i>'$fl'</i>";
+              print "</td></tr>\n";
+              print "</table>\n";
+          }
+      ?>
+
     </td>
   </tr>
 </table>
 </form>
 </body>
-
+</html>

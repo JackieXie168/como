@@ -73,6 +73,7 @@
 		$modargs = $modargs . "url=generic_query.php&";
 		$modargs = $modargs . "urlargs=stime=$stime&";
 		$modargs = $modargs . "urlargs=etime=$etime&";
+		$modargs = $modargs . "urlargs=interval=$interval&";
 		$modargs = $modargs . "urlargs=module=tuple&";
 		$modargs = $modargs . "urlargs=source=tuple&";
 	      }
