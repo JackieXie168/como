@@ -1,3 +1,13 @@
+<?php
+    /*  Create a cookie and initialize to all fields visible  */
+    if (!(isset($_COOKIE['alert'])))
+	setcookie("alert", "block");
+    if (!(isset($_COOKIE['topdest'])))
+	setcookie("topdest", "block");
+    if (!(isset($_COOKIE['topports'])))
+	setcookie("topports", "block");
+
+?>
 <!--  $Id$  -->
 
 <?php
@@ -21,11 +31,67 @@
     /*
     * GET input variables
     */
-    $special = "ports";
     include("include/getinputvars.php.inc");
+$test = "block";
 ?>
 
 <body>
+<script type="text/javascript">
+    <!--
+window.onload = function() {
+    initializeMenu("alertMenu", "alertTrig", "alert");
+    initializeMenu("topdestMenu", "topdestTrig", "topdest");
+    initializeMenu("topportsMenu", "topportsTrig", "topports");
+}
+    if (!document.getElementById)
+	document.getElementById = function() { return null; }
+
+function initializeMenu(menuId, triggerId, module) {
+    var menu = document.getElementById(menuId);
+    var trigger = document.getElementById(triggerId);
+    var state = readCookie(module);
+    menu.style.display = state; 
+    var display = menu.style.display;
+    menu.parentNode.style.backgroundImage =
+            (display == "block") ? "url(images/plus.gif)" : 
+                                   "url(images/minus.gif)";
+
+    trigger.onclick = function() {
+        var display = menu.style.display;
+        this.parentNode.style.backgroundImage = 
+        (display == "block") ? "url(images/minus.gif)" : "url(images/plus.gif)";
+        menu.style.display = (display == "block") ? "none" : "block";
+	/*document.cookie = module + "=" + display; */
+	var opposite = (display=="block") ? "none" : "block";
+	document.cookie = module+"="+opposite;
+        return false;
+    }
+    function readCookie(name) {
+	var nameEQ = name + "=";
+	var ca = document.cookie.split(';');
+	for(var i=0;i < ca.length;i++) {
+	    var c = ca[i];
+	    while (c.charAt(0)==' ') c = c.substring(1,c.length);
+		if (c.indexOf(nameEQ) == 0) 
+                    return c.substring(nameEQ.length,c.length);
+	}
+	return null;
+    }
+}
+    //-->
+</script>
+<style>
+    .menubar {
+        background : url(images/plus.gif) no-repeat 0em 0.3em; 
+        background-color : #EEE;
+        text-align : left;
+    }
+    .menu {
+    }
+    .trig {
+        padding : 10px ;
+    }
+</style>
 <table class=fence border=0 cellpadding=0 cellspacing=0>
   <tr>
     <td colspan=2>
@@ -55,6 +121,7 @@
 	   * 
 	   */
 
+
           $sec_array = $node -> GetConfigModules 
                                 ($comonode, $NODEDB, "secondary");
           $interval=$etime-$stime;
@@ -83,6 +150,12 @@
 		$modargs = $modargs . "source=tuple&";
 		$modargs = $modargs . "interval=$interval&";
 	      }
+
+              print "<div class=menubar>";
+	      print "<a href=# id=$sec_array[$i]Trig class=trig>";
+              print "$sec_array[$i]</a>";
+
+              print "<div id=$sec_array[$i]Menu class=menu>";
 	      print "<iframe width=100% frameborder=0 ";
 	      print "src=generic_query.php?comonode=$comonode&";
 	      print "module={$sec_array[$i]}&format=html&";
@@ -91,7 +164,9 @@
 	      print "urlargs=comonode=$comonode&";
 #	      print "urlargs=module=$module&";
 	      print "urlargs=filter={$node->modinfo[$sec_array[$i]]['filter']}>";
-	      print "</iframe>\n";
+	      print "</iframe>";
+              print "</div>";
+              print "</div>\n";
 	  }
 #	
 #          print "<iframe width=100% frameborder=0 ";
