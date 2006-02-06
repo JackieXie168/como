@@ -30,14 +30,14 @@ $RESOLUTION = 200;
  * relative to apache document root. apache needs to have write
  * access to it. 
  */
-$RESULTS = "./results"; 
+$RESULTS = "results"; 
 
 /* 
  * directory with the node lists. the path is relative to  
  * document root and needs to be readable from apache. 
  * look into db/README for details. 
  */
-$NODEDB = "./db"; 
+$NODEDB = "db"; 
 
 /* gnuplot command -- check that this is the correct path */
 $GNUPLOT = "/usr/bin/gnuplot"; 
@@ -49,7 +49,7 @@ $CONVERT = "/usr/bin/convert -density 600x600 -resize 600x450";
  *  Error report values are defined on php.net
  *  Set to 'E_ALL' for debugging or '0' for none
  */
-error_reporting(E_ALL);
+error_reporting(0);
 
 /* select if using Flash or not */
 $browser = $_SERVER['HTTP_USER_AGENT']; 
@@ -60,7 +60,7 @@ if (stristr($browser, "msie")) {
 }
 
 /* Customize your logo here */
-$MYLOGO = "./images/intel.gif";
+$MYLOGO = "images/intel.gif";
 
 /* Use file caching 
  * Some pages will have the opportunity to write data to files.
