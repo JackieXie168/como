@@ -41,20 +41,30 @@
     	include("include/footer.php.inc");
     	exit;
         } else {
-     
-    	if (!(file_exists("$NODEDB/$nodefile"))) {
-    	    if (!($fh = fopen("$NODEDB/$nodefile", "w"))){
-    		print "Unable to open file $NODEDB/$nodefile";
-    		exit;
-    	    }
+	  if (!file_exists($NODEDB)) {
+	    /*  Attempt to create the db directory  */
+	    if (!(system ("mkdir $ABSROOT/$NODEDB"))){
+	      print "Directory $NODEDB, as specified in comolive.conf, ";
+	      print "is not writable by webserver<br>";
+	      print "Please create this directory and make ";
+	      print "it writable by the webserver<br><br>";
+	      print "$ABSROOT/$NODEDB";
+	      exit;
+	    }
+	  }
+	  if (!(file_exists("$NODEDB/$nodefile"))) {
+	    if (!($fh = fopen("$NODEDB/$nodefile", "w"))){
+	      print "Unable to open file $NODEDB/$nodefile<br>";
+	      exit;
+	    }
     
-    	   $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;\n";
+	    $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;\n";
     	    if (fwrite ($fh, $tofile) === FALSE){
     		print "$NODEDB/$nodefile not writable";
     		exit;
     	    }
     	    fclose($fh);
-    	} else {
+	  } else {
     	    $fh = fopen("$NODEDB/$nodefile", "a");
 
     	    $tmp = $node -> nodename . ";;" ;
@@ -64,16 +74,16 @@
     	    $tmp = $tmp . $node -> comment. "\n" ;
     	    $tofile = $tmp;
     	    if (fwrite ($fh, $tofile) === FALSE) {
-    		print "Unable to write to file $nodefile<br>";
-    		exit;
+	      print "Unable to write to file $nodefile<br>";
+	      exit;
     	    } else {
-    		header("Location: index.php");
+	      fclose($fh);
+	      header("Location: index.php");
     	    }
-    	    fclose($fh);
-            }
+	  }
         } 
-    }
-    if ($action == "delete"){
+      }
+      if ($action == "delete"){
         $datafile = file ("$NODEDB/$nodefile");
         $tofile = "";
         for ($i=0;$i<count($datafile);$i++){
@@ -84,13 +94,13 @@
         }
 	$fh = fopen("$NODEDB/$nodefile", "w+");
         if (fwrite ($fh, $tofile) === FALSE) {
-            print "Unable to write to file $nodefile<br>";
-	    exit;
+	  print "Unable to write to file $nodefile<br>";
+	  exit;
 	} else {
-	    header("Location: index.php");
+	  fclose($fh);
+	  header("Location: index.php");
 	}
-	fclose($fh);
-    }
+      }
     ?>
 
   </object>
