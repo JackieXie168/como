@@ -422,6 +422,8 @@ module_t *
 load_module(module_t *mdl, int idx)
 {
     callbacks_t *cb;
+    int narg, i;
+    char **args_backup;
 
     if (idx == map.module_max) 
 	panicx("too many modules, cannot load %s", mdl->name);
@@ -443,12 +445,60 @@ load_module(module_t *mdl, int idx)
     if (mdl->msize)
 	mdl->mem = safe_calloc(1, mdl->msize);
 
+    if (mdl->args) {
+        /* Count how many args we have for this module */
+        for (narg = 0; mdl->args[narg] != NULL; narg++);
+        /* Allocate memory for the args backup array */
+        args_backup = safe_calloc(narg, sizeof(char *));
+        /* Backup the module's args */
+        for (i = 0; i < narg; i++)
+            safe_dup(&args_backup[i], mdl->args[i]);
+        /* Expand some args reading from a file, if needed */
+        for (i = 0; i < narg; i++) {
+	    if (mdl->args[i][0] == '$') {
+		FILE *auxfp;
+		char line[512];
+
+		/* The arg must be read from an auxiliar file */
+		    
+		/* Open the file */
+		if((auxfp = fopen(&mdl->args[i][1], "r")) == NULL)
+		    panic("Error opening auxiliar file: %s\n",
+                          &mdl->args[i][1]);
+		    
+		/* Dump its content into a string */
+		mdl->args[i] = safe_calloc(1, sizeof(char));
+		strncpy(mdl->args[i], "\0", 1);
+		while(fgets(line, sizeof(line), auxfp)) {
+		    int sz; 
+		    sz = strlen(mdl->args[i]) + strlen(line) + 1; 
+		    mdl->args[i] = (char *)safe_realloc(mdl->args[i], sz); 
+		    strncat(mdl->args[i], line, strlen(line));
+		}
+		/* Close the file */
+		fclose(auxfp);
+            }
+        }
+    }
+    
     /* initialize module */
     mdl->flush_ivl = cb->init == NULL? 
 	DEFAULT_CAPTURE_IVL: cb->init(mdl->mem, mdl->msize, mdl->args);
     if (mdl->flush_ivl == 0) 
 	panicx("could not initialize %s\n", mdl->name); 
 
+    /* Restore the module's args and free the backup array */
+    if (mdl->args) {
+        for (i = 0; i < narg; i++) {
+            free(mdl->args[i]);
+            mdl->args[i] = safe_calloc(1, sizeof(char *));
+            safe_dup(&mdl->args[i], args_backup[i]);
+        }
+        for (i = 0; i < narg; i++)
+            free(args_backup[i]);
+        free(args_backup);
+    }
+    
     return mdl;
 }
 
@@ -900,29 +950,7 @@ do_config(int argc, char *argv[])
     case TOK_ARGS:
 	mdl->args = safe_calloc(argc, sizeof(char *));
 	for (i = 1; i < argc; i++) {
-	    if (argv[i][0] == '$') {
-		FILE *auxfp;
-		char line[512];
-
-		/* The arg must be read from an auxiliar file */
-		    
-		/* Open the file */
-		if((auxfp = fopen(&argv[i][1], "r")) == NULL)
-		    panic("Error opening auxiliar file: %s\n", &argv[i][1]);
-		    
-		/* Dump its content into a string */
-		mdl->args[i-1] = safe_calloc(1, sizeof(char));
-		strncpy(mdl->args[i-1], "\0", 1);
-		while(fgets(line, sizeof(line), auxfp)) {
-		    int sz; 
-		    sz = strlen(mdl->args[i-1]) + strlen(line) + 1; 
-		    mdl->args[i-1] = (char *)safe_realloc(mdl->args[i-1], sz); 
-		    strncat(mdl->args[i-1], line, strlen(line));
-		}
-		/* Close the file */
-		fclose(auxfp);
-	    } else 
-		safe_dup(&(mdl->args[i-1]), argv[i]);
+	    safe_dup(&(mdl->args[i-1]), argv[i]);
 	}
 
 	/* 

@@ -40,13 +40,14 @@
 #include <pcre.h>
 #else
 #include <pcre/pcre.h>       /* pcre library headers (Fedora Core location)
-                                The location may be <pcre.h> in other 
+                                The location may be <pcre.h> in other
                                 Linux distributions */
 #endif
 
 #include "stdpkt.h" /* pkt_t */
 
 #define MAX_RULES       2000
+#define MAX_OPTS        25  /* Maximum number of option sets per rule header */
 #define MAX_PORT        65535
 #define MAX_STR_SIZE    255
 
@@ -293,7 +294,8 @@ struct _ruleinfo {
     portset_t           src_ports;
     portset_t	        dst_ports;
     fpnode_t            *funcs;     /* list of pointers to check functions */
-    opt_t               *opts;      /* list of rule options */
+    unsigned int        nopts;      /* number of option sets */
+    opt_t               *opts_array[MAX_OPTS]; /* array of option sets */
 };
 
 union _varvalue {
@@ -338,4 +340,4 @@ unsigned int check_tcp_src_port(ruleinfo_t *, pkt_t *);
 unsigned int check_tcp_dst_port(ruleinfo_t *, pkt_t *);
 unsigned int check_udp_src_port(ruleinfo_t *, pkt_t *);
 unsigned int check_udp_dst_port(ruleinfo_t *, pkt_t *);
-unsigned int check_options(ruleinfo_t *, pkt_t *, opt_t **);
+unsigned int check_options(ruleinfo_t *, pkt_t *, int *);

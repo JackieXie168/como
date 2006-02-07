@@ -129,10 +129,13 @@
 
  /* Structure for the data that CoMo will save on disk */
 struct _pktinfo {
-    ruleinfo_t *rules[MAX_SIMULT_HDRS]; /* pointers to the rule headers
-                                           that matched the packet */
-    opt_t *opt;       /* pointer to the options header
-                         that matched the packet */
+    unsigned int rules[MAX_SIMULT_HDRS]; /* numbers of the rule headers
+                                            that matched the packet
+                                            in check() */
+    unsigned int rule;  /* number of the rule header that matched the packet
+                           in action() */
+    unsigned int opt;   /* number of the options header
+                           that matched the packet */
     pkt_t pkt;        /* packet data */
 };
 typedef struct _pktinfo pktinfo_t;
@@ -248,15 +251,17 @@ FLOWDESC {
 /* We save the info that we get from the Snort rules file
  * into these structures */
 unsigned int nrules = 0;        /* number of rules */
+unsigned int nhdrs = 0;         /* number of rule headers */
 unsigned int nrules_read = 0;   /* number of rules read */
-ruleinfo_t *ri = NULL;          /* rules info */
+ruleinfo_t *hdrs_array[MAX_RULES]; /* pointers to each rule header */
+opt_t *opts_array[MAX_OPTS]; /* pointers to each option set */
 varinfo_t *vi[VAR_HASHSIZE];    /* variables info */
 dyn_t *dr[MAX_RULES];           /* dynamic rules info */
 
 #define IP_ADDR_LEN     15      /* strlen("XXX.XXX.XXX.XXX") */
 
 /* Pointers to the rule headers that match with a packet */
-ruleinfo_t *rule_match[MAX_SIMULT_HDRS];
+int rule_match[MAX_SIMULT_HDRS];
 
 /* Needed to manage the module's private memory region */
 void *prv_mem;
@@ -441,7 +446,7 @@ get_bytes(char *pl, unsigned int nbytes, uint8_t endian)
  *
  */
 uint16_t
-get_ip_option(char *option)
+get_ip_option(unsigned char *option)
 {
     uint16_t ret = 0;
     switch(*option) {
@@ -483,7 +488,7 @@ get_ip_options(pkt_t *pkt)
 {
     int i = 0;
     uint16_t ipopt = 0, ipopts = 0;
-    char *options = IP(options);
+    unsigned char *options = (unsigned char *)IP(options);
     
     while (i < (((IP(vhl) & 0x0F) << 2) - 20)) {
         ipopt = get_ip_option(options + i);
@@ -511,15 +516,15 @@ get_ip_options(pkt_t *pkt)
  * Given a packet and the rule header that matched against it,
  * go through all the options headers and determine which one
  * matches the packet (if any).
- * A pointer to the matching option header (or NULL if there is no match)
+ * The number of the matching option header (or -1 if there is no match)
  * is returned through the opt parameter
  * 
  */
 unsigned int
-check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
+check_options(ruleinfo_t *info, pkt_t *pkt, int *opt)
 {
-    opt_t *oaux;
     optnode_t *onode;
+    opt_t *oaux;
     unsigned int ok;
     unsigned int pl_start = 0, pl_size = 0, last_found = 0, layer4jmp = 0;
     char *pl;
@@ -530,10 +535,13 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
 #endif
     int byte_value;
     uint8_t ipopts;
+    unsigned int i;
     
-    for (oaux = info->opts; oaux; oaux = oaux->next) {
+    for (i = 0; i < info->nopts; i++) {
         ok = 1;
-        for (onode = oaux->options; onode && ok; onode = onode->next) {
+        oaux = info->opts_array[i];
+        for (onode = oaux->options; onode && ok;
+             onode = onode->next) {
             if (onode->keyword == SNTOK_CONTENT ||
                 onode->keyword == SNTOK_PCRE ||
                 onode->keyword == SNTOK_ISDATAAT ||
@@ -912,11 +920,11 @@ check_options(ruleinfo_t *info, pkt_t *pkt, opt_t **opt)
             }
         }
         if (ok) {
-            *opt = oaux;
+            *opt = i;
             return 1;
         }
     }
-    *opt = NULL;
+    *opt = -1;
     return 0;
 }
     
@@ -986,23 +994,23 @@ init(void *mem, size_t msize, char *args[])
 static int
 check(pkt_t *pkt)
 {
-    ruleinfo_t *i;
+    unsigned int i;
     unsigned int ok;
     fpnode_t *fp;
     unsigned int idx = 0, found = 0;
     
     /* Initialize the rule_match array */
     for(idx = 0; idx < MAX_SIMULT_HDRS; idx++)
-        rule_match[idx] = NULL;
+        rule_match[idx] = -1;
     
     /* See if the incoming packet matches any of the
      * rules' headers */    
     idx = 0;
-    for (i = ri; i; i = i->next) {
+    for (i = 0; i < nhdrs; i++) {
         ok = 1;
         /* Go through the list of pointers to check functions */
-        for (fp = i->funcs; fp != NULL && ok; fp = fp->next)
-            ok &= fp->function(i, pkt);
+        for (fp = hdrs_array[i]->funcs; fp != NULL && ok; fp = fp->next)
+            ok &= fp->function(hdrs_array[i], pkt);
         if (ok) {
             /* Save which rule headers matched the packet */
             found = 1;
@@ -1098,8 +1106,9 @@ action(void *efh, __unused timestamp_t current_time, __unused int count)
     ruleinfo_t *i;
     pkt_t *pkt;
     dyn_t *d;
+    int opt_number;
     opt_t *opt;
-    unsigned int active, idx;
+    unsigned int active, idx, j;
 
     if (efh == NULL) 
 	return ACT_GO;
@@ -1110,18 +1119,19 @@ action(void *efh, __unused timestamp_t current_time, __unused int count)
     pkt = &(ep->pkt);
     
     idx = 0;
-    i = ep->rules[idx];
+    i = hdrs_array[ep->rules[idx]];
     while (i && idx < MAX_SIMULT_HDRS) {
         /* First check whether the rule is active */
         active = 0;
-        for (opt = i->opts; opt && !active; opt = opt->next)
-            active |= opt->active;
+        for (j = 0; j < i->nopts; j++)
+            active |= i->opts_array[j]->active;
         if (!active) return ACT_DISCARD;
     
         /* Check the rule options against the packet
          * to decide what to do with it (discard or store)
          */
-        if (check_options(i, pkt, &opt)) {
+        if (check_options(i, pkt, &opt_number)) {
+            opt = i->opts_array[opt_number];
             switch (opt->action) {
             case SNTOK_PASS:
                 return ACT_DISCARD;
@@ -1138,12 +1148,13 @@ action(void *efh, __unused timestamp_t current_time, __unused int count)
                 if (opt->curr_count == 0) opt->active = 0;
                 break;
             }        
-            ep->opt = opt;
+            ep->rule = ep->rules[idx];
+            ep->opt = opt_number;
             return (ACT_STORE | ACT_DISCARD);
         }
 
         idx++;
-        i = ep->rules[idx];
+        i = hdrs_array[ep->rules[idx]];
     }
     
     /* The packet didn't match */
@@ -1356,6 +1367,7 @@ print(char *buf, size_t *len, char * const args[])
     
     pktinfo_t *pktinfo;
     pkt_t *pkt;
+    opt_t *opt;
     static char s[4096];
     char timebuf[TIMEBUF_SIZE];
     struct timeval tv;
@@ -1364,7 +1376,7 @@ print(char *buf, size_t *len, char * const args[])
     unsigned int pl_start;
     
     if (buf == NULL && args != NULL) { 
-	    /* First print callback, process the arguments.
+        /* First print callback, process the arguments.
          * Return a file header if necessary
          */
         for (n = 0; args[n]; n++) {
@@ -1477,17 +1489,18 @@ print(char *buf, size_t *len, char * const args[])
     
     pktinfo = (pktinfo_t *)buf; 
     pkt = &(pktinfo->pkt);
+    opt = hdrs_array[pktinfo->rule]->opts_array[pktinfo->opt];
 
     ts = pkt->ts;
     t = (time_t) TS2SEC(ts);
-    if (pktinfo->opt->action == SNTOK_ALERT)
+    if (opt->action == SNTOK_ALERT)
         nalerts++;
     
     /* If we selected a Snort rule in the query, make sure that
      * the packet to output matches that rule. If it doesn't, return an
      * empty string
      */
-    if (rule_found && pktinfo->opt->rule_id != rule) {
+    if (rule_found && opt->rule_id != rule) {
         *len = 0;
         return s;
     }
@@ -1505,12 +1518,12 @@ print(char *buf, size_t *len, char * const args[])
     } else if (fmt == FALERTFMT) { /* Fast alert format */
         /* if the packet did not match against an alert rule,
          * do not print it (return an empty string) */
-        if (pktinfo->opt->action != SNTOK_ALERT) {
+        if (opt->action != SNTOK_ALERT) {
             *len = 0;
             return s;
         }
         /* create the alert string and return it */
-        create_alert_str(&tv, pkt, pktinfo->opt, s);
+        create_alert_str(&tv, pkt, opt, s);
         *len = strlen(s);
         return s;
     } else if (fmt == PCAPLOGFMT) { /* pcap packet logging */
@@ -1528,7 +1541,7 @@ print(char *buf, size_t *len, char * const args[])
         *len = sizeof(*pcaphdr) + pkt->caplen;
         return (char *)pcaphdr;
     } else if (fmt == UALERTFMT) { /* Unified alert format */
-        if (pktinfo->opt->action != SNTOK_ALERT) {
+        if (opt->action != SNTOK_ALERT) {
             *len = 0;
             return s;
         }
@@ -1538,10 +1551,10 @@ print(char *buf, size_t *len, char * const args[])
         uat = (UnifiedAlert_t *)prv_alloc(sizeof(*uat));
         uat->event.sig_generator = 1; /* All events are generated
                                        * by Snort rules */
-        uat->event.sig_id = pktinfo->opt->sid;
-        uat->event.sig_rev = pktinfo->opt->rev;
+        uat->event.sig_id = opt->sid;
+        uat->event.sig_rev = opt->rev;
         uat->event.classification = 0; // XXX ???
-        uat->event.priority = pktinfo->opt->prio;
+        uat->event.priority = opt->prio;
         uat->event.event_id = event_id;
         uat->event.event_reference = 0; /* no tagged packets or
                                          * other event references */
@@ -1582,10 +1595,10 @@ print(char *buf, size_t *len, char * const args[])
         ult = (UnifiedLog_t *)prv_alloc(sizeof(*ult) + pkt->caplen);
         ult->event.sig_generator = 1; /* All events are generated
                                          by Snort rules */
-        ult->event.sig_id = pktinfo->opt->sid;
-        ult->event.sig_rev = pktinfo->opt->rev;
+        ult->event.sig_id = opt->sid;
+        ult->event.sig_rev = opt->rev;
         ult->event.classification = 0; // XXX ???
-        ult->event.priority = pktinfo->opt->prio;
+        ult->event.priority = opt->prio;
         ult->event.event_id = event_id;
         /* no tagged packets or other event references,
          * so the event reference id is the same as the
@@ -1612,14 +1625,14 @@ print(char *buf, size_t *len, char * const args[])
         *len = sprintf(s, "%s", timebuf);
 
         /* Print info about the rule that matched the packet */
-        *len += sprintf(s + *len, "msg:%s", pktinfo->opt->msg); 
-        for (ref = pktinfo->opt->refs; ref; ref = ref->next)
+        *len += sprintf(s + *len, "msg:%s", opt->msg); 
+        for (ref = opt->refs; ref; ref = ref->next)
             *len += sprintf(s + *len, " ref:%s,%s", ref->systemid, ref->id);
         *len += sprintf(s + *len, "\n");
         *len += sprintf(s + *len, "sid:%d, rev:%d\n",
-                        pktinfo->opt->sid, pktinfo->opt->rev);
+                        opt->sid, opt->rev);
         *len += sprintf(s + *len, "classtype:%s, prio:%d\n",
-                        pktinfo->opt->ctype, pktinfo->opt->prio);
+                        opt->ctype, opt->prio);
     
         /* Print IP addresses and port numbers (if any) */
         addr = N32(IPS(src_ip)); 

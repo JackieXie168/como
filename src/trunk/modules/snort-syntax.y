@@ -54,14 +54,16 @@
 #define YYMALLOC prv_alloc
 #define YYFREE prv_free
 
-#define YYERROR_VERBOSE
+#define yserror_VERBOSE
 
 /* These variables are declared in modules/snort.c
  * We fill the info from here while parsing the Snort rules file
  */
 extern unsigned int nrules;
+extern unsigned int nhdrs;
 extern unsigned int nrules_read;
-extern ruleinfo_t *ri;
+extern ruleinfo_t *hdrs_array[];
+extern opt_t *opts_array[];
 extern varinfo_t *vi[];
 extern dyn_t *dr[];
 
@@ -335,10 +337,10 @@ translate_kw(char *string)
  *
  */
 static uint 
-hextochar(unsigned char *string)
+hextochar(char *string)
 {
     uint i = 0, j = 0;
-    unsigned char c[4] = {'0', 'x', '0', '0'};
+    char c[4] = {'0', 'x', '0', '0'};
 
     while (i < strlen(string)) {
         if (string[i] == '|') {
@@ -347,7 +349,7 @@ hextochar(unsigned char *string)
                 if (string[i] == ' ') i++;
                 else {
                     strncpy(&c[2], &string[i], 2);
-                    string[j] = (unsigned char)strtol(c, NULL, 16);
+                    string[j] = strtol(c, NULL, 16);
                     i += 2; j++;
                 }
             }
@@ -570,10 +572,10 @@ add_rule(uint8_t action, unsigned int proto,
          ip_t src_ips, portset_t src_ports, ip_t dst_ips, portset_t dst_ports,
          optnode_t *opts)
 {
-    ruleinfo_t *info, *ricur, *riprev;
+    ruleinfo_t *info;
     unsigned int header_found = 0;
     optnode_t *optnode, *onode_cand, *onode_cand_2;
-    opt_t *opt, *oaux;
+    opt_t *opt;
     fpnode_t **fp;
 
     unsigned int has_actv = 0, has_actvby = 0, has_count = 0, has_sid = 0;
@@ -1404,31 +1406,25 @@ add_rule(uint8_t action, unsigned int proto,
     
     /* Add the new rule at the end of the list */
     if (rule_is_valid) {
-        if (!ri) {
-            ri = info;
-            opt->rule = ri;
-            ri->opts = opt;
-        } else {
-            ricur = ri;
-            riprev = NULL;
-            do {
-                if (compare_rule_header(ricur, info)) {
-                    header_found = 1;
-                    /* Add the options to the end of the options list */
-                    for(oaux = ricur->opts; oaux->next; oaux = oaux->next);
-                    opt->rule = ricur;
-                    oaux->next = opt;
-                }
-                riprev = ricur;
-                ricur = ricur->next;
-            } while (ricur && !header_found);
-        
-            if (!header_found) {
-                opt->rule = info;
-                info->opts = opt;
-                riprev->next = info;
+        unsigned int i = 0;
+        while (i < nhdrs && !header_found) {
+            if (compare_rule_header(hdrs_array[i], info)) {
+                header_found = 1;
+                /* Add the option set to the end of the array */
+                opt->rule = hdrs_array[i];
+                info->opts_array[info->nopts] = opt;
+                info->nopts++;
             }
-        }    
+            i++;
+        }
+    
+        if (!header_found) {
+            hdrs_array[nhdrs] = info;
+            opt->rule = info;
+            info->opts_array[0] = opt;
+            info->nopts = 1;
+            nhdrs++;
+        }
         nrules++;
     } else
         // XXX We should free more structures here
