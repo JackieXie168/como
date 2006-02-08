@@ -10,7 +10,7 @@
 
     /*  Don't allow entrace without customization priviledge  */
     if (!$ALLOWCUSTOMIZE) {
-        header("Location: index.php")
+        header("Location: index.php");
         exit;
     }
 
