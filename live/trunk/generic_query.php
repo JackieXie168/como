@@ -48,10 +48,11 @@
         $http_query_string = $http_query_string . $tmp_filter[1] ;
         $http_query_string = $http_query_string . " and dst ";
         $http_query_string = $http_query_string . $daip; 
+    } else {
+	$daip="none";
     }
-
     $filename=$comonode . "_" . $module . "_" . $stime . "_" . 
-	      $etime . ".html";
+	      $etime . "_" . $daip . ".html";
 
     /*  File caching check  */
     if ((file_exists("$RESULTS/$filename")) && ($USECACHE)) {
