@@ -8,7 +8,22 @@
     $includebanner=1;
     include("include/header.php.inc");
     include("comolive.conf");
-    $nodefile = "$NODEDB/nodes.lst";
+        /*  get the groups */
+    $dadir = $NODEDB;
+    $handle=opendir("$dadir");
+    $allgroups=array();
+    $x=0;
+    while (false!==($filez= readdir($handle))) {
+        if ($filez!= "." && $filez!= ".." && ereg (".*\.lst$", $filez)) {
+	    if (file_exists("$NODEDB/$filez")) {
+	        $desc = file ("$NODEDB/$filez");
+	        $allgroups[$x][0] = $filez;
+	        $allgroups[$x][1] = $desc[0];
+		$x++;
+	   }
+        }
+    }
+
 ?>
 <script>
     function clearText(thefield){
@@ -29,59 +44,94 @@
 	vertical-align:top
 	padding:10px;
     }
+    .grouphead {
+        font-size : 20px;
+        font-weight : bold;
+        background-color : #EEE;
+    }
+    .grouplink{
+        font-size : 10px;
+        display : inline;
+    }
 
 </style>
 <body>
 <table class=fence>
   <tr>
     <td class=leftmain>
-      <h2>CoMo Nodes</h2>
-    <?php
-        if (file_exists($nodefile)) {
-	    $x = file ($nodefile);
-	    $entrycount = count($x);
-        }
-       
-        if ((!file_exists($nodefile)) || ($entrycount < 2)) {
-            print "no como nodes saved";
+
+<?php
+$numgroup = count($allgroups);
+if ($numgroup < 1) {
+    print "<div class=grouphead>CoMo Nodes</div>";
+    print "no como nodes saved";
+} else { 
+    for ($i=0;$i<count($allgroups);$i++) {
+	$nodefile = "$NODEDB/{$allgroups[$i][0]}";
+        $numlines = count(file ("$nodefile"));
+        if ($numlines <= 2) {
+	    print "<div class=grouphead>{$allgroups[$i][1]}";
+	    print "<a href=managenode.php?action=groupdel";
+	    print "&group={$allgroups[$i][0]}";
+	    print "&comonode=blank:44444>";
+            if ($ALLOWCUSTOMIZE) {
+		print "<div class=grouplink>Remove</a>";
+		print "</div>";
+            }
+
+            print "</div>";
+	    print "no como nodes saved";
+         
         } else {
-            if ($fp = fopen ($nodefile, "r")) {
+	    if ($fp = fopen ("$nodefile", "r")) {
 		print "<table cellpadding=0 cellspacing=2>";
 		while (!feof($fp)) {
 		    $line = fgets($fp);
-		    if ($line != ""){
+		    if ($line == $allgroups[$i][1]) {
+			print "<div class=grouphead>{$allgroups[$i][1]}";
+			print "<a href=managenode.php?action=groupdel";
+			print "&group={$allgroups[$i][0]}";
+			print "&comonode=blank:44444>";
+			if ($ALLOWCUSTOMIZE) {
+			    print "<div class=grouplink>Remove</a>";
+			    print "</div>";
+                        }
+                        print "</div>";
+ 
+                    } 
+		    if (($line != "") && ($line != $allgroups[$i][1])) {
 			list($name, $comonode, $loc, $iface, $comment) 
 			    = split(';;', $line);
                         list ($host, $port) = split (":", $comonode);
 			print "<tr>";
 			print "<td width=200 valign=top>";
-		    if ($name != "Name") {
-			print "<a href=dashboard.php?comonode=$comonode>";
-                        print "$name</a>";
-		    } else {
-			print "$name";
-                    }
-		    print "</td>";
-		    print "<td width=100 valign=top>$port</td>";
-		    print "<td width=150 valign=top>$loc</td>";
-		    print "<td width=150 valign=top>$iface</td>";
-		    print "<td width=500 valign=top>$comment</td>";
-		    if ($name != "Name" && $ALLOWCUSTOMIZE) {
-			print "<td valign=top align=right>";
-                        print "<a href=managenode.php?action=delete";
-                        print "&comonode=$comonode>Remove</a></td>";
-                    } 
-		    print "</tr>";
-                   
-            }
-        }
+			if ($name != "Name") {
+			    print "<a href=dashboard.php?comonode=$comonode>";
+			    print "$name</a>";
+			} else {
+			    print "$name";
+			}
+			print "</td>";
+			print "<td width=100 valign=top>$port</td>";
+			print "<td width=150 valign=top>$loc</td>";
+			print "<td width=150 valign=top>$iface</td>";
+			print "<td width=500 valign=top>$comment</td>";
+			if ($name != "Name" && $ALLOWCUSTOMIZE) {
+			    print "<td valign=top align=right>";
+			    print "<a href=managenode.php?action=delete";
+			    print "&comonode=$comonode";
+                            print "&group={$allgroups[$i][0]}>";
+                            print "Remove</a></td>";
+			} 
+			print "</tr>";
+		    }
+		}
+	    }
         print "</table>";
 
-            } else {
-                print "unable to open the file $nodefile<br>";
-            }
         }
-
+    }
+}
     ?>
     </td>
     <td class=nodeselect valign=top>
@@ -95,7 +145,7 @@
     <?  if ($ALLOWCUSTOMIZE) { ?>
       <br>
       Add a new CoMo node
-      <form align=middle action=managenode.php method=get>
+      <form align=middle action=nodeview.php method=get>
 	<input type=text name=comonode size=21 value="comonode:44444"
          onFocus=clearText(this);>
 	<input type=image src=images/go.jpg >
