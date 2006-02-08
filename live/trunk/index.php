@@ -45,7 +45,7 @@
 	padding:10px;
     }
     .grouphead {
-        font-size : 20px;
+        font-size : 16px;
         font-weight : bold;
         background-color : #EEE;
     }
