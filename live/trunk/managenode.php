@@ -7,15 +7,23 @@
      */
     require_once("comolive.conf");
     require_once("class/node.class.php");
-    $nodefile = "nodes.lst";
+
+
+    if (isset ($_GET['group']))
+        $group = $_GET['group'];
+    else
+        $group = "";
+
+    $nodefile = "$group";
 
     /*  get the node hostname and port number */
     if (isset($_GET['comonode'])){
-        $comonode = $_GET['comonode'];
+	$comonode = $_GET['comonode'];
     }else{
-        print "This file requires the comonode=host:port arg passed to it";
-        exit;
+	print "This file requires the comonode=host:port arg passed to it";
+	exit;
     }
+
     if (isset ($_GET['action']))
         $action = $_GET['action'];
     else
@@ -87,9 +95,13 @@
         $datafile = file ("$NODEDB/$nodefile");
         $tofile = "";
         for ($i=0;$i<count($datafile);$i++){
-            $val = explode (";;", $datafile[$i]);
-            if ($comonode != $val[1]){
+            if ($i==0) {
     	        $tofile = $tofile . $datafile[$i];
+            } else {
+		$val = explode (";;", $datafile[$i]);
+		if ($comonode != $val[1]){
+		    $tofile = $tofile . $datafile[$i];
+		}
             }
         }
 	$fh = fopen("$NODEDB/$nodefile", "w+");
@@ -100,6 +112,10 @@
 	  fclose($fh);
 	  header("Location: index.php");
 	}
+      }
+      if ($action == "groupdel"){
+          system ("rm -rf $NODEDB/$group");
+	  header("Location: index.php");
       }
     ?>
 
