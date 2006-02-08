@@ -4,8 +4,15 @@
  *  This file will require the comonode=host:port arg passed to it  
  *  <!-- $Id$  -->
  */
-  require_once("comolive.conf");
+    require_once("comolive.conf");
+    /*  Don't allow entrace without customization priviledge  */
+    if (!$ALLOWCUSTOMIZE) {
+        header("Location: index.php");
+        exit;
+    }
+
   /*  get the node hostname and port number */
+
     if (isset($_GET['comonode'])){
         $comonode = $_GET['comonode'];
     }else{

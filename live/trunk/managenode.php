@@ -8,6 +8,11 @@
     require_once("comolive.conf");
     require_once("class/node.class.php");
 
+    /*  Don't allow entrace without customization priviledge  */
+    if (!$ALLOWCUSTOMIZE) {
+        header("Location: index.php")
+        exit;
+    }
 
     if (isset ($_GET['group']))
         $group = $_GET['group'];
