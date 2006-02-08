@@ -89,10 +89,10 @@ if ($numgroup < 1) {
 		    $line = fgets($fp);
 		    if ($line == $allgroups[$i][1]) {
 			print "<div class=grouphead>{$allgroups[$i][1]}";
+			if ($ALLOWCUSTOMIZE) {
 			print "<a href=managenode.php?action=groupdel";
 			print "&group={$allgroups[$i][0]}";
 			print "&comonode=blank:44444>";
-			if ($ALLOWCUSTOMIZE) {
 			    print "<div class=grouplink>Remove</a>";
 			    print "</div>";
                         }
