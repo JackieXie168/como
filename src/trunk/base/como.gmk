@@ -98,6 +98,8 @@ ifdef SUPPORT_NETFLOW_V5
 	LIBDIRS += /usr/local/netflow/lib
 endif
 
+SNIFFERS += sflow
+
 # add sniffers  
 x=$(SNIFFERS:%=$(SNIFFDIR)/sniffer-%.c)
 x += $(SNIFFDIR)/sniffers.c
