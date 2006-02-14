@@ -214,7 +214,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
         pcap_hdr_t ph; 
 	int left = info->nbytes - (base - info->buf); 
-	bcopy(base, &ph, sizeof(pcap_hdr_t));
 
         /* XXX We use bcopy here because the base pointer may not be word
          * aligned. This is an issue on some platforms like the Stargate */
