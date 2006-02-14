@@ -632,7 +632,9 @@ sniffer_stop(source_t * src)
 	// ftio_close(&info->ftio); 
 	close(src->fd); 
     } 
-    free(src->ptr); 
+    free(src->ptr);
+    
+    free(src->output);
 }
 
 
