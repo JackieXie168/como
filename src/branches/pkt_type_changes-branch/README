@@ -1,0 +1,26 @@
+$Id$
+
+CoMo is open source and is released under terms of the BSD License. 
+CoMo has been tested under Linux 2.4, 2.6 and FreeBSD 4.x and 5.x. It 
+also compiles for gcc 2.9.5 and any more recent releases. 
+
+In order to install CoMo follow these steps:
+
+# tar -xvzf como-0.3.tar.gz
+# cd como-0.3
+# make
+
+CoMo requires gmake v3.80 or higher to compile correctly. It is possible to 
+set a few configuration options to build a customized CoMo binary. The 
+options can be found in config_var.default. Rename that file to 
+config_var.local to customize your release. 
+
+Once built the como binary will reside in base/como. An example configuration 
+file can be found in base/example.conf. A man page can be found in 
+man/como.1 (run "nroff -man como.1" to view it formatted properly).
+
+--------------------------------------------------------------------------
+Copyright (c) 2004-2005 Intel Corporation
+All rights reserved.
+
+
