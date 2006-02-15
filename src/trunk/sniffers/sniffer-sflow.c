@@ -682,10 +682,10 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		memset(pkt, 0, sizeof(pkt_t));
 
 		/* point the packet payload to next packet */
-		pkt->payload = info->pktbuf + nbytes;
+		COMO(payload) = info->pktbuf + nbytes;
 
 		/* set the timestamp */
-		pkt->ts = info->last_ts;
+		COMO(ts) = info->last_ts;
 
 		switch (el.tag) {
 		case SFLFLOW_HEADER:
@@ -693,12 +693,12 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * have got a full header, now copy it into pktbuf and set
 		     * cap_len and len properly
 		     */
-		    pkt->caplen = el.flowType.header.header_length;
+		    COMO(caplen) = el.flowType.header.header_length;
 		    
 		    /* CHECKME: should stripped bytes be summed to this */
-		    pkt->len = el.flowType.header.frame_length;
-		    memcpy(pkt->payload,
-			   el.flowType.header.header_bytes, pkt->caplen);
+		    COMO(len) = el.flowType.header.frame_length;
+		    memcpy(COMO(payload),
+			   el.flowType.header.header_bytes, COMO(caplen));
 		    switch (el.flowType.header.header_protocol) {
 		    case SFLHEADER_ETHERNET_ISO8023:
 			/*
@@ -712,18 +712,18 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			 * there's nothing at layer 2, the packet starts with
 			 * ip header
 			 */
-			pkt->type = COMOTYPE_NONE;
-			pkt->l3type = ETHERTYPE_IP;
-			pkt->l3ofs = 0;
+			COMO(type) = COMOTYPE_NONE;
+			COMO(l3type) = ETHERTYPE_IP;
+			COMO(l3ofs) = 0;
 			break;
 		    case SFLHEADER_IPv6:
 			/*
 			 * there's nothing at layer 2, the packet starts with
 			 * ip v6 header
 			 */
-			pkt->type = COMOTYPE_NONE;
-			pkt->l3type = ETHERTYPE_IPV6;
-			pkt->l3ofs = 0;
+			COMO(type) = COMOTYPE_NONE;
+			COMO(l3type) = ETHERTYPE_IPV6;
+			COMO(l3ofs) = 0;
 			break;
 		    default:
 			/*
@@ -739,15 +739,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * SFLSampled_ethernet structure need to copy structure
 		     * fields into pktbuf to make it a valid ethernet header
 		     */
-		    pkt->caplen = sizeof(struct _como_eth);
+		    COMO(caplen) = sizeof(struct _como_eth);
 		    
 		    /*
 		     * CHECKME: eth_len doesn't contain MAC encapsulation
 		     * (does it include ethernet header?)
 		     */
-		    pkt->len = el.flowType.ethernet.eth_len;
-		    memcpy(pkt->payload, el.flowType.ethernet.dst_mac, 6);
-		    memcpy(pkt->payload, el.flowType.ethernet.src_mac, 6);
+		    COMO(len) = el.flowType.ethernet.eth_len;
+		    memcpy(COMO(payload), el.flowType.ethernet.dst_mac, 6);
+		    memcpy(COMO(payload), el.flowType.ethernet.src_mac, 6);
 		    N16(ETH(type)) = htons(el.flowType.ethernet.eth_type);
 		    updateofs(pkt, COMOTYPE_ETH);
 		    break;
@@ -757,15 +757,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * SFLSampled_ipv4 structure need to copy structure fields
 		     * into pktbuf to make it a valid ipv4 header
 		     */
-		    pkt->caplen = sizeof(struct _como_iphdr);
+		    COMO(caplen) = sizeof(struct _como_iphdr);
 		    /*
 		     * CHECKME: We don't know the lower layer, can we assume a
 		     * minimum encapsulation length?
 		     */
-		    pkt->len = el.flowType.ipv4.length;
-		    pkt->type = COMOTYPE_NONE;
-		    pkt->l3type = ETHERTYPE_IP;
-		    pkt->l3ofs = 0;
+		    COMO(len) = el.flowType.ipv4.length;
+		    COMO(type) = COMOTYPE_NONE;
+		    COMO(l3type) = ETHERTYPE_IP;
+		    COMO(l3ofs) = 0;
 		    IP(vhl) = 0x45;	/* version 4, header len 20 bytes */
 		    IP(tos) = (uint8_t) el.flowType.ipv4.tos;
 		    N16(IP(len)) = htons((uint16_t) el.flowType.ipv4.length);
@@ -774,9 +774,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		    N32(IP(dst_ip)) = el.flowType.ipv4.dst_ip.s_addr;
 		    switch (el.flowType.ipv4.protocol) {
 		    case IPPROTO_TCP:
-			pkt->l4ofs = pkt->caplen;
-			pkt->l4type = el.flowType.ipv4.protocol;
-			pkt->caplen += sizeof(struct _como_tcphdr);
+			COMO(l4ofs) = COMO(caplen);
+			COMO(l4type) = el.flowType.ipv4.protocol;
+			COMO(caplen) += sizeof(struct _como_tcphdr);
 			N16(TCP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv4.src_port);
 			N16(TCP(dst_port)) =
@@ -784,9 +784,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			TCP(flags) = el.flowType.ipv4.tcp_flags;
 			break;
 		    case IPPROTO_UDP:
-			pkt->l4ofs = pkt->caplen;
-			pkt->l4type = el.flowType.ipv4.protocol;
-			pkt->caplen += sizeof(struct _como_udphdr);
+			COMO(l4ofs) = COMO(caplen);
+			COMO(l4type) = el.flowType.ipv4.protocol;
+			COMO(caplen) += sizeof(struct _como_udphdr);
 			N16(UDP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv4.src_port);
 			N16(UDP(dst_port)) =
@@ -800,15 +800,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * structure need to copy structure fields into pktbuf to
 		     * make it a valid ipv6 header
 		     */
-		    pkt->caplen = 40;	/* IPv6 header length */
+		    COMO(caplen) = 40;	/* IPv6 header length */
 		    /*
 		     * CHECKME: We don't know the lower layer, can we assume a
 		     * minimum encapsulation length?
 		     */
-		    pkt->len = el.flowType.ipv6.length + 40;
-		    pkt->type = COMOTYPE_NONE;
-		    pkt->l3type = ETHERTYPE_IP;
-		    pkt->l3ofs = 0;
+		    COMO(len) = el.flowType.ipv6.length + 40;
+		    COMO(type) = COMOTYPE_NONE;
+		    COMO(l3type) = ETHERTYPE_IP;
+		    COMO(l3ofs) = 0;
 		    IPV6(base.vtcfl) =
 			htonl((6 << 28) | (el.flowType.ipv6.priority << 20));
 		    N16(IPV6(base.len)) = htons(el.flowType.ipv6.length);
@@ -817,9 +817,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		    memcpy(&IPV6(base.dst_addr), &el.flowType.ipv6.dst_ip, 16);
 		    switch (el.flowType.ipv6.protocol) {
 		    case IPPROTO_TCP:
-			pkt->l4ofs = pkt->caplen;
-			pkt->l4type = el.flowType.ipv6.protocol;
-			pkt->caplen += sizeof(struct _como_tcphdr);
+			COMO(l4ofs) = COMO(caplen);
+			COMO(l4type) = el.flowType.ipv6.protocol;
+			COMO(caplen) += sizeof(struct _como_tcphdr);
 			N16(TCP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv6.src_port);
 			N16(TCP(dst_port)) =
@@ -827,9 +827,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			TCP(flags) = el.flowType.ipv6.tcp_flags;
 			break;
 		    case IPPROTO_UDP:
-			pkt->l4ofs = pkt->caplen;
-			pkt->l4type = el.flowType.ipv6.protocol;
-			pkt->caplen += sizeof(struct _como_udphdr);
+			COMO(l4ofs) = COMO(caplen);
+			COMO(l4type) = el.flowType.ipv6.protocol;
+			COMO(caplen) += sizeof(struct _como_udphdr);
 			N16(UDP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv6.src_port);
 			N16(UDP(dst_port)) =
@@ -838,7 +838,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		    }
 		    break;
 		}
-		nbytes += pkt->caplen;
+		nbytes += COMO(caplen);
 		npkts++;
 		pkt++;
 	    }
