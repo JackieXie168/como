@@ -155,7 +155,7 @@ store(void *rp, char *buf, size_t len)
     PUTH8(buf, x->wepmode); 
     PUTH8(buf, x->len); 
     for (i = 0; i < x->len; i++) 
-	PUTH8(buf, x->ssid[i]); 
+	PUTH8(buf, x->ssid[i]); /* CHECKME: why not use memcpy? */
     
     return sizeof(FLOWDESC);
 }
