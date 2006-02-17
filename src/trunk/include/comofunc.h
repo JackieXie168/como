@@ -224,6 +224,7 @@ void reset_timers(void);
 
 #endif
 
-
+#define assert_not_reached()	\
+    assert((logmsg(LOGWARN, "should not be reached.\n"), 0))
 
 #endif /* _COMO_FUNC_H */
