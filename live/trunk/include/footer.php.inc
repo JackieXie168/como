@@ -1,6 +1,9 @@
 <!--  $Id$  -->
+<?
+$cur_date = getdate(time());
+?>
 <div id=footer>
-    Copyright &#169; 2004-2005 Intel Corporation --
+    Copyright &#169; 2004-<?=$cur_date['year'] ?> Intel Corporation --
     <a href="http://www.intel.com/sites/corporate/tradmarx.htm">
     Legal Information</a> and
     <a href="http://www.intel.com/sites/corporate/privacy.htm">
