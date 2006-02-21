@@ -203,12 +203,11 @@ flush_table(module_t * mdl, tailq_t * expired)
  * current flow table needs to be flushed.
  *
  */
-static timestamp_t
+static void
 capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which, 
 	    tailq_t * expired)
 {
     pkt_t *pkt = (pkt_t *) pkt_buf;
-    timestamp_t max_ts; 
     int i;
     int new_record;
     int record_size; /* effective record size */
@@ -219,20 +218,10 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
     if (mdl->ca_hashtable == NULL)
 	mdl->ca_hashtable = create_table(mdl, pkt->ts); 
 
-    max_ts = 0; 
     for (i = 0; i < no_pkts; i++, pkt++) { 
         rec_t *prev, *cand;
         uint32_t hash;
         uint bucket;
-
-	if (pkt->ts >= max_ts) {
-	    max_ts = pkt->ts; 
-	} else {
-	    logmsg(LOGCAPTURE,
-		"pkt no. %d timestamps not increasing (%u.%06u --> %u.%06u)\n", 
-		i, TS2SEC(max_ts), TS2USEC(max_ts), 
-		TS2SEC(pkt->ts), TS2USEC(pkt->ts));
-	}
 
         /* flush the current flow table, if needed */
 	if (mdl->ca_hashtable) {
@@ -373,8 +362,6 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	cand->full = mdl->callbacks.update(pkt, cand, new_record);
 	end_tsctimer(map.stats->ca_updatecb_timer); 
     }
-
-    return max_ts; 
 }
 
 /*
@@ -512,6 +499,7 @@ filter(pkt_t *pkt, int n_packets, int n_out, module_t *modules)
     int i = n_packets*n_out*sizeof(int); /* size of the output bitmap */
     int j;
     int *outs[n_out];
+    timestamp_t max_ts = 0;
 
     if (which == NULL) {
         size = i;
@@ -525,9 +513,18 @@ filter(pkt_t *pkt, int n_packets, int n_out, module_t *modules)
     for (i = 0; i < n_out; i++)
         outs[i] = which + n_packets*i;
 
-    for (i = 0; i < n_packets; i++, pkt++)
+    for (i = 0; i < n_packets; i++, pkt++) {
+    	if (pkt->ts >= max_ts) {
+	    max_ts = pkt->ts; 
+	} else {
+	    logmsg(LOGCAPTURE,
+		"pkt no. %d timestamps not increasing (%u.%06u --> %u.%06u)\n",
+		i, TS2SEC(max_ts), TS2USEC(max_ts), 
+		TS2SEC(pkt->ts), TS2USEC(pkt->ts));
+    	}
         for (j = 0; j < n_out; j++)
             outs[j][i] = evaluate(modules[j].filter_tree, pkt);
+    }
 
     return which;
 }
