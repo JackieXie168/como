@@ -36,22 +36,22 @@
  * frame format derived from linux-wlan-ng codebase
  */
 struct _como_wlan_prism2hdr {
-    n32_t      version;
-    n32_t      length;
-    n64_t      mactime;
-    n64_t      hosttime;
-    n32_t      phytype;
-    n32_t      channel;
-    n32_t      datarate;
-    n32_t      antenna;
-    n32_t      priority;
-    n32_t      ssi_type;
-    n32_t      ssi_signal;
-    n32_t      ssi_noise;
-    n32_t      preamble;
-    n32_t      encoding;
-}; 
-#define PRISM_HDR(field)        \
+    n32_t version;
+    n32_t length;
+    n64_t mactime;
+    n64_t hosttime;
+    n32_t phytype;
+    n32_t channel;
+    n32_t datarate;
+    n32_t antenna;
+    n32_t priority;
+    n32_t ssi_type;
+    n32_t ssi_signal;
+    n32_t ssi_noise;
+    n32_t preamble;
+    n32_t encoding;
+};
+#define PRISM_HDR(field)						\
     (((struct _como_wlan_prism2hdr*)(pkt->payload))->field)
 
 #define PRISM_HDR_LEN 64
@@ -61,23 +61,23 @@ struct _como_wlan_prism2hdr {
  * como management frame body components
  */
 struct _como_wlan_mgmt_body {
-    uint8_t        ts[8];
-    uint16_t       bivl;
-    uint16_t       cap;
-    uint16_t       aan;
-    uint16_t       atsn;
-    uint8_t        ap_addr[6];
-    uint16_t       li;
-    uint16_t       rc;
-    uint16_t       aid;
-    uint16_t       sc;
-  
-    uint8_t        ssid_len;
-    char           ssid[34];
-    uint8_t        rates_len;
-    uint8_t        rates[8];
-    uint8_t        ch;
-    uint8_t        padding; 
+    uint8_t ts[8];
+    n16_t bivl;
+    n16_t cap;
+    n16_t aan;
+    n16_t atsn;
+    uint8_t ap_addr[6];
+    n16_t li;
+    n16_t rc;
+    n16_t aid;
+    n16_t sc;
+
+    uint8_t ssid_len;
+    char ssid[34];
+    uint8_t rates_len;
+    uint8_t rates[8];
+    uint8_t ch;
+    uint8_t padding;
 
     /*
      * working with a minimum set of information elements 
@@ -86,19 +86,9 @@ struct _como_wlan_mgmt_body {
      */
 };
 
-typedef struct _como_wlan_mgmt_body        mgmt_body_t;
+typedef struct _como_wlan_mgmt_body mgmt_body_t;
 
-#define MGMT_BODY(field)        \
-    (((struct _como_wlan_mgmt_body*)(pkt->payload + pkt->l3ofs))->field) 
+#define MGMT_BODY(field)						\
+    (((struct _como_wlan_mgmt_body*)(pkt->payload + pkt->l3ofs))->field)
 
-
-
-/* parsing  variables */
-struct _p80211info {
-    uint32_t  hdrlen;  /* header length */
-    int  rl;           /* remaining packet length */
-    int  n;
-};
-
-#endif /* _COMO_WLAN_H */
-
+#endif				/* _COMO_WLAN_H */
