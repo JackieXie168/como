@@ -121,7 +121,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 	/* now find the information in the management frame.
 	 * get privacy bit to determine if wep is enabled
 	 */
-	x->wepmode = CAPINFO_PRIVACY(MGMT_BODY(cap)) ? 1 : 0;
+	x->wepmode = CAPINFO_PRIVACY(H16(MGMT_BODY(cap))) ? 1 : 0;
 
 	/* get to the SSID information element */
 	if (MGMT_BODY(ssid_len) > 0) { 
