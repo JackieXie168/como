@@ -128,7 +128,7 @@ struct wlan_req {
  * 
  * ioctl to configure interface 
  */
-void 
+int
 send_ioctl(char * device, struct wlan_req * req, int request) 
 {
     struct ifreq ifr; 
@@ -144,11 +144,18 @@ send_ioctl(char * device, struct wlan_req * req, int request)
 #endif
 
     s = socket(AF_INET, SOCK_DGRAM, 0);
-    if (s == -1)
-	panic("socket %s", ifr.ifr_name); 
-    if (ioctl(s, request, &ifr) == -1)
-	panic("ioclt %s (0x%x)", ifr.ifr_name, request); 
+    if (s == -1) {
+	logmsg(LOGWARN, "sniffer-prism2: can't create socket (%s): %s\n",
+	       ifr.ifr_name, strerror(errno));
+	return -1;
+    }
+    if (ioctl(s, request, &ifr) == -1) {
+	logmsg(LOGWARN, "sniffer-prims2: error in ioclt %s (0x%x): %s\n",
+	       ifr.ifr_name, request, strerror(errno));
+	return -1;
+    }
     close(s); 
+    return 0;
 }
 
 
@@ -163,7 +170,7 @@ send_ioctl(char * device, struct wlan_req * req, int request)
 static int
 sniffer_start(source_t * src)
 {
-    struct _snifferinfo * info;
+    struct _snifferinfo * info = NULL;
     uint snaplen = LIBPCAP_DEFAULT_SNAPLEN; 
     uint timeout = LIBPCAP_DEFAULT_TIMEOUT; 
     uint channel = 0;
@@ -173,6 +180,8 @@ sniffer_start(source_t * src)
     sniff_pcap_datalink sp_link; 
     sniff_pcap_close sp_close; 
     struct wlan_req wreq;
+
+    src->ptr = NULL;
 
     if (src->args) { 
 	/* process input arguments */
@@ -214,7 +223,8 @@ sniffer_start(source_t * src)
     wreq.type = MONITOR_MODE; 
     wreq.len = 0;
 #endif
-    send_ioctl(src->device, &wreq, SET_OPERATIONMODE); 
+    if (send_ioctl(src->device, &wreq, SET_OPERATIONMODE) == -1)
+	goto error;
 
     /* 
      * fix the channel, if requested 
@@ -231,7 +241,8 @@ sniffer_start(source_t * src)
 	wreq.len = 1; 
 	wreq.val[0] = channel; 
 #endif
-	send_ioctl(src->device, &wreq, SET_CHANNEL); 
+	if (send_ioctl(src->device, &wreq, SET_CHANNEL) == -1)
+	    goto error;
     } 
 
     /* 
@@ -240,14 +251,14 @@ sniffer_start(source_t * src)
      */
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
+    info->pcap = NULL;
 
     /* link the libpcap library */
     info->handle = dlopen("libpcap.so", RTLD_NOW);
     if (info->handle == NULL) { 
-	logmsg(LOGWARN, "sniffer %s error opening libpcap.so: %s\n", 
-	    src->cb->name, strerror(errno)); 
-	free(src->ptr); 
-	return -1; 
+	logmsg(LOGWARN, "sniffer-prism2: error while opening libpcap.so: %s\n",
+	       strerror(errno)); 
+	goto error;
     } 
 
     /* find all the symbols that we will need */
@@ -264,21 +275,22 @@ sniffer_start(source_t * src)
     
     /* check for initialization errors */
     if (info->pcap == NULL) {
-        logmsg(LOGWARN, "%s\n", info->errbuf);
-	free(src->ptr); 
-        return -1;
+        logmsg(LOGWARN, "sniffer-prism2: libpcap open failed: %s\n",
+	       info->errbuf);
+	goto error;
     }
     if (info->errbuf[0] != '\0')
-        logmsg(LOGWARN, "%s\n", info->errbuf);
+        logmsg(LOGWARN, "sniffer-prism2: libcap reports error: %s\n",
+	       info->errbuf);
     
     /*
      * It is very important to set pcap in non-blocking mode, otherwise
      * sniffer_next() will try to fill the entire buffer before returning.
      */
     if (sp_noblock(info->pcap, 1, info->errbuf) < 0) {
-        logmsg(LOGWARN, "%s\n", info->errbuf);
-	free(src->ptr);
-        return -1;
+        logmsg(LOGWARN, "sniffer-prism2: can't set non blocking mode: %s\n",
+	       info->errbuf);
+	goto error;
     }
    
     /* check datalink type.  support 802.11 DLT_ values */
@@ -290,15 +302,21 @@ sniffer_start(source_t * src)
 	info->type = COMOTYPE_LINK;
 	break;
     default:
-        logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
-        sp_close(info->pcap);
-        return -1;
+        logmsg(LOGWARN, "sniffer-prism2: unrecognized datalink format\n");
+	goto error;
     }
 
     src->fd = sp_fileno(info->pcap);
     src->flags = SNIFF_TOUCHED|SNIFF_SELECT; 
     src->polling = 0;
     return 0; 		/* success */
+error:
+    if (info && info->pcap) {
+        sp_close(info->pcap);
+	info->pcap = NULL;
+    }
+    free(src->ptr); 
+    return -1;
 }
 
 
