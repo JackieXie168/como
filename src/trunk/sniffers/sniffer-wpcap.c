@@ -163,16 +163,17 @@ sniffer_next(source_t *src, pkt_t *out, int max_no)
          */
         npkts++;
 
-        pkt->ts = TIME2TS(header->ts.tv_sec, header->ts.tv_usec);
-        pkt->len = header->len;
-        pkt->caplen = header->caplen; 
-        pkt->payload = (char*)pkt_data; 
+	COMO(ts) = TIME2TS(header->ts.tv_sec, header->ts.tv_usec);
+	COMO(type) = COMOTYPE_LINK;
+	COMO(len) = header->len;
+	COMO(caplen) = header->caplen;
+	COMO(payload) = (char *) pkt_data;
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
-        updateofs(pkt, COMOTYPE_ETH); 
+	updateofs(pkt, L2, LINKTYPE_ETH);
         if (npkts >= max_no) 
 	    break;
         pkt++;
