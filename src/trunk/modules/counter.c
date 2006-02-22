@@ -82,7 +82,7 @@ update(pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh);
 
     if (isnew) {
-	x->ts = pkt->ts;
+	x->ts = COMO(ts);
         x->bytes = 0;
         x->pkts = 0;
     }
@@ -91,7 +91,7 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->bytes += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
         x->pkts += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
     } else {
-        x->bytes += pkt->len; 
+	x->bytes += COMO(len);
         x->pkts++;
     }
 
