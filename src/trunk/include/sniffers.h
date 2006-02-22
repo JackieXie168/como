@@ -104,11 +104,12 @@ struct _source {
 #define SNIFF_FROZEN	0x0010	/* frozen to slow down (only for SNIFF_FILE) */
 #define SNIFF_COMPLETE  0x0020  /* complete, i.e. finish the buffer */
 
+typedef enum { L2 = 2, L3 = 3 } layer_t;
 
 /* generic function used by sniffer-*.c */
-void updateofs(pkt_t * pkt, int type);
+void updateofs(pkt_t * pkt, layer_t l, int type);
 
 /* function used by sniffer-*.c to parse the 802.11 frames */
-int parse80211_frame(pkt_t *pkt, char *buf, char *pl, uint32_t type);
+int ieee80211_parse_frame(pkt_t * pkt, char *mgmt_buf);
 
 #endif /* _COMO_SNIFFERS_H */
