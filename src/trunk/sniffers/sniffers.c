@@ -27,6 +27,7 @@
  */
 
 #include <sys/types.h>
+#include <assert.h>
 #include "como.h"
 #include "comofunc.h"
 #include "stdpkt.h"
@@ -36,21 +37,7 @@
  * shared among all sniffers. 
  */
 
-/* 
- * Layer 2 header lengths
- */
-static size_t como_l2_len[] = {
-    0,          // COMOTYPE_NONE
-    14,         // COMOTYPE_ETH
-    4,          // COMOTYPE_HDLC
-    18,         // COMOTYPE_VLAN
-    40,         // COMOTYPE_ISL
-    0,          // COMOTYPE_NF
-    0,		// COMOTYPE_80211     
-    0 		// COMOTYPE_RADIO      
-};
-
-
+int ieee80211_hdrlen(uint32_t fc);
 
 /* 
  * figure out if a packet is ISL.
@@ -61,108 +48,119 @@ isISL(pkt_t * pkt)
 {
     const char val[] = {0x01, 0x00, 0x0c, 0x00, 0x00}; 
     int i; 
-    struct _como_isl *islh = (struct _como_isl *)pkt->payload;
-    if (islh->da[0] != 0x01 && islh->da[0] != 0x03) 
-	return 0; 
 
-    for (i = 1; i < 5; i++) 
-	if (islh->da[i] != val[i])
-	    return 0; 
+    if (ISL(da)[0] != 0x01 && ISL(da)[0] != 0x03)
+	return 0;
 
-    return 1; 
-} 
+    for (i = 1; i < 5; i++)
+	if (ISL(da)[i] != val[i])
+	    return 0;
+
+    return 1;
+}
 
 
 /* 
  * -- updatel4 
  * 
- * populates l3ofs and l4ofs values of a packet
+ * populates l4type and l4ofs values of a packet
  */
 static void
 updatel4(pkt_t * pkt)
 {
-    pkt->l3ofs = pkt->l4ofs = 0; 
+    COMO(l4ofs) = COMO(l3ofs);
+    COMO(l4type) = 0;
 
-    if (pkt->l3type == ETHERTYPE_IP) {
-	pkt->l3ofs = pkt->l4ofs = como_l2_len[pkt->type];
-	pkt->l4ofs += ((IP(vhl) & 0x0f) << 2);
-	pkt->l4type = IP(proto);
-    } 
-
-    if (pkt->type == COMOTYPE_RADIO || pkt->type == COMOTYPE_80211) { 
-	switch(FCTRL_TYPE(pkt->l2type)) { /* determine 802.11 frame type */
-	case WLANTYPE_MGMT:
-	    pkt->l3ofs = pkt->l2ofs + MGMT_HDR_LEN;
-	    pkt->l4ofs += pkt->l3ofs; 
-	    break;
-	case WLANTYPE_CTRL:
-            pkt->l3ofs = pkt->l2ofs;
-	    pkt->l4ofs += pkt->l3ofs; 
-            break;
-	case WLANTYPE_DATA:
-	    if (FCTRL_TO_DS(pkt->l2type) && FCTRL_FROM_DS(pkt->l2type))
-		pkt->l3ofs = pkt->l2ofs + 30 + LLC_HDR_LEN;
-            else
-		pkt->l3ofs = pkt->l2ofs + 24 + LLC_HDR_LEN;
-	    pkt->l4ofs += pkt->l3ofs; 
-            break;
-         default:
-            logmsg(LOGWARN, "ieee802.11 frame type unknown\n");
-	    break;
-	}
+    if (COMO(l3type) == ETHERTYPE_IP
+	&& COMO(caplen) > COMO(l3ofs) + sizeof(struct _como_iphdr)) {
+	COMO(l4ofs) += ((IP(vhl) & 0x0f) << 2);
+	COMO(l4type) = IP(proto);
     }
+    /*
+     * TODO: IPV6
+     */
 }
-
 
 /*
  * -- updateofs 
  * 
- * updates type and offset information in the pkt_t data structure. 
+ * updates type and offset information in the pkt_t data structure.
  * requires the type of interface as input. 
  */
-void 
-updateofs(pkt_t * pkt, int type) 
+void
+updateofs(pkt_t * pkt, layer_t l, int type)
 {
-    pkt->type = type; 
-    pkt->l2type = 0xFFFF; /* implies field unused */ 
-    switch (pkt->type) { 
-    case COMOTYPE_ETH: 
-        if (H16(ETH(type)) == ETHERTYPE_VLAN) {
-            pkt->type = COMOTYPE_VLAN;
-            pkt->l3type = H16(VLAN(ethtype));
-        } else if (isISL(pkt)) { 
-	    pkt->type = COMOTYPE_ISL; 
-	    pkt->l3type = H16(ISL(ethtype)); 
-	} else { 
-            pkt->l3type = H16(ETH(type));
-        }
-	break; 
+    uint32_t fc;
+    assert(COMO(type) != 0);
 
-    case COMOTYPE_HDLC: 
-	pkt->l3type = H16(HDLC(type)); 
-        break; 
-    
-    case COMOTYPE_80211:
-        pkt->l2type = H16(IEEE80211_HDR(fc));
-        if (FCTRL_TYPE(pkt->l2type) == WLANTYPE_DATA)
-	    pkt->l3type = H16(LLC_HDR(type));
-	else
-	    pkt->l3type = 0;
-        break;
-
+    /*
+     * update l2of
+     */
+    switch (COMO(type)) {
+    case COMOTYPE_SFLOW:
+	COMO(l2ofs) = sizeof(struct _como_sflow);
+	break;
+    case COMOTYPE_NF:
+	COMO(l2ofs) = sizeof(struct _como_nf);
+	break;
     case COMOTYPE_RADIO:
-        pkt->l2type = H16(IEEE80211_HDR(fc)); 
-        if (FCTRL_TYPE(pkt->l2type) == WLANTYPE_DATA)
-	    pkt->l3type = H16(LLC_HDR(type));
-	else
-	    pkt->l3type = 0;
-        break;
+	COMO(l2ofs) = sizeof(struct _como_wlan_prism2hdr);
+	break;
+    case COMOTYPE_LINK:
+    case COMOTYPE_COMO:
+	COMO(l2ofs) = 0;
+	break;
+    default:
+	assert_not_reached();
+    }
 
-    default: 
-	pkt->l3type = 0; 
-        break; 
-    } 
+    /*
+     * initialise l2type, l3type and l3ofs
+     */
+    COMO(l2type) = 0;
+    COMO(l3type) = 0;
+    COMO(l3ofs) = COMO(l2ofs);
 
-    updatel4(pkt); 
+    if (l == L2) {
+
+	/*
+	 * update l2type, l3type, l3ofs
+	 */
+	switch (type) {
+	case LINKTYPE_ETH:
+	    if (H16(ETH(type)) == ETHERTYPE_VLAN) {
+		COMO(l2type) = LINKTYPE_VLAN;
+		COMO(l3type) = H16(VLAN(ethtype));
+		COMO(l3ofs) += sizeof(struct _como_vlan);
+	    } else if (isISL(pkt)) {
+		COMO(l2type) = LINKTYPE_ISL;
+		COMO(l3type) = H16(ISL(ethtype));
+		COMO(l3ofs) += sizeof(struct _como_isl);
+	    } else {
+		COMO(l2type) = LINKTYPE_ETH;
+		COMO(l3type) = H16(ETH(type));
+		COMO(l3ofs) += sizeof(struct _como_eth);
+	    }
+	    break;
+	case LINKTYPE_HDLC:
+	    COMO(l2type) = LINKTYPE_HDLC;
+	    COMO(l3type) = H16(HDLC(type));
+	    COMO(l3ofs) += sizeof(struct _como_hdlc);
+	    break;
+	case LINKTYPE_80211:
+	    COMO(l2type) = LINKTYPE_80211;
+
+	    fc = H16(IEEE80211_HDR(fc));
+	    COMO(l3ofs) += ieee80211_hdrlen(fc);
+
+	    if (FCTRL_TYPE(fc) == WLANTYPE_DATA)
+		COMO(l3type) = H16(LLC_HDR(type));
+
+	    break;
+	}
+    } else {
+	COMO(l3type) = type;
+    }
+
+    updatel4(pkt);
 }
-
