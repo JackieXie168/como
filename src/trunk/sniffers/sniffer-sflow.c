@@ -124,12 +124,13 @@ static int
 sflow_datagram_read(int fd, SFDatagram * dg)
 {
     struct sockaddr_in agent;
-    int addr_len, bytes;
+    socklen_t addr_len;
+    int bytes;
     SFCursor *sc = (SFCursor *) dg;
 
     addr_len = sizeof(agent);
     memset(&agent, 0, sizeof(agent));
-    bytes = recvfrom(fd, sc->buf, dg->buf_length, 0,
+    bytes = recvfrom(fd, sc->buf, (size_t) dg->buf_length, 0,
 		     (struct sockaddr *) &agent, &addr_len);
     if (bytes <= 0) {
 	sf_warning("sniffer-sflow: recvfrom() failed: %s\n", strerror(errno));
