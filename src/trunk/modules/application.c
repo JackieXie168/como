@@ -119,7 +119,6 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 {
     pkt_t * pkt; 
     int i;
-    struct _como_iphdr *iph;
 
     memset(port2app, UNKNOWN, sizeof(port2app));
 
@@ -224,16 +223,17 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     N16(outdesc.ih.len) = 0xffff;
     
     pkt = (pkt_t *) template; 
-    pkt->caplen = sizeof(struct _como_iphdr); 
-    pkt->len = pkt->caplen;
-    pkt->type = COMOTYPE_NONE; 
-    pkt->l3type = ETHERTYPE_IP;
-    pkt->l3ofs = 0; 
-    pkt->l4ofs = sizeof(struct _como_iphdr);
-    pkt->payload = template + sizeof(pkt_t); 
-    iph = (struct _como_iphdr *)(pkt->payload + pkt->l3ofs);
-    iph->vhl = 0x45; 
-    iph->proto = IPPROTO_TCP; 
+    COMO(caplen) = sizeof(struct _como_iphdr);
+    COMO(len) = COMO(caplen);
+    COMO(type) = COMOTYPE_COMO;
+    COMO(l2type) = 0;
+    COMO(l2ofs) = 0;
+    COMO(l3type) = ETHERTYPE_IP;
+    COMO(l3ofs) = 0;
+    COMO(l4ofs) = sizeof(struct _como_iphdr);
+    COMO(payload) = template + sizeof(pkt_t);
+    IP(vhl) = 0x45;
+    IP(proto) = IPPROTO_TCP;
 
     return TIME2TS(meas_ivl, 0);
 }
@@ -259,18 +259,18 @@ update(pkt_t *pkt, void *fh, int isnew)
     int app; 
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts);
+	x->ts = TS2SEC(COMO(ts));
         bzero(x->bytes, sizeof(x->bytes)); 
         bzero(x->pkts, sizeof(x->pkts)); 
     }
 
-    if (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_TCP) {
+    if (COMO(l3type) == ETHERTYPE_IP && COMO(l4type) == IPPROTO_TCP) {
 	app = port2app[H16(TCP(src_port))] & port2app[H16(TCP(dst_port))];
 	if (COMO(type) == COMOTYPE_NF) {
 	    x->bytes[app] += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
 	    x->pkts[app] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
 	} else {
-	    x->bytes[app] += pkt->len;
+	    x->bytes[app] += COMO(len);
 	    x->pkts[app]++;
 	}
     }
@@ -497,7 +497,7 @@ replay(char *buf, char *out, size_t * len, int *count)
     size_t plen; 
     
     pkt = (pkt_t *) template; 
-    plen = pkt->caplen + sizeof(pkt_t); 
+    plen = COMO(caplen) + sizeof(pkt_t);
 
     if (*len < plen) 
         return -1;
@@ -511,8 +511,8 @@ replay(char *buf, char *out, size_t * len, int *count)
 	timestamp_t ts; 
 	int nbytes; 
 	int i; 
-	struct _como_iphdr *iph = (struct _como_iphdr *)(pkt->payload +
-							 pkt->l3ofs);
+	struct _como_iphdr *iph = (struct _como_iphdr *)(COMO(payload) +
+							 COMO(l3ofs));
 	nbytes = 0; 
 	for (i = 0; i < APPLICATIONS; i++) { 
 	    npkts += ntohl(app->pkts[i]); 
@@ -521,14 +521,14 @@ replay(char *buf, char *out, size_t * len, int *count)
 	if (npkts > 0)
             N16(iph->len) = htons((uint16_t) (nbytes / npkts));
 	ts = TIME2TS(ntohl(app->ts), 0);
-	pkt->ts = ts; 
+	COMO(ts) = ts;
         *count = npkts;
     }
     
     for (out_len = 0; out_len < *len && npkts > 0; npkts--) { 
-	pkt->payload = out + out_len + sizeof(pkt_t);
-	bcopy(template, out + out_len, sizeof(pkt_t) + pkt->caplen); 
-	out_len += sizeof(pkt_t) + pkt->caplen; 
+	COMO(payload) = out + out_len + sizeof(pkt_t);
+	bcopy(template, out + out_len, sizeof(pkt_t) + COMO(caplen));
+	out_len += sizeof(pkt_t) + COMO(caplen);
     } 
     
     *len = out_len; 
@@ -558,4 +558,3 @@ callbacks_t callbacks = {
     replay: replay,
     formats: "plain pretty gnuplot gnuplot-relative"
 };
-
