@@ -1,4 +1,4 @@
-/*-
+/*
  * Copyright (c) 2004, Intel Corporation
  * All rights reserved.
  *
@@ -287,7 +287,7 @@ sniffer_start(source_t * src)
 	info->type = COMOTYPE_RADIO;
 	break;
     case DLT_IEEE802_11:
-	info->type = COMOTYPE_80211;
+	info->type = COMOTYPE_LINK;
 	break;
     default:
         logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
@@ -312,20 +312,25 @@ sniffer_start(source_t * src)
 static void
 processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
 {
-    pkt_t * pkt = (pkt_t *) data; 
-    pkt->ts = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
-    pkt->len = h->len;
-    pkt->caplen = h->caplen;
- 
-    /* pkt->caplen padded to be 4 byte aligned. This takes care of
-     * alignment issues on the ARM architecture.
-     */
+    char *mgmt_buf;
+    pkt_t *pkt = (pkt_t *) data;
+    COMO(ts) = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
+    COMO(len) = h->len;
+    COMO(caplen) = h->caplen;
 
+    mgmt_buf = COMO(payload);
+    COMO(payload) = (char *) buf;
+
+    updateofs(pkt, L2, LINKTYPE_80211);
     /*
      * the management frame is redefined to include the 802.11 hdr +
      * capture hdr) plus the como management body structure
      */
-    parse80211_frame(pkt, (char *) buf, pkt->payload, pkt->type);
+    if (ieee80211_parse_frame(pkt, mgmt_buf) == 0) {
+    	/* the frame is not of management type: copy the payload */
+    	COMO(payload) = mgmt_buf;
+    	memcpy(COMO(payload), buf, COMO(caplen));
+    }
 }
 
 
@@ -355,9 +360,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	int count; 
 	
 	/* point the packet payload to next packet */
-	pkt->payload = info->pktbuf + nbytes; 
+	COMO(payload) = info->pktbuf + nbytes;
         /* specify 802.11 type */
-	pkt->type = info->type; 
+	COMO(type) = info->type;
 
 	/*
 	 * we use pcap_dispatch() because pcap_next() is assumend unaffected
@@ -373,7 +378,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	if (count == 0) 
 	    break;
 
-	nbytes += pkt->caplen; 
+	nbytes += COMO(caplen);
 	npkts++; 
 	pkt++;
     }
@@ -402,5 +407,4 @@ sniffer_stop(source_t * src)
 
 struct _sniffer prism2_sniffer = { 
     "prism2", sniffer_start, sniffer_next, sniffer_stop
-
 };
