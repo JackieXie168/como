@@ -26,7 +26,6 @@
  * $Id$
  */
 
-
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -53,6 +52,7 @@
 #define BUFSIZE (1024*1024) 
 struct _snifferinfo { 
     uint16_t type; 	 	/* CoMo packet type */
+    uint16_t l2type;		/* Layer 2 type */
     int littleendian;		/* set if pcap headers are bigendian */
     char buf[BUFSIZE];   	/* base of the capture buffer */
     int nbytes;      	 	/* valid bytes in buffer */
@@ -61,8 +61,8 @@ struct _snifferinfo {
      * the following are needed to deal 
      * with IEEE 802.11 frames 
      */
-    char pktbuf[BUFSIZE];	/* buffer for pre-processed packets */
-    int pkt_nbytes; 	 	/* valid bytes in pktbuf */
+    char mgmt_buf[BUFSIZE];	/* buffer for pre-processed packets */
+    int mgmt_nbytes;		/* valid bytes in mgmt_buf */
     uint16_t padding;
 };
 
@@ -104,7 +104,7 @@ sniffer_start(source_t * src)
     struct _snifferinfo * info; 
     struct pcap_file_header pf; 
     int swapped; 
-    uint16_t type;
+    uint16_t type, l2type;
     int rd;
     int fd;
 
@@ -140,17 +140,19 @@ sniffer_start(source_t * src)
     switch (pf.linktype) { 
     case DLT_EN10MB: 
 	logmsg(LOGSNIFFER, "datalink Ethernet (%d)\n", pf.linktype); 
-	type = COMOTYPE_ETH; 
-	break; 
+	type = COMOTYPE_LINK;
+	l2type = LINKTYPE_ETH;
+	break;
     case DLT_IEEE802_11: 
 	logmsg(LOGSNIFFER, "datalink 802.11 (%d)\n", pf.linktype); 
-	type = COMOTYPE_80211;
+	type = COMOTYPE_LINK;
+	l2type = LINKTYPE_80211;
 	break;
-
     case DLT_PRISM_HEADER: 
 	logmsg(LOGSNIFFER, 
 	       "datalink 802.11 with Prism header (%d)\n", pf.linktype); 
 	type = COMOTYPE_RADIO;
+	l2type = LINKTYPE_80211;
 	break;
     default: 
 	logmsg(LOGWARN, 
@@ -166,6 +168,7 @@ sniffer_start(source_t * src)
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
     info->type = type;
+    info->l2type = l2type;
     info->littleendian = swapped;
     return 0;
 }
@@ -209,7 +212,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     if (info->nbytes == 0)
         return -1;       /* end of file, nothing left to do */
 
-    info->pkt_nbytes = 0; 
+    info->mgmt_nbytes = 0;
     base = info->buf;
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
         pcap_hdr_t ph; 
@@ -235,50 +238,27 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
         if (left < (int) sizeof(pcap_hdr_t) + ph.caplen) 
             break;
 
-        pkt->ts = TIME2TS(ph.ts.tv_sec, ph.ts.tv_usec);
-        pkt->len = ph.len;
-        pkt->caplen = ph.caplen; 
-
 	/*      
 	 * Now we have a packet: start filling a new pkt_t struct
 	 * (beware that it could be discarded later on)
 	 */
-	if (info->type == COMOTYPE_80211 || info->type == COMOTYPE_RADIO) { 
-            /* 
-	     * point to memory region to receive pre-processed 802.11 
-	     * frame. this frame may be larger than original frame 
-	     * captured from the medium. (we do it this way for performance
-	     * reasons and to simplify the code in the modules)
-	     */
-            pkt->payload = info->pktbuf + info->pkt_nbytes;
-            base += sizeof(pcap_hdr_t);
-	    /* pkt->caplen padded to be 4 byte aligned. This takes care of 
-	     * alignment issues on the ARM architecture.
-             */
+	COMO(ts) = TIME2TS(ph.ts.tv_sec, ph.ts.tv_usec);
+	COMO(len) = ph.len;
+	COMO(caplen) = ph.caplen;
+	COMO(type) = info->type;
 
-            /*  
-             * the management frame is redefined to include the 802.11 hdr +
- 	     * capture hdr) plus the como management body structure
-	     */
-	    parse80211_frame(pkt,base,pkt->payload,info->type); 
-
-	    if (pkt->caplen == 0) {
-		logmsg(LOGWARN, "ieee802.11 parsing error (alignment?)\n"); 
-		break; 
-	    }
-	    info->pkt_nbytes += pkt->caplen; 
-	    base += ph.caplen;
-	} else {  
-	    pkt->payload = base + sizeof(pcap_hdr_t); 
-            /* 
-             * update layer2 information and offsets of layer 3 and above. 
-             * this sniffer runs on ethernet frames
-             */
-            updateofs(pkt, info->type); 
-	   
-            /* increment the number of processed packets */
-	    base += sizeof(pcap_hdr_t) + ph.caplen; 
-	} 
+	COMO(payload) = base + sizeof(pcap_hdr_t);
+	/* 
+	 * update layer2 information and offsets of layer 3 and above. 
+	 * this sniffer runs on ethernet frames
+	 */
+	updateofs(pkt, L2, info->l2type);
+	if (info->l2type == LINKTYPE_80211) {
+	    info->mgmt_nbytes += ieee80211_parse_frame(pkt, info->mgmt_buf +
+						       info->mgmt_nbytes);
+	}
+	/* increment the number of processed packets */
+	base += sizeof(pcap_hdr_t) + ph.caplen;
     }
     info->nbytes -= (base - info->buf);
     bcopy(base, info->buf, info->nbytes);
