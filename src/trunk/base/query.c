@@ -140,7 +140,7 @@ send_status(int client_fd, int node_id)
 	/* read first record */
 	ts = 0;
 	rlen = mdl->bsize;
-	ptr = csmap(file_fd, ofs, &rlen);
+	ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
 	if (ptr && rlen > 0) {
 	    /* we got something, give the record to load() */
 	    sz = mdl->callbacks.load(ptr, rlen, &ts);
