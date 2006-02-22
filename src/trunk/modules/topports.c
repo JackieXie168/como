@@ -101,6 +101,9 @@ update(pkt_t *pkt, void *rp, int isnew)
     if (COMO(type) == COMOTYPE_NF) {
         newbytes = H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
         newpkts = H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } else if (COMO(type) == COMOTYPE_SFLOW) {
+	newbytes = (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
+	newpkts = H32(SFLOW(sampling_rate));
     } 
 
     if (isTCP) {
