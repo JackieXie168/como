@@ -717,6 +717,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		/* add sflow header to packet */
 		memcpy(COMO(payload), &como_sflow_hdr,
 		       sizeof(struct _como_sflow));
+		COMO(caplen) = sizeof(struct _como_sflow);
 
 		/* set layer 2 and 3 to start after sflow header */
 		COMO(l2ofs) = sizeof(struct _como_sflow);
@@ -728,12 +729,13 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * have got a full header, now copy it into pktbuf and set
 		     * cap_len and len properly
 		     */
-		    COMO(caplen) = el.flowType.header.header_length;
+		    COMO(caplen) += el.flowType.header.header_length;
 
 		    /* CHECKME: should stripped bytes be summed to this */
 		    COMO(len) = el.flowType.header.frame_length;
 		    memcpy(COMO(payload) + COMO(l2ofs),
-			   el.flowType.header.header_bytes, COMO(caplen));
+			   el.flowType.header.header_bytes,
+			   el.flowType.header.header_length);
 		    switch (el.flowType.header.header_protocol) {
 		    case SFLHEADER_ETHERNET_ISO8023:
 			/*
@@ -770,7 +772,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * SFLSampled_ethernet structure need to copy structure
 		     * fields into pktbuf to make it a valid ethernet header
 		     */
-		    COMO(caplen) = sizeof(struct _como_eth);
+		    COMO(caplen) += sizeof(struct _como_eth);
 		    /*
 		     * CHECKME: eth_len doesn't contain MAC encapsulation
 		     * (does it include ethernet header?)
@@ -789,7 +791,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * SFLSampled_ipv4 structure need to copy structure fields
 		     * into pktbuf to make it a valid ipv4 header
 		     */
-		    COMO(caplen) = sizeof(struct _como_iphdr);
+		    COMO(caplen) += sizeof(struct _como_iphdr);
 		    /*
 		     * CHECKME: We don't know the lower layer, can we assume a
 		     * minimum encapsulation length?
@@ -827,7 +829,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * structure need to copy structure fields into pktbuf to
 		     * make it a valid ipv6 header
 		     */
-		    COMO(caplen) = 40;	/* IPv6 header length */
+		    COMO(caplen) += 40;	/* IPv6 header length */
 		    /*
 		     * CHECKME: We don't know the lower layer, can we assume a
 		     * minimum encapsulation length?
