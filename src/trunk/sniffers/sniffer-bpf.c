@@ -1,4 +1,4 @@
-/*-
+/*
  * Copyright (c) 2004, Intel Corporation
  * All rights reserved.
  *
@@ -207,16 +207,17 @@ sniffer_next(source_t *src, pkt_t *out, int max_no)
          * Now we have a packet: start filling a new pkt_t struct
          * (beware that it could be discarded later on)
          */
-        pkt->ts = TIME2TS(bh->bh_tstamp.tv_sec, bh->bh_tstamp.tv_usec);
-        pkt->len = bh->bh_datalen; 
-        pkt->caplen = bh->bh_caplen; 
-        pkt->payload = wh + bh->bh_hdrlen; 
+	COMO(ts) = TIME2TS(bh->bh_tstamp.tv_sec, bh->bh_tstamp.tv_usec);
+	COMO(len) = bh->bh_datalen;
+	COMO(caplen) = bh->bh_caplen;
+	COMO(payload) = wh + bh->bh_hdrlen;
+	COMO(type) = COMOTYPE_LINK;
 
 	/* 
 	 * update layer2 information and offsets of layer 3 and above. 
 	 * this sniffer only runs on ethernet frames. 
 	 */
-	updateofs(pkt, COMOTYPE_ETH); 
+	updateofs(pkt, L2, LINKTYPE_ETH);
 
 	/* bpf aligns packets to long word */
 	wh += BPF_WORDALIGN(bh->bh_caplen + bh->bh_hdrlen); 

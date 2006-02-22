@@ -1,4 +1,4 @@
-/*-
+/*
  * Copyright (c) 2005, Intel Corporation
  * All rights reserved.
  *
@@ -131,17 +131,18 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
 {
     pkt_t * pkt = &flow->pkt; 
     
-    pkt->ts = netflow2ts(f, f->First); 
-    pkt->len = f->dOctets / f->dPkts;
-    pkt->caplen = sizeof(struct _como_nf) + 
+    COMO(ts) = netflow2ts(f, f->First); 
+    COMO(len) = f->dOctets / f->dPkts;
+    COMO(caplen) = sizeof(struct _como_nf) + 
 		  sizeof(struct _como_iphdr) + 
 		  sizeof(struct _como_udphdr);
-    pkt->type = COMOTYPE_NF; 
-    pkt->l3type = ETHERTYPE_IP; 
-    pkt->l4type = f->prot;
-    pkt->l3ofs = sizeof(struct _como_nf); 
-    pkt->l4ofs = pkt->l3ofs + sizeof(struct _como_iphdr); 
-    pkt->payload = flow->payload; 
+    COMO(type) = COMOTYPE_NF;
+    COMO(l2type) = 0;
+    COMO(l3type) = ETHERTYPE_IP; 
+    COMO(l4type) = f->prot;
+    COMO(l2ofs) = COMO(l3ofs) = sizeof(struct _como_nf); 
+    COMO(l4ofs) = COMO(l3ofs) + sizeof(struct _como_iphdr); 
+    COMO(payload) = flow->payload; 
 
     /* NetFlow header */
     NF(src_mask) = f->src_mask;
@@ -159,8 +160,8 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
     N16(NF(sampling)) = htons(sampling); 
     N32(NF(pktcount)) = htonl(f->dPkts); 
     N64(NF(bytecount)) = HTONLL((uint64_t) f->dOctets); 
-    N32(NF(duration)) = htonl(TS2SEC(flow->end_ts - pkt->ts) * 1000 + 
-			      TS2MSEC(flow->end_ts - pkt->ts)); 
+    N32(NF(duration)) = htonl(TS2SEC(flow->end_ts - COMO(ts)) * 1000 + 
+			      TS2MSEC(flow->end_ts - COMO(ts))); 
 
     /* IP header */
     IP(vhl) = 0x45; 
@@ -569,9 +570,9 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 * others. 
 	 */
 	*pkt = flow->pkt; 
-	bcopy(pkt->payload, info->buf + info->nbytes, pkt->caplen); 
-	pkt->payload = info->buf + info->nbytes; 
-	info->nbytes += pkt->caplen; 
+	bcopy(COMO(payload), info->buf + info->nbytes, COMO(caplen)); 
+	COMO(payload) = info->buf + info->nbytes; 
+	info->nbytes += COMO(caplen); 
 
 	/* 
 	 * check if this flow has more packets. If so, update the 
@@ -586,9 +587,9 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    N64(NF(bytecount)) = 1; 
 	    N32(NF(pktcount)) = 1;  
 	    if (flow->pkt.ts >= flow->end_ts) { 
-		pkt->ts = flow->end_ts; 
-		pkt->len += flow->length_last; 
-		N16(IP(len)) = htons((uint16_t) pkt->len); 
+		COMO(ts) = flow->end_ts; 
+		COMO(len) += flow->length_last; 
+		N16(IP(len)) = htons((uint16_t) COMO(len)); 
 		free(flow); 
 	    } else {  
 		flow->pkt.ts += flow->increment; 
@@ -608,11 +609,11 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 * packets stop and return to CAPTURE so that it can 
  	 * process EXPORT messages, etc. 
 	 */
-	if (pkt->ts - info->last_ts > TIME2TS(1,0))
+	if (COMO(ts) - info->last_ts > TIME2TS(1,0))
 	    break; 
     }
 
-    info->last_ts = pkt->ts; 
+    info->last_ts = COMO(ts); 
     return npkts;
 }
 
