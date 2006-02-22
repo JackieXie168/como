@@ -1,4 +1,4 @@
-/*-
+/*
  * Copyright (c) 2004, Intel Corporation
  * All rights reserved.
  *
@@ -160,7 +160,7 @@ sniffer_start(source_t * src)
      */
     switch (sp_link(info->pcap)) { 
     case DLT_EN10MB: 
-	info->type = COMOTYPE_ETH; 
+	info->type = LINKTYPE_ETH; 
 	break; 
 
 #if 0 
@@ -202,15 +202,16 @@ sniffer_start(source_t * src)
 static void
 processpkt(u_char *data, const struct pcap_pkthdr *h, const u_char *buf)
 {
-    pkt_t * pkt = (pkt_t *) data; 
-    pkt->ts = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
-    pkt->len = h->len;
-    pkt->caplen = h->caplen;
+    pkt_t *pkt = (pkt_t *) data;
+    COMO(ts) = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
+    COMO(len) = h->len;
+    COMO(caplen) = h->caplen;
+    COMO(type) = COMOTYPE_LINK;
 
     /*
      * copy the packet payload
      */
-    bcopy(buf, pkt->payload, pkt->caplen);
+    bcopy(buf, COMO(payload), COMO(caplen));
 }
 
 
@@ -240,7 +241,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	int count; 
         
 	/* point the packet payload to next packet */
-	pkt->payload = info->pktbuf + nbytes; 
+	COMO(payload) = info->pktbuf + nbytes;
 
 	/*
 	 * we use pcap_dispatch() because pcap_next() is assumend unaffected
@@ -259,9 +260,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
          * update layer2 information and offsets of layer 3 and above.
          * this sniffer only runs on ethernet frames.
          */
-        updateofs(pkt, info->type);
+	updateofs(pkt, L2, info->type);
 
-	nbytes += pkt->caplen; 
+	nbytes += COMO(caplen);
     }
     
     return npkts;
