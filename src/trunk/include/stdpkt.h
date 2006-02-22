@@ -70,11 +70,11 @@ struct _como_pkt {
     uint32_t caplen;		/* capture length */
     uint8_t input;		/* input sniffer id */
     uint8_t reserved[3];	/* reserved (padding for now) */
-    uint16_t type; 		/* packet type (COMOTYPE_*) */
-    uint16_t dropped;		/* dropped packets since last (max 0xffff) */ 
-    uint16_t l2type; 		/* layer2 type using mac codes */ 
-    uint16_t l3type; 		/* layer3 type using ethernet codes */
-    uint16_t l4type;            /* layer4 type using layer3 specific codes */
+    uint16_t type;		/* packet type (COMOTYPE_*) */
+    uint16_t dropped;		/* dropped packets since last (max 0xffff) */
+    uint16_t l2type;		/* layer2 type (LINKTYPE_*) */
+    uint16_t l3type;		/* layer3 type using ethernet codes */
+    uint16_t l4type;		/* layer4 type using layer3 specific codes */
     uint16_t l2ofs;		/* offset where layer2 header starts */
     uint16_t l3ofs;		/* offset where layer3 header starts */
     uint16_t l4ofs; 		/* offset where layer4 header starts */
@@ -83,17 +83,23 @@ struct _como_pkt {
 
 
 /* 
- * Known packet types 
+ * CoMo packet types 
  */
-#define COMOTYPE_NONE		0x0000  /* CoMo-specific (e.g., replay()) */
-#define COMOTYPE_ETH		0x0001	/* Ethernet */
-#define COMOTYPE_HDLC		0x0002	/* Cisco HDLC */
-#define COMOTYPE_VLAN		0x0003	/* 802.1q packet */
-#define COMOTYPE_ISL		0x0004	/* Cisco ISL */
-#define COMOTYPE_NF		0x0005	/* Flow records (NetFlow v5 info) */
-#define COMOTYPE_80211   	0x0006  /* IEEE 802.11 header */
-#define COMOTYPE_RADIO		0x0007  /* IEEE 802.11 with radio info */ 
- 
+#define COMOTYPE_COMO		0x0010	/* CoMo-specific (e.g., replay()) */
+#define COMOTYPE_NF		0x0015	/* NetFlow records (NetFlow v5 info) */
+#define COMOTYPE_SFLOW		0x0018	/* sFlow records (sFlow v5 info) */
+#define COMOTYPE_LINK		0x0019	/* Encapsulated in supported l2
+					   protocol */
+#define COMOTYPE_RADIO		0x0017	/* Radio info */
+
+/* 
+ * Known layer 2 types 
+ */
+#define LINKTYPE_ETH		0x0001	/* Ethernet */
+#define LINKTYPE_HDLC		0x0002	/* Cisco HDLC */
+#define LINKTYPE_VLAN		0x0003	/* 802.1q packet */
+#define LINKTYPE_ISL		0x0004	/* Cisco ISL */
+#define LINKTYPE_80211   	0x0006	/* IEEE 802.11 header */
 
 /*
  * macros to use for packet header fields. these can be
@@ -187,28 +193,29 @@ set_field(char *ptr, size_t size, uint64_t value)
  * other one does not have this check. the more safe" methods can be
  * enabled by defining the variable SAFEMACROS
  */
-
 #ifdef SAFEMACROS
+#error "SAFEMACROS are broken"
 
 #define __EXTRACT_L2_FIELD(type, tag, field) \
     (pkt->l2type == type ? \
-     (((struct tag *)pkt->payload)->field) : \
+     (((struct tag *) (pkt->payload + pkt->l2ofs))->field) : \
      (abort(), ((struct tag *)NULL)->field))
-#define ETH(field) __EXTRACT_L2_FIELD(COMOTYPE_ETH, _como_eth, field)
-#define VLAN(field) __EXTRACT_L2_FIELD(COMOTYPE_VLAN, _como_vlan, field)
-#define HDLC(field) __EXTRACT_L2_FIELD(COMOTYPE_HDLC, _como_hdlc, field)
-#define ISL(field) __EXTRACT_L2_FIELD(COMOTYPE_ISL, _como_isl, field)
 
 
+#define ETH(field) __EXTRACT_L2_FIELD(COMOL2TYPE_ETH, _como_eth, field)
+#define VLAN(field) __EXTRACT_L2_FIELD(COMOL2TYPE_VLAN, _como_vlan, field)
+#define HDLC(field) __EXTRACT_L2_FIELD(COMOL2TYPE_HDLC, _como_hdlc, field)
+#define ISL(field) __EXTRACT_L2_FIELD(COMOL2TYPE_ISL, _como_isl, field)
 
 #define IP(field)               \
     (pkt->l3type == ETHERTYPE_IP ?  \
      (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field) : \
-     (abort(),((struct _como_iphdr *)NULL)->field))
+     (abort(), ((struct _como_iphdr *)NULL)->field))
+
 #define TCP(field)              \
     (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_TCP ? \
      (((struct _como_tcphdr *) (pkt->payload + pkt->l4ofs))->field) : \
-     (abort(),((struct _como_tcphdr *)NULL)->field))
+     (abort(), ((struct _como_tcphdr *)NULL)->field))
 #define UDP(field)              \
     (pkt->l3type == ETHERTYPE_IP && pkt->l4type == IPPROTO_UDP ? \
      (((struct _como_udphdr *) (pkt->payload + pkt->l4ofs))->field) : \
@@ -224,129 +231,152 @@ set_field(char *ptr, size_t size, uint64_t value)
      (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field) : \
      (abort(), ((struct _como_iphdr *)NULL)->field))
 
-#else		/* unsafe macros... */
+#else				/* unsafe macros... */
 
 #ifdef BUILD_FOR_ARM
 
-#define ETH(field)              \
-    ((typeof(((struct _como_eth *)NULL)->field)) \
-     get_field((char *)&(((struct _como_eth *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_eth *)NULL)->field))))
-#define ETHX(field, value)              \
-    (set_field((char *)&(((struct _como_eth *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_eth *)NULL)->field)), (uint64_t)value))
-
-#define VLAN(field)             \
-    ((typeof(((struct _como_vlan *)NULL)->field)) \
-     get_field((char *)&(((struct _como_vlan *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_vlan *)NULL)->field))))
-#define VLANX(field, value)              \
-    (set_field((char *)&(((struct _como_vlan *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_vlan *)NULL)->field)), (uint64_t)value))
-
-#define HDLC(field)             \
-    ((typeof(((struct _como_hdlc *)NULL)->field)) \
-     get_field((char *)&(((struct _como_hdlc *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_hdlc *)NULL)->field))))
-#define HDLCX(field, value)              \
-    (set_field((char *)&(((struct _como_hdlc *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_hdlc *)NULL)->field)), (uint64_t)value))
-
-#define ISL(field)              \
-    ((typeof(((struct _como_isl *)NULL)->field)) \
-     get_field((char *)&(((struct _como_isl *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_isl *)NULL)->field))))
-#define ISLX(field, value)              \
-    (set_field((char *)&(((struct _como_isl *)pkt->payload)->field), \
-     sizeof(typeof(((struct _como_isl *)NULL)->field)), (uint64_t)value))
-
-#define NF(field)               \
-    ((typeof(((struct _como_nf *)NULL)->field)) \
-     get_field((char *)&(((struct _como_nf *)pkt->payload)->field), \
+#define NF(field)							\
+    ((typeof(((struct _como_nf *)NULL)->field))				\
+     get_field((char *)&(((struct _como_nf *) pkt->payload)->field),	\
      sizeof(typeof(((struct _como_nf *)NULL)->field))))
-#define NFX(field, value)              \
-    (set_field((char *)&(((struct _como_nf *)pkt->payload)->field), \
+#define NFX(field, value)						\
+    (set_field((char *)&(((struct _como_nf *) pkt->payload)->field),	\
      sizeof(typeof(((struct _como_nf *)NULL)->field)), (uint64_t)value))
 
-#define IP(field)               \
-    ((typeof(((struct _como_iphdr *)NULL)->field)) \
-     get_field((char *)&(((struct _como_iphdr *) \
-     (pkt->payload + pkt->l3ofs))->field), \
+#define SFLOW(field)							\
+    ((typeof(((struct _como_sflow *)NULL)->field))			\
+     get_field((char *)&(((struct _como_nf *) pkt->payload)->field),	\
+     sizeof(typeof(((struct _como_sflow *)NULL)->field))))
+#define SFLOWX(field, value)						\
+    (set_field((char *)&(((struct _como_sflow *) pkt->payload)->field),	\
+     sizeof(typeof(((struct _como_sflow *)NULL)->field)), (uint64_t)value))
+
+/* Layer 2 macros */
+#define ETH(field)							\
+    ((typeof(((struct _como_eth *)NULL)->field))			\
+     get_field((char *)&(((struct _como_eth *)				\
+     (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_eth *)NULL)->field))))
+#define ETHX(field, value)						\
+    (set_field((char *)&(((struct _como_eth *)				\
+    (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_eth *)NULL)->field)), (uint64_t)value))
+
+#define VLAN(field)							\
+    ((typeof(((struct _como_vlan *)NULL)->field))			\
+     get_field((char *)&(((struct _como_vlan *)				\
+     (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_vlan *)NULL)->field))))
+#define VLANX(field, value)						\
+    (set_field((char *)&(((struct _como_vlan *)				\
+    (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_vlan *)NULL)->field)), (uint64_t)value))
+
+#define HDLC(field)							\
+    ((typeof(((struct _como_hdlc *)NULL)->field))			\
+     get_field((char *)&(((struct _como_hdlc *)				\
+     (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_hdlc *)NULL)->field))))
+#define HDLCX(field, value)						\
+    (set_field((char *)&(((struct _como_hdlc *)				\
+    (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_hdlc *)NULL)->field)), (uint64_t)value))
+
+#define ISL(field)							\
+    ((typeof(((struct _como_isl *)NULL)->field))			\
+     get_field((char *)&(((struct _como_isl *)				\
+     (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_isl *)NULL)->field))))
+#define ISLX(field, value)						\
+    (set_field((char *)&(((struct _como_isl *)				\
+    (pkt->payload + pkt->l2ofs))->field),				\
+     sizeof(typeof(((struct _como_isl *)NULL)->field)), (uint64_t)value))
+
+/* Layer 3 macros */
+#define IP(field)							\
+    ((typeof(((struct _como_iphdr *)NULL)->field))			\
+     get_field((char *)&(((struct _como_iphdr *)			\
+     (pkt->payload + pkt->l3ofs))->field),				\
      sizeof(typeof(((struct _como_iphdr *)NULL)->field))))
-#define IPX(field, value)              \
-    (set_field((char *)&(((struct _como_iphdr *) \
-     (pkt->payload + pkt->l3ofs))->field), \
+#define IPX(field, value)						\
+    (set_field((char *)&(((struct _como_iphdr *)			\
+     (pkt->payload + pkt->l3ofs))->field),				\
      sizeof(typeof(((struct _como_iphdr *)NULL)->field)), (uint64_t)value))
 
-#define TCP(field)              \
-    ((typeof(((struct _como_tcphdr *)NULL)->field)) \
-     get_field((char *)&(((struct _como_tcphdr *) \
-     (pkt->payload + pkt->l4ofs))->field), \
+/* Layer 4 macros */
+#define TCP(field)							\
+    ((typeof(((struct _como_tcphdr *)NULL)->field))			\
+     get_field((char *)&(((struct _como_tcphdr *)			\
+     (pkt->payload + pkt->l4ofs))->field),				\
      sizeof(typeof(((struct _como_tcphdr *)NULL)->field))))
-#define TCPX(field, value)              \
-    (set_field((char *)&(((struct _como_tcphdr *) \
-     (pkt->payload + pkt->l4ofs))->field), \
+#define TCPX(field, value)						\
+    (set_field((char *)&(((struct _como_tcphdr *)			\
+     (pkt->payload + pkt->l4ofs))->field),				\
      sizeof(typeof(((struct _como_tcphdr *)NULL)->field)), (uint64_t)value))
 
-#define UDP(field)              \
-    ((typeof(((struct _como_udphdr *)NULL)->field)) \
-     get_field((char *)&(((struct _como_udphdr *) \
-     (pkt->payload + pkt->l4ofs))->field), \
+#define UDP(field)							\
+    ((typeof(((struct _como_udphdr *)NULL)->field))			\
+     get_field((char *)&(((struct _como_udphdr *)			\
+     (pkt->payload + pkt->l4ofs))->field),				\
      sizeof(typeof(((struct _como_udphdr *)NULL)->field))))
-#define UDPX(field, value)              \
-    (set_field((char *)&(((struct _como_udphdr *) \
-     (pkt->payload + pkt->l4ofs))->field), \
+#define UDPX(field, value)						\
+    (set_field((char *)&(((struct _como_udphdr *)			\
+     (pkt->payload + pkt->l4ofs))->field),				\
      sizeof(typeof(((struct _como_udphdr *)NULL)->field)), (uint64_t)value))
 
-#define ICMP(field)             \
-    ((typeof(((struct _como_icmphdr *)NULL)->field)) \
-     get_field((char *)&(((struct _como_icmphdr *) \
-     (pkt->payload + pkt->l4ofs))->field), \
+#define ICMP(field)							\
+    ((typeof(((struct _como_icmphdr *)NULL)->field))			\
+     get_field((char *)&(((struct _como_icmphdr *)			\
+     (pkt->payload + pkt->l4ofs))->field),				\
      sizeof(typeof(((struct _como_icmphdr *)NULL)->field))))
-#define ICMPX(field, value)              \
-    (set_field((char *)&(((struct _como_icmphdr *) \
-     (pkt->payload + pkt->l4ofs))->field), \
+#define ICMPX(field, value)						\
+    (set_field((char *)&(((struct _como_icmphdr *)			\
+     (pkt->payload + pkt->l4ofs))->field),				\
      sizeof(typeof(((struct _como_icmphdr *)NULL)->field)), (uint64_t)value))
+
+#else				/* BUILD_FOR_ARM */
+
+#define NF(field)							\
+    (((struct _como_nf *) pkt->payload)->field)
+
+#define SFLOW(field)							\
+    (((struct _como_sflow *) pkt->payload)->field)
+
+
+/* Layer 2 macros */
+#define ETH(field)							\
+    (((struct _como_eth *) (pkt->payload + pkt->l2ofs))->field)
+#define VLAN(field)							\
+    (((struct _como_vlan *) (pkt->payload + pkt->l2ofs))->field)
+#define HDLC(field)							\
+    (((struct _como_hdlc *) (pkt->payload + pkt->l2ofs))->field)
+#define ISL(field)							\
+    (((struct _como_isl *) (pkt->payload + pkt->l2ofs))->field)
+
+/* Layer 3 macros */
+#define IP(field)							\
+    (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field)
+#define IPV6(field)							\
+     (((union _como_ipv6hdr *) (pkt->payload + pkt->l3ofs))->field)
+
+/* Layer 4 macros */
+#define TCP(field)							\
+    (((struct _como_tcphdr *) (pkt->payload + pkt->l4ofs))->field)
+#define UDP(field)							\
+    (((struct _como_udphdr *) (pkt->payload + pkt->l4ofs))->field)
+#define ICMP(field)							\
+    (((struct _como_icmphdr *) (pkt->payload + pkt->l4ofs))->field)
+#define ICMPV6(field)							\
+     (((struct _como_icmpv6hdr *) (pkt->payload + pkt->l4ofs))->field)
+
+#endif				/* BUILD_FOR_ARM */
 
 #define ETHP(pkt, field)        ETH(field)
 #define IPP(pkt, field)         IP(field)
+#define IPV6P(pkt, field)       IPV6(field)
 
-#else
+#endif				/* SAFEMACROS */
 
-#define ETH(field)              \
-    (((struct _como_eth *) pkt->payload)->field)
-#define VLAN(field)             \
-    (((struct _como_vlan *) pkt->payload)->field)
-#define HDLC(field)             \
-    (((struct _como_hdlc *) pkt->payload)->field)
-#define ISL(field)              \
-    (((struct _como_isl *) pkt->payload)->field)
-#define NF(field)               \
-    (((struct _como_nf *) pkt->payload)->field)
-#define IP(field)               \
-    (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field)
-#define TCP(field)              \
-    (((struct _como_tcphdr *) (pkt->payload + pkt->l4ofs))->field)
-#define UDP(field)              \
-    (((struct _como_udphdr *) (pkt->payload + pkt->l4ofs))->field)
-#define ICMP(field)             \
-    (((struct _como_icmphdr *) (pkt->payload + pkt->l4ofs))->field)
-#define IPV6(field)                                                     \
-     (((union _como_ipv6hdr *) (pkt->payload + pkt->l3ofs))->field)
-#define ICMPV6(field)                                                   \
-     (((struct _como_icmpv6hdr *) (pkt->payload + pkt->l4ofs))->field)
-
-
-#define ETHP(pkt, field)        ETH(field)
-#define IPP(pkt, field)         \
-    (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field)
-#define IPV6P(pkt, field)                                               \
-     (((union _como_ipv6hdr *) (pkt->payload + pkt->l3ofs))->field)
-
-#endif
-
-#endif
-  
 /*
  * Timestamp macros
  * 
@@ -368,6 +398,11 @@ set_field(char *ptr, size_t size, uint64_t value)
 #define isTCP           (isIP && (IP(proto) == IPPROTO_TCP))
 #define isUDP           (isIP && (IP(proto) == IPPROTO_UDP))
 #define isICMP          (isIP && (IP(proto) == IPPROTO_ICMP))
-#define isIPv6          (COMO(l3type) == ETHERTYPE_IPV6)
+#define isIPV6          (COMO(l3type) == ETHERTYPE_IPV6)
 
-#endif/* _COMO_STDPKT_H */
+#define hasL2		(COMO(l2ofs) < COMO(l3ofs))
+#define hasL3		(COMO(l3ofs) < COMO(l4ofs))
+#define hasL4		(COMO(l4ofs) > COMO(l3ofs) &&			\
+    COMO(l4ofs) <= COMO(caplen))
+
+#endif				/* _COMO_STDPKT_H */
