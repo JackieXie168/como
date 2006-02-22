@@ -90,6 +90,9 @@ update(pkt_t *pkt, void *fh, int isnew)
     if (COMO(type) == COMOTYPE_NF) {
         x->bytes += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
         x->pkts += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } else if (COMO(type) == COMOTYPE_SFLOW) {
+	x->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
+	x->pkts += (uint64_t) H32(SFLOW(sampling_rate));
     } else {
 	x->bytes += COMO(len);
         x->pkts++;
