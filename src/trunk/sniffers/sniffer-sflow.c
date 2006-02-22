@@ -82,6 +82,7 @@ typedef struct _SFTag {
 /* 
  * define SNIFFER_SFLOW_DEBUG to enable debug information
  */
+/* #define SNIFFER_SFLOW_DEBUG */
 #ifdef SNIFFER_SFLOW_DEBUG
 #define sf_log(format...)	logmsg(LOGDEBUG, format)
 #else
@@ -200,7 +201,9 @@ sflow_tag_decode_flow_sample(SFTag * tag, SFLFlow_sample * fs)
     fs->sequence_number = sf_read32((SFCursor *) tag);
     fs->source_id = sf_read32((SFCursor *) tag);
     fs->sampling_rate = sf_read32((SFCursor *) tag);
+    sf_log("sampling_rate %d\n", fs->sampling_rate);
     fs->sample_pool = sf_read32((SFCursor *) tag);
+    sf_log("sample_pool %d\n", fs->sample_pool);
     fs->drops = sf_read32((SFCursor *) tag);
     fs->input = sf_read32((SFCursor *) tag);
     fs->output = sf_read32((SFCursor *) tag);
@@ -357,7 +360,6 @@ sflow_tag_next_flow_sample(SFTag * tag, SFLFlow_sample_element * el)
   * used for successive callbacks.
   */
 struct _snifferinfo {
-    int fd;			/* UDP socket descriptor */
     uint16_t port;		/* socket port */
     uint32_t last_sn;		/* last sample packet sequence number */
     uint32_t first_sn;		/* first sample packet sequence number */
@@ -448,7 +450,7 @@ sniffer_start(source_t * src)
      */
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
     info = (struct _snifferinfo *) src->ptr;
-    src->fd = info->fd = -1;
+    src->fd = -1;
     /* defult port as assigned by IANA */
     info->port = SFL_DEFAULT_COLLECTOR_PORT;
     info->first_sn = 0;
@@ -459,7 +461,7 @@ sniffer_start(source_t * src)
     sniffer_config(src->args, info);
 
     /* this sniffer operates on socket and uses a select()able descriptor */
-    src->flags = SNIFF_TOUCHED | SNIFF_FILE | SNIFF_SELECT;
+    src->flags = SNIFF_TOUCHED | SNIFF_SELECT;
     src->polling = 0;
 
     /* create a socket */
@@ -496,7 +498,7 @@ sniffer_start(source_t * src)
 	goto error;
     }
 
-    src->fd = info->fd = fd;
+    src->fd = fd;
 
     if (info->flow_type_tag != SFLFLOW_HEADER) {
 	/* fill packet descriptor info */
@@ -588,6 +590,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
     SFDatagram dg;
     SFTag tag;
 
+    struct _como_sflow como_sflow_hdr;
+
     assert(src != NULL);
     assert(src->ptr != NULL);
     assert(out != NULL);
@@ -600,7 +604,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
     dg.sc.buf = buf;
     dg.buf_length = MAX_PKT_SIZ;
 
-    if (sflow_datagram_read(info->fd, &dg) != SF_OK) {
+    if (sflow_datagram_read(src->fd, &dg) != SF_OK) {
 	/* an error here cannot be ignored, return with -1 */
 	return -1;
     }
@@ -609,6 +613,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	/* received a bad sflow datagram: ignoring */
 	return 0;
     }
+
+    /* NOTE: only IPv4 address is considered */
+    N32(como_sflow_hdr.agent_address) =
+	dg.hdr.agent_address.address.ip_v4.s_addr;
+    N32(como_sflow_hdr.sub_agent_id) = htonl(dg.hdr.sub_agent_id);
 
     /*
      * timestamp handling
@@ -648,6 +657,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	    if (sflow_tag_decode_flow_sample(&tag, &fs) != SF_OK)
 		break;
 	    num_elements = fs.num_elements;
+
+	    N32(como_sflow_hdr.ds_class) = htonl(fs.source_id >> 24);
+	    N32(como_sflow_hdr.ds_index) = htonl(fs.source_id & 0x00ffffff);
+	    N32(como_sflow_hdr.sampling_rate) = htonl(fs.sampling_rate);
+	    N32(como_sflow_hdr.sample_pool) = htonl(fs.sample_pool);
+	    N32(como_sflow_hdr.inputFormat) = htonl(fs.input >> 30);
+	    N32(como_sflow_hdr.input) = htonl(fs.input & 0x3fffffff);
+	    N32(como_sflow_hdr.outputFormat) = htonl(fs.output >> 30);
+	    N32(como_sflow_hdr.output) = htonl(fs.output & 0x3fffffff);
 	}
 
 	if (tag.type == SFLFLOW_SAMPLE_EXPANDED) {
@@ -656,13 +674,21 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	    if (sflow_tag_decode_flow_sample_expanded(&tag, &fse) != SF_OK)
 		break;
 	    num_elements = fse.num_elements;
+
+	    N32(como_sflow_hdr.ds_class) = htonl(fse.ds_class);
+	    N32(como_sflow_hdr.ds_index) = htonl(fse.ds_index);
+	    N32(como_sflow_hdr.sampling_rate) = htonl(fse.sampling_rate);
+	    N32(como_sflow_hdr.sample_pool) = htonl(fse.sample_pool);
+	    N32(como_sflow_hdr.inputFormat) = htonl(fse.inputFormat);
+	    N32(como_sflow_hdr.input) = htonl(fse.input);
+	    N32(como_sflow_hdr.outputFormat) = htonl(fse.outputFormat);
+	    N32(como_sflow_hdr.output) = htonl(fse.output);
 	}
 
 	/*
 	 * FLOW samples are elaborated while COUNTERS samples are ignored
 	 */
-	if (tag.type == SFLFLOW_SAMPLE ||
-	    tag.type == SFLFLOW_SAMPLE_EXPANDED) {
+	if (tag.type == SFLFLOW_SAMPLE || tag.type == SFLFLOW_SAMPLE_EXPANDED) {
 	    SFLFlow_sample_element el;
 	    uint32_t eli;
 
@@ -679,13 +705,22 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		    el.tag != SFLFLOW_IPV4 && el.tag != SFLFLOW_IPV6)
 		    continue;
 
-		memset(pkt, 0, sizeof(pkt_t));
-
 		/* point the packet payload to next packet */
 		COMO(payload) = info->pktbuf + nbytes;
 
 		/* set the timestamp */
 		COMO(ts) = info->last_ts;
+
+		/* set packet type */
+		COMO(type) = COMOTYPE_SFLOW;
+
+		/* add sflow header to packet */
+		memcpy(COMO(payload), &como_sflow_hdr,
+		       sizeof(struct _como_sflow));
+
+		/* set layer 2 and 3 to start after sflow header */
+		COMO(l2ofs) = sizeof(struct _como_sflow);
+		COMO(l3ofs) = sizeof(struct _como_sflow);
 
 		switch (el.tag) {
 		case SFLFLOW_HEADER:
@@ -694,10 +729,10 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * cap_len and len properly
 		     */
 		    COMO(caplen) = el.flowType.header.header_length;
-		    
+
 		    /* CHECKME: should stripped bytes be summed to this */
 		    COMO(len) = el.flowType.header.frame_length;
-		    memcpy(COMO(payload),
+		    memcpy(COMO(payload) + COMO(l2ofs),
 			   el.flowType.header.header_bytes, COMO(caplen));
 		    switch (el.flowType.header.header_protocol) {
 		    case SFLHEADER_ETHERNET_ISO8023:
@@ -705,31 +740,27 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			 * update layer 2 information and offsets of layer 3
 			 * and above.
 			 */
-			updateofs(pkt, COMOTYPE_ETH);
+			updateofs(pkt, L2, LINKTYPE_ETH);
 			break;
 		    case SFLHEADER_IPv4:
 			/*
 			 * there's nothing at layer 2, the packet starts with
 			 * ip header
 			 */
-			COMO(type) = COMOTYPE_NONE;
-			COMO(l3type) = ETHERTYPE_IP;
-			COMO(l3ofs) = 0;
+			updateofs(pkt, L3, ETHERTYPE_IP);
 			break;
 		    case SFLHEADER_IPv6:
 			/*
 			 * there's nothing at layer 2, the packet starts with
 			 * ip v6 header
 			 */
-			COMO(type) = COMOTYPE_NONE;
-			COMO(l3type) = ETHERTYPE_IPV6;
-			COMO(l3ofs) = 0;
+			updateofs(pkt, L3, ETHERTYPE_IPV6);
 			break;
 		    default:
 			/*
 			 * FIXME: what to do here?
 			 */
-			updateofs(pkt, COMOTYPE_NONE);
+			COMO(l2type) = 0;
 			break;
 		    }
 		    break;
@@ -740,16 +771,17 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * fields into pktbuf to make it a valid ethernet header
 		     */
 		    COMO(caplen) = sizeof(struct _como_eth);
-		    
 		    /*
 		     * CHECKME: eth_len doesn't contain MAC encapsulation
 		     * (does it include ethernet header?)
 		     */
 		    COMO(len) = el.flowType.ethernet.eth_len;
-		    memcpy(COMO(payload), el.flowType.ethernet.dst_mac, 6);
-		    memcpy(COMO(payload), el.flowType.ethernet.src_mac, 6);
+		    memcpy(COMO(payload) + COMO(l2ofs),
+			   el.flowType.ethernet.dst_mac, 6);
+		    memcpy(COMO(payload) + COMO(l2ofs) + 6,
+			   el.flowType.ethernet.src_mac, 6);
 		    N16(ETH(type)) = htons(el.flowType.ethernet.eth_type);
-		    updateofs(pkt, COMOTYPE_ETH);
+		    updateofs(pkt, L2, LINKTYPE_ETH);
 		    break;
 		case SFLFLOW_IPV4:
 		    /*
@@ -763,19 +795,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * minimum encapsulation length?
 		     */
 		    COMO(len) = el.flowType.ipv4.length;
-		    COMO(type) = COMOTYPE_NONE;
-		    COMO(l3type) = ETHERTYPE_IP;
-		    COMO(l3ofs) = 0;
 		    IP(vhl) = 0x45;	/* version 4, header len 20 bytes */
 		    IP(tos) = (uint8_t) el.flowType.ipv4.tos;
 		    N16(IP(len)) = htons((uint16_t) el.flowType.ipv4.length);
 		    IP(proto) = (uint8_t) el.flowType.ipv4.protocol;
 		    N32(IP(src_ip)) = el.flowType.ipv4.src_ip.s_addr;
 		    N32(IP(dst_ip)) = el.flowType.ipv4.dst_ip.s_addr;
+		    COMO(l4ofs) = COMO(l3ofs) + sizeof(struct _como_iphdr);
 		    switch (el.flowType.ipv4.protocol) {
 		    case IPPROTO_TCP:
-			COMO(l4ofs) = COMO(caplen);
-			COMO(l4type) = el.flowType.ipv4.protocol;
 			COMO(caplen) += sizeof(struct _como_tcphdr);
 			N16(TCP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv4.src_port);
@@ -784,8 +812,6 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			TCP(flags) = el.flowType.ipv4.tcp_flags;
 			break;
 		    case IPPROTO_UDP:
-			COMO(l4ofs) = COMO(caplen);
-			COMO(l4type) = el.flowType.ipv4.protocol;
 			COMO(caplen) += sizeof(struct _como_udphdr);
 			N16(UDP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv4.src_port);
@@ -793,6 +819,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			    htons((uint16_t) el.flowType.ipv4.dst_port);
 			break;
 		    }
+		    updateofs(pkt, L3, ETHERTYPE_IP);
 		    break;
 		case SFLFLOW_IPV6:
 		    /*
@@ -806,19 +833,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * minimum encapsulation length?
 		     */
 		    COMO(len) = el.flowType.ipv6.length + 40;
-		    COMO(type) = COMOTYPE_NONE;
-		    COMO(l3type) = ETHERTYPE_IP;
-		    COMO(l3ofs) = 0;
 		    IPV6(base.vtcfl) =
 			htonl((6 << 28) | (el.flowType.ipv6.priority << 20));
 		    N16(IPV6(base.len)) = htons(el.flowType.ipv6.length);
 		    IPV6(base.nxthdr) = (uint8_t) el.flowType.ipv6.protocol;
 		    memcpy(&IPV6(base.src_addr), &el.flowType.ipv6.src_ip, 16);
 		    memcpy(&IPV6(base.dst_addr), &el.flowType.ipv6.dst_ip, 16);
+		    COMO(l4ofs) = COMO(l3ofs) + 40; /* IPv6 header length */
 		    switch (el.flowType.ipv6.protocol) {
 		    case IPPROTO_TCP:
-			COMO(l4ofs) = COMO(caplen);
-			COMO(l4type) = el.flowType.ipv6.protocol;
 			COMO(caplen) += sizeof(struct _como_tcphdr);
 			N16(TCP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv6.src_port);
@@ -827,8 +850,6 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			TCP(flags) = el.flowType.ipv6.tcp_flags;
 			break;
 		    case IPPROTO_UDP:
-			COMO(l4ofs) = COMO(caplen);
-			COMO(l4type) = el.flowType.ipv6.protocol;
 			COMO(caplen) += sizeof(struct _como_udphdr);
 			N16(UDP(src_port)) =
 			    htons((uint16_t) el.flowType.ipv6.src_port);
@@ -837,6 +858,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			break;
 		    }
 		    break;
+		    updateofs(pkt, L3, ETHERTYPE_IPV6);
 		}
 		nbytes += COMO(caplen);
 		npkts++;
@@ -871,9 +893,9 @@ sniffer_stop(source_t * src)
 
     info = (struct _snifferinfo *) src->ptr;
 
-    if (info->fd > 0) {
+    if (src->fd > 0) {
 	/* close the socket */
-	close(info->fd);
+	close(src->fd);
     }
 
     free(src->ptr);
