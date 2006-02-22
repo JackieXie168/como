@@ -81,9 +81,13 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static int
 check(pkt_t * pkt) 
 {
-  return ((COMO(type) == COMOTYPE_RADIO) &&
-        ((WLANTYPE(COMO(l2type)) == WLANTYPE_MGMT) &&
-        (WLANSUBTYPE(COMO(l2type)) == MGMT_SUBTYPE_BEACON)));
+    if (COMO(type) == COMOTYPE_RADIO) {
+	uint32_t fc;
+	fc = H16(IEEE80211_HDR(fc));
+	return ((WLANTYPE(fc) == WLANTYPE_MGMT) &&
+		(WLANSUBTYPE(fc) == MGMT_SUBTYPE_BEACON));
+    }
+    return 0;
 }
 
 
@@ -109,7 +113,7 @@ update(pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh); 
 
     if (isnew) {
-	x->ts = pkt->ts - pkt->ts % TIME2TS(meas_ivl, 0);
+	x->ts = COMO(ts) - COMO(ts) % TIME2TS(meas_ivl, 0);
 	x->channel = -1; 
 	x->signal = x->noise = 0;
         x->samples = 0; 
