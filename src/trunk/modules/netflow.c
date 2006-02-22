@@ -233,7 +233,7 @@ update(pkt_t *pkt, rec_t *fh, int is_new, __unused unsigned drop_cntr)
 		x->dstport = H16(TCPUDP(dst_port));
 		break;
 	    }
-	    x->tos = pkt->ih.tos;
+	    x->tos = IP(tos);
         }
 
         x->dPkts = x->dOctets = 0;
