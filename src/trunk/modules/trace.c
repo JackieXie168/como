@@ -158,11 +158,11 @@ update(pkt_t *pkt, void *fh, __unused int isnew)
     FLOWDESC *x = F(fh);
     int len; 
 
-    len = (pkt->caplen > snaplen)? snaplen : pkt->caplen; 
+    len = (COMO(caplen) > snaplen) ? snaplen : COMO(caplen);
     memcpy(x->buf, pkt, sizeof(pkt_t)); 
     ((pkt_t *) x->buf)->payload = NULL;
     ((pkt_t *) x->buf)->caplen = len;
-    memcpy(x->buf + sizeof(pkt_t), pkt->payload, len); 
+    memcpy(x->buf + sizeof(pkt_t), COMO(payload), len);
 
     return 1;		/* records are always full */
 }
@@ -176,7 +176,7 @@ store(void *fh, char *buf, size_t len)
     size_t need;
     
     pkt = (pkt_t *) x->buf; 
-    need = pkt->caplen + sizeof(pkt_t) ; 
+    need = COMO(caplen) + sizeof(pkt_t);
 
     if (len < need)
         return -1;
@@ -420,16 +420,16 @@ print(char *buf, size_t *len, char * const args[])
 			(uint) H32(TCP(ack)), 
 		 	(uint16_t) H16(TCP(win))); 
 	}
-    } else if (WLANTYPE(COMO(l2type)) == WLANTYPE_MGMT || WLANTYPE_DATA || 
-	WLANTYPE_CTRL) { 
-	
-	switch(WLANTYPE(COMO(l2type))) {
+    } else if (COMO(l2type) == LINKTYPE_80211) {
+	uint32_t fc = H16(IEEE80211_HDR(fc));
+
+	switch (WLANTYPE(fc)) {
 
 	case WLANTYPE_MGMT:
             snprintf(ssid, MGMT_BODY(ssid_len) + 1, MGMT_BODY(ssid));
 	    *len += sprintf(s + *len, "%s ",
-				mgmt_subtypes[WLANSUBTYPE(COMO(l2type))>>12]); 
-	    switch(WLANSUBTYPE(COMO(l2type))) {
+			    mgmt_subtypes[WLANSUBTYPE(fc) >> 12]);
+	    switch (WLANSUBTYPE(fc)) {
 	    case MGMT_SUBTYPE_BEACON:
 	    case MGMT_SUBTYPE_PROBE_RES:
                 *len += sprintf(s + *len, "%s %s", ssid,"[");
@@ -439,14 +439,18 @@ print(char *buf, size_t *len, char * const args[])
                         (MGMT_BODY(rates[i]) & 0x80 ? "*" : "" ));
                 }
 		*len += sprintf(s + *len, "%s %s %d %s %s", "Mbit]", "ch:",
-		    MGMT_BODY(ch), CAPINFO_ESS(MGMT_BODY(cap)) ? "ESS" 
-		    : "IBSS", CAPINFO_PRIVACY(MGMT_BODY(cap)) ? "PRIVACY" : "");
+				MGMT_BODY(ch),
+				CAPINFO_ESS(H16(MGMT_BODY(cap))) ? "ESS" :
+				"IBSS",
+				CAPINFO_PRIVACY(H16(MGMT_BODY(cap))) ? "PRIVACY"
+				: "");
 		break;
 	    case MGMT_SUBTYPE_DISASSOC:
 	    case MGMT_SUBTYPE_DEAUTH:
-                *len += sprintf(s + *len, "%s", ntohs(MGMT_BODY(rc)) < 
-		    RC_RESERVED_VALUES ? rc_text[ntohs(MGMT_BODY(rc))] 
-								: "RESERVED");
+		/* CHECKME: was using ntohs around rc */
+		*len += sprintf(s + *len, "%s", H16(MGMT_BODY(rc)) <
+				RC_RESERVED_VALUES ? rc_text[H16(MGMT_BODY(rc))]
+				: "RESERVED");
 		break;
 	    case MGMT_SUBTYPE_ASSOC_REQ:
 	    case MGMT_SUBTYPE_PROBE_REQ:
@@ -460,10 +464,13 @@ print(char *buf, size_t *len, char * const args[])
 		break;
 	    case MGMT_SUBTYPE_ASSOC_RES:
 	    case MGMT_SUBTYPE_REASSOC_RES:
-		*len += sprintf(s + *len, "AID(%x) %s %s", 
-		    MGMT_BODY(aid), CAPINFO_PRIVACY(MGMT_BODY(cap)) ?
-		    "PRIVACY" : "", MGMT_BODY(sc) < SC_RESERVED_VALUES ? 
-		    sc_text[ntohs(MGMT_BODY(sc))] : "RESERVED");
+		*len += sprintf(s + *len, "AID(%x) %s %s",
+				H16(MGMT_BODY(aid)),
+				CAPINFO_PRIVACY(H16(MGMT_BODY(cap))) ? "PRIVACY"
+				: "",
+				H16(MGMT_BODY(sc)) <
+				SC_RESERVED_VALUES ? sc_text[H16(MGMT_BODY(sc))]
+				: "RESERVED");
 		break;
 	    case MGMT_SUBTYPE_REASSOC_REQ:
 		*len += sprintf(s + *len, "%s %s", ssid, "AP:");
@@ -478,10 +485,10 @@ print(char *buf, size_t *len, char * const args[])
 	    }	
 	    break;
 	case WLANTYPE_CTRL:
-	    switch(FCTRL_SUBTYPE(COMO(l2type))) {
+	    switch (WLANSUBTYPE(fc)) {
 	    case CTRL_SUBTYPE_PS_POLL:
-		*len += sprintf(s + *len, "%s %s%02x%s", "Power Save-Poll", 
-		    "AID(", MGMT_BODY(aid), ")"); 
+		*len += sprintf(s + *len, "%s %s%02x%s", "Power Save-Poll",
+				"AID(", H16(MGMT_BODY(aid)), ")");
 		break;
 	    case CTRL_SUBTYPE_RTS:
 		*len += sprintf(s + *len, "%s %s", "Request-To-Send", "TA:"); 
@@ -518,7 +525,7 @@ print(char *buf, size_t *len, char * const args[])
 	    }
 	    break;
 	case WLANTYPE_DATA:
-	    switch(WLANSUBTYPE(COMO(l2type))) {
+	    switch (WLANSUBTYPE(fc)) {
 	    case DATA_SUBTYPE_DATA:
 		*len += sprintf(s + *len, "%s", "Data Type NOT Supported"); 
 		break;
@@ -562,7 +569,7 @@ static int
 replay(char *buf, char *out, size_t * len, int *count)
 {
     pkt_t * pkt = (pkt_t *) buf; 
-    size_t need = ntohl(pkt->caplen) + sizeof(pkt_t); 
+    size_t need = ntohl(COMO(caplen)) + sizeof(pkt_t);
 
     if (*len < need) 
 	return -1; 
@@ -595,7 +602,7 @@ replay(char *buf, char *out, size_t * len, int *count)
     COMO(l3ofs) = ntohs(COMO(l3ofs)); 
     COMO(l4ofs) = ntohs(COMO(l4ofs)); 
 #endif
-    pkt->payload = out + sizeof(pkt_t);
+    COMO(payload) = out + sizeof(pkt_t);
     *len = need;
     *count = 1;
     return 0;	
@@ -623,4 +630,3 @@ callbacks_t callbacks = {
     replay: replay ,
     formats: "pretty pcap"
 };
-
