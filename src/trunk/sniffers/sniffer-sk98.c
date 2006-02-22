@@ -331,19 +331,20 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	info->tokens[npkts] = token; 
 	getTime(info->clock_retimers[iface], info->m->k2u_pipe[ind].tstamp, 
 		&tv, NULL);
-        pkt->ts = TIME2TS(tv.tv_sec, tv.tv_usec); 
-        pkt->len = info->m->k2u_pipe[ind].len; 
-        pkt->caplen = info->m->k2u_pipe[ind].len; 
-	pkt->payload = (char *) info->packet_pool[token].payload; 
+	COMO(ts) = TIME2TS(tv.tv_sec, tv.tv_usec);
+	COMO(type) = COMOTYPE_LINK;
+	COMO(len) = info->m->k2u_pipe[ind].len;
+	COMO(caplen) = info->m->k2u_pipe[ind].len;
+	COMO(payload) = (char *) info->packet_pool[token].payload;
 
-	pkt->dropped = (dropped < 0xffff)? (uint16_t) dropped : 0xffff; 
+	COMO(dropped) = (dropped < 0xffff) ? (uint16_t) dropped : 0xffff;
 	dropped = 0; 
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
-        updateofs(pkt, COMOTYPE_ETH);
+	updateofs(pkt, L2, LINKTYPE_ETH);
 	mb();
 	info->m->k2u_cons++;
     }
