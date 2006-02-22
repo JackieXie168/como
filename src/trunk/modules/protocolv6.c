@@ -66,7 +66,7 @@ ipv6_proto(pkt_t *pkt)
 {
     union _como_ipv6hdr * hdr;
 
-    hdr = (union _como_ipv6hdr *) (pkt->payload + pkt->layer3ofs);
+    hdr = (union _como_ipv6hdr *) (pkt->payload + pkt->l3ofs);
         
     /* initialize */
     int32_t len = H16(hdr->base.len);
