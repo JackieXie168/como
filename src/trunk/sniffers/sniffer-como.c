@@ -146,21 +146,26 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
             break;
 
 	/* ok, copy the packet header */
-	pkt->ts = NTOHLL(p->ts); 
-	pkt->len = ntohl(p->len); 
-	pkt->caplen = ntohl(p->caplen);
-        pkt->type = ntohs(p->type); 
-  	pkt->l3type = ntohs(p->l3type); 
-        pkt->l3ofs = ntohs(p->l3ofs); 
-        pkt->l4ofs = ntohs(p->l4ofs); 
+	COMO(ts) = NTOHLL(p->ts); 
+	COMO(len) = ntohl(p->len); 
+	COMO(caplen) = ntohl(p->caplen);
+        COMO(type) = ntohs(p->type); 
+        COMO(dropped) = ntohs(p->dropped); 
+        COMO(type) = ntohs(p->type); 
+        COMO(l2type) = ntohs(p->l2type); 
+  	COMO(l3type) = ntohs(p->l3type); 
+  	COMO(l4type) = ntohs(p->l4type); 
+        COMO(l2ofs) = ntohs(p->l2ofs); 
+        COMO(l3ofs) = ntohs(p->l3ofs); 
+        COMO(l4ofs) = ntohs(p->l4ofs); 
 
 	/* the payload is just after the packet. update 
 	 * the payload pointer. 
 	 */
-	pkt->payload = base + sizeof(pkt_t); 
+	COMO(payload) = base + sizeof(pkt_t); 
 
 	/* move forward */
-	base += pkt->caplen + sizeof(pkt_t); 
+	base += COMO(caplen) + sizeof(pkt_t); 
     }
 
     info->nbytes -= (base - info->buf);
