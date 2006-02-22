@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004 Intel Corporation
- * All r ghts reserved.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -94,9 +94,13 @@ hash(pkt_t *pkt)
 static int
 check(pkt_t * pkt)
 {
-    return ((COMO(type) == COMOTYPE_RADIO) && 
-	((WLANTYPE(COMO(l2type)) == WLANTYPE_MGMT) && 
-	(WLANSUBTYPE(COMO(l2type)) == MGMT_SUBTYPE_BEACON)));
+    if (COMO(type) == COMOTYPE_RADIO) {
+	uint32_t fc;
+	fc = H16(IEEE80211_HDR(fc));
+	return ((WLANTYPE(fc) == WLANTYPE_MGMT) &&
+		(WLANSUBTYPE(fc) == MGMT_SUBTYPE_BEACON));
+    }
+    return 0;
 }
 
 
@@ -128,14 +132,14 @@ update(pkt_t *pkt, void *fh, int isnew)
     int i;
 
     if (isnew) {
-        x->ts = pkt->ts;
+	x->ts = COMO(ts);
 
 	x->signal = H32(PRISM_HDR(ssi_signal));
 	x->noise = H32(PRISM_HDR(ssi_noise));
         x->phytype = H32(PRISM_HDR(phytype));
 	x->encoding = H32(PRISM_HDR(encoding));    
 
-        x->bivl = MGMT_BODY(bivl); 
+        x->bivl = H16(MGMT_BODY(bivl)); 
 	x->channel = MGMT_BODY(ch);
         
 	/* get to the SSID information element */
@@ -339,4 +343,3 @@ callbacks_t callbacks = {
     replay: NULL,
     formats: "plain pretty"
 };
-
