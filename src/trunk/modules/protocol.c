@@ -76,6 +76,9 @@ update(pkt_t *pkt, void *fh, int isnew)
     if (COMO(type) == COMOTYPE_NF) {
         x->bytes[IP(proto)] += H64(NF(bytecount)) * (uint64_t)H16(NF(sampling));
         x->pkts[IP(proto)] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } else if (COMO(type) == COMOTYPE_SFLOW) {
+	x->bytes[IP(proto)] += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
+	x->pkts[IP(proto)] += H32(SFLOW(sampling_rate));
     } else {
         x->bytes[IP(proto)] += H16(IP(len)); 
         x->pkts[IP(proto)]++;
