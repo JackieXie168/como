@@ -50,10 +50,16 @@ FLOWDESC {
     uint64_t    databytes;
 };
 
+static int
+check(pkt_t * pkt)
+{
+    return (COMO(l2type) == LINKTYPE_80211);
+}
 
 static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
+    uint32_t fc;
     FLOWDESC *x = F(fh);
 
     if (isnew) {
@@ -61,8 +67,10 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->mgmtpkts = x->ctrlpkts = x->datapkts = 0;
         x->mgmtbytes = x->ctrlbytes = x->databytes = 0;
     }
+    
+    fc = H16(IEEE80211_HDR(fc));
 
-    switch(WLANTYPE(COMO(l2type))) {
+    switch(WLANTYPE(fc)) {
     case WLANTYPE_MGMT:
 	x->mgmtpkts++;
         x->mgmtbytes += COMO(len);
@@ -209,7 +217,7 @@ callbacks_t callbacks = {
     indesc: NULL, 
     outdesc: NULL,
     init: NULL,
-    check: NULL,
+    check: check,
     hash: NULL,
     match: NULL,
     update: update,
