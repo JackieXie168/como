@@ -130,7 +130,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	dag_record_t *rec;          /* DAG record structure */ 
 	int len;                    /* total record length */
-        int type; 
+        int l2type; 
 
         /* access to packet record */
         rec = (dag_record_t *) base;
@@ -146,8 +146,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
         /*
          * ok, data is good now, copy the packet over
          */
-        pkt->ts = rec->ts;
-        pkt->len = ntohs(rec->wlen);
+	COMO(ts) = rec->ts;
+	COMO(len) = ntohs(rec->wlen);
+	COMO(type) = COMOTYPE_LINK;
 
 	/* 
 	 * skip the DAG header 
@@ -167,11 +168,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	     */
 
 	case TYPE_HDLC_POS: 
-	    type = COMOTYPE_HDLC; 
+	    l2type = LINKTYPE_HDLC; 
 	    break; 
 
 	case TYPE_ETH: 
-	    type = COMOTYPE_ETH; 
+	    l2type = LINKTYPE_ETH; 
 	    base += 2; 	/* DAG adds 4 bytes to Ethernet headers */
 	    len -= 2; 
 	    break; 
@@ -185,14 +186,14 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
         /* 
          * copy the packet payload 
          */
-        pkt->caplen = len;
-	pkt->payload = base; 
+	COMO(caplen) = len;
+	COMO(payload) = base;
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 
          * this sniffer only runs on ethernet frames. 
          */
-        updateofs(pkt, type); 
+	updateofs(pkt, L2, l2type);
 
 	/* move to next packet in the buffer */
         base += len; 
