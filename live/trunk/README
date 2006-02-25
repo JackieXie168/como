@@ -26,13 +26,3 @@ particular environment where it is supposed to run.
  . The page gives the ability to add a CoMo node to the list of 
    queryable nodes.
 
--- Allow/Deny certain queries. 
-
- . By default, the web page will present four areas corresponding to 
-   four queries. The main area with a JPEG image will have a set of tabs 
-   corresponding to all modules running on the CoMo node. In order to remove
-   a tab update the variable $DONOTSHOW in the comolive.conf file, e.g., to 
-   remove the "trace" module from the tab list add
-     '$DONOTSHOW = array(0 => "trace");' 
-
-

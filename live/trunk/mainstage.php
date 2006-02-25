@@ -20,7 +20,6 @@
     include ("class/query.class.php");
 
     $http_query_string = $http_query_string . "&filter=" . $node -> modinfo[$module]['filter'];
-
     $query = new Query($stime, $etime, $RESULTS, $GNUPLOT, $CONVERT, $RESOLUTION);
     $query_string = $query->get_query_string($module, $format, $http_query_string);
     $data = $query->do_query ($node->comonode, $query_string);
