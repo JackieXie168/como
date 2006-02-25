@@ -63,8 +63,11 @@ class Query {
                 $query .= "&" . $a[$i];
             }
         }
-        
-       $this->query_string  = "module=$module&start=$this->stime&end=$this->etime&wait=$this->wait&format=$format&granularity=$this->granularity" . $query;
+        if ($module != "netflow-anon") {
+	   $this->query_string  = "module=$module&start=$this->stime&end=$this->etime&wait=$this->wait&format=$format&granularity=$this->granularity" . $query;
+        } else {
+	   $this->query_string  = "module=$module&start=$this->stime&end=$this->etime&wait=$this->wait&format=$format" . $query;
+        }
         return $this->query_string;
     }
 
