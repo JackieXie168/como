@@ -237,7 +237,7 @@ int	pcap_get_selectable_fd(pcap_t *);
 #define DLT_IPFILTER    116
 #define DLT_PFLOG       117
 #define DLT_CISCO_IOS   118
-#define DLT_PRISM_HEADER        119
+#define DLT_AVS_HEADER  119
 #define DLT_AIRONET_HEADER      120
 
 #endif

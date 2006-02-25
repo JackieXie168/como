@@ -135,8 +135,8 @@ update(pkt_t *pkt, void *fh, int isnew)
 	x->channel = MGMT_BODY(ch); 	
     }
     x->samples++;
-    x->signal += H32(PRISM_HDR(ssi_signal)); 
-    x->noise += H32(PRISM_HDR(ssi_noise)); 
+    x->signal += H32(AVS_HDR(ssi_signal)); 
+    x->noise += H32(AVS_HDR(ssi_noise)); 
     
     return 0; /* records are never full */
 }

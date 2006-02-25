@@ -134,10 +134,10 @@ update(pkt_t *pkt, void *fh, int isnew)
     if (isnew) {
 	x->ts = COMO(ts);
 
-	x->signal = H32(PRISM_HDR(ssi_signal));
-	x->noise = H32(PRISM_HDR(ssi_noise));
-        x->phytype = H32(PRISM_HDR(phytype));
-	x->encoding = H32(PRISM_HDR(encoding));    
+	x->signal = H32(AVS_HDR(ssi_signal));
+	x->noise = H32(AVS_HDR(ssi_noise));
+        x->phytype = H32(AVS_HDR(phytype));
+	x->encoding = H32(AVS_HDR(encoding));    
 
         x->bivl = H16(MGMT_BODY(bivl)); 
 	x->channel = MGMT_BODY(ch);

@@ -35,7 +35,7 @@
 /* 
  * frame format derived from linux-wlan-ng codebase
  */
-struct _como_wlan_prism2hdr {
+struct _como_wlan_avshdr {
     n32_t version;
     n32_t length;
     n64_t mactime;
@@ -51,10 +51,10 @@ struct _como_wlan_prism2hdr {
     n32_t preamble;
     n32_t encoding;
 };
-#define PRISM_HDR(field)						\
-    (((struct _como_wlan_prism2hdr*)(pkt->payload))->field)
+#define AVS_HDR(field)						\
+    (((struct _como_wlan_avshdr*)(pkt->payload))->field)
 
-#define PRISM_HDR_LEN 64
+#define AVS_HDR_LEN 64
 
 
 /*
