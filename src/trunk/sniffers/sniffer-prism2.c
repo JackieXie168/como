@@ -295,7 +295,7 @@ sniffer_start(source_t * src)
    
     /* check datalink type.  support 802.11 DLT_ values */
     switch (sp_link(info->pcap)) {
-    case DLT_PRISM_HEADER:
+    case DLT_AVS_HEADER:
 	info->type = COMOTYPE_RADIO;
 	break;
     case DLT_IEEE802_11:

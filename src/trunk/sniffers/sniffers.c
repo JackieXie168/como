@@ -104,7 +104,7 @@ updateofs(pkt_t * pkt, layer_t l, int type)
 	COMO(l2ofs) = sizeof(struct _como_nf);
 	break;
     case COMOTYPE_RADIO:
-	COMO(l2ofs) = sizeof(struct _como_wlan_prism2hdr); 
+	COMO(l2ofs) = sizeof(struct _como_wlan_avshdr); 
 	break;
     case COMOTYPE_LINK:
     case COMOTYPE_COMO:
