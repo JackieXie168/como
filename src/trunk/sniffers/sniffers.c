@@ -103,8 +103,11 @@ updateofs(pkt_t * pkt, layer_t l, int type)
     case COMOTYPE_NF:
 	COMO(l2ofs) = sizeof(struct _como_nf);
 	break;
-    case COMOTYPE_RADIO:
-	COMO(l2ofs) = sizeof(struct _como_wlan_avshdr); 
+    case COMOTYPE_RADIO: /* 64-byte AVS header supported */ 
+	if(H32(AVS_HDR(version)) == AVS_MAGIC_COOKIE) 
+	    COMO(l2ofs) = sizeof(struct _como_wlan_avshdr); 
+	else 
+	    logmsg(LOGWARN, "144-byte PRISM HEADER unsupported\n");
 	break;
     case COMOTYPE_LINK:
     case COMOTYPE_COMO:
