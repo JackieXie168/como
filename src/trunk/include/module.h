@@ -108,8 +108,9 @@
     x = ((char *)x) + 8; 	\
 }
 
-
+#ifndef MAX
 #define MAX(a,b) 	(((a) > (b))? (a) : (b))
+#endif
 
 #endif /* _COMO_MODULE_H */
 
