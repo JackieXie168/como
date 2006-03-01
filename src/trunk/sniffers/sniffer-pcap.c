@@ -148,7 +148,8 @@ sniffer_start(source_t * src)
 	type = COMOTYPE_LINK;
 	l2type = LINKTYPE_80211;
 	break;
-    case DLT_AVS_HEADER: 
+    /* ignore 144-byte prism hdr, supporting AVS hdr only */
+    case DLT_PRISM_HEADER:
 	logmsg(LOGSNIFFER, 
 	       "datalink 802.11 with AVS header (%d)\n", pf.linktype); 
 	type = COMOTYPE_RADIO;

@@ -55,6 +55,9 @@ struct _como_wlan_avshdr {
     (((struct _como_wlan_avshdr*)(pkt->payload))->field)
 
 #define AVS_HDR_LEN 64
+#define AVS_MAGIC_COOKIE 0x80211001
+
+
 
 
 /*
