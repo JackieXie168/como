@@ -42,25 +42,6 @@
 
 #include "module.h"
 
-/* phy types employed by ieee 802.11 devices */
-
-#define PHYTYPE_FHSS_DOT11_97 	1
-#define PHYTYPE_DSSS_DOT11_97  	2
-#define PHYTYPE_IRBASEBAND    	3
-#define PHYTYPE_DSSS_DOT11_B  	4
-#define PHYTYPE_PBCC_DOT11_B 	5
-#define PHYTYPE_OFDM_DOT11_G 	6
-#define PHYTYPE_PBCC_DOT11_G 	7
-#define PHYTYPE_OFDM_DOT11_A 	8
-
-/* ieee 802.11 encoding types */
-
-#define UNKNOWN_ENCODING 	0
-#define CCK_ENCODING 		1
-#define PBCC_ENCODING 		2
-#define OFDM_ENCODING 		3
-
-
 #define MAC_ADDR_SIZE 	6
 #define SSID_SIZE     	34
 
@@ -94,11 +75,9 @@ hash(pkt_t *pkt)
 static int
 check(pkt_t * pkt)
 {
-    if (COMO(type) == COMOTYPE_RADIO) {
-	uint32_t fc;
-	fc = H16(IEEE80211_HDR(fc));
-	return ((WLANTYPE(fc) == WLANTYPE_MGMT) &&
-		(WLANSUBTYPE(fc) == MGMT_SUBTYPE_BEACON));
+    if (COMO(l2type) == LINKTYPE_80211) {
+	return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
+		(IEEE80211_BASE(fc_subtype) == MGMT_SUBTYPE_BEACON));
     }
     return 0;
 }
@@ -134,10 +113,17 @@ update(pkt_t *pkt, void *fh, int isnew)
     if (isnew) {
 	x->ts = COMO(ts);
 
-	x->signal = H32(AVS_HDR(ssi_signal));
-	x->noise = H32(AVS_HDR(ssi_noise));
-        x->phytype = H32(AVS_HDR(phytype));
-	x->encoding = H32(AVS_HDR(encoding));    
+        if (COMO(type) == COMOTYPE_RADIO) {
+            x->signal = H32(RADIO(ssisignal));
+	    x->noise = H32(RADIO(ssinoise));
+            x->phytype = H32(RADIO(phytype));
+	    x->encoding = H32(RADIO(encoding));
+        } else {
+            x->signal = 0;
+            x->noise = 0;
+            x->phytype = RADIO_PHYTYPE_NONE;
+            x->encoding = RADIO_ENCODING_UNKNOWN;
+        }
 
         x->bivl = H16(MGMT_BODY(bivl)); 
 	x->channel = MGMT_BODY(ch);
@@ -264,48 +250,54 @@ print(char *buf, size_t *len, char * const args[])
 			n < (MAC_ADDR_SIZE-1) ? ":": "  ");
 
         switch (ntohl(x->phytype)) {
-	case PHYTYPE_FHSS_DOT11_97:
+	case RADIO_PHYTYPE_FHSS_DOT11_97:
 	    *len += sprintf(s + *len, "%-15s", "FHSS 802.11 97");
 	    break; 
-	case PHYTYPE_DSSS_DOT11_97:
+	case RADIO_PHYTYPE_DSSS_DOT11_97:
 	    *len += sprintf(s + *len, "%-15s", "DSSS 802.11 97");
 	    break;
-	case PHYTYPE_IRBASEBAND:  
+	case RADIO_PHYTYPE_IRBASEBAND:  
 	    *len += sprintf(s + *len, "%-15s", "IR BASEBAND");
 	    break;
-	case PHYTYPE_DSSS_DOT11_B: 
+	case RADIO_PHYTYPE_DSSS_DOT11_B: 
 	    *len += sprintf(s + *len, "%-15s", "DSSS 802.11b");
 	    break;
-	case PHYTYPE_PBCC_DOT11_B:
+	case RADIO_PHYTYPE_PBCC_DOT11_B:
 	    *len += sprintf(s + *len, "%-15s", "PBCC 802.11b");
 	    break;
-	case PHYTYPE_OFDM_DOT11_G:
+	case RADIO_PHYTYPE_OFDM_DOT11_G:
 	    *len += sprintf(s + *len, "%-15s", "OFDM 802.11g");
 	    break;
-	case PHYTYPE_PBCC_DOT11_G: 
+	case RADIO_PHYTYPE_PBCC_DOT11_G: 
 	    *len += sprintf(s + *len, "%-15s", "PBCC 802.11g");
 	    break;
-	case PHYTYPE_OFDM_DOT11_A: 
+	case RADIO_PHYTYPE_OFDM_DOT11_A: 
 	    *len += sprintf(s + *len, "%-15s", "OFDM 802.11a");
 	    break;
+        case RADIO_PHYTYPE_DSSS_OFDM_DOT11_G:
+            *len += sprintf(s + *len, "%-15s", "DSSS OFDM 802.11g");
+            break;
 	default:
 	    *len += sprintf(s + *len, "%-15s", "FOREIGN");
 	    break;
 	}
 
 	switch(ntohl(x->encoding)) {
-	case UNKNOWN_ENCODING:
+	case RADIO_ENCODING_UNKNOWN:
 	    *len += sprintf(s + *len, "%-10s", "UNKNOWN");
 	    break; 
-	case CCK_ENCODING: 
+	case RADIO_ENCODING_CCK: 
 	    *len += sprintf(s + *len, "%-10s", "CCK");
 	    break; 
-	case PBCC_ENCODING: 
+	case RADIO_ENCODING_PBCC: 
 	    *len += sprintf(s + *len, "%-10s", "PBCC");
 	    break; 
-	case OFDM_ENCODING: 
+	case RADIO_ENCODING_OFDM: 
 	    *len += sprintf(s + *len, "%-10s", "OFDM");
-	    break; 
+	    break;
+        case RADIO_ENCODING_DSSS_OFDM: 
+            *len += sprintf(s + *len, "%-10s", "DSSS OFDM");
+            break;
 	default:
 	    *len += sprintf(s + *len, "%-10s", "FOREIGN");
 	    break;
