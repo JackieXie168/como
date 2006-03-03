@@ -33,6 +33,7 @@
 #include <string.h>		/* bzero */
 #include <errno.h>		/* errno */
 #include <signal.h>
+#include <assert.h>
 
 #include "como.h"
 #include "sniffers.h"
