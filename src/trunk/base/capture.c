@@ -32,7 +32,7 @@
 #include <unistd.h>		/* read, write etc. */
 #include <string.h>		/* bzero */
 #include <errno.h>		/* errno */
-#include <assert.h>
+#include <signal.h>
 
 #include "como.h"
 #include "sniffers.h"
@@ -56,6 +56,33 @@ extern struct _sniffer *__sniffers[];
 
 tailq_t expired_tables;		/* expired flow tables */
 
+/*
+ * -- cleanup
+ * 
+ * This function is registered to get called at exit.
+ * Calls the stop callback for each sniffer still active.
+ */
+static void
+cleanup()
+{
+    source_t *src;
+    logmsg(LOGDEBUG, "closing sniffers\n");
+
+    for (src = map.sources; src; src = src->next) {
+	if (src->flags & SNIFF_INACTIVE)
+	    continue;
+	src->cb->sniffer_stop(src);
+	src->flags |= SNIFF_INACTIVE;
+    }
+}
+
+static void
+handle_sigpipe()
+{
+    map.supervisor_fd = 0;
+    
+    exit(SIGPIPE);
+}
 
 /*
  * -- match_desc
@@ -689,6 +716,10 @@ capture_mainloop(int accept_fd)
     int max_fd;
     int table_sent;
     int idx;
+
+    signal(SIGPIPE, handle_sigpipe);
+    signal(SIGINT, exit);
+    atexit(cleanup);
 
     /* initialize select()able file descriptors */
     max_fd = 0;
