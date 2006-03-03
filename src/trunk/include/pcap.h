@@ -236,9 +236,10 @@ int	pcap_get_selectable_fd(pcap_t *);
 #define DLT_ECONET      115
 #define DLT_IPFILTER    116
 #define DLT_PFLOG       117
-#define DLT_CISCO_IOS  	118
-#define DLT_PRISM_HEADER	119
-#define DLT_AIRONET_HEADER    	120
-#define DLT_IEEE802_11_RADIO_AVS 	163 
+#define DLT_CISCO_IOS   118
+#define DLT_PRISM_HEADER         119
+#define DLT_AIRONET_HEADER       120
+#define DLT_IEEE802_11_RADIO     127 /* 802.11 plus radiotap radio header */
+#define DLT_IEEE802_11_RADIO_AVS 163 /* 802.11 plus AVS radio header */
 
 #endif
