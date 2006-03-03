@@ -30,29 +30,6 @@
 #define _COMO_COMO_H
 
 #include <sys/time.h>   /* struct timeval */
-#include <sys/param.h>	/* byte endianness */
-
-#ifdef __BYTE_ORDER
-# if __BYTE_ORDER == __LITTLE_ENDIAN
-#  define COMO_LITTLE_ENDIAN
-# else
-#  if __BYTE_ORDER == __BIG_ENDIAN
-#   define COMO_BIG_ENDIAN
-#  else
-#    error "unknown byte order!"
-#  endif
-# endif
-#else
-# ifdef LITTLE_ENDIAN
-#  define COMO_LITTLE_ENDIAN
-# else
-#  ifdef BIG_ENDIAN
-#   define COMO_BIG_ENDIAN
-#  else
-#   error "unknown byte order!"
-#  endif
-# endif
-#endif /* __BYTE_ORDER */
 
 #include "comotypes.h"
 #include "comofunc.h"
