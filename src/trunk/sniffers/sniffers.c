@@ -37,7 +37,7 @@
  * shared among all sniffers. 
  */
 
-int ieee80211_hdrlen(uint32_t fc);
+int ieee80211_hdrlen(pkt_t * pkt);
 
 /* 
  * figure out if a packet is ISL.
@@ -90,7 +90,6 @@ updatel4(pkt_t * pkt)
 void
 updateofs(pkt_t * pkt, layer_t l, int type)
 {
-    uint32_t fc;
     assert(COMO(type) != 0);
 
     /*
@@ -103,11 +102,8 @@ updateofs(pkt_t * pkt, layer_t l, int type)
     case COMOTYPE_NF:
 	COMO(l2ofs) = sizeof(struct _como_nf);
 	break;
-    case COMOTYPE_RADIO: /* 64-byte AVS header supported */ 
-	if(H32(AVS_HDR(version)) == AVS_MAGIC_COOKIE) 
-	    COMO(l2ofs) = sizeof(struct _como_wlan_avshdr); 
-	else 
-	    logmsg(LOGWARN, "144-byte PRISM HEADER unsupported\n");
+    case COMOTYPE_RADIO:
+	COMO(l2ofs) = sizeof(struct _como_radio);
 	break;
     case COMOTYPE_LINK:
     case COMOTYPE_COMO:
@@ -153,10 +149,9 @@ updateofs(pkt_t * pkt, layer_t l, int type)
 	case LINKTYPE_80211:
 	    COMO(l2type) = LINKTYPE_80211;
 
-	    fc = H16(IEEE80211_HDR(fc));
-	    COMO(l3ofs) += ieee80211_hdrlen(fc);
+	    COMO(l3ofs) += ieee80211_hdrlen(pkt);
 
-	    if (FCTRL_TYPE(fc) == WLANTYPE_DATA)
+	    if (IEEE80211_BASE(fc_type) == IEEE80211TYPE_DATA)
 		COMO(l3type) = H16(LLC_HDR(type));
 
 	    break;

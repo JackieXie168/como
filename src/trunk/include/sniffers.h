@@ -110,6 +110,12 @@ typedef enum { L2 = 2, L3 = 3 } layer_t;
 void updateofs(pkt_t * pkt, layer_t l, int type);
 
 /* function used by sniffer-*.c to parse the 802.11 frames */
-int ieee80211_parse_frame(pkt_t * pkt, char *mgmt_buf);
+int ieee80211_capture_frame(const char *buf, int buf_len, char *dest);
+
+typedef int (*to_como_radio_fn)(const char *, struct _como_radio *);
+
+int avs_header_to_como_radio(const char *buf, struct _como_radio *r);
+
+int prism2_header_to_como_radio(const char *buf, struct _como_radio *r);
 
 #endif /* _COMO_SNIFFERS_H */
