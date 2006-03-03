@@ -421,15 +421,13 @@ print(char *buf, size_t *len, char * const args[])
 		 	(uint16_t) H16(TCP(win))); 
 	}
     } else if (COMO(l2type) == LINKTYPE_80211) {
-	uint32_t fc = H16(IEEE80211_HDR(fc));
+	switch (IEEE80211_BASE(fc_type)) {
 
-	switch (WLANTYPE(fc)) {
-
-	case WLANTYPE_MGMT:
+	case IEEE80211TYPE_MGMT:
             snprintf(ssid, MGMT_BODY(ssid_len) + 1, MGMT_BODY(ssid));
 	    *len += sprintf(s + *len, "%s ",
-			    mgmt_subtypes[WLANSUBTYPE(fc) >> 12]);
-	    switch (WLANSUBTYPE(fc)) {
+			    mgmt_subtypes[IEEE80211_BASE(fc_subtype)]);
+	    switch (IEEE80211_BASE(fc_subtype)) {
 	    case MGMT_SUBTYPE_BEACON:
 	    case MGMT_SUBTYPE_PROBE_RES:
                 *len += sprintf(s + *len, "%s %s", ssid,"[");
@@ -484,8 +482,8 @@ print(char *buf, size_t *len, char * const args[])
 		break;
 	    }	
 	    break;
-	case WLANTYPE_CTRL:
-	    switch (WLANSUBTYPE(fc)) {
+	case IEEE80211TYPE_CTRL:
+	    switch (IEEE80211_BASE(fc_subtype)) {
 	    case CTRL_SUBTYPE_PS_POLL:
 		*len += sprintf(s + *len, "%s %s%02x%s", "Power Save-Poll",
 				"AID(", H16(MGMT_BODY(aid)), ")");
@@ -524,8 +522,8 @@ print(char *buf, size_t *len, char * const args[])
 	       break;
 	    }
 	    break;
-	case WLANTYPE_DATA:
-	    switch (WLANSUBTYPE(fc)) {
+	case IEEE80211TYPE_DATA:
+	    switch (IEEE80211_BASE(fc_subtype)) {
 	    case DATA_SUBTYPE_DATA:
 		*len += sprintf(s + *len, "%s", "Data Type NOT Supported"); 
 		break;

@@ -59,7 +59,6 @@ check(pkt_t * pkt)
 static int
 update(pkt_t *pkt, void *fh, int isnew)
 {
-    uint32_t fc;
     FLOWDESC *x = F(fh);
 
     if (isnew) {
@@ -68,18 +67,16 @@ update(pkt_t *pkt, void *fh, int isnew)
         x->mgmtbytes = x->ctrlbytes = x->databytes = 0;
     }
     
-    fc = H16(IEEE80211_HDR(fc));
-
-    switch(WLANTYPE(fc)) {
-    case WLANTYPE_MGMT:
+    switch(IEEE80211_BASE(fc_type)) {
+    case IEEE80211TYPE_MGMT:
 	x->mgmtpkts++;
         x->mgmtbytes += COMO(len);
         break;
-    case WLANTYPE_CTRL:
+    case IEEE80211TYPE_CTRL:
 	x->ctrlpkts++;
         x->ctrlbytes += COMO(len);
 	break;
-    case WLANTYPE_DATA: 
+    case IEEE80211TYPE_DATA: 
 	x->datapkts++;
         x->databytes += COMO(len);
 	break;

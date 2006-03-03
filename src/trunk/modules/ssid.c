@@ -81,11 +81,9 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 static int
 check(pkt_t * pkt) 
 {
-    if (COMO(type) == COMOTYPE_RADIO) {
-	uint32_t fc;
-	fc = H16(IEEE80211_HDR(fc));
-	return ((WLANTYPE(fc) == WLANTYPE_MGMT) &&
-		(WLANSUBTYPE(fc) == MGMT_SUBTYPE_BEACON));
+    if (COMO(l2type) == LINKTYPE_80211) {
+	return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
+		(IEEE80211_BASE(fc_subtype) == MGMT_SUBTYPE_BEACON));
     }
     return 0;
 }
@@ -135,8 +133,10 @@ update(pkt_t *pkt, void *fh, int isnew)
 	x->channel = MGMT_BODY(ch); 	
     }
     x->samples++;
-    x->signal += H32(AVS_HDR(ssi_signal)); 
-    x->noise += H32(AVS_HDR(ssi_noise)); 
+    if (COMO(type) == COMOTYPE_RADIO) {
+        x->signal += H32(RADIO(ssisignal)); 
+        x->noise += H32(RADIO(ssinoise)); 
+    }
     
     return 0; /* records are never full */
 }
