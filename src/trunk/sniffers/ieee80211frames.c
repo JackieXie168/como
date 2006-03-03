@@ -27,6 +27,7 @@
  */
 
 #include <string.h>
+#include <assert.h>
 
 #include "como.h"
 #include "comofunc.h"
@@ -37,32 +38,184 @@
 /* parsing  variables */
 struct _p80211info {
     int rl;			/* remaining packet length */
-    char *pkt_data;
-    struct _como_wlan_mgmt_body *mgmt_body;
+    const char *pkt_data;
+    struct _como_wlan_mgmt *wlan_mgmt;
     uint32_t fc;
 };
+
+/*
+ * management frames: fixed fields
+ */
+struct _ieee80211_beacon {
+    uint8_t ts[8];
+    uint16_t bi;
+    uint16_t cap;
+};
+#define BEACON_FIXED_LEN 12
+
+struct _ieee80211_disassoc {
+    uint16_t rc;
+};
+#define DISASSOC_FIXED_LEN 2
+
+struct _ieee80211_assoc_req {
+    uint16_t cap;
+    uint16_t li;
+};
+#define ASSOC_REQ_FIXED_LEN 4
+
+struct _ieee80211_assoc_res {
+    uint16_t cap;
+    uint16_t sc;
+    uint16_t aid;
+};
+#define ASSOC_RES_FIXED_LEN 6
+
+struct _ieee80211_reassoc_req {
+    uint16_t cap;
+    uint16_t li;
+    uint8_t addr[6];		/* current ap address */
+};
+#define REASSOC_REQ_FIXED_LEN 10
+
+struct _ieee80211_reassoc_res {
+    uint16_t cap;
+    uint16_t sc;
+    uint16_t aid;
+};
+#define REASSOC_RES_FIXED_LEN 6
+
+/*
+struct _ieee80211_probe_req {
+};
+*/
+#define PROBE_REQ_FIXED_LEN 0
+
+struct _ieee80211_probe_res {
+    uint8_t ts[8];
+    uint16_t bi;
+    uint16_t cap;
+};
+#define PROBE_RES_FIXED_LEN 12
+
+struct _ieee80211_auth {
+    uint16_t aan;		/* auth algorithm number */
+    uint16_t atsn;		/* auth transaction seq number */
+    uint16_t sc;
+};
+#define AUTH_FIXED_LEN 6
+
+struct _ieee80211_deauth {
+    uint16_t rc;
+};
+#define DEAUTH_FIXED_LEN 2
+
+/* service set identity element */
+struct _ieee80211_info_element {
+    uint8_t id;
+    uint8_t len;
+};
+
+struct _ieee80211_ssid {
+    uint8_t id;
+    uint8_t len;
+    char ssid[34];
+};
+
+struct _ieee80211_rates {
+    uint8_t id;
+    uint8_t len;
+    uint8_t rates[8];
+};
+
+struct _ieee80211_fh {
+    uint8_t id;
+    uint8_t length;
+    uint16_t dwell_time;
+    uint8_t hop_set;
+    uint8_t hop_pattern;
+    uint8_t hop_index;
+};
+
+#define FH_IE_LEN 7
+
+struct _ieee80211_ds {
+    uint8_t id;
+    uint8_t len;
+    uint8_t ch;
+};
+
+#define DS_IE_LEN 3
+
+struct _ieee80211_cf {
+    uint8_t id;
+    uint8_t length;
+    uint8_t count;
+    uint8_t period;
+    uint16_t md;
+    uint16_t dr;
+};
+
+#define CF_IE_LEN 8
+
+struct _ieee80211_ibss {
+    uint8_t id;
+    uint8_t len;
+    uint16_t atim;
+};
+
+#define IBSS_IE_LEN 4
+
+struct _ieee80211_tim {
+    uint8_t id;
+    uint8_t len;
+    uint8_t cnt;
+    uint8_t period;
+    uint8_t bc;
+    uint8_t bmap[252];
+};
+
+struct _ieee80211_challenge {
+    uint8_t id;
+    uint8_t length;
+    uint8_t text[254];		/* 1-253 + 1 for NULL */
+};
+
+/*
+ * information element IDs
+ */
+#define SSID_TYPE      0
+#define RATES_TYPE     1
+#define FH_TYPE        2
+#define DS_TYPE        3
+#define CF_TYPE        4
+#define TIM_TYPE       5
+#define IBSS_TYPE      6
+/* Reserved         7- 15 */
+#define CHALLENGE_TYPE 16
 
 /*
  * -- ieee80211_hdrlen
  * return 802.11 header length 
  */
 int
-ieee80211_hdrlen(uint32_t fc)
+ieee80211_hdrlen(pkt_t * pkt)
 {
     /* determine 802.11 frame type */
-    switch (FCTRL_TYPE(fc)) {
-    case WLANTYPE_MGMT:
+    switch (IEEE80211_BASE(fc_type)) {
+    case IEEE80211TYPE_MGMT:
 	return MGMT_HDR_LEN;
-    case WLANTYPE_CTRL:
+    case IEEE80211TYPE_CTRL:
 	return 0;		/* TODO */
-    case WLANTYPE_DATA:
-	if (FCTRL_TO_DS(fc) && FCTRL_FROM_DS(fc))
+    case IEEE80211TYPE_DATA:
+	if (IEEE80211_BASE(fc_to_ds) && IEEE80211_BASE(fc_from_ds))
 	    return 30 + LLC_HDR_LEN;
 	else
 	    return 24 + LLC_HDR_LEN;
 	break;
     default:
 	logmsg(LOGWARN, "ieee802.11 frame type unknown\n");
+	assert_not_reached();
 	break;
     }
     return 0;			/* XXX */
@@ -83,7 +236,7 @@ parse80211_info_elements(struct _p80211info *pi)
     struct _ieee80211_rates *rates_type;
     struct _ieee80211_ds *ds_type;
     struct _ieee80211_tim *tim_type;
-    struct _como_wlan_mgmt_body *mgmt_body = pi->mgmt_body;
+    struct _como_wlan_mgmt *wlan_mgmt = pi->wlan_mgmt;
 
     int wh;			/* buffer offset */
 
@@ -94,14 +247,14 @@ parse80211_info_elements(struct _p80211info *pi)
 	switch (ie->id) {
 	case SSID_TYPE:
 	    ssid_type = (struct _ieee80211_ssid *) pi->pkt_data;
-	    mgmt_body->ssid_len = ssid_type->len;
-	    memcpy(mgmt_body->ssid, ssid_type->ssid, mgmt_body->ssid_len);
+	    wlan_mgmt->ssid_len = ssid_type->len;
+	    memcpy(wlan_mgmt->ssid, ssid_type->ssid, wlan_mgmt->ssid_len);
 	    wh = ssid_type->len + 2;
 	    break;
 	case RATES_TYPE:
 	    rates_type = (struct _ieee80211_rates *) pi->pkt_data;
-	    mgmt_body->rates_len = rates_type->len;
-	    memcpy(mgmt_body->rates, rates_type->rates, mgmt_body->rates_len);
+	    wlan_mgmt->rates_len = rates_type->len;
+	    memcpy(wlan_mgmt->rates, rates_type->rates, wlan_mgmt->rates_len);
 	    wh = rates_type->len + 2;
 	    break;
 	case FH_TYPE:
@@ -109,7 +262,7 @@ parse80211_info_elements(struct _p80211info *pi)
 	    break;
 	case DS_TYPE:
 	    ds_type = (struct _ieee80211_ds *) pi->pkt_data;
-	    mgmt_body->ch = ds_type->ch;
+	    wlan_mgmt->ch = ds_type->ch;
 	    wh = DS_IE_LEN;
 	    break;
 	case CF_TYPE:
@@ -154,8 +307,8 @@ parse80211_assoc_req(struct _p80211info *pi)
     /*
      * fill management body structure with fixed fields
      */
-    N16(pi->mgmt_body->cap) = stype->cap;
-    N16(pi->mgmt_body->li) = stype->li;
+    N16(pi->wlan_mgmt->cap) = stype->cap;
+    N16(pi->wlan_mgmt->li) = stype->li;
 
     /*
      * remaining packet length to parse, when zero the packet
@@ -181,9 +334,9 @@ parse80211_assoc_res(struct _p80211info *pi)
 
     stype = (struct _ieee80211_assoc_res *) pi->pkt_data;
 
-    N16(pi->mgmt_body->cap) = stype->cap;
-    N16(pi->mgmt_body->sc) = stype->sc;
-    N16(pi->mgmt_body->aid) = stype->aid;
+    N16(pi->wlan_mgmt->cap) = stype->cap;
+    N16(pi->wlan_mgmt->sc) = stype->sc;
+    N16(pi->wlan_mgmt->aid) = stype->aid;
 
     pi->rl -= ASSOC_RES_FIXED_LEN;
     pi->pkt_data += ASSOC_RES_FIXED_LEN;
@@ -205,9 +358,9 @@ parse80211_reassoc_req(struct _p80211info *pi)
 
     stype = (struct _ieee80211_reassoc_req *) pi->pkt_data;
 
-    N16(pi->mgmt_body->cap) = stype->cap;
-    N16(pi->mgmt_body->li) = stype->li;
-    memcpy(pi->mgmt_body->ap_addr, stype->addr, 6);
+    N16(pi->wlan_mgmt->cap) = stype->cap;
+    N16(pi->wlan_mgmt->li) = stype->li;
+    memcpy(pi->wlan_mgmt->ap_addr, stype->addr, 6);
 
     pi->rl -= REASSOC_REQ_FIXED_LEN;
     pi->pkt_data += REASSOC_REQ_FIXED_LEN;
@@ -229,9 +382,9 @@ parse80211_reassoc_res(struct _p80211info *pi)
 
     stype = (struct _ieee80211_reassoc_res *) pi->pkt_data;
 
-    N16(pi->mgmt_body->cap) = stype->cap;
-    N16(pi->mgmt_body->sc) = stype->sc;
-    N16(pi->mgmt_body->aid) = stype->aid;
+    N16(pi->wlan_mgmt->cap) = stype->cap;
+    N16(pi->wlan_mgmt->sc) = stype->sc;
+    N16(pi->wlan_mgmt->aid) = stype->aid;
 
     pi->rl -= REASSOC_RES_FIXED_LEN;
     pi->pkt_data += REASSOC_RES_FIXED_LEN;
@@ -255,8 +408,8 @@ parse80211_auth(struct _p80211info *pi)
     /*
      * fill management body structure with fixed fields
      */
-    N16(pi->mgmt_body->aan) = stype->aan;
-    N16(pi->mgmt_body->atsn) = stype->atsn;
+    N16(pi->wlan_mgmt->aan) = stype->aan;
+    N16(pi->wlan_mgmt->atsn) = stype->atsn;
 
     pi->rl -= AUTH_FIXED_LEN;
     pi->pkt_data += AUTH_FIXED_LEN;
@@ -280,7 +433,7 @@ parse80211_deauth(struct _p80211info *pi)
     /*
      * fill management body structure with fixed fields
      */
-    N16(pi->mgmt_body->rc) = stype->rc;
+    N16(pi->wlan_mgmt->rc) = stype->rc;
 
     pi->rl -= DEAUTH_FIXED_LEN;
     pi->pkt_data += DEAUTH_FIXED_LEN;
@@ -300,9 +453,9 @@ parse80211_probe_res(struct _p80211info *pi)
 
     stype = (struct _ieee80211_probe_res *) pi->pkt_data;
 
-    memcpy(pi->mgmt_body->ts, stype->ts, 8);
-    N16(pi->mgmt_body->bivl) = stype->bi;
-    N16(pi->mgmt_body->cap) = stype->cap;
+    memcpy(pi->wlan_mgmt->ts, stype->ts, 8);
+    N16(pi->wlan_mgmt->bivl) = stype->bi;
+    N16(pi->wlan_mgmt->cap) = stype->cap;
 
     pi->rl -= PROBE_RES_FIXED_LEN;
     pi->pkt_data += PROBE_RES_FIXED_LEN;
@@ -338,7 +491,7 @@ parse80211_disassoc(struct _p80211info *pi)
 
     stype = (struct _ieee80211_disassoc *) pi->pkt_data;
 
-    N16(pi->mgmt_body->rc) = (stype->rc);
+    N16(pi->wlan_mgmt->rc) = (stype->rc);
 
     pi->rl -= DISASSOC_FIXED_LEN;
     pi->pkt_data += DISASSOC_FIXED_LEN;
@@ -358,9 +511,9 @@ parse80211_beacon(struct _p80211info *pi)
 
     stype = (struct _ieee80211_beacon *) pi->pkt_data;
 
-    memcpy(pi->mgmt_body->ts, stype->ts, 8);
-    N16(pi->mgmt_body->bivl) = stype->bi;
-    N16(pi->mgmt_body->cap) = stype->cap;
+    memcpy(pi->wlan_mgmt->ts, stype->ts, 8);
+    N16(pi->wlan_mgmt->bivl) = stype->bi;
+    N16(pi->wlan_mgmt->cap) = stype->cap;
 
     pi->rl -= BEACON_FIXED_LEN;
     pi->pkt_data += BEACON_FIXED_LEN;
@@ -370,7 +523,7 @@ parse80211_beacon(struct _p80211info *pi)
 
 
 /*
- * -- parse80211_mgmtframe
+ * -- parse80211_mgmt_frame
  *
  * determine the 802.11 management frame subtype
  * call parsing subtype routine to fill the management body structure with
@@ -379,26 +532,31 @@ parse80211_beacon(struct _p80211info *pi)
  *
  */
 static int
-parse80211_mgmtframe(pkt_t * pkt, char *mgmt_buf, uint32_t fc)
+parse80211_mgmt_frame(const char *buf, int buf_len, char *dest)
 {
     struct _p80211info pi;
-    /*	FIXME: parser is not giving errors! */
+    struct _ieee80211_mgmt_hdr *h;
 
-    /*
-     * copy the first packet bytes up to management header
-     */
-    memcpy(mgmt_buf, COMO(payload), COMO(l3ofs));
+    /*  FIXME: parser is not giving errors! */
+
+    h = (struct _ieee80211_mgmt_hdr *) buf;
+
+    /* copy the management header */
+    memcpy(dest, buf, sizeof(struct _ieee80211_mgmt_hdr));
+    buf += sizeof(struct _ieee80211_mgmt_hdr);
+    dest += sizeof(struct _ieee80211_mgmt_hdr);
+    buf_len -= sizeof(struct _ieee80211_mgmt_hdr);
 
     /* remaining packet length to parse, when zero the packet
      * parsing process is complete
      */
-    pi.rl = COMO(caplen) - COMO(l3ofs);
+    pi.rl = buf_len;
 
     /* update capture buffer and processed packets buffer pointers */
-    pi.pkt_data = COMO(payload) + COMO(l3ofs);
-    pi.mgmt_body = (struct _como_wlan_mgmt_body *) (mgmt_buf + COMO(l3ofs));
+    pi.pkt_data = buf;
+    pi.wlan_mgmt = (struct _como_wlan_mgmt *) dest;
 
-    switch (FCTRL_SUBTYPE(fc)) {
+    switch (h->fc_subtype) {
     case MGMT_SUBTYPE_ASSOC_REQ:
 	parse80211_assoc_req(&pi);
 	break;
@@ -432,38 +590,39 @@ parse80211_mgmtframe(pkt_t * pkt, char *mgmt_buf, uint32_t fc)
 	parse80211_deauth(&pi);
 	break;
     }
-    COMO(caplen) = COMO(l3ofs) + sizeof(struct _como_wlan_mgmt_body);
-    COMO(payload) = mgmt_buf;
-    return COMO(caplen);
+
+    return sizeof(struct _ieee80211_mgmt_hdr) + sizeof(struct _como_wlan_mgmt);
 }
 
 
 /*
- * -- ieee80211_parse_frame
+ * -- ieee80211_capture_frame
  *
  * checks the frame type and in case of a management frame parses it
- * collecting all available header fields into a _como_wlan_mgmt_body
+ * collecting all available header fields into a _como_wlan_mgmt
  * structure that is stored after the 802.11 header into memory pointed by
  * mgmt_buf.
- * returns the number of bytes used in the mgmt_buf
+ * returns the number of bytes written in dest
  */
 int
-ieee80211_parse_frame(pkt_t * pkt, char *mgmt_buf)
+ieee80211_capture_frame(const char *buf, int buf_len, char *dest)
 {
-    uint32_t fc;
+    struct _ieee80211_base *h;
 
-    fc = H16(IEEE80211_HDR(fc));
+    h = (struct _ieee80211_base *) buf;
 
-    switch (FCTRL_TYPE(fc)) {
-    case WLANTYPE_MGMT:
+    switch (h->fc_type) {
+    case IEEE80211TYPE_MGMT:
 	/*
 	 * remaining packet length to parse, when zero the packet
 	 * parsing process is complete
 	 */
-	return parse80211_mgmtframe(pkt, mgmt_buf, fc);
+	return parse80211_mgmt_frame(buf, buf_len, dest);
 	break;
-    case WLANTYPE_CTRL:
-    case WLANTYPE_DATA:
+    case IEEE80211TYPE_CTRL:
+    case IEEE80211TYPE_DATA:
+	memcpy(dest, buf, buf_len);
+	return buf_len;
     default:
 	break;
     }

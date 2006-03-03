@@ -35,6 +35,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <assert.h>
 
 #include "como.h"
 #include "sniffers.h"
@@ -63,7 +64,7 @@ struct _snifferinfo {
      */
     char mgmt_buf[BUFSIZE];	/* buffer for pre-processed packets */
     int mgmt_nbytes;		/* valid bytes in mgmt_buf */
-    uint16_t padding;
+    to_como_radio_fn to_como_radio;
 };
 
 
@@ -101,29 +102,30 @@ swaps(uint16_t x)
 static int
 sniffer_start(source_t * src) 
 {
-    struct _snifferinfo * info; 
-    struct pcap_file_header pf; 
-    int swapped; 
+    struct _snifferinfo *info;
+    struct pcap_file_header pf;
+    int swapped = 0;
     uint16_t type, l2type;
     int rd;
     int fd;
+    to_como_radio_fn to_como_radio = NULL;
 
     fd = open(src->device, O_RDONLY);
     if (fd < 0) {
-	logmsg(LOGWARN, "pcap sniffer: opening file %s (%s)\n", 
-	    src->device, strerror(errno));
-	return -1; 
-    } 
+	logmsg(LOGWARN, "pcap sniffer: opening file %s (%s)\n",
+	       src->device, strerror(errno));
+	return -1;
+    }
 
     rd = read(fd, &pf, sizeof(pf));
     if (rd != sizeof(pf)) {
 	logmsg(LOGWARN, "pcap sniffer: failed to read header\n");
-	return -1; 
-    } 
+	return -1;
+    }
 
     if (pf.magic != PCAP_MAGIC) { 
         if (pf.magic != swapl(PCAP_MAGIC)) {
-             logmsg(LOGWARN, "pcap sniffer: invalid pcap file\n"); 
+            logmsg(LOGWARN, "pcap sniffer: invalid pcap file\n"); 
             return -1;
         } else {
             pf.version_major = swaps(pf.version_major);
@@ -148,12 +150,19 @@ sniffer_start(source_t * src)
 	type = COMOTYPE_LINK;
 	l2type = LINKTYPE_80211;
 	break;
-    /* ignore 144-byte prism hdr, supporting AVS hdr only */
+    case DLT_IEEE802_11_RADIO_AVS:
+	logmsg(LOGSNIFFER,
+	       "datalink 802.11 with AVS header (%d)\n", pf.linktype);
+	type = COMOTYPE_LINK;
+	l2type = LINKTYPE_80211;
+	to_como_radio = avs_header_to_como_radio;
+	break;
     case DLT_PRISM_HEADER:
-	logmsg(LOGSNIFFER, 
-	       "datalink 802.11 with AVS header (%d)\n", pf.linktype); 
+	logmsg(LOGSNIFFER,
+	       "datalink 802.11 with Prism header (%d)\n", pf.linktype);
 	type = COMOTYPE_RADIO;
 	l2type = LINKTYPE_80211;
+	to_como_radio = prism2_header_to_como_radio;
 	break;
     default: 
 	logmsg(LOGWARN, 
@@ -171,6 +180,7 @@ sniffer_start(source_t * src)
     info->type = type;
     info->l2type = l2type;
     info->littleendian = swapped;
+    info->to_como_radio = to_como_radio;
     return 0;
 }
 
@@ -215,29 +225,34 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 
     info->mgmt_nbytes = 0;
     base = info->buf;
-    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
-        pcap_hdr_t ph; 
-	int left = info->nbytes - (base - info->buf); 
+    pkt = out;
+    npkts = 0;
 
-        /* XXX We use bcopy here because the base pointer may not be word
-         * aligned. This is an issue on some platforms like the Stargate */
-        bcopy(base, &ph, sizeof(pcap_hdr_t));
+    while (npkts < max_no) {
+	pcap_hdr_t ph;
+	int left = info->nbytes - (base - info->buf);
+	int drop_this = 0;
+
+	/* XXX We use bcopy here because the base pointer may not be word
+	 * aligned. This is an issue on some platforms like the Stargate */
+	bcopy(base, &ph, sizeof(pcap_hdr_t));
 
 	/* convert the header if needed */
-	if (info->littleendian) { 
-            ph.ts.tv_sec = swapl(ph.ts.tv_sec);
-            ph.ts.tv_usec = swapl(ph.ts.tv_usec);
-            ph.caplen = swapl(ph.caplen);
-            ph.len = swapl(ph.len);
-        } 
+	if (info->littleendian) {
+	    ph.ts.tv_sec = swapl(ph.ts.tv_sec);
+	    ph.ts.tv_usec = swapl(ph.ts.tv_usec);
+	    ph.caplen = swapl(ph.caplen);
+	    ph.len = swapl(ph.len);
+	}
 
 	/* do we have a pcap header? */
-	if (left < (int) sizeof(pcap_hdr_t)) 
-	    break; 
+	if (left < (int) sizeof(pcap_hdr_t))
+	    break;
 
-        /* check if entire record is available */
-        if (left < (int) sizeof(pcap_hdr_t) + ph.caplen) 
-            break;
+	/* check if entire record is available */
+	if (left < (int) sizeof(pcap_hdr_t) + ph.caplen)
+	    break;
+
 
 	/*      
 	 * Now we have a packet: start filling a new pkt_t struct
@@ -245,18 +260,57 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 */
 	COMO(ts) = TIME2TS(ph.ts.tv_sec, ph.ts.tv_usec);
 	COMO(len) = ph.len;
-	COMO(caplen) = ph.caplen;
 	COMO(type) = info->type;
 
-	COMO(payload) = base + sizeof(pcap_hdr_t);
-	/* 
-	 * update layer2 information and offsets of layer 3 and above. 
-	 * this sniffer runs on ethernet frames
-	 */
-	updateofs(pkt, L2, info->l2type);
-	if (info->l2type == LINKTYPE_80211) {
-	    info->mgmt_nbytes += ieee80211_parse_frame(pkt, info->mgmt_buf +
-						       info->mgmt_nbytes);
+	if (info->type != COMOTYPE_RADIO && info->l2type != LINKTYPE_80211) {
+
+	    COMO(caplen) = ph.caplen;
+	    COMO(payload) = base + sizeof(pcap_hdr_t);
+	} else {
+	    char *buf, *dest;
+	    int buf_len, dest_len;
+	    int frame_len;
+
+	    buf = base + sizeof(pcap_hdr_t);
+	    buf_len = ph.caplen;
+
+	    COMO(payload) = dest = info->mgmt_buf + info->mgmt_nbytes;
+	    COMO(caplen) = dest_len = 0;
+
+	    if (info->type == COMOTYPE_RADIO) {
+		int info_len;
+		struct _como_radio *radio;
+
+		radio = (struct _como_radio *) dest;
+		info_len = info->to_como_radio(buf, radio);
+
+		buf += info_len;
+		buf_len -= info_len;
+
+		dest_len = sizeof(struct _como_radio);
+		dest += dest_len;
+	    }
+
+	    frame_len = ieee80211_capture_frame(buf, buf_len, dest);
+	    if (frame_len > 0) {
+		dest_len += frame_len;
+		COMO(caplen) = dest_len;
+		info->mgmt_nbytes += dest_len;
+	    } else {
+		drop_this = 1;
+	    }
+	}
+
+	if (drop_this == 0) {
+	    /* 
+	     * update layer2 information and offsets of layer 3 and above. 
+	     * this sniffer runs on ethernet frames
+	     */
+	    updateofs(pkt, L2, info->l2type);
+	    npkts++;
+	    pkt++;
+	} else {
+	    src->drops++;
 	}
 	/* increment the number of processed packets */
 	base += sizeof(pcap_hdr_t) + ph.caplen;
@@ -273,7 +327,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
  * Close the file descriptor. 
  */
 static void
-sniffer_stop (source_t * src)
+sniffer_stop(source_t * src)
 {
     free(src->ptr);
     close(src->fd);
