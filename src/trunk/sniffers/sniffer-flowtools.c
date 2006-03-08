@@ -583,7 +583,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	if (info->flags & FLOWTOOLS_COMPACT) {
 	    free(flow);
 	} else { 
-	    NF(flags) &= ~COMONF_FIRST;
 	    N64(NF(bytecount)) = 1; 
 	    N32(NF(pktcount)) = 1;  
 	    if (flow->pkt.ts >= flow->end_ts) { 
@@ -593,6 +592,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 		free(flow); 
 	    } else {  
 		flow->pkt.ts += flow->increment; 
+		NFP(&flow->pkt, flags) &= ~COMONF_FIRST;
 		heap_insert(info->heap, flow); 
 	    } 
 	} 
