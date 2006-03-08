@@ -43,10 +43,6 @@
 #ifndef SFLOW_H
 #define SFLOW_H 1
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 enum SFLAddress_type {
   SFLADDRESSTYPE_IP_V4 = 1,
   SFLADDRESSTYPE_IP_V6 = 2
@@ -611,9 +607,5 @@ typedef struct _SFLSample_datagram_hdr {
 #define SFL_DEFAULT_DATAGRAM_SIZE 1400
 
 #define SFL_DATA_PAD 400
-
-#if defined(__cplusplus)
-}  /* extern "C" */
-#endif
 
 #endif /* SFLOW_H */
