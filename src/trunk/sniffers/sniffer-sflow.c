@@ -25,6 +25,19 @@
  *
  * $Id$
  */
+
+
+/* 
+ * This sniffer support sFlow(R) datagrams for Version 4 and 5 as 
+ * specified in IETF RFC 3176 or in http://www.sflow.org/sflow_version_5.txt. 
+ * 
+ * sFlow is a trademark of InMon Corporation.
+ * 
+ * For sFlow(R) licensing details please refer to 
+ * http://www.inmon.com/technology/sflowlicense.txt
+ *
+ */
+
 #include <stdlib.h>		/* malloc */
 #include <fcntl.h>		/* open */
 #include <unistd.h>		/* close */
