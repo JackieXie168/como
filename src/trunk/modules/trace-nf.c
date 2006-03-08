@@ -251,7 +251,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "Active connections</div>\n" \
     "<table class=netview>\n"                                   \
     "  <tr class=nvtitle>\n"					\
-    "    <td>Start Time</td>\n"               			\
+    "    <td>Start Time (UTC)</td>\n"               			\
     "    <td>Protocol</td>\n"                 			\
     "    <td>Source IP:Port</td>\n"                 		\
     "    <td>Destination IP:Port</td>\n"                 	\
@@ -321,7 +321,7 @@ print(char *buf, size_t *len, char * const args[])
 		    NTOHLL(x->pkts));
     } else { 
 	*len = sprintf(s, fmt, 
-		    asctime(localtime(&ts)), getprotoname(x->proto), 
+		    asctime(gmtime(&ts)), getprotoname(x->proto), 
 		    src, (uint) H16(x->src_port), 
 		    dst, (uint) H16(x->dst_port), 
 		    NTOHLL(x->bytes), NTOHLL(x->pkts));
@@ -368,7 +368,7 @@ replay(char *buf, char *out, size_t * len, int *count)
 
 #ifdef BUILD_FOR_ARM
 
-	COMOX(ts, TIME2TS(ntohl(x->ts), 0)); 
+	COMOX(ts, NTOHLL(x->start_ts));  
 	COMOX(caplen, sizeof(struct _como_iphdr) +
                         sizeof(struct _como_udphdr));
 	COMOX(type, COMOTYPE_NF);
@@ -382,10 +382,10 @@ replay(char *buf, char *out, size_t * len, int *count)
 	    COMOX(len, COMO(len) + ((uint32_t) nbytes % npkts)); 
 
 	NFX(flags, outlen == 0? COMONF_FIRST : 0); 
-        NFX(src_as, x->src_as)
-        NFX(dst_as, x->dst_as)
-        NFX(input, x->input)
-        NFX(output, x->output)
+        NFX(src_as, x->src_as);
+        NFX(dst_as, x->dst_as);
+        NFX(input, x->input);
+        NFX(output, x->output);
 	NFX(sampling, x->sampling);
 	NFX(bytecount, x->bytes); 
 	NFX(pktcount, htonl((uint32_t) npkts));
