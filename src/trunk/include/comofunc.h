@@ -139,7 +139,7 @@ void *_scalloc(const char * file, const int line, int n, size_t sz);
 #define safe_calloc(...) _scalloc(__FILE__, __LINE__, __VA_ARGS__) 
 void *_srealloc(const char * file, const int line, void * ptr, size_t sz); 
 #define safe_realloc(...) _srealloc(__FILE__, __LINE__, __VA_ARGS__) 
-char *_sstrdup(const char * file, const int line, char * str); 
+char *_sstrdup(const char * file, const int line, const char * str); 
 #define safe_strdup(...) _sstrdup(__FILE__, __LINE__, __VA_ARGS__) 
 void _sfree(const char * file, const int line, void * ptr); 
 #define safe_free(...) _sfree(__FILE__, __LINE__, __VA_ARGS__) 

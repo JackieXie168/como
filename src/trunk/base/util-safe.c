@@ -133,7 +133,7 @@ _srealloc(const char * file, const int line, void * ptr, size_t sz)
  *
  */
 char *
-_sstrdup(const char * file, const int line, char * str)
+_sstrdup(const char * file, const int line, const char * str)
 {
     char * v; 
 
