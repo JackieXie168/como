@@ -57,29 +57,41 @@ EFLOWDESC {
     uint32_t count;
 };
 
-static int meas_ivl = 1; 
+#define STATEDESC   struct _activeflows_state
+STATEDESC {
+    int meas_ivl;
+    uint32_t flowcount; 
+    uint32_t current_ts; 
+};
 
 static timestamp_t
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char * args[])
 {
+    STATEDESC *state;
     int i; 
 
+    state = mdl_mem_alloc(self, sizeof(STATEDESC));
+    state->meas_ivl = 1;
+    state->flowcount = 0; 
+    state->current_ts = 0; 
+    
     /*
      * process input arguments
      */
     for (i = 0; args && args[i]; i++) {
 	if (strstr(args[i], "interval")) {
 	    char * len = index(args[i], '=') + 1; 
-	    meas_ivl = atoi(len); 
+	    state->meas_ivl = atoi(len); 
 	}
     }
 
-    return TIME2TS(meas_ivl, 0);
+    STATE(self) = state;
+    return TIME2TS(state->meas_ivl, 0);
 }
 
 
 static uint32_t
-hash(pkt_t *pkt)
+hash(__unused void * self, pkt_t *pkt)
 {
     uint sport, dport; 
 
@@ -97,7 +109,7 @@ hash(pkt_t *pkt)
 }
 
 static int
-match(pkt_t *pkt, void *fh)
+match(__unused void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     uint sport, dport; 
@@ -121,7 +133,7 @@ match(pkt_t *pkt, void *fh)
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -145,23 +157,22 @@ update(pkt_t *pkt, void *fh, int isnew)
     return 0;
 }
 
-static uint32_t flowcount = 0; 
-static uint32_t current_ts; 
-
 static int 
-export(__unused void *efh, void *fh, __unused int isnew)
+export(void * self, __unused void *efh, __unused void *fh, int isnew)
 { 
     FLOWDESC *x = F(fh);
+    STATEDESC * state = STATE(self);
 
     if (isnew) 
-        current_ts = x->ts - x->ts % meas_ivl; 
+        state->current_ts = x->ts - x->ts % state->meas_ivl; 
 
-    flowcount++;
+    state->flowcount++;
     return 0;
 }
 
 static int
-action(void *efh, __unused timestamp_t current_time, int count)
+action(__unused void * self, void *efh, 
+       __unused timestamp_t current_time, int count)
 {
     if (efh == NULL) 
         return ACT_GO;          /* dump the records */
@@ -173,21 +184,19 @@ action(void *efh, __unused timestamp_t current_time, int count)
 }
 
 static ssize_t
-store(__unused void *efh, char *buf, size_t len)
+store(void * self, __unused void *efh, char *buf)
 {
-    if (len < sizeof(EFLOWDESC))
-        return -1;
+    STATEDESC * state = STATE(self);
 
-    PUTH32(buf, current_ts);
-    PUTH32(buf, flowcount); 
-
-    flowcount = 0; 
+    PUTH32(buf, state->current_ts);
+    PUTH32(buf, state->flowcount); 
+    state->flowcount = 0; 
 
     return sizeof(EFLOWDESC);
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(EFLOWDESC)) {
         ts = 0;
@@ -215,12 +224,13 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define GNUPLOTFMT      "%u %u\n"
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static int granularity = 1;
     static int count = 0; 
     static int no_records = 0; 
+    STATEDESC * state = STATE(self);
     EFLOWDESC *x; 
 
     if (buf == NULL && args != NULL) { 
@@ -235,7 +245,7 @@ print(char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce
                  * communication messages.
                  */
-                granularity = MAX(atoi(val) / meas_ivl, 1);
+                granularity = MAX(atoi(val) / state->meas_ivl, 1);
 	    } 
 	}
 

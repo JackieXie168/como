@@ -39,9 +39,9 @@
 #ifdef __FreeBSD__ 
 #include <pcre.h>
 #else
-#include <pcre/pcre.h>       /* pcre library headers (Fedora Core location)
-                                The location may be <pcre.h> in other
-                                Linux distributions */
+#include <pcre.h>           /* pcre library headers (Ubuntu Breezy location)
+                               The location may be <pcre/pcre.h> in other
+                               Linux distributions */
 #endif
 
 #include "stdpkt.h" /* pkt_t */
@@ -190,7 +190,7 @@ typedef struct _portset portset_t;
 typedef struct _ruleinfo ruleinfo_t;
 
 struct _fpnode {
-    unsigned int (*function)(ruleinfo_t *, pkt_t *);
+    unsigned int function;
     struct _fpnode *next;
 };
 typedef struct _fpnode fpnode_t;
@@ -319,12 +319,29 @@ struct _dyn {
 };
 typedef struct _dyn dyn_t;
 
+/* Size of the hash table used to store variable information */
+#define VAR_HASHSIZE 26
+#define MAX_SIMULT_HDRS 10
+#define STATEDESC struct _snort_state
+STATEDESC {
+    /* We save the info that we get from the Snort rules file
+     * into these structures */
+    unsigned int nrules;        /* number of rules */
+    unsigned int nhdrs;         /* number of rule headers */
+    unsigned int nrules_read;   /* number of rules read */
+    ruleinfo_t *hdrs_array[MAX_RULES]; /* pointers to each rule header */
+    opt_t *opts_array[MAX_OPTS]; /* pointers to each option set */
+    varinfo_t *vi[VAR_HASHSIZE];    /* variables info */
+    dyn_t *dr[MAX_RULES];           /* dynamic rules info */
+    /* Pointers to the rule headers that match with a packet */
+    int rule_match[MAX_SIMULT_HDRS];
+};
+
 void yserror(char *, ...);
 
 /* Used to allocate memory in the module's private region */
-void *prv_alloc(unsigned int);
-void prv_free(void *);
-void *prv_realloc(void *, unsigned int);
+#define prv_alloc(x)    (como_alloc(x))
+#define prv_free(x)     (como_free(x))
 
 /* String matching functions (Boyer-Moore algorithm) */
 void lowercase(char *, unsigned int);

@@ -59,24 +59,38 @@ FLOWDESC {
     n32_t duration; 
 };
 
-/*
- * packet description and templates for the
- * replay() callback or to know if we can process
- * the packets from given sniffer
- */    
-static pktdesc_t indesc, outdesc;
-static int compact = 0;
-static uint32_t mask = ~0;
+#define STATEDESC   struct _tracenf_state
+STATEDESC {
+    /*
+     * packet description and templates for the
+     * replay() callback or to know if we can process
+     * the packets from given sniffer
+     */    
+    pktdesc_t indesc, outdesc;
+    int compact;
+    uint32_t mask;
+};
+STATEDESC *state;
+
+callbacks_t callbacks;
 
 static timestamp_t
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void *mem, int do_init, char *args[])
 {
-    timestamp_t ivl = TIME2TS(1,0); 
+    timestamp_t ivl;
     int i; 
 
+    state = (STATEDESC *) mem;
+    
+    if (!do_init)
+        return TIME2TS(1,0);
+    
     /*
      * process input arguments
      */
+    ivl = TIME2TS(1,0); 
+    state->compact = 0;
+    state->mask = ~0;
     for (i = 0; args && args[i]; i++) {
 	char * x; 
 
@@ -85,11 +99,11 @@ init(__unused void *mem, __unused size_t msize, char *args[])
 	    ivl = TIME2TS(atoi(x), 0);
 	}
 	if (strstr(args[i], "compact")) {
-	    compact = 1;
+	    state->compact = 1;
 	}
         if (strstr(args[i], "mask")) { 
 	    x = index(args[i], '=') + 1; 
-	    mask <<= atoi(x);
+	    state->mask <<= atoi(x);
 	}
     }
 
@@ -98,35 +112,38 @@ init(__unused void *mem, __unused size_t msize, char *args[])
      * a packet length. for the timestamp, we use a default value of
      * one second or whatever we receive from configuration
      */
-    bzero(&indesc, sizeof(pktdesc_t));
-    indesc.ts = ivl; 
-    indesc.ih.proto = 0xff;
-    N16(indesc.ih.len) = 0xffff;
-    N32(indesc.ih.src_ip) = ~0; 
-    N32(indesc.ih.dst_ip) = ~0; 
-    N16(indesc.tcph.src_port) = 0xffff;
-    N16(indesc.tcph.dst_port) = 0xffff;
-    N16(indesc.udph.src_port) = 0xffff;
-    N16(indesc.udph.dst_port) = 0xffff;
+    bzero(&state->indesc, sizeof(pktdesc_t));
+    state->indesc.ts = ivl; 
+    state->indesc.ih.proto = 0xff;
+    N16(state->indesc.ih.len) = 0xffff;
+    N32(state->indesc.ih.src_ip) = ~0; 
+    N32(state->indesc.ih.dst_ip) = ~0; 
+    N16(state->indesc.tcph.src_port) = 0xffff;
+    N16(state->indesc.tcph.dst_port) = 0xffff;
+    N16(state->indesc.udph.src_port) = 0xffff;
+    N16(state->indesc.udph.dst_port) = 0xffff;
     
-    bzero(&outdesc, sizeof(pktdesc_t));
-    outdesc.ts = ivl; 
-    outdesc.flags = COMO_AVG_PKTLEN;
-    N16(outdesc.ih.len) = 0xffff;
-    outdesc.ih.proto = 0xff;
-    N32(outdesc.ih.src_ip) = 0xffffffff;
-    N32(outdesc.ih.dst_ip) = 0xffffffff;
-    N16(outdesc.tcph.src_port) = 0xffff;
-    N16(outdesc.tcph.dst_port) = 0xffff;
-    N16(outdesc.udph.src_port) = 0xffff;
-    N16(outdesc.udph.dst_port) = 0xffff;
-    N16(outdesc.nf.input) = ~0;
-    N16(outdesc.nf.output) = ~0;
-    N16(outdesc.nf.src_as) = ~0;
-    N16(outdesc.nf.dst_as) = ~0;
-    N64(outdesc.nf.bytecount) = ~0;
-    N32(outdesc.nf.pktcount) = ~0;
-    outdesc.nf.flags = COMONF_FIRST;
+    bzero(&state->outdesc, sizeof(pktdesc_t));
+    state->outdesc.ts = ivl; 
+    state->outdesc.flags = COMO_AVG_PKTLEN;
+    N16(state->outdesc.ih.len) = 0xffff;
+    state->outdesc.ih.proto = 0xff;
+    N32(state->outdesc.ih.src_ip) = 0xffffffff;
+    N32(state->outdesc.ih.dst_ip) = 0xffffffff;
+    N16(state->outdesc.tcph.src_port) = 0xffff;
+    N16(state->outdesc.tcph.dst_port) = 0xffff;
+    N16(state->outdesc.udph.src_port) = 0xffff;
+    N16(state->outdesc.udph.dst_port) = 0xffff;
+    N16(state->outdesc.nf.input) = ~0;
+    N16(state->outdesc.nf.output) = ~0;
+    N16(state->outdesc.nf.src_as) = ~0;
+    N16(state->outdesc.nf.dst_as) = ~0;
+    N64(state->outdesc.nf.bytecount) = ~0;
+    N32(state->outdesc.nf.pktcount) = ~0;
+    state->outdesc.nf.flags = COMONF_FIRST;
+    
+    callbacks.indesc = &state->indesc;
+    callbacks.outdesc = &state->outdesc;
     
     return TIME2TS(1,0);
 }
@@ -251,7 +268,7 @@ load(char * buf, size_t len, timestamp_t * ts)
     "Active connections</div>\n" \
     "<table class=netview>\n"                                   \
     "  <tr class=nvtitle>\n"					\
-    "    <td>Start Time (UTC)</td>\n"               			\
+    "    <td>Start Time</td>\n"               			\
     "    <td>Protocol</td>\n"                 			\
     "    <td>Source IP:Port</td>\n"                 		\
     "    <td>Destination IP:Port</td>\n"                 	\
@@ -308,8 +325,8 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (FLOWDESC *) buf;
     ts = (time_t) TS2SEC(NTOHLL(x->start_ts)); 
-    saddr.s_addr = N32(x->src_ip) & htonl(mask);
-    daddr.s_addr = N32(x->dst_ip) & htonl(mask);
+    saddr.s_addr = N32(x->src_ip) & htonl(state->mask);
+    daddr.s_addr = N32(x->dst_ip) & htonl(state->mask);
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 
@@ -321,7 +338,7 @@ print(char *buf, size_t *len, char * const args[])
 		    NTOHLL(x->pkts));
     } else { 
 	*len = sprintf(s, fmt, 
-		    asctime(gmtime(&ts)), getprotoname(x->proto), 
+		    asctime(localtime(&ts)), getprotoname(x->proto), 
 		    src, (uint) H16(x->src_port), 
 		    dst, (uint) H16(x->dst_port), 
 		    NTOHLL(x->bytes), NTOHLL(x->pkts));
@@ -368,7 +385,7 @@ replay(char *buf, char *out, size_t * len, int *count)
 
 #ifdef BUILD_FOR_ARM
 
-	COMOX(ts, NTOHLL(x->start_ts));  
+	COMOX(ts, TIME2TS(ntohl(x->ts), 0)); 
 	COMOX(caplen, sizeof(struct _como_iphdr) +
                         sizeof(struct _como_udphdr));
 	COMOX(type, COMOTYPE_NF);
@@ -382,10 +399,10 @@ replay(char *buf, char *out, size_t * len, int *count)
 	    COMOX(len, COMO(len) + ((uint32_t) nbytes % npkts)); 
 
 	NFX(flags, outlen == 0? COMONF_FIRST : 0); 
-        NFX(src_as, x->src_as);
-        NFX(dst_as, x->dst_as);
-        NFX(input, x->input);
-        NFX(output, x->output);
+        NFX(src_as, x->src_as)
+        NFX(dst_as, x->dst_as)
+        NFX(input, x->input)
+        NFX(output, x->output)
 	NFX(sampling, x->sampling);
 	NFX(bytecount, x->bytes); 
 	NFX(pktcount, htonl((uint32_t) npkts));
@@ -435,13 +452,13 @@ replay(char *buf, char *out, size_t * len, int *count)
 
 	outlen += pktsz; 
 
-	if (compact) 	/* just one packet per flow */
+	if (state->compact) 	/* just one packet per flow */
 	    break;
     } 
 
     *len = outlen;
     *count = howmany;
-    return (compact? 0 : (npkts - howmany));
+    return (state->compact? 0 : (npkts - howmany));
 }
 
 
@@ -449,8 +466,8 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC), 
-    indesc: &indesc,
-    outdesc: &outdesc,
+    indesc: NULL,
+    outdesc: NULL,
     init: init,
     check: check,
     hash: NULL,
@@ -464,5 +481,6 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: replay,
-    formats: "plain pretty html"
+    formats: "plain pretty html",
+    statesize: sizeof(STATEDESC)
 };

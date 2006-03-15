@@ -34,10 +34,6 @@
 #include <string.h>		/* strlen strcpy strncat memset */
 
 #ifdef linux
-   /* XXX what does this do?
-    *     anyway it works only for linux
-    *     -gianluca
-    */
 #include <mcheck.h>
 #else 
 #define mcheck(x)
@@ -48,9 +44,8 @@
 #include <signal.h>	// signal... 
 #include <unistd.h>
 
-#include "query.h"	// mainloop...
-#include "storage.h"
 #include "como.h"
+#include "storage.h"	// mainloop
 
 /*
  * the "map" is the root of the data. it contains all the
@@ -71,8 +66,8 @@ cleanup()
 {
     char *cmd;
 
-    if (strcmp(map.procname, "su")) {
-	logmsg(V_LOGWARN, "terminating normally\n", map.procname);
+    if (map.whoami != SUPERVISOR) { 
+	logmsg(V_LOGWARN, "terminating normally\n");
 	return;
     }
     logmsg(LOGUI, "\n\n\n--- about to exit... remove work directory %s\n",
@@ -109,7 +104,7 @@ main(int argc, char *argv[])
 
     /* set default values */
     memset(&map, 0, sizeof(map));
-    map.procname = "su";    		/* supervisor */
+    map.whoami = SUPERVISOR; 
     map.supervisor_fd = -1;
     map.logflags = DEFAULT_LOGFLAGS; 
     map.mem_size = DEFAULT_MEMORY; 
@@ -129,8 +124,7 @@ main(int argc, char *argv[])
     logmsg(LOGUI, "  Copyright (c) 2004-2005, Intel Corporation\n"); 
     logmsg(LOGUI, "  All rights reserved.\n"); 
     logmsg(LOGUI, "----------------------------------------------------\n");
-    logmsg(LOGUI, "-- Workdir is %s ---\n", map.workdir);
-    logmsg(LOGUI, "-- Loading configuration:\n\n"); 
+    logmsg(V_LOGUI, "... workdir %s\n", map.workdir);
 
     /*
      * parse command line and configuration files
@@ -140,8 +134,8 @@ main(int argc, char *argv[])
     logmsg(V_LOGUI, "log level: %s\n", loglevel_name(map.logflags)); 
 
     /*
-     * Initialize the shared memory region that will be
-     * used by CAPTURE and EXPORT (owned by CAPTURE)
+     * Initialize the shared memory region.
+     * All processes will be able to see it.
      */
     memory_init(map.mem_size);
 
@@ -153,11 +147,9 @@ main(int argc, char *argv[])
      * They are written by one process and read by SUPERVISOR. They 
      * do not need to be 100% reliable. 
      */
-    map.stats = new_mem(NULL, sizeof(stats_t), "stats data");
+    map.stats = mem_alloc(sizeof(stats_t)); 
     bzero(map.stats, sizeof(stats_t)); 
-    map.stats->mdl_stats = new_mem(NULL, 
-			           map.module_max * sizeof(mdl_stats_t), 
-				   "mdl stats");
+    map.stats->mdl_stats = mem_alloc(map.module_max * sizeof(mdl_stats_t));
     gettimeofday(&map.stats->start, NULL); 
     map.stats->modules_active = map.module_count; 
     map.stats->first_ts = ~0;
@@ -173,31 +165,22 @@ main(int argc, char *argv[])
     supervisor_fd = create_socket("S:supervisor.sock", NULL);
 
     /* start the CAPTURE process */
-    pid = start_child("CAPTURE", "ca", capture_mainloop, capture_fd); 
-
-    /* 
-     * memory map not needed any more, get rid of it. 
-     * this destroys only the map not the actual region of shared 
-     * memory. CAPTURE is now in charge of allocating and freeing memory
-     * in the shared memory region. however, all processes can still see,
-     * read, and write in the shared memory if CAPTURE tell them where 
-     * to look... 
-     */
-    memory_clear();
+    pid = start_child(CAPTURE, COMO_SHARED_MEM, capture_mainloop, capture_fd); 
 
     /* start the STORAGE process */
-    pid = start_child("STORAGE", "st", storage_mainloop, storage_fd);
+    pid = start_child(STORAGE, COMO_PRIVATE_MEM, storage_mainloop, storage_fd);
 
     /*
      * Start the remaining processes.
      * SUPERVISOR is not really forked, so right before going to it
      * we call 'atexit' to register a handler.
      */
-    pid = start_child("EXPORT", "ex", export_mainloop, -1); 
+    pid = start_child(EXPORT, COMO_PRIVATE_MEM, export_mainloop, -1); 
 
     signal(SIGINT, exit);
     atexit(cleanup);
-    pid = start_child("SUPERVISOR", NULL, supervisor_mainloop, supervisor_fd);
+    pid = start_child(SUPERVISOR, COMO_SHARED_MEM|COMO_PERSISTENT_MEM, 
+	supervisor_mainloop, supervisor_fd);
 
     return EXIT_SUCCESS; 
 }

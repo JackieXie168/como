@@ -26,10 +26,6 @@
  * $Id$
  */
 
-/*
- * Author: Josep Sanjuas Cuxart (jsanjuas@ac.upc.es)
- */ 
-
 #include <string.h>     /* strlen */
 #include <sys/time.h>   /* FD_SET */
 #include <sys/types.h>
@@ -43,7 +39,9 @@ enum msg_ids {
     MSG_NEW_MODULES = 7,
     MSG_MDL_STATUS,
     MSG_STRING,
-    MSG_ACK
+    MSG_ACK,
+    MSG_CA_LOCK,
+    MSG_CA_UNLOCK
 };
 
 /*
@@ -225,12 +223,6 @@ unregister_ipc_fd(int fd)
  * array will be scanned, and modules whose status is MDL_LOADING
  * will be sent to core processes.
  *
- * There is an optimization here. Capture needs a new filter function
- * when new modules are to be loaded. Instead of sending the new
- * modules and expecting capture to build itself a new filter, here
- * (as supervisor) we build it and send the shared object's filename
- * for capture to link it.
- *
  */
 int
 sup_send_new_modules(void)
@@ -349,6 +341,66 @@ sup_send_module_status(void)
             continue;
 
         sup_wait_for_ack(i);
+    }
+}
+
+/**
+ * -- sup_send_ca_lock
+ *
+ * After using this call, the next message must be sent using
+ * sup_send_ca_unlock.
+ */
+void
+sup_send_ca_lock(void)
+{
+    char msg_id = MSG_CA_LOCK;
+    int i;
+
+    logmsg(LOGDEBUG, "Sending lock message\n");
+
+    for (i = min_proc_fd; i < max_proc_fd; i++) {
+
+        if (! is_registered_fd(i))
+            continue;
+
+        if (sizeof(msg_id) != write_var(i, msg_id)) {
+            logmsg(LOGWARN, "Lost communication to fd %d\n", i);
+            unregister_ipc_fd(i);
+            continue;
+        }
+
+    }
+
+    for (i = min_proc_fd; i < max_proc_fd; i++) {
+        if (! is_registered_fd(i))
+            continue;
+
+        sup_wait_for_ack(i);
+    }
+}
+
+/**
+ * -- sup_send_ca_unlock
+ */
+void
+sup_send_ca_unlock(void)
+{
+    char msg_id = MSG_CA_UNLOCK;
+    int i;
+
+    logmsg(LOGDEBUG, "Sending unlock message\n");
+
+    for (i = min_proc_fd; i < max_proc_fd; i++) {
+
+        if (! is_registered_fd(i))
+            continue;
+
+        if (sizeof(msg_id) != write_var(i, msg_id)) {
+            logmsg(LOGWARN, "Lost communication to fd %d\n", i);
+            unregister_ipc_fd(i);
+            continue;
+        }
+
     }
 }
 
@@ -575,6 +627,20 @@ recv_message(int fd, proc_callbacks_t *callbacks)
             break;
         case MSG_MDL_STATUS:
             recv_module_status(fd, callbacks);
+            break;
+        case MSG_CA_LOCK:
+            /* All processes send back the ACK, but only CA will lock
+             * waiting for the next message */
+            if (map.whoami == CAPTURE) 
+                logmsg(V_LOGDEBUG, "CA locking\n");
+            send_ack();
+            if (map.whoami == CAPTURE) 
+                recv_message(fd, callbacks);
+            break;
+        case MSG_CA_UNLOCK:
+            if (map.whoami == CAPTURE) { 
+                logmsg(V_LOGDEBUG, "CA unlocking\n");
+            }
             break;
         default: /* should never be reached */
             logmsg(LOGWARN, "an unknown message type was received from supervisor\n");

@@ -76,34 +76,49 @@ EFLOWDESC {
 #define ALERT_BYTES		0x1
 #define ALERT_PKTS		0x2
     
-
-static int meas_ivl = 30;     		/* measurement interval */
-static double weight = 0.9;		/* weigth for EWMA */
-static double change_thresh = 3.0;	/* volume change threshold */ 
+#define STATEDESC   struct _anomalyewma_state
+STATEDESC {
+    int meas_ivl;     		/* measurement interval */
+    double weight;		/* weigth for EWMA */
+    double change_thresh;       /* volume change threshold */ 
+    char str[2048];
+    char * fmt; 
+    char urlstr[2048];
+    int alerts;
+};
 
 static timestamp_t 
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char *args[])
 {
+    STATEDESC *state;
     int i;
+
+    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
+    bzero(state, sizeof(STATEDESC)); 
+    state->meas_ivl = 30;
+    state->weight = 0.9;
+    state->change_thresh = 3.0;
+    state->urlstr[0] = '#';
 
     for (i = 0; args && args[i]; i++) {
 	if (strstr(args[i], "interval")) {
 	    char * val = index(args[i], '=') + 1;
-	    meas_ivl = atoi(val);
+	    state->meas_ivl = atoi(val);
         } else if (strstr(args[i], "weight")) {
 	    char * val = index(args[i], '=') + 1;
-	    weight = strtod(val, NULL); 
+	    state->weight = strtod(val, NULL); 
         } else if (strstr(args[i], "change_thresh")) {
 	    char * val = index(args[i], '=') + 1;
-	    change_thresh = strtod(val, NULL); 
+	    state->change_thresh = strtod(val, NULL); 
         } 
     }
 
-    return TIME2TS(meas_ivl, 0);
+    STATE(self) = state; 
+    return TIME2TS(state->meas_ivl, 0);
 }
 
 static int
-update(pkt_t *pkt, void *rp, int isnew)
+update(__unused void * self, pkt_t *pkt, void *rp, int isnew)
 {
     FLOWDESC *x = F(rp);
 
@@ -119,12 +134,13 @@ update(pkt_t *pkt, void *rp, int isnew)
 }
 
 static int
-export(void *erp, void *rp, int isnew)
+export(void * self, void *erp, void *rp, int isnew)
 {
+    STATEDESC * state = STATE(self); 
     EFLOWDESC *ex = EF(erp);
     FLOWDESC *x = F(rp);
-    uint64_t b = x->bytes / meas_ivl;
-    uint64_t p = x->pkts / meas_ivl;
+    uint64_t b = x->bytes / state->meas_ivl;
+    uint64_t p = x->pkts / state->meas_ivl;
 
     if (isnew) {
 	bzero(ex, sizeof(EFLOWDESC));
@@ -138,16 +154,16 @@ export(void *erp, void *rp, int isnew)
     ex->diff_bytes = (float) b / (float) ex->bytes; 
     ex->diff_pkts = (float) p / (float) ex->pkts; 
 
-    if (ex->diff_bytes > change_thresh)
+    if (ex->diff_bytes > state->change_thresh)
 	ex->alert |= ALERT_BYTES; 
-    if (ex->diff_pkts > change_thresh)
+    if (ex->diff_pkts > state->change_thresh)
 	ex->alert |= ALERT_PKTS; 
 
     /* update the moving average for the sum */
-    ex->bytes = (uint64_t) ((1.0 - weight) * (float) ex->bytes + 
-				weight * (float) b); 
-    ex->pkts = (uint64_t) ((1.0 - weight) * (float) ex->pkts + 
-				weight * (float) p); 
+    ex->bytes = (uint64_t) ((1.0 - state->weight) * (float) ex->bytes + 
+				state->weight * (float) b); 
+    ex->pkts = (uint64_t) ((1.0 - state->weight) * (float) ex->pkts + 
+				state->weight * (float) p); 
 
     /* reset the past alert flag if no alerts are raised */
     ex->past_alert &= ex->alert; 
@@ -156,7 +172,8 @@ export(void *erp, void *rp, int isnew)
 }
     
 static int
-action(void * rp, __unused timestamp_t t, __unused int count)
+action(__unused void * self, void * rp, __unused timestamp_t t, 
+       __unused int count)
 {
     EFLOWDESC *ex = EF(rp);
 
@@ -177,14 +194,11 @@ struct alert_record {
 
 
 static ssize_t
-store(void *rp, char *buf, size_t len)
+store(__unused void * self, void *rp, char *buf)
 {
     EFLOWDESC *ex = EF(rp);
     time_t ts;
     int count;
-
-    if (len < 2*sizeof(struct alert_record))
-	return -1; 
 
     ts = (time_t) TS2SEC(ex->ts);
     count = 0;
@@ -212,7 +226,7 @@ store(void *rp, char *buf, size_t len)
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(struct alert_record)) {
         ts = 0;
@@ -272,12 +286,9 @@ load(char * buf, size_t len, timestamp_t * ts)
     "</div></body></html>\n"                                          
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
-    static char s[2048];
-    static char * fmt; 
-    static char urlstr[2048] = "#";
-    static int alerts = 0;
+    STATEDESC * state = STATE(self); 
     struct alert_record *x; 
     char typestr[20];
     time_t ts;
@@ -290,17 +301,17 @@ print(char *buf, size_t *len, char * const args[])
         int no_urlargs = 0;
 
 	/* by default, pretty print */
-	*len = sprintf(s, PRETTYHDR);  
-	fmt = PRETTYFMT; 
+	*len = sprintf(state->str, PRETTYHDR);  
+	state->fmt = PRETTYFMT; 
 
 	/* first call of print, process the arguments and return */
 	for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
-		fmt = PLAINFMT;
+		state->fmt = PLAINFMT;
 	    } else if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR); 
-                fmt = HTMLFMT;
+                *len = sprintf(state->str, HTMLHDR); 
+                state->fmt = HTMLFMT;
             } else if (!strncmp(args[n], "url=", 4)) {
                 url = args[n] + 4;
             } else if (!strncmp(args[n], "urlargs=", 8)) {
@@ -312,32 +323,33 @@ print(char *buf, size_t *len, char * const args[])
         if (url != NULL) {
             int w, k;
 
-            w = sprintf(urlstr, "%s?", url);
+            w = sprintf(state->urlstr, "%s?", url);
             for (k = 0; k < no_urlargs; k++)
-                w += sprintf(urlstr + w, "%s&", urlargs[k]);
-	    w += sprintf(urlstr + w, "stime=%%u&etime=%%u"); 
+                w += sprintf(state->urlstr + w, "%s&", urlargs[k]);
+	    w += sprintf(state->urlstr + w, "stime=%%u&etime=%%u"); 
         }
 
-	return s; 
+	return state->str; 
     } 
 
     if (buf == NULL && args == NULL) {  
-	*len = alerts? 0 : 
-	    sprintf(s, "No anomalies to report during this time interval\n"); 
-	if (fmt == HTMLFMT) { 
-	    if (alerts) 
-		*len += sprintf(s + *len, HTMLFOOTER_ALERTS); 
-	    *len += sprintf(s + *len, HTMLFOOTER);
+	*len = state->alerts? 0 : 
+	    sprintf(state->str, 
+		"No anomalies to report during this time interval\n"); 
+	if (state->fmt == HTMLFMT) { 
+	    if (state->alerts) 
+		*len += sprintf(state->str + *len, HTMLFOOTER_ALERTS); 
+	    *len += sprintf(state->str + *len, HTMLFOOTER);
 	} 
-	return s; 
+	return state->str; 
     } 
 	
     *len = 0; 
 
-    if (alerts == 0) { 
-	if (fmt == HTMLFMT) 
-	    *len = sprintf(s, HTMLHDR_ALERTS); 
-	alerts = 1;
+    if (state->alerts == 0) { 
+	if (state->fmt == HTMLFMT) 
+	    *len = sprintf(state->str, HTMLHDR_ALERTS); 
+	state->alerts = 1;
     } 
 
     x = (struct alert_record *) buf; 
@@ -348,24 +360,25 @@ print(char *buf, size_t *len, char * const args[])
     ch_dec = ntohs(x->change) & 0xff;
 
     /* print according to the requested format */
-    if (fmt == PRETTYFMT) {
-	*len += sprintf(s + *len, fmt, asctime(gmtime(&ts)), typestr, 
-			ch_int, ch_dec);
-    } else if (fmt == HTMLFMT) {
+    if (state->fmt == PRETTYFMT) {
+	*len += sprintf(state->str + *len, state->fmt, 
+			asctime(gmtime(&ts)), typestr, ch_int, ch_dec);
+    } else if (state->fmt == HTMLFMT) {
 	char timestr[20]; 
         char tmp[2048] = "#";
 
-        if (urlstr[0] != '#')
-            sprintf(tmp, urlstr, ts - 3600, ts + 3600);
+        if (state->urlstr[0] != '#')
+            sprintf(tmp, state->urlstr, ts - 3600, ts + 3600);
 
 	strftime(timestr, sizeof(timestr), "%b %d %T", gmtime(&ts)); 
-	*len += sprintf(s + *len, fmt, tmp, timestr, typestr, 
-			ch_int, ch_dec); 
+	*len += sprintf(state->str + *len, state->fmt, 
+			tmp, timestr, typestr, ch_int, ch_dec); 
     } else {
-	*len += sprintf(s + *len, fmt, (long int)ts, typestr, ch_int, ch_dec); 
+	*len += sprintf(state->str + *len, state->fmt, 
+			(long int)ts, typestr, ch_int, ch_dec); 
     } 
 	
-    return s;
+    return state->str;
 }
 
 callbacks_t callbacks = {

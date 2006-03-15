@@ -47,19 +47,20 @@ int load_callbacks(module_t *mdl);
 module_t *load_module(module_t *mdl, int idx);
 void remove_module(module_t *mdl);
 
-
-/*
+/* 
  * memory.c
  */
-void dump_alloc(void);
-int mem_merge_maps(memlist_t *dst, memlist_t *m);
-void *new_mem(memlist_t *m, uint size, char *msg); 
-void mfree_mem(memlist_t *m, void *p, uint size); 
-void memory_init(uint size_mb);     
-void memory_clear(void);        
-uint memory_usage(void);
-uint memory_peak(void);
-memlist_t *new_memlist(uint entries); 
+uint memory_usage();
+uint memory_peak();
+void * mem_alloc(size_t sz);
+void mem_free(void * p);
+void mem_flush(void * p, memlist_t * map);
+int mem_free_map(memlist_t * x);
+void * mdl_mem_alloc(module_t * mdl, size_t sz);
+void mdl_mem_free(module_t * mdl, void *p);
+void memory_init(uint size_mb);
+memlist_t *new_memlist(uint entries);
+void * mem_copy_map(memlist_t * s, void * p, memlist_t * d);
 
 
 /*
@@ -78,7 +79,7 @@ void export_mainloop(int fd);
  * supervisor.c
  */
 void supervisor_mainloop(int fd);
-pid_t start_child(char *name, char *procname, void (*mainloop)(int fd), int fd);
+pid_t start_child(procname_t who, int mtype, void (*mainloop)(int fd), int fd);
 int get_sp_fd(char *name);
 
 
@@ -124,6 +125,8 @@ char *getprotoname(int proto);
 void *load_object(char *base_name, char *symbol);
 void *load_object_h(char *base_name, char *symbol, void **handle);
 void unload_object(void *handle);
+char * getprocname(procname_t);
+char * getprocfullname(procname_t);
 
 
 /*
@@ -185,9 +188,12 @@ void register_ipc_fd(int fd);
 void unregister_ipc_fd(int fd);
 int  sup_send_new_modules(void);
 void sup_send_module_status(void);
+void sup_send_ca_lock(void);
+void sup_send_ca_unlock(void);
 void recv_message(int fd, proc_callbacks_t *callbacks);
 int  sup_recv_message(int fd);
 void sup_wait_for_ack(int fd);
+void send_string(char *);
 
 /*
  * res-mgmt.c

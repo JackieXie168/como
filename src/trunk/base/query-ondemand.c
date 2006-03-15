@@ -112,10 +112,7 @@ q_create_table(module_t * mdl, timestamp_t ts)
     ct->first_full = ct->size;      /* all records are empty */
     ct->records = 0;
     ct->live_buckets = 0;
-    ct->module = mdl;
-    ct->mem = NULL;                 /* use the system's map */
     ct->ts = ts;
-    ct->next_expired = NULL;
 
     /*
      * save the timestamp to indicate which flush interval this 
@@ -127,7 +124,7 @@ q_create_table(module_t * mdl, timestamp_t ts)
 }
 
 /*
- * -- q_flush_table
+ * -- q_flush_state
  *
  * Called by q_capture_pkt() process when a timeslot is complete.
  * it flushes the flow table (if it exists and it is non-empty)
@@ -135,8 +132,9 @@ q_create_table(module_t * mdl, timestamp_t ts)
  *
  */
 static void
-q_flush_table(module_t * mdl, tailq_t * expired)
+q_flush_state(module_t * mdl, tailq_t * expired)
 {
+    expiredmap_t * ex;
     ctable_t *ct;
 
     logmsg(V_LOGDEBUG, "flush_table start\n");
@@ -156,8 +154,13 @@ q_flush_table(module_t * mdl, tailq_t * expired)
 	mdl->name, ct->size, ct->records, ct->live_buckets);
 
     /* add to linked list and remove from here. */
-    TQ_APPEND(expired, ct, next_expired);
+    ex = mem_alloc(sizeof(expiredmap_t));
+    ex->mdl = mdl;
+    ex->ct = ct;
+    ex->ptr = mdl->ptr;
+    TQ_APPEND(expired, ex, next);
     mdl->ca_hashtable = NULL;
+    mdl->ptr = mem_copy_map(mdl->master_map, mdl->master_ptr, NULL);
 
     logmsg(V_LOGDEBUG, "module %s flush_table done.\n", mdl->name);
 }
@@ -208,10 +211,8 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 	    ctable_t * ct = mdl->ca_hashtable; 
 	
 	    ct->ts = pkt->ts; 
-	    if (ct->ts >= ct->ivl + mdl->flush_ivl && ct->records) {  
-		q_flush_table(mdl, expired);
-		mdl->ca_hashtable = NULL;
-	    }
+	    if (ct->ts >= ct->ivl + mdl->flush_ivl && ct->records) 
+		q_flush_state(mdl, expired);
 	}
 	if (!mdl->ca_hashtable) {
 	    mdl->ca_hashtable = q_create_table(mdl, pkt->ts); 
@@ -232,7 +233,7 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
          * make it unacceptable for the classifier.
          * (if check() is not provided, we take the packet anyway)
          */
-        if (mdl->callbacks.check != NULL && !mdl->callbacks.check(pkt))
+        if (mdl->callbacks.check != NULL && !mdl->callbacks.check(mdl, pkt))
             continue;
 
         /*
@@ -240,7 +241,7 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
          * this packet reside
          * (if hash() is not provided, it defaults to 0)
          */
-        hash = mdl->callbacks.hash != NULL ? mdl->callbacks.hash(pkt) : 0;
+        hash = mdl->callbacks.hash != NULL ? mdl->callbacks.hash(mdl, pkt) : 0;
         bucket = hash % mdl->ca_hashtable->size;
 
         /*
@@ -255,7 +256,8 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
         cand = mdl->ca_hashtable->bucket[bucket];
         while (cand) {
             /* if match() is not provided, any record matches */
-            if (mdl->callbacks.match == NULL || mdl->callbacks.match(pkt, cand))
+            if (mdl->callbacks.match == NULL || 
+		mdl->callbacks.match(mdl, pkt, cand))
                 break;
             prev = cand;
             cand = cand->next;
@@ -333,7 +335,7 @@ q_capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int * which,
 
 	    new_record = 1;
 	}
-	cand->full = mdl->callbacks.update(pkt, cand, new_record);
+	cand->full = mdl->callbacks.update(mdl, pkt, cand, new_record);
     }
 }
 
@@ -459,7 +461,7 @@ q_export_record(module_t * mdl, rec_t * rp, __unused int client_fd)
         if (mdl->callbacks.ematch == NULL)
             break;
         
-        ret = mdl->callbacks.ematch(cand, rp);
+        ret = mdl->callbacks.ematch(mdl, cand, rp);
         if (ret)
             break;
     }
@@ -474,7 +476,7 @@ q_export_record(module_t * mdl, rec_t * rp, __unused int client_fd)
     /* 
      * update the export record. 
      */
-    mdl->callbacks.export(cand, rp, isnew);
+    mdl->callbacks.export(mdl, cand, rp, isnew);
 
     /*
      * move the record to the front of the bucket in the  
@@ -512,7 +514,7 @@ q_call_print(module_t * mdl, rec_t *rp, int client_fd)
     if (buf == NULL) 
 	buf = safe_malloc(mdl->bsize);
 
-    ret = mdl->callbacks.store(rp, buf, mdl->bsize);
+    ret = mdl->callbacks.store(mdl, rp, buf);
     if (ret < 0) 
         logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
 
@@ -527,7 +529,7 @@ q_call_print(module_t * mdl, rec_t *rp, int client_fd)
 	size_t sz; 
 	timestamp_t ts; 
 
- 	sz = mdl->callbacks.load(p, (size_t) ret, &ts);  
+ 	sz = mdl->callbacks.load(mdl, p, (size_t) ret, &ts);  
 
 	/* print this record */
         printrecord(mdl, p, NULL, client_fd);
@@ -555,11 +557,12 @@ q_call_print(module_t * mdl, rec_t *rp, int client_fd)
  *
  */
 static void
-q_process_table(ctable_t * ct, int client_fd)
+q_process_table(expiredmap_t * ex, int client_fd)
 {
-    module_t *mdl = ct->module;
+    ctable_t * ct = ex->ct; 
+    module_t * mdl = ex->mdl;
     int (*record_fn)(module_t *, rec_t *, int);
-    int record_size = ct->module->callbacks.ca_recordsize + sizeof(rec_t);
+    int record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
     
     /*
      * call export() if available, otherwise just print() and
@@ -608,7 +611,7 @@ q_process_table(ctable_t * ct, int client_fd)
                 record_fn(mdl, rec, client_fd);
 
                 /* update the memory counters */
-                MDL_STATS(ct->module)->mem_usage_shmem_f += record_size;
+                MDL_STATS(mdl)->mem_usage_shmem_f += record_size;
 
 		free(rec);	/* done, free this record */
 		rec = p;		/* move to the next one */
@@ -696,7 +699,7 @@ q_print_records(module_t * mdl, timestamp_t ts, int client_fd)
     /* check the global action to be done on the 
      * export records at this time. 
      */
-    what = mdl->callbacks.action(NULL, ts, 0); 
+    what = mdl->callbacks.action(mdl, NULL, ts, 0); 
     assert( (what | ACT_MASK) == ACT_MASK );
     if (what & ACT_STOP) 
 	return; 
@@ -714,7 +717,7 @@ q_print_records(module_t * mdl, timestamp_t ts, int client_fd)
         if (ea->record[i] == NULL) 
             panicx("EXPORT array should be compact!");
 
-	what = mdl->callbacks.action(ea->record[i], ts, i);
+	what = mdl->callbacks.action(mdl, ea->record[i], ts, i);
 	/* only bits in the mask are valid */
 	logmsg(V_LOGEXPORT, "action %d returns 0x%x (%s%s%s)\n",
 		i, what,
@@ -796,9 +799,6 @@ init_ondemand_module(qreq_t * req)
     x->filter_str = req->filter_str;
     parse_filter(x->filter_str, &(x->filter_tree), NULL); 
     x->source = safe_strdup(req->mdl->source);
-    x->msize = req->mdl->msize;
-    if (x->msize)
-	x->mem = safe_calloc(1, x->msize);
     x->ca_hashsize = x->ex_hashsize = req->mdl->ex_hashsize;
 
     /* we get the new module arguments from the request command.
@@ -813,9 +813,15 @@ init_ondemand_module(qreq_t * req)
     load_callbacks(x);
     x->flush_ivl = DEFAULT_CAPTURE_IVL; 
     if (x->callbacks.init != NULL) {
-	x->flush_ivl = x->callbacks.init(x->mem, x->msize, x->args);
+	/* set the memory in persistent mode */
+	map.mem_type |= COMO_PERSISTENT_MEM; 
+
+	x->flush_ivl = x->callbacks.init(x, x->args);
 	if (x->flush_ivl == 0)
 	    panicx("could not initialize the new module %s\n", x->name);
+
+	/* reset the memory type */
+	map.mem_type &= ~COMO_PERSISTENT_MEM; 
     } 
 
     /* init capture tables */
@@ -841,9 +847,9 @@ void
 replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd) 
 {
     char out[DEFAULT_REPLAY_BUFSIZE]; 
-    size_t len, sz; 
+    size_t len; 
     int left, count;
-    ctable_t *ft, *next;
+    expiredmap_t *ex, *next;
     tailq_t expired_tables;  /* expired flow tables */
 
     /* init expired flow tables */
@@ -876,7 +882,7 @@ replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd)
 	 * to the module to clear all buffers if any and that no
 	 * more records will come. 
 	 */
-	left = src->callbacks.replay(ptr, out, &len, &count);
+	left = src->callbacks.replay(mdl, ptr, out, &len, &count);
 	if (left < 0)
 	    panicx("%s.replay() returns error", src->name);
 
@@ -893,29 +899,26 @@ replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd)
      * replay_source(). flush all tables independently if the 
      * timer has expired. 
      */
-    if (!ptr && mdl->ca_hashtable && mdl->ca_hashtable->records) {
-	q_flush_table(mdl, &expired_tables);
-	mdl->ca_hashtable = NULL;
-    }
+    if (!ptr && mdl->ca_hashtable && mdl->ca_hashtable->records)
+	q_flush_state(mdl, &expired_tables);
 
     /* 
      * here we do the export stuff and process all 
      * expired tables before processing any more packets
      */  
-    ft = TQ_HEAD(&expired_tables);
-    while (ft != NULL) {
-	next = ft->next_expired;
-	sz = sizeof(ctable_t) + ft->size * sizeof(void *);
+    ex = TQ_HEAD(&expired_tables);
+    while (ex != NULL) {
+	next = ex->next;
 
         /* process capture table and update export table */
-        q_process_table(ft, client_fd);
+        q_process_table(ex, client_fd);
 
 	/* process export table, printing/discarding records */
-	q_print_records(ft->module, ft->ts, client_fd);
+	q_print_records(ex->mdl, ex->ct->ts, client_fd);
 
-        /* free the capture table and move to next */
-	free(ft);  
-	ft = next;
+        /* free the table and move to next */
+	free(ex);  
+	ex = next;
     }
 }
 

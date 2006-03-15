@@ -37,10 +37,6 @@
 #include <assert.h>
 
 #ifdef linux
-   /* XXX what does this do?
-    *     anyway it works only for linux
-    *     -gianluca
-    */
 #include <mcheck.h>
 #else
 #define mcheck(x)
@@ -140,7 +136,7 @@ export_record(module_t * mdl, rec_t * rp)
         if (mdl->callbacks.ematch == NULL)
             break;
         
-        ret = mdl->callbacks.ematch(cand, rp);
+        ret = mdl->callbacks.ematch(mdl, cand, rp);
         if (ret)
             break;
     }
@@ -155,7 +151,7 @@ export_record(module_t * mdl, rec_t * rp)
     /* 
      * update the export record. 
      */
-    mdl->callbacks.export(cand, rp, isnew);
+    mdl->callbacks.export(mdl, cand, rp, isnew);
 
     /*
      * move the record to the front of the bucket in the  
@@ -197,7 +193,7 @@ call_store(module_t * mdl, rec_t *rp)
 	panic("fail csmap for module %s", mdl->name);
 
     /* call the store() callback */
-    ret = mdl->callbacks.store(rp, dst, mdl->bsize);
+    ret = mdl->callbacks.store(mdl, rp, dst);
     if (ret < 0) {
 	logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
 	return ret; 
@@ -231,11 +227,12 @@ call_store(module_t * mdl, rec_t *rp)
  *
  */
 static void
-process_table(ctable_t * ct, memlist_t * mem)
+process_table(expiredmap_t * ex, memlist_t * mem)
 {
-    module_t *mdl = ct->module;
+    ctable_t * ct = ex->ct;
+    module_t * mdl = ex->mdl;
     int (*record_fn)(module_t *, rec_t *);
-    int record_size = ct->module->callbacks.ca_recordsize + sizeof(rec_t);
+    int record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
     
     /*
      * call export() if available, otherwise just store() and
@@ -243,15 +240,18 @@ process_table(ctable_t * ct, memlist_t * mem)
      */
     record_fn = mdl->callbacks.export? export_record : call_store;
 
+    /* 
+     * store the current flush_map in the module data structure so 
+     * that callbacks can free memory too. 
+     */
+    mdl->flush_map = mem; 
+
     /*
      * scan all buckets and save the information to the output file.
      * then see what the EXPORT process has to keep about the entry.
      */
     for (; ct->first_full < ct->size; ct->first_full++) {
 	rec_t *rec; 
-
-	logmsg(V_LOGEXPORT, "processing table for module %s (bucket %d)\n",
-	       mdl->name, ct->first_full);
 
 	/*
 	 * Each entry in the bucket is a list of records for the same record.
@@ -285,9 +285,14 @@ process_table(ctable_t * ct, memlist_t * mem)
                 record_fn(mdl, rec);
 
                 /* update the memory counters */
-                MDL_STATS(ct->module)->mem_usage_shmem_f += record_size;
+                MDL_STATS(mdl)->mem_usage_shmem_f += record_size;
 
-		mfree_mem(mem, rec, 0);	/* done, free this record */
+	        /* XXX we use mdl_mem_free here. in the future this 
+	         *     should only happen within the module themselves 
+		 *     and export should not be in charge of freeing memory
+		 *     for the modules.
+		 */
+		mdl_mem_free(mdl, rec);	/* done, free this record */
 		rec = p;		/* move to the next one */
 	    }
 
@@ -311,10 +316,13 @@ process_table(ctable_t * ct, memlist_t * mem)
  * and update memory counters.
  */
 static void
-ignore_capture_table(ctable_t * ct, memlist_t * mem)
+ignore_capture_table(expiredmap_t * ex, memlist_t * mem)
 {
-    int record_size = ct->module->callbacks.ca_recordsize + sizeof(rec_t);
+    ctable_t * ct = ex->ct;
+    module_t * mdl = ex->mdl;
+    int record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
 
+    mdl->flush_map = mem; 
     for (; ct->first_full < ct->size; ct->first_full++) {
         rec_t *rec = ct->bucket[ct->first_full];
         while(rec != NULL) {
@@ -325,8 +333,8 @@ ignore_capture_table(ctable_t * ct, memlist_t * mem)
 
             while (rec != end) {
                 rec_t *p = rec->next;
-                mfree_mem(mem, rec, 0);
-                MDL_STATS(ct->module)->mem_usage_shmem_f += record_size;
+                mdl_mem_free(mdl, rec);
+                MDL_STATS(mdl)->mem_usage_shmem_f += record_size;
                 rec = p;
             }
         }
@@ -403,7 +411,7 @@ store_records(module_t * mdl, timestamp_t ts)
     /* check the global action to be done on the 
      * export records at this time. 
      */
-    what = mdl->callbacks.action(NULL, ts, 0); 
+    what = mdl->callbacks.action(mdl, NULL, ts, 0); 
     assert( (what | ACT_MASK) == ACT_MASK );
     if (what & ACT_STOP) 
 	return; 
@@ -423,7 +431,7 @@ store_records(module_t * mdl, timestamp_t ts)
         if (ea->record[i] == NULL) 
             panicx("EXPORT array should be compact!");
 
-	what = mdl->callbacks.action(ea->record[i], ts, i);
+	what = mdl->callbacks.action(mdl, ea->record[i], ts, i);
 	/* only bits in the mask are valid */
 	logmsg(V_LOGEXPORT, "action %d returns 0x%x (%s%s%s)\n",
 		i, what,
@@ -512,6 +520,7 @@ ex_init_module(module_t *mdl)
         panic("cannot open file %s for %s", nm, mdl->name);
     free(nm);
     mdl->offset = csgetofs(mdl->file);
+    mdl->ptr = mem_copy_map(mdl->master_map, mdl->master_ptr, NULL);
 }
 
 /**
@@ -612,6 +621,8 @@ export_mainloop(__unused int fd)
      */
     logmsg(LOGDEBUG, "wait for 1st msg from SU\n");
     recv_message(map.supervisor_fd, &export_callbacks);
+    /* This is not a typo, we need to wait for two messages */
+    recv_message(map.supervisor_fd, &export_callbacks);
 
     /* allocate the timers */
     init_timers();
@@ -669,37 +680,41 @@ export_mainloop(__unused int fd)
 	    /*
 	     * process the tables that have been received
 	     */
-	    while (x.ft != NULL) {
-		ctable_t * next = x.ft->next_expired;
-		size_t sz = sizeof(ctable_t) + x.ft->size * sizeof(void *);
+	    while (x.ex != NULL) {
+		expiredmap_t * next = x.ex->next;
+		size_t sz;
 
-        /*
-         * Process the table, if the module it belongs to is active.
-         */
-        if (x.ft->module->status == MDL_ACTIVE) {
+		logmsg(LOGEXPORT, "expired table for %s\n", x.ex->mdl->name); 
+
+		/*
+		 * Process the table, if the module it belongs to is active.
+		 */
+		if (x.ex->mdl->status == MDL_ACTIVE) {
 		    mcheck(NULL);
 		    /* process capture table and update export table */
 		    start_tsctimer(map.stats->ex_table_timer); 
-		    process_table(x.ft, x.m);
+		    process_table(x.ex, x.m);
 		    end_tsctimer(map.stats->ex_table_timer); 
 		    mcheck(NULL);
 
 		    /* process export table, storing/discarding records */
 		    start_tsctimer(map.stats->ex_store_timer); 
-		    store_records(x.ft->module, x.ft->ts); 
+		    store_records(x.ex->mdl, x.ex->ct->ts); 
 		    end_tsctimer(map.stats->ex_store_timer); 
 		    mcheck(NULL);
-        }
-        else
-            ignore_capture_table(x.ft, x.m);
+		} else
+		    ignore_capture_table(x.ex, x.m);
 
-        /* update memory counter */
-        MDL_STATS(x.ft->module)->mem_usage_shmem_f += sz;
+		/* update memory counter */
+		MDL_STATS(x.ex->mdl)->mem_usage_shmem_f += sz;
 		
-        /* free the capture table and move to next */
-		mfree_mem(x.m, x.ft, sz);  
+		/* free the capture table, the expired map and move to next */
+		sz = sizeof(ctable_t) + x.ex->ct->size * sizeof(void *);
+		mem_flush(x.ex->ct, x.m);  
+		mem_flush(x.ex->ptr, x.m);  
+		mem_flush(x.ex, x.m);
 		mcheck(NULL);
-		x.ft = next;
+		x.ex = next;
 	    }
 
 	    /*

@@ -46,25 +46,32 @@ FLOWDESC {
     uint32_t    pkts;
 };
 
-static int meas_ivl = 1;     /* measurement interval */
+#define STATEDESC   struct _counter_state
+STATEDESC {
+    int meas_ivl;     /* measurement interval */
+};
 
 static timestamp_t 
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char *args[])
 {
+    STATEDESC * state; 
     int i;
 
+    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
+    state->meas_ivl = 1;
     for (i = 0; args && args[i]; i++) {
-	if (strstr(args[i], "interval")) {
-	    char * val = index(args[i], '=') + 1;
-	    meas_ivl = atoi(val);
+        if (strstr(args[i], "interval")) {
+            char * val = index(args[i], '=') + 1;
+            state->meas_ivl = atoi(val);
         }
     }
 
-    return TIME2TS(meas_ivl, 0);
+    STATE(self) = state;
+    return TIME2TS(state->meas_ivl, 0);
 }
 
 static int
-check(pkt_t * pkt)
+check(__unused void * self, pkt_t * pkt)
 {
     /*
      * if the stream contains per-flow information,
@@ -77,7 +84,7 @@ check(pkt_t * pkt)
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -102,22 +109,20 @@ update(pkt_t *pkt, void *fh, int isnew)
 }
 
 static ssize_t
-store(void *rp, char *buf, size_t len)
+store(void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
-
-    if (len < sizeof(FLOWDESC)) 
-	return -1; 
+    STATEDESC * state = STATE(self);
 
     PUTH64(buf, x->ts);
-    PUTH64(buf, x->bytes/meas_ivl);
-    PUTH32(buf, x->pkts/meas_ivl);
+    PUTH64(buf, x->bytes/state->meas_ivl);
+    PUTH32(buf, x->pkts/state->meas_ivl);
 
     return sizeof(FLOWDESC);
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
@@ -157,7 +162,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define GNUPLOTFOOTER	"e\n"
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt; 
@@ -165,6 +170,7 @@ print(char *buf, size_t *len, char * const args[])
     static int no_records = 0; 
     static uint64_t bytes = 0;
     static uint64_t pkts = 0;
+    STATEDESC * state = STATE(self); 
     FLOWDESC *x; 
     timestamp_t ts;
     time_t t; 
@@ -189,7 +195,7 @@ print(char *buf, size_t *len, char * const args[])
 		/* aggregate multiple records into one to reduce 
 		 * communication messages. 
 		 */
-		granularity = MAX(atoi(val) / meas_ivl, 1);
+		granularity = MAX(atoi(val) / state->meas_ivl, 1);
 	    } else if (!strcmp(args[n], "format=mbps")) {
 		*len = 0; 
 		fmt = MBPSFMT; 
@@ -260,5 +266,5 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "gnuplot plain pretty mbps"
+    formats: "gnuplot plain pretty mbps",
 };

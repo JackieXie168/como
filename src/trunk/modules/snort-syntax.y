@@ -59,13 +59,7 @@
 /* These variables are declared in modules/snort.c
  * We fill the info from here while parsing the Snort rules file
  */
-extern unsigned int nrules;
-extern unsigned int nhdrs;
-extern unsigned int nrules_read;
-extern ruleinfo_t *hdrs_array[];
-extern opt_t *opts_array[];
-extern varinfo_t *vi[];
-extern dyn_t *dr[];
+extern STATEDESC *state;
 
 int linenum = 0;
 int rule_is_valid = 0;
@@ -370,7 +364,7 @@ hextochar(char *string)
  *
  */
 static int 
-add_func(fpnode_t **list, unsigned int (*function)(ruleinfo_t *, pkt_t *))
+add_func(fpnode_t **list, unsigned int function)
 {
     fpnode_t *aux, *i;
     
@@ -404,20 +398,20 @@ add_var(char *varname, varinfo_t var)
     c = *varname;
     p = c - 65;
     
-    if (!vi[p]) {
-        vi[p] = (varinfo_t *)prv_alloc(sizeof(varinfo_t)); 
-        if (vi[p] == NULL) return -1;
-        vi[p]->next = NULL;
-        vi[p]->namelen = strlen(varname);
-        vi[p]->name = (char *)prv_alloc(strlen(varname));
-        if (vi[p]->name == NULL) return -1;
-        strncpy(vi[p]->name, varname, strlen(varname));
-        vi[p]->type = var.type;
+    if (!state->vi[p]) {
+        state->vi[p] = (varinfo_t *)prv_alloc(sizeof(varinfo_t)); 
+        if (state->vi[p] == NULL) return -1;
+        state->vi[p]->next = NULL;
+        state->vi[p]->namelen = strlen(varname);
+        state->vi[p]->name = (char *)prv_alloc(strlen(varname));
+        if (state->vi[p]->name == NULL) return -1;
+        strncpy(state->vi[p]->name, varname, strlen(varname));
+        state->vi[p]->type = var.type;
         if (!var.type)
-            vi[p]->value.ip = var.value.ip;
-        else vi[p]->value.port = var.value.port;
+            state->vi[p]->value.ip = var.value.ip;
+        else state->vi[p]->value.port = var.value.port;
     } else {
-        for (v = vi[p]; v; v = v->next) {
+        for (v = state->vi[p]; v; v = v->next) {
             if (!strcmp(v->name, varname)) {
                 yserror("Variable %s already exists", varname);
                 return -1;
@@ -425,7 +419,7 @@ add_var(char *varname, varinfo_t var)
         }
         v = (varinfo_t *)prv_alloc(sizeof(varinfo_t));
         if (v == NULL) return -1;
-        v->next = vi[p];
+        v->next = state->vi[p];
         v->namelen = strlen(varname);
         v->name = (char *)prv_alloc(strlen(varname));
         if (v->name == NULL) return -1;
@@ -434,7 +428,7 @@ add_var(char *varname, varinfo_t var)
         if (!var.type)
             v->value.ip = var.value.ip;
         else v->value.port = var.value.port;
-        vi[p] = v;
+        state->vi[p] = v;
     }
     
     return 0;
@@ -456,7 +450,7 @@ get_var(char *varname, varinfo_t *varinfo)
     c = *varname;
     p = c - 65;
 
-    for (var = vi[p]; var; var = var->next) {
+    for (var = state->vi[p]; var; var = var->next) {
         if (!strncmp(var->name, varname, var->namelen)) {
             *varinfo = *var;
             return 0;
@@ -486,9 +480,9 @@ add_dynamic_rule(opt_t *o)
     
     n = o->actvby;
     
-    if (!dr[n]) dr[n] = d;
+    if (!state->dr[n]) state->dr[n] = d;
     else {
-        for (aux = dr[n]; aux->next; aux = aux->next);
+        for (aux = state->dr[n]; aux->next; aux = aux->next);
         aux->next = d;
     }
 
@@ -594,7 +588,7 @@ add_rule(uint8_t action, unsigned int proto,
     int end = 0;
 #endif
     
-    if (nrules >= MAX_RULES) {
+    if (state->nrules >= MAX_RULES) {
         yserror("Too many rules in the file");
         return -1;
     }
@@ -614,12 +608,12 @@ add_rule(uint8_t action, unsigned int proto,
     *fp = NULL;
     
     info->proto = proto;
-    if (add_func(fp, check_proto) == -1)
+    if (add_func(fp, 0) == -1)
         return -1;
     
     info->src_ips = src_ips;
     if (info->src_ips.ipnode->valid) {
-        if (add_func(fp, check_src_ip) == -1)
+        if (add_func(fp, 1) == -1)
             return -1;
     }
             
@@ -627,11 +621,11 @@ add_rule(uint8_t action, unsigned int proto,
     if (info->src_ports.valid) {
         switch(proto) {
         case IPPROTO_TCP:
-            if (add_func(fp, check_tcp_src_port) == -1)
+            if (add_func(fp, 3) == -1)
                 return -1;
             break;
         case IPPROTO_UDP:
-            if (add_func(fp, check_udp_src_port) == -1)
+            if (add_func(fp, 5) == -1)
                 return -1;
             break;
         }
@@ -639,7 +633,7 @@ add_rule(uint8_t action, unsigned int proto,
             
     info->dst_ips = dst_ips;
     if (info->dst_ips.ipnode->valid) {
-        if (add_func(fp, check_dst_ip) == -1)
+        if (add_func(fp, 2) == -1)
             return -1;
     }
             
@@ -647,18 +641,18 @@ add_rule(uint8_t action, unsigned int proto,
     if (info->dst_ports.valid) {
         switch(proto) {
         case IPPROTO_TCP:
-            if (add_func(fp, check_tcp_dst_port) == -1)
+            if (add_func(fp, 4) == -1)
                 return -1;
             break;
         case IPPROTO_UDP:
-            if (add_func(fp, check_udp_dst_port) == -1)
+            if (add_func(fp, 6) == -1)
                 return -1;
             break;
         }
     }            
 
     /* Preprocess rule's options */
-    opt->rule_id = nrules;
+    opt->rule_id = state->nrules;
     opt->refs = NULL;
     opt->next = NULL;
     opt->options = opts;
@@ -691,7 +685,7 @@ add_rule(uint8_t action, unsigned int proto,
             has_actvby = 1;
             if (opt->action != SNTOK_DYN) {
                 yserror("rule %d: activated-by option in non-dynamic rule",
-                        nrules);
+                        state->nrules);
                 return 0;
             }
             opt->actvby = atoi(optnode->content);
@@ -703,7 +697,7 @@ add_rule(uint8_t action, unsigned int proto,
             has_count = 1;
             if (opt->action != SNTOK_DYN) {
                 yserror("rule %d: count option in non-dynamic rule",
-                        nrules);
+                        state->nrules);
                 return 0;
             }
             opt->count = atoi(optnode->content);
@@ -719,7 +713,7 @@ add_rule(uint8_t action, unsigned int proto,
                 
             saux = index(optnode->content, ',');
             if (saux == NULL) {
-                yserror("rule %d: wrong reference option", nrules);
+                yserror("rule %d: wrong reference option", state->nrules);
                 return 0;
             }
             ref->id = saux + 1;
@@ -745,7 +739,7 @@ add_rule(uint8_t action, unsigned int proto,
             /* Save the revision of the rule */
             if (!has_sid) {
                 yserror("rule %d: rev option without previous sid option",
-                        nrules);
+                        state->nrules);
                 return 0;
             }
             opt->rev = atoi(optnode->content);
@@ -765,7 +759,7 @@ add_rule(uint8_t action, unsigned int proto,
                 if (!has_prio) opt->prio = 3;
                 break;                            
             case SNTOK_NULL:
-                yserror("rule %d: wrong classtype", nrules);
+                yserror("rule %d: wrong classtype", state->nrules);
                 return 0;
             }
             break;
@@ -803,7 +797,7 @@ add_rule(uint8_t action, unsigned int proto,
             onode_cand = find_pm_option(opts, optnode);
             if (!onode_cand) {
                 yserror("rule %d: nocase option without previous "
-                        "pattern-matching option", nrules);
+                        "pattern-matching option", state->nrules);
                 return 0;                    
             }
             onode_cand->nocase = 1;
@@ -823,7 +817,7 @@ add_rule(uint8_t action, unsigned int proto,
             onode_cand = find_pm_option(opts, optnode);
             if (!onode_cand) {
                 yserror("rule %d: depth option without previous "
-                        "pattern-matching option", nrules);
+                        "pattern-matching option", state->nrules);
                 return 0;                
             }
             onode_cand->has_depth = 1;
@@ -833,7 +827,7 @@ add_rule(uint8_t action, unsigned int proto,
             onode_cand = find_pm_option(opts, optnode);
             if (!onode_cand) {
                 yserror("rule %d: offset option without previous "
-                        "pattern_matching option", nrules);
+                        "pattern_matching option", state->nrules);
                 return 0;
             }
             onode_cand->offset = atoi(optnode->content);
@@ -845,7 +839,7 @@ add_rule(uint8_t action, unsigned int proto,
                 if (!onode_cand_2) {
                     yserror("rule %d: distance option requires at least "
                             "two previous pattern_matching options",
-                            nrules);
+                            state->nrules);
                     return 0;
                 } else {
                     onode_cand->has_distance = 1;
@@ -853,7 +847,7 @@ add_rule(uint8_t action, unsigned int proto,
                 }
             } else {
                 yserror("rule %d: distance option requires at least two "
-                        "previous pattern-matching options", nrules);
+                        "previous pattern-matching options", state->nrules);
                 return 0;
             }
             break;
@@ -864,7 +858,7 @@ add_rule(uint8_t action, unsigned int proto,
                 onode_cand->within = atoi(optnode->content);                    
             } else {
                 yserror("rule %d: within option without "
-                        "previous pattern-matching option", nrules);
+                        "previous pattern-matching option", state->nrules);
                 return 0;
             }
             break;
@@ -878,14 +872,14 @@ add_rule(uint8_t action, unsigned int proto,
                 onode_cand = find_pm_option(opts, optnode);
                 if (!onode_cand) {
                     yserror("rule %d: isdataat relative option without "
-                            "previous pattern-matching option", nrules);
+                            "previous pattern-matching option", state->nrules);
                     return 0;                        
                 } else {
                     optnode->isdataat = atoi(optnode->content);
                     optnode->relative = 1;
                 }
             } else {
-                yserror("rule %d: wrong isdataat option", nrules);
+                yserror("rule %d: wrong isdataat option", state->nrules);
                 return 0;                    
             }
             break;
@@ -909,7 +903,7 @@ add_rule(uint8_t action, unsigned int proto,
             }
             if (!saux || !saux_2) {
                 /* The pcre was not found */
-                yserror("rule %d: wrong pcre option", nrules);
+                yserror("rule %d: wrong pcre option", state->nrules);
                 return 0;                    
             }
             optnode->cnt = (char *)prv_alloc(saux_2 - saux);
@@ -942,7 +936,7 @@ add_rule(uint8_t action, unsigned int proto,
                     if (!onode_cand) {
                         yserror("rule %d: pcre relative option without "
                                 "previous pattern-matching option",
-                                nrules);
+                                state->nrules);
                         return 0;
                     }
                     else optnode->relative = 1;
@@ -950,13 +944,11 @@ add_rule(uint8_t action, unsigned int proto,
             }
                 
             /* Compile the pcre found in the rule */                
-            pcre_malloc = prv_alloc;
-            pcre_free = prv_free;
             regexp_aux = pcre_compile(optnode->cnt, pcre_opts,
                                       &pcre_error, &erroffset, NULL);
             if (regexp_aux == NULL) {
                 yserror("rule %d: wrong pcre expression, offset = %d, "
-                        "error = %s", nrules, erroffset, pcre_error);
+                        "error = %s", state->nrules, erroffset, pcre_error);
                 return 0;
             } 
             prv_free(optnode->cnt);
@@ -964,7 +956,7 @@ add_rule(uint8_t action, unsigned int proto,
 #else
             yserror("rule %d: pcre option found, but pcre support is "
                     "disabled. please install libpcre and edit "
-                    "config_vars.local", nrules);
+                    "config_vars.local", state->nrules);
             return 0;
 #endif
             break;
@@ -997,7 +989,7 @@ add_rule(uint8_t action, unsigned int proto,
                                     yserror("rule %d: byte_test relative "
                                             "option without previous "
                                             "pattern-matching option",
-                                            nrules);
+                                            state->nrules);
                                     return 0;
                                 }                                    
                                 else optnode->relative = 1;
@@ -1017,23 +1009,23 @@ add_rule(uint8_t action, unsigned int proto,
                         }
                     } else {
                         yserror("rule %d: insufficient parameters "
-                                "in byte_test option", nrules);
+                                "in byte_test option", state->nrules);
                         return 0;                            
                     }
                 } else {
                     yserror("rule %d: insufficient parameters in "
-                            "byte_test option", nrules);
+                            "byte_test option", state->nrules);
                     return 0;
                 }
             } else {
                     yserror("rule %d: insufficient parameters "
-                            "in byte_test option", nrules);
+                            "in byte_test option", state->nrules);
                     return 0;
             }
             if (!(optnode->byte_isstring) && optnode->byte_number != 1 &&
                 optnode->byte_number != 2 && optnode->byte_number != 4) {
                 yserror("rule %d: the number of bytes in a byte_test "
-                        "option must be 1, 2 or 4", nrules);
+                        "option must be 1, 2 or 4", state->nrules);
                 return 0;                    
             }
             break;
@@ -1048,7 +1040,7 @@ add_rule(uint8_t action, unsigned int proto,
             if (optnode->byte_number != 1 && optnode->byte_number != 2 &&
                 optnode->byte_number != 4) {
                 yserror("rule %d: the number of bytes in a byte_test "
-                        "option must be 1, 2 or 4", nrules);
+                        "option must be 1, 2 or 4", state->nrules);
                 return 0;                    
             }
             saux = index(optnode->content, ',');
@@ -1061,7 +1053,7 @@ add_rule(uint8_t action, unsigned int proto,
                         if (!onode_cand) {
                             yserror("rule %d: byte_test relative option "
                                     "without previous pattern-matching "
-                                    "option", nrules);
+                                    "option", state->nrules);
                             return 0;
                         } else optnode->relative = 1;                        
                     }
@@ -1083,7 +1075,7 @@ add_rule(uint8_t action, unsigned int proto,
                 }
             } else {
                 yserror("rule %d: insufficient parameters in byte_jump "
-                        "option", nrules);
+                        "option", state->nrules);
                 return 0;
             }
             break;
@@ -1170,7 +1162,8 @@ add_rule(uint8_t action, unsigned int proto,
             if ((opt->ipopts & IPOPT_EOL) != IPOPT_EOL)
                 opt->ipopts |= IPOPT_EOL;
             if (!(opt->ipopts)) {
-                yserror("rule %d: empty or wrong ipopts option", nrules);
+                yserror("rule %d: empty or wrong ipopts option",
+                        state->nrules);
                 return 0;                
             }
             break;
@@ -1222,7 +1215,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_FLAGS:
             if (info->proto != IPPROTO_TCP) {
                 yserror("rule %d: flags option not compatible with "
-                        "non-tcp rule", nrules);
+                        "non-tcp rule", state->nrules);
                 return 0;                
             }
             opt->flags = 0;
@@ -1272,7 +1265,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_SEQ:
             if (info->proto != IPPROTO_TCP) {
                 yserror("rule %d: seq option not compatible "
-                        "with non-tcp rule", nrules);
+                        "with non-tcp rule", state->nrules);
                 return 0;                
             }                
             opt->seq = atoi(optnode->content);
@@ -1280,7 +1273,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_ACK:
             if (info->proto != IPPROTO_TCP) {
                 yserror("rule %d: ack option not compatible "
-                        "with non-tcp rule", nrules);
+                        "with non-tcp rule", state->nrules);
                 return 0;                
             }
             opt->ack = atoi(optnode->content);
@@ -1288,7 +1281,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_WINDOW:
             if (info->proto != IPPROTO_TCP) {
                 yserror("rule %d: window option not compatible "
-                        "with non-tcp rule", nrules);
+                        "with non-tcp rule", state->nrules);
                 return 0;                
             }
             optnode->neg = 0;
@@ -1301,7 +1294,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_ITYPE:
             if (info->proto != IPPROTO_ICMP) {
                 yserror("rule %d: itype option not compatible "
-                        "with non-icmp rule", nrules);
+                        "with non-icmp rule", state->nrules);
                 return 0;                
             }                
             opt->itypelow = 0;
@@ -1325,7 +1318,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_ICODE:
             if (info->proto != IPPROTO_ICMP) {
                 yserror("rule %d: icode option not compatible "
-                        "with non-icmp rule", nrules);
+                        "with non-icmp rule", state->nrules);
                 return 0;                
             }                
             opt->icodelow = 0;
@@ -1349,7 +1342,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_ICMPID:
             if (info->proto != IPPROTO_ICMP) {
                 yserror("rule %d: icmp_id option not compatible "
-                        "with non-icmp rule", nrules);
+                        "with non-icmp rule", state->nrules);
                 return 0;                
             }                
             opt->icmpid = atoi(optnode->content);
@@ -1357,7 +1350,7 @@ add_rule(uint8_t action, unsigned int proto,
         case SNTOK_ICMPSEQ:
             if (info->proto != IPPROTO_ICMP) {
                 yserror("rule %d: icmp_seq option not compatible "
-                        "with non-icmp rule", nrules);
+                        "with non-icmp rule", state->nrules);
                 return 0;                
             }                
             opt->icmpseq = atoi(optnode->content);
@@ -1390,14 +1383,15 @@ add_rule(uint8_t action, unsigned int proto,
     /* Check that all mandatory options are present */
     if (opt->action == SNTOK_ACTIV) {
         if (!has_actv) {
-            yserror("activate rule %d without activates option", nrules);
+            yserror("activate rule %d without activates option",
+                    state->nrules);
             return 0;
         }
     }
     if (opt->action == SNTOK_DYN) {
         if (!has_count || !has_actvby) {
             yserror("dynamic rule %d lacks required options "
-                    "(activated_by,count)", nrules);
+                    "(activated_by,count)", state->nrules);
             return 0;
         }
     }
@@ -1407,11 +1401,11 @@ add_rule(uint8_t action, unsigned int proto,
     /* Add the new rule at the end of the list */
     if (rule_is_valid) {
         unsigned int i = 0;
-        while (i < nhdrs && !header_found) {
-            if (compare_rule_header(hdrs_array[i], info)) {
+        while (i < state->nhdrs && !header_found) {
+            if (compare_rule_header(state->hdrs_array[i], info)) {
                 header_found = 1;
                 /* Add the option set to the end of the array */
-                opt->rule = hdrs_array[i];
+                opt->rule = state->hdrs_array[i];
                 info->opts_array[info->nopts] = opt;
                 info->nopts++;
             }
@@ -1419,13 +1413,13 @@ add_rule(uint8_t action, unsigned int proto,
         }
     
         if (!header_found) {
-            hdrs_array[nhdrs] = info;
+            state->hdrs_array[state->nhdrs] = info;
             opt->rule = info;
             info->opts_array[0] = opt;
             info->nopts = 1;
-            nhdrs++;
+            state->nhdrs++;
         }
-        nrules++;
+        state->nrules++;
     } else
         // XXX We should free more structures here
         prv_free(info);
@@ -1542,7 +1536,7 @@ portvar : NEGATION portdescvar {
 
 rule : action proto ip port direction ip port options
        { 
-            nrules_read++;
+            state->nrules_read++;
             
             if (add_rule($1, $2, $3, $4, $6, $7, $8) == -1)
                 YYABORT;

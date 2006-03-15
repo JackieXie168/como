@@ -23,20 +23,20 @@ SRCS_como := \
 	query.c \
 	query-comms.c \
 	query-ondemand.c \
+	export.c \
 	supervisor.c \
 	logging.c \
-	util-io.c \
-	util-safe.c \
-	util-misc.c \
-	util-socket.c \
-	util-timers.c \
-	export.c \
 	storage.c \
 	storage-client.c \
 	heap.c \
 	os.c \
 	ipc.c \
-	filter-syntax.c
+	filter-syntax.c \
+	util-io.c \
+	util-safe.c \
+	util-misc.c \
+	util-socket.c \
+	util-timers.c 
 
 LIBS = $(LIBDL) m		
 LIBDIRS = /usr/local/lib

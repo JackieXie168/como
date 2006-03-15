@@ -42,6 +42,7 @@ typedef struct _callbacks       callbacks_t;    /* callbacks */
 typedef struct _como_msg        msg_t;          /* message capture/export */
 
 typedef struct _memlist         memlist_t;      /* opaque, memory manager */
+typedef struct _expiredmap	expiredmap_t;	/* expired list of mem maps */
 
 typedef struct _record 	        rec_t;          /* table record header */
 typedef struct _capture_table   ctable_t;       /* capture hash table */
@@ -57,6 +58,16 @@ typedef struct _proc_callbacks  proc_callbacks_t; /* callbacks of core procs */
 typedef struct _como_pktdesc    pktdesc_t;      /* Packet description */
 
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
+
+typedef enum { 
+    NONE = 0,
+    SUPERVISOR = 4, 
+    CAPTURE = 12, 
+    EXPORT = 23, 
+    STORAGE = 35, 
+    QUERY = 87, 
+    OTHER = 101
+} procname_t; 
 
 typedef enum {
     MDL_INVALID, 			/* unused for debugging */
@@ -80,7 +91,7 @@ typedef enum {
  * Returns the capture flush interval on success, 0 on failure. 
  * Not mandatory, default does nothing and returns DEFAULT_CAPTURE_IVL.
  */
-typedef timestamp_t (init_fn)(void *mem, size_t msize, char * args[]);
+typedef timestamp_t (init_fn)(void * self, char * args[]);
 
 /**
  * check_fn() ... checks for the validity of a packet before
@@ -92,14 +103,14 @@ typedef timestamp_t (init_fn)(void *mem, size_t msize, char * args[]);
  * Returns 1 on success, 0 on failure.
  * Not mandatory, default returns 1.
  */
-typedef int (check_fn)(pkt_t *pkt);
+typedef int (check_fn)(void * self, pkt_t *pkt);
 
 /**
  * hash_fn() computes a 32-bit hash value for a packet.
  * Not mandatory, the default returns 0 (which makes further classification
  * steps potentially very expensive).
  */
-typedef uint32_t (hash_fn)(pkt_t *pkt);
+typedef uint32_t (hash_fn)(void * self, pkt_t *pkt);
 
 /**
  * match_fn() checks that a packet belongs to the record passed as second
@@ -107,7 +118,7 @@ typedef uint32_t (hash_fn)(pkt_t *pkt);
  * Returns 1 on success, 0 on failure.
  * Not mandatory, default returns 1. XXX luigi is not convinced.
  */
-typedef int (match_fn)(pkt_t *pkt, void *fh);
+typedef int (match_fn)(void * self, pkt_t *pkt, void *fh);
 
 /**
  * update_fn() run from capture to update *fh with the info from *pkt.
@@ -117,7 +128,7 @@ typedef int (match_fn)(pkt_t *pkt, void *fh);
  * not contemplated).
  * Mandatory.
  */
-typedef int (update_fn)(pkt_t *pkt, void *fh, int is_new);
+typedef int (update_fn)(void * self, pkt_t *pkt, void *fh, int is_new);
 
 /**
  * ematch_fn() same as match_fn() but now it uses the current capture
@@ -126,7 +137,7 @@ typedef int (update_fn)(pkt_t *pkt, void *fh, int is_new);
  * Not mandatory, default returns 1; useless if there's no export_fn().
  * Called by export upon receipt of *eh from capture.
  */
-typedef int (ematch_fn)(void *eh, void *fh);
+typedef int (ematch_fn)(void * self, void *eh, void *fh);
 
 /**
  * export_fn() same as update_fn(), is the core of export's processing.
@@ -136,7 +147,7 @@ typedef int (ematch_fn)(void *eh, void *fh);
  * not contemplated).
  * Not mandatory; if defined, an action_fn() should be defined too.
  */
-typedef int (export_fn)(void *efh, void *fh, int new_rec);
+typedef int (export_fn)(void * self, void *efh, void *fh, int new_rec);
 
 /**
  * compare_fn() is the compare function used by qsort.
@@ -162,7 +173,7 @@ typedef int (compare_fn)(const void *, const void *);
  * Not mandatory; if defined, an export_fn() should be defined too.
  * 
  */
-typedef int (action_fn)(void * fh, timestamp_t t, int count);
+typedef int (action_fn)(void * self, void * fh, timestamp_t t, int count);
 #define	ACT_DISCARD	0x0400
 #define	ACT_STORE	0x4000
 #define	ACT_STOP	0x0040
@@ -179,7 +190,7 @@ typedef int (action_fn)(void * fh, timestamp_t t, int count);
  * it is not larger than a single file). So the response to this should
  * be disable the module or some other strong action.
  */
-typedef ssize_t (store_fn)(void *, char * buf, size_t);
+typedef ssize_t (store_fn)(void * self, void * rec, char * buf);
 
 /**
  * load_fn() given a buffer, returns the size of the first record in the
@@ -187,7 +198,7 @@ typedef ssize_t (store_fn)(void *, char * buf, size_t);
  * On error returns 0 and leaves *ts invalid.
  * Mandatory.
  */
-typedef size_t (load_fn)(char *buf, size_t len, timestamp_t * ts);
+typedef size_t (load_fn)(void * self, char *buf, size_t len, timestamp_t * ts);
 
 /**
  * print_fn() given a data buffer, returns a printable
@@ -201,7 +212,8 @@ typedef size_t (load_fn)(char *buf, size_t len, timestamp_t * ts);
  * On error returns NULL.
  * Optional
  */
-typedef char * (print_fn)(char *buf, size_t *len, char * const args[]);
+typedef char * (print_fn)(void * self, char * buf, size_t * len, 
+			  char * const args[]);
 
 /**
  * replay_fn() - given a data buffer (ptr), returns a reconstructed packet 
@@ -211,8 +223,8 @@ typedef char * (print_fn)(char *buf, size_t *len, char * const args[]);
  * out_buf_len is also updated to indicate the valid bytes in out. 
  * Not mandatory.
  */
-typedef int (replay_fn)(char *ptr, char *out, size_t * out_buf_len,
-                        int *count);
+typedef int (replay_fn)(void * self, char *ptr, char *out, 
+			size_t * out_buf_len, int *count);
 
 /*
  * This structure contains the callbacks for a classifier.
@@ -283,11 +295,18 @@ struct _module {
     treenode_t * filter_tree;   /* filter data */
     char * filter_str;          /* filter expression */
 
+    memlist_t * master_map;	/* blocks allocated after init() */
+    void * master_ptr;          /* module private state after init() */
+
+    memlist_t * mem_map;        /* memory map currently used */
+    void * ptr;                 /* current private state */
+
+    memlist_t * flush_map;      /* map to temporarily keep blocks to be freed */
+
     char * output;              /* output file basename */
     char ** args;               /* parameters for the module */
     char * source;              /* filename of the shared lib. */
-    void * mem;           	/* private memory for the classifier */
-    size_t msize;          	/* size of private memory */
+
     callbacks_t callbacks;      /* callbacks (static, from the shared obj) */
     void * cb_handle;           /* handle of module's dynamic libraries */
 
@@ -311,8 +330,7 @@ struct _module {
                                  * the more important the module is */
 
     int seen;                   /* used in config.c to find out what modules
-                                 * have been removed from cfg files
-                                 */
+                                 * have been removed from cfg files */
 };
 
 /*
@@ -340,9 +358,21 @@ struct _record {
  */
 struct _como_msg {
     memlist_t * m;
-    ctable_t * ft;
+    expiredmap_t * ex;
 };
 
+/* 
+ * Expired memory maps are stored by CAPTURE waiting to be sent to 
+ * EXPORT on a per-module basis to pass the state. They contain the 
+ * pointer to the private state of the module (at the time of being expired)
+ * and the memory maps where blocks should be freed.
+ */
+struct _expiredmap { 
+    expiredmap_t * next;	/* next expired map */
+    module_t * mdl;		/* module that is using this table */
+    ctable_t * ct;		/* capture table expired */
+    void * ptr;			/* private module state */
+};
 
 /*
  * Flow table descriptor -- one for each protocol or group of protocols.
@@ -353,9 +383,6 @@ struct _como_msg {
  * new ones in the chain.
  */
 struct _capture_table {
-    module_t *module;		/* module that is using this table */
-    memlist_t *mem;		/* map to be used for malloc/free */
-    ctable_t * next_expired;	/* next expired table */
     timestamp_t ts;             /* last observed packet */ 
     timestamp_t ivl;            /* first insertion (flush_ivl aligned) */
     uint32_t size;		/* size of hash table */

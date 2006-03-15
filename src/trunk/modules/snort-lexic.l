@@ -78,8 +78,6 @@ COMMENT         "#"(.)*
 
 %option noyywrap
 %option nounput
-/* This should work with Flex version >= 2.5.11 */
-option noyyalloc noyyfree noyyrealloc
 
 %%
 
@@ -193,19 +191,3 @@ option noyyalloc noyyfree noyyrealloc
 [ \t\n]+
 
 %%
-
-/* Redefine memory allocation functions
- * This should work with Flex version >= 2.5.11 
- */
-
-void *yyalloc (size_t bytes) {
-    return prv_alloc(bytes);
-}
-
-void yyfree (void *ptr) {
-    return prv_free(ptr);
-}
-
-void *yyrealloc (void *ptr, size_t bytes) {
-    return prv_realloc(ptr, bytes);
-}

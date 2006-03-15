@@ -69,14 +69,14 @@ FLOWDESC {
 
 
 static timestamp_t 
-init(__unused void *mem, __unused size_t msize, __unused char *args[])
+init(__unused void * self, __unused char *args[])
 {
     return TIME2TS(300,0);
 }
 
 
 static int
-check(pkt_t * pkt)
+check(__unused void * self, pkt_t * pkt)
 {
     /*
      * if the stream contains per-flow information,
@@ -89,7 +89,7 @@ check(pkt_t * pkt)
 }
 
 static uint32_t
-hash(pkt_t *pkt)
+hash(__unused void * self, pkt_t *pkt)
 {
     uint sport, dport;
 
@@ -107,7 +107,7 @@ hash(pkt_t *pkt)
 }
 
 static int
-match(pkt_t *pkt, void *fh)
+match(__unused void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     uint sport, dport;
@@ -132,7 +132,7 @@ match(pkt_t *pkt, void *fh)
 
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     timestamp_t end_ts;
@@ -180,7 +180,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(void *efh, char *buf, size_t len)
+store(__unused void * self, void *efh, char *buf, size_t len)
 {
     FLOWDESC *x = F(efh);
     uint32_t src, dst;
@@ -276,7 +276,7 @@ print_tcp_flags(uint8_t flags)
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
@@ -353,7 +353,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define PRINTDEF        0x01000000
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     char src[20], dst[20], exaddr[20], nexthop[20];
@@ -609,5 +609,5 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "pretty"
+    formats: "pretty",
 };

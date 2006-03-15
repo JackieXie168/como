@@ -159,6 +159,42 @@ getprotoname(int proto)
 }
 	    
 
+static struct {
+    procname_t who; 
+    char * name;
+    char * fullname; 
+} procalias[] = { 
+    {SUPERVISOR, 	"su", "SUPERVISOR"}, 
+    {CAPTURE, 		"ca", "CAPTURE"}, 
+    {EXPORT, 		"ex", "EXPORT"},
+    {STORAGE, 		"st", "STORAGE"}, 
+    {QUERY, 		"qu", "QUERY"},
+    {OTHER, 		"ot", "OTHER"},
+    {NONE, 		"??", "NONE"}
+};
+
+__inline__ char * 
+getprocname(procname_t who)
+{
+    int i; 
+
+    for (i = 0; procalias[i].who != who && procalias[i].who != NONE; i++) 
+	;
+
+    return procalias[i].name;
+}
+
+__inline__ char * 
+getprocfullname(procname_t who)
+{
+    int i; 
+
+    for (i = 0; procalias[i].who != who && procalias[i].who != NONE; i++) 
+	;
+
+    return procalias[i].fullname;
+}
+
 #if 0 
 
 /*

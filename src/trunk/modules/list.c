@@ -62,7 +62,7 @@ FLOWDESC {
 
 
 static uint32_t
-hash(pkt_t *pkt) 
+hash(__unused void * self, pkt_t *pkt) 
 {
     uint32_t addr; 
     int i;
@@ -73,7 +73,7 @@ hash(pkt_t *pkt)
 
 
 static int
-check(pkt_t * pkt)
+check(__unused void * self, pkt_t * pkt)
 {
     if (COMO(l2type) == LINKTYPE_80211) {
 	return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
@@ -84,7 +84,7 @@ check(pkt_t * pkt)
 
 
 static int
-match(pkt_t * pkt, void * fh)
+match(__unused void * self, pkt_t * pkt, void * fh)
 {
     FLOWDESC * x = F(fh);
     uint8_t addr;
@@ -104,7 +104,7 @@ match(pkt_t * pkt, void * fh)
 
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     uint8_t addr;
@@ -151,14 +151,11 @@ update(pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(void *fh, char *buf, size_t len)
+store(__unused void * self, void *fh, char *buf)
 {
     FLOWDESC *x = F(fh);
     int i;
  
-    if (len < sizeof(FLOWDESC))
-	return -1;
-
     PUTH64(buf, x->ts);
     PUTH32(buf, x->signal);
     PUTH32(buf, x->noise);
@@ -179,7 +176,7 @@ store(void *fh, char *buf, size_t len)
 
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
@@ -197,7 +194,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt;
@@ -333,5 +330,5 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "plain pretty"
+    formats: "plain pretty",
 };

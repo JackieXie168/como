@@ -65,12 +65,18 @@ typedef struct _node	node_t;
  * modules and classifiers as well.
  */
 struct _como {
-    char * procname;   	 	/* process using this instance */
+    procname_t whoami; 		/* process using this instance */
     char * workdir;		/* work directory for templates etc. */
     char * basedir;     	/* base directory for output files */
     char * libdir;		/* base directory for modules */
-    size_t mem_size;    	/* memory size for capture/export (MB) */
     int logflags;       	/* log flags (i.e., what to log) */
+
+    size_t mem_size;    	/* memory size for capture/export (MB) */
+    int mem_type;		/* defines how to allocate memory */
+#define COMO_PRIVATE_MEM 	0x01
+#define COMO_SHARED_MEM 	0x02
+#define COMO_PERSISTENT_MEM 	0x04
+
 
     int virtual_nodes;		/* no. of virtual nodes */
     node_t node;		/* node information */
@@ -82,6 +88,7 @@ struct _como {
     module_t * modules; 	/* array of modules */ 
     int module_max;  		/* max no. of modules */
     int module_count;   	/* current no. of modules */
+    module_t *curr_mdl;         /* module currently running */
 
     size_t maxfilesize; 	/* max file size in one bytestream */
 
@@ -100,7 +107,6 @@ struct _como {
     int il_mode;            	/* flag set if running in inline mode */
     module_t * il_module;	/* module that needs to be run in inline mode */
     char * il_qargs;		/* query args for the inline mode */
-    int il_inquery;		/* flag set if query is printing in inline mode */
 };
 
 

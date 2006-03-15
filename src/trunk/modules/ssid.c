@@ -56,21 +56,32 @@ FLOWDESC {
     uint8_t     padding[3]; 
 };
 
-static int meas_ivl = 1;     /* measurement interval */
-
+#define STATEDESC   struct _ssid_state
+STATEDESC {
+    int meas_ivl;     /* measurement interval */
+};
 
 static timestamp_t
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char *args[])
 {
+    STATEDESC *state;
     int i;
 
+    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
+    state->meas_ivl = 1;
+
+    /* 
+     * process input arguments 
+     */
     for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "interval")) {
             char * val = index(args[i], '=') + 1;
-            meas_ivl = atoi(val);
+            state->meas_ivl = atoi(val);
         }
     }
-    return TIME2TS(meas_ivl, 0);
+
+    STATE(self) = state; 
+    return TIME2TS(state->meas_ivl, 0);
 }
 
 
@@ -79,7 +90,7 @@ init(__unused void *mem, __unused size_t msize, char *args[])
  * beacons 
  */
 static int
-check(pkt_t * pkt) 
+check(__unused void * self, pkt_t * pkt) 
 {
     if (COMO(l2type) == LINKTYPE_80211) {
 	return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
@@ -90,7 +101,7 @@ check(pkt_t * pkt)
 
 
 static int 
-match(pkt_t * pkt, void * fh) 
+match(__unused void * self, pkt_t * pkt, void * fh) 
 {
     FLOWDESC * x = F(fh); 
     
@@ -106,12 +117,13 @@ match(pkt_t * pkt, void * fh)
  * update callback
  */
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
+    STATEDESC * state = STATE(self);
     FLOWDESC *x = F(fh); 
 
     if (isnew) {
-	x->ts = COMO(ts) - COMO(ts) % TIME2TS(meas_ivl, 0);
+	x->ts = COMO(ts) - COMO(ts) % TIME2TS(state->meas_ivl, 0);
 	x->channel = -1; 
 	x->signal = x->noise = 0;
         x->samples = 0; 
@@ -143,13 +155,10 @@ update(pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(void *rp, char *buf, size_t len)
+store(__unused void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
     int i; 
-    
-    if (len < sizeof(FLOWDESC)) 
-	return -1;   
     
     PUTH64(buf, x->ts);
     PUTH32(buf, x->signal);
@@ -166,7 +175,7 @@ store(void *rp, char *buf, size_t len)
 
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {   
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
@@ -185,7 +194,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define PLAINFMT	"%12ld %1d %2d %2d %2d %2d\n" 
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt; 
@@ -257,5 +266,5 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "pretty plain"
+    formats: "pretty plain",
 };

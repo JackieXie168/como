@@ -80,8 +80,11 @@ cleanup()
 static void
 handle_sigpipe()
 {
-    map.supervisor_fd = 0;
-    
+    /* SUPERVISOR is dead (that's why we got a SIGPIPE) so 
+     * mark the supervisor socket as unusable so that any 
+     * subsequent logmsg will not try to send messages
+     */
+    map.supervisor_fd = -1;
     exit(SIGPIPE);
 }
 
@@ -142,7 +145,7 @@ create_table(module_t * mdl, timestamp_t ts)
     size_t len;
 
     len = sizeof(ctable_t) + mdl->ca_hashsize * sizeof(void *);
-    ct = new_mem(NULL, len, "new_flow_table");
+    ct = mem_alloc(len); 
     if (ct == NULL)
 	return NULL;
 
@@ -153,8 +156,6 @@ create_table(module_t * mdl, timestamp_t ts)
     ct->first_full = ct->size;	/* all records are empty */
     ct->records = 0;
     ct->live_buckets = 0;
-    ct->module = mdl;
-    ct->mem = NULL;		/* use the system's map */
     ct->ts = ts;
 
     /*
@@ -168,19 +169,24 @@ create_table(module_t * mdl, timestamp_t ts)
 
 
 /*
- * -- flush_table
+ * -- flush_state
  *
  * Called by capture_pkt() process when a timeslot is complete.
  * it flushes the flow table (if it exists and it is non-empty)
- * and then it allocates a new one.
+ * and all memory state of the module. The state is store in the 
+ * expired list that will be sent to export once the processing of 
+ * the current packet batch is complete. 
+ * 
+ * XXX we send both the pointer to the module state and the 
+ *     capture table. this is going to change in the near future 
+ *     when the hash table will be managed from inside the modules.
  *
  */
 static void
-flush_table(module_t * mdl, tailq_t * expired)
+flush_state(module_t * mdl, tailq_t * expired)
 {
+    expiredmap_t * ex;
     ctable_t *ct;
-
-    logmsg(V_LOGCAPTURE, "flush_table start\n");
 
     /* check if the table is there and if it is non-empty */
     ct = mdl->ca_hashtable;
@@ -213,11 +219,18 @@ flush_table(module_t * mdl, tailq_t * expired)
 #endif
 
     /* add to linked list and remove from here. */
-    TQ_APPEND(expired, ct, next_expired);
+    ex = mem_alloc(sizeof(expiredmap_t));
+    if (ex == NULL) 
+	panicx("no more memory to expire tables...");
+    ex->mdl = mdl;
+    ex->ct = ct; 
+    ex->ptr = mdl->ptr;
+    TQ_APPEND(expired, ex, next);
     map.stats->table_queue++;
-    mdl->ca_hashtable = NULL;
 
-    logmsg(V_LOGCAPTURE, "module %s flush_table done.\n", mdl->name);
+    /* reset the state of the module */
+    mdl->ca_hashtable = NULL;
+    mdl->ptr = mem_copy_map(mdl->master_map, mdl->master_ptr, mdl->mem_map);
 }
 
 
@@ -240,7 +253,6 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
     int new_record;
     int record_size;		/* effective record size */
 
-
     record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
 
     if (mdl->ca_hashtable == NULL)
@@ -256,10 +268,8 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	    ctable_t *ct = mdl->ca_hashtable;
 
 	    ct->ts = pkt->ts;
-	    if (ct->ts >= ct->ivl + mdl->flush_ivl && ct->records) {
-		flush_table(mdl, expired);
-		mdl->ca_hashtable = NULL;
-	    }
+	    if (ct->ts >= ct->ivl + mdl->flush_ivl && ct->records)
+		flush_state(mdl, expired);
 	}
 	if (!mdl->ca_hashtable) {
 	    mdl->ca_hashtable = create_table(mdl, pkt->ts);
@@ -283,7 +293,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	 * make it unacceptable for the classifier.
 	 * (if check() is not provided, we take the packet anyway)
 	 */
-	if (mdl->callbacks.check != NULL && !mdl->callbacks.check(pkt))
+	if (mdl->callbacks.check != NULL && !mdl->callbacks.check(mdl, pkt))
 	    continue;
 
 	/*
@@ -291,7 +301,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	 * this packet reside
 	 * (if hash() is not provided, it defaults to 0)
 	 */
-	hash = mdl->callbacks.hash != NULL ? mdl->callbacks.hash(pkt) : 0;
+	hash = mdl->callbacks.hash != NULL ? mdl->callbacks.hash(mdl, pkt) : 0;
 	bucket = hash % mdl->ca_hashtable->size;
 
 	/*
@@ -306,7 +316,8 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	cand = mdl->ca_hashtable->bucket[bucket];
 	while (cand) {
 	    /* if match() is not provided, any record matches */
-	    if (mdl->callbacks.match == NULL || mdl->callbacks.match(pkt, cand))
+	    if (mdl->callbacks.match == NULL || 
+		mdl->callbacks.match(mdl, pkt, cand))
 		break;
 	    prev = cand;
 	    cand = cand->next;
@@ -334,7 +345,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 		rec_t *x;
 
 		/* allocate a new record */
-		x = new_mem(mdl->ca_hashtable->mem, record_size, "new");
+		x = mem_alloc(record_size); 
 		if (x == NULL)
 		    continue;	/* XXX no memory, we keep going. 
 				 *     need better solution! */
@@ -370,7 +381,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	     * create a new record, update table stats
 	     * and link it to the bucket.
 	     */
-	    cand = new_mem(mdl->ca_hashtable->mem, record_size, "new");
+	    cand = mem_alloc(record_size); 
 	    if (cand == NULL)
 		continue;
 	    SHMEM_USAGE(mdl) += record_size;
@@ -387,7 +398,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	    new_record = 1;
 	}
 	start_tsctimer(map.stats->ca_updatecb_timer);
-	cand->full = mdl->callbacks.update(pkt, cand, new_record);
+	cand->full = mdl->callbacks.update(mdl, pkt, cand, new_record);
 	end_tsctimer(map.stats->ca_updatecb_timer);
     }
 }
@@ -404,7 +415,7 @@ static void
 ca_init_module(module_t * mdl)
 {
     source_t *src;
-
+    
     /* Default values for filter stuff */
     mdl->filter_tree = NULL;
 
@@ -427,6 +438,11 @@ ca_init_module(module_t * mdl)
 	    break;
 	}
     }
+
+    /* copy the master memory region */
+    mdl->ptr = mem_copy_map(mdl->master_map, mdl->master_ptr, mdl->mem_map);
+
+    logmsg(LOGCAPTURE, "module %s loaded (#%d)\n", mdl->name, map.module_count);
 }
 
 /*
@@ -449,7 +465,7 @@ drop_table(ctable_t * ct, module_t * mdl)
 
 	    while (rec != end) {
 		rec_t *p = rec->next;
-		mfree_mem(NULL, rec, 0);
+		mem_free(rec); 
 		SHMEM_USAGE(mdl) -= record_size;
 		rec = p;
 	    }
@@ -457,7 +473,7 @@ drop_table(ctable_t * ct, module_t * mdl)
     }
 
     SHMEM_USAGE(mdl) -= sizeof(ctable_t) + ct->size * sizeof(void *);
-    mfree_mem(NULL, ct, 0);
+    mem_free(ct); 
 }
 
 /*
@@ -469,12 +485,18 @@ drop_table(ctable_t * ct, module_t * mdl)
 static void
 ca_disable_module(module_t * mdl)
 {
-    ctable_t *ct, *prev, *head /*, *tail */ ;
+    // ctable_t *ct, *prev, *head /*, *tail */ ;
 
     if (mdl->ca_hashtable)
 	drop_table(mdl->ca_hashtable, mdl);
     mdl->ca_hashtable = NULL;
 
+#if 0 
+    /* XXX we let the expired tables reach EXPORT.
+     *     this part of the code needs to be fixed to take 
+     *     into account memory state that has been allocated
+     *     by CAPTURE as well. It needs more thinking...
+     */
     head = TQ_HEAD(&expired_tables);
     ct = head;
     prev = NULL;
@@ -499,6 +521,7 @@ ca_disable_module(module_t * mdl)
 	}
 	ct = next;
     }
+#endif
 }
 
 /* callbacks */
@@ -610,7 +633,7 @@ process_batch(pkt_t * pkts, unsigned count, tailq_t * expired)
 
 	assert(mdl->name != NULL);
 	logmsg(V_LOGCAPTURE,
-	       "sending %d packets to module %s for processing",
+	       "sending %d packets to module %s for processing\n",
 	       count, map.modules[idx].name);
 
 	start_tsctimer(map.stats->ca_module_timer);
@@ -764,6 +787,8 @@ capture_mainloop(int accept_fd)
      */
     logmsg(LOGDEBUG, "wait for 1st msg from SU\n");
     recv_message(map.supervisor_fd, &capture_callbacks);
+    /* This is not a typo, we need to wait for two messages */
+    recv_message(map.supervisor_fd, &capture_callbacks);
 
     /*
      * This is the actual main loop where we monitor the various
@@ -810,7 +835,7 @@ capture_mainloop(int accept_fd)
 		ctable_t *ct = mdl->ca_hashtable;
 
 		if (ct && ct->records)
-		    flush_table(mdl, &expired_tables);
+		    flush_state(mdl, &expired_tables);
 	    }
 	}
 
@@ -820,7 +845,7 @@ capture_mainloop(int accept_fd)
 	    int ret;
 
 	    x.m = flush_map;
-	    x.ft = TQ_HEAD(&expired_tables);
+	    x.ex = TQ_HEAD(&expired_tables);
 	    ret = write(export_fd, &x, sizeof(x));
 	    if (ret != sizeof(x))
 		panic("error writing export_fd got %d", ret);
@@ -862,8 +887,8 @@ capture_mainloop(int accept_fd)
 		if (reply.m != flush_map)
 		    panicx("bad flush_map from export_fd");
 
-		/* ok, export freed memory into the map for us */
-		mem_merge_maps(NULL, flush_map);
+		/* ok, move freed memory into the main memory */
+		mem_free_map(flush_map); 
 
 		/* update memory counters */
 		for (idx = 0; idx < map.module_count; idx++) {

@@ -46,34 +46,43 @@ FLOWDESC {
     uint64_t pkts[65536];		/* pkts per port number */
 };
 
-static uint32_t meas_ivl = 1;		/* interval (secs) */
-static int topn = 20;    		/* number of top ports */
+#define STATEDESC   struct _topports_state
+STATEDESC {
+    uint32_t meas_ivl;		/* interval (secs) */
+    int topn;    		/* number of top ports */
+};
 
 static timestamp_t
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char *args[])
 {
-    int i;
+    STATEDESC *state;
     char *len;
+    int i;
     
+    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
+    state->meas_ivl = 1;
+    state->topn = 20;
+
     /* 
      * process input arguments 
      */
     for (i = 0; args && args[i]; i++) { 
 	if (strstr(args[i], "interval")) {
 	    len = index(args[i], '=') + 1; 
-	    meas_ivl = atoi(len); 
+	    state->meas_ivl = atoi(len); 
 	} 
 	if (strstr(args[i], "topn")) {
 	    len = index(args[i], '=') + 1;
-	    topn = atoi(len);
+	    state->topn = atoi(len);
 	}
     }
 
-    return TIME2TS(meas_ivl, 0); 
+    STATE(self) = state; 
+    return TIME2TS(state->meas_ivl, 0); 
 }
 
 static int
-check(pkt_t *pkt)
+check(__unused void * self, pkt_t *pkt)
 {
     /*
      * if the stream contains per-flow information,
@@ -87,15 +96,16 @@ check(pkt_t *pkt)
 
 
 static int
-update(pkt_t *pkt, void *rp, int isnew)
+update(void * self, pkt_t *pkt, void *rp, int isnew)
 {
+    STATEDESC * state = STATE(self);
     FLOWDESC *x = F(rp);
     uint64_t newbytes = H16(IP(len)); 
     uint32_t newpkts = 1; 
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC)); 
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % state->meas_ivl);
     }
 
     if (COMO(type) == COMOTYPE_NF) {
@@ -131,15 +141,13 @@ struct topports {
 
 
 static ssize_t
-store(void *rp, char *buf, size_t len)
+store(void * self, void *rp, char *buf)
 {
+    STATEDESC * state = STATE(self);
     FLOWDESC *x = F(rp);
     int top_ports[65536 + 1];		/* we need one more than max port */
     int i, j;
     
-    if (len < topn * sizeof(struct topports))
-        return -1;
-
     /* go thru the array of bytes to find the topn port 
      * numbers. store them in the top_ports array. 
      */
@@ -148,7 +156,7 @@ store(void *rp, char *buf, size_t len)
 	if (x->bytes[i] == 0)
 	    continue;
 
-	for (j = topn - 1; j >= 0; j--) {
+	for (j = state->topn - 1; j >= 0; j--) {
 	    if (x->bytes[i] < x->bytes[top_ports[j]])
 		break;
 
@@ -160,7 +168,7 @@ store(void *rp, char *buf, size_t len)
     /* 
      * save the first top N entries 
      */
-    for (i = 0; i < topn && x->bytes[top_ports[i]] > 0; i++) { 
+    for (i = 0; i < state->topn && x->bytes[top_ports[i]] > 0; i++) { 
 	PUTH32(buf, x->ts);
 	PUTH32(buf, top_ports[i]); 
 	PUTH64(buf, x->bytes[top_ports[i]]);
@@ -171,7 +179,7 @@ store(void *rp, char *buf, size_t len)
 }
 
 static size_t
-load(char *buf, size_t len, timestamp_t *ts)
+load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
 {
     if (len < sizeof(struct topports)) {
         ts = 0;
@@ -226,10 +234,11 @@ load(char *buf, size_t len, timestamp_t *ts)
 #define HTMLFMT		"<tr><td>%5u</td><td>%.2f</td></tr>\n"
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt; 
+    STATEDESC * state = STATE(self);
     struct topports *x; 
     time_t ts;
 
@@ -247,7 +256,7 @@ print(char *buf, size_t *len, char * const args[])
                 fmt = PLAINFMT;
             } 
             if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR, topn); 
+                *len = sprintf(s, HTMLHDR, state->topn); 
                 fmt = HTMLFMT;
             } 
         } 
@@ -268,7 +277,7 @@ print(char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), ntohl(x->port),
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));
     } else if (fmt == HTMLFMT) { 
-	float mbps = (float) NTOHLL(x->bytes) * 8 / (float) meas_ivl;
+	float mbps = (float) NTOHLL(x->bytes) * 8 / (float) state->meas_ivl;
 	mbps /= 1000000;
 	*len = sprintf(s, fmt, ntohl(x->port), mbps); 
     } else { 
