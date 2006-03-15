@@ -41,8 +41,6 @@
 #include <time.h>
 #include "module.h"
 
-#define WATERMARK_IVL   TIME2TS(0, 100000)     /* watermark ivl */
-#define FLUSH_IVL       TIME2TS(1, 0)
 
 #define FLOWDESC        struct _util_stat
 #define EFLOWDESC       struct _eutil_stat
@@ -61,21 +59,34 @@ EFLOWDESC {
     uint32_t hi_watermark;
 };
 
-static pktdesc_t reqs;
+#define STATEDESC   struct _utilization_state
+STATEDESC {
+    timestamp_t meas_ivl;
+    timestamp_t wmark_ivl;
+    pktdesc_t reqs;
+};
 
 static timestamp_t
-init(__unused void *mem, __unused size_t msize, __unused char **args)
+init(void * self, __unused char **args)
 {
-    bzero(&reqs, sizeof(pktdesc_t));
-    reqs.ts = WATERMARK_IVL;
-    N16(reqs.ih.len) = 0xffff;
-    return FLUSH_IVL;
+    STATEDESC * state;
+    
+    state = mdl_mem_alloc(self, sizeof(STATEDESC));
+    state->meas_ivl = TIME2TS(1, 0);
+    state->wmark_ivl = TIME2TS(0, 100000);
+    bzero(&(state->reqs), sizeof(pktdesc_t));
+    state->reqs.ts = state->wmark_ivl;
+    N16(state->reqs.ih.len) = 0xffff;
+
+    STATE(self) = state; 
+    return state->meas_ivl;
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
+    STATEDESC * state = STATE(self); 
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts);
@@ -87,7 +98,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 
     x->bytes += pkt->len;
 
-    if (pkt->ts - x->last_watermark > WATERMARK_IVL) {
+    if (pkt->ts - x->last_watermark > state->wmark_ivl) {
         x->last_watermark = pkt->ts;
         x->bytes_ivl = 0;
     }
@@ -100,10 +111,10 @@ update(pkt_t *pkt, void *fh, int isnew)
 }
 
 static int
-export(void *efh, void *fh, int isnew)
+export(__unused void * self, void *efh, void *fh, int isnew)
 {
-    EFLOWDESC *ex = EF(efh);
-    FLOWDESC *x = F(fh);
+    FLOWDESC * x = F(fh);
+    EFLOWDESC * ex = EF(efh);
     
     if (isnew) {
         ex->ts = x->ts;
@@ -119,14 +130,15 @@ export(void *efh, void *fh, int isnew)
 }
 
 static int
-action(void * fh, timestamp_t t, __unused int count)
+action(void * self, void * fh, timestamp_t t, __unused int count)
 {
-    EFLOWDESC *ex = EF(fh);
+    EFLOWDESC * ex = EF(fh);
+    STATEDESC * state = STATE(self);
     
     if (fh == NULL) 
         return ACT_GO;
     
-    if (t > TIME2TS(ex->ts, 0) + FLUSH_IVL)
+    if (t > TIME2TS(ex->ts, 0) + state->meas_ivl)
         return ACT_STORE | ACT_DISCARD;
     
     return ACT_STOP;
@@ -134,13 +146,10 @@ action(void * fh, timestamp_t t, __unused int count)
 
 
 static ssize_t
-store(void *efh, char *buf, size_t len)
+store(__unused void * self, void *efh, char *buf)
 {
     EFLOWDESC *x = EF(efh);
 
-    if (len < sizeof(EFLOWDESC))
-        return -1;
-    
     PUTH32(buf, x->ts);
     PUTH32(buf, x->bytes);
     PUTH32(buf, x->hi_watermark);
@@ -148,7 +157,7 @@ store(void *efh, char *buf, size_t len)
 }
 
 static size_t
-load(char *buf, size_t len, timestamp_t *ts)
+load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
 {
     if (len < sizeof(EFLOWDESC)) {
         ts = 0;
@@ -182,13 +191,14 @@ load(char *buf, size_t len, timestamp_t *ts)
 #define GNUPLOTFOOTER   "e\n"
 
 static char * 
-print(char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt; 
     static int granularity = 1;
     static int no_records = 0;
     static EFLOWDESC values;
+    STATEDESC * state = STATE(self);
     EFLOWDESC *x; 
     int n;
 
@@ -208,7 +218,7 @@ print(char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce 
                  * communication messages. 
                  */
-                granularity = MAX(atoi(val)/TS2SEC(FLUSH_IVL), 1);
+                granularity = MAX(atoi(val)/TS2SEC(state->meas_ivl), 1);
             } 
 	} 
 
@@ -241,7 +251,7 @@ print(char *buf, size_t *len, char * const args[])
     } 
 
     values.bytes /= granularity; 
-    values.hi_watermark *= (FLUSH_IVL / WATERMARK_IVL); 
+    values.hi_watermark *= (state->meas_ivl / state->wmark_ivl); 
 
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, 
@@ -263,7 +273,7 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
-    indesc: &reqs,
+    indesc: NULL,
     outdesc: NULL,
     init: init,
     check: NULL,
@@ -278,6 +288,6 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "plain gnuplot"
+    formats: "plain gnuplot",
 };
 

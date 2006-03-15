@@ -35,7 +35,6 @@
 #include <time.h>
 #include "module.h"
 
-static int meas_ivl = 1; /* measurement interval */
 
 #define FLOWDESC    struct _frames
 FLOWDESC {
@@ -51,13 +50,13 @@ FLOWDESC {
 };
 
 static int
-check(pkt_t * pkt)
+check(__unused void * self, pkt_t * pkt)
 {
     return (COMO(l2type) == LINKTYPE_80211);
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -88,12 +87,9 @@ update(pkt_t *pkt, void *fh, int isnew)
 }
 
 static ssize_t
-store(void *rp, char *buf, size_t len)
+store(__unused void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
-
-    if (len < sizeof(FLOWDESC)) 
-	return -1; 
 
     PUTH64(buf, x->ts);
     PUTH64(buf, x->mgmtpkts);
@@ -108,7 +104,7 @@ store(void *rp, char *buf, size_t len)
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
@@ -149,7 +145,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define GNUPLOTFOOTER	"e\n"
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt; 
@@ -175,7 +171,7 @@ print(char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce
                  * communication messages.
                  */
-                granularity = MAX(atoi(val) / meas_ivl, 1);
+                granularity = MAX(atoi(val), 1);
             }
 	} 
 	return s;	 
@@ -226,5 +222,5 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "pretty gnuplot"
+    formats: "pretty gnuplot",
 };

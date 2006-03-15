@@ -64,17 +64,15 @@ EFLOWDESC {
     timestamp_t ts[1000];
 };
 
-/* 
- * static variable for the modules. 
- * XXX we should get rid of these to force callbacks to be closures. 
- */
-static int meas_ivl = 60; 		/* measurement granularity (secs) */
-
 static timestamp_t 
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(__unused void *mem, int do_init, char *args[])
 {
     int i;
+    int meas_ivl = 60;
 
+    if (!do_init)
+        return TIME2TS(meas_ivl, 0);
+    
     for (i = 0; args && args[i]; i++) {
 	if (strstr(args[i], "interval")) {
 	    char * val = index(args[i], '=') + 1;
@@ -383,5 +381,6 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "pretty"
+    formats: "pretty",
+    statesize: 0
 };

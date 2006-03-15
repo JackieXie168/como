@@ -98,110 +98,110 @@ typedef struct {
 } app_t;
 
 
-/* 
- * packet description and templates for the 
- * replay() callback or to know if we can process
- * the packets from given sniffer
- */
-static pktdesc_t indesc, outdesc;
-static char template[1024]; 
-
-
-/* 
- * static variable for the modules. 
- * XXX we should get rid of these to force callbacks to be closures. 
- */
-static int meas_ivl = 1; 		/* measurement granularity (secs) */
-static uint8_t port2app[65536];		/* mapping port number to app */
+#define STATEDESC   struct _application_state
+STATEDESC {
+    /* 
+     * packet description and templates for the 
+     * replay() callback or to know if we can process
+     * the packets from given sniffer
+     */
+    pktdesc_t indesc, outdesc;
+    char template[1024]; 
+    int meas_ivl; 		/* measurement granularity (secs) */
+    uint8_t port2app[65536];	/* mapping port number to app */
+};
 
 static timestamp_t 
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char *args[])
 {
+    STATEDESC *state;
     pkt_t * pkt; 
     int i;
 
-    memset(port2app, UNKNOWN, sizeof(port2app));
+    state = mdl_mem_alloc(self, sizeof(STATEDESC));
+    memset(state->port2app, UNKNOWN, sizeof(state->port2app));
 
     /* initialize the port-to-application mapping array */
-    port2app[80]    = WEB;
-    port2app[443]   = WEB;
-    port2app[8080]  = WEB;
-    port2app[3128]  = WEB;             // SQUID
-    port2app[3130]  = WEB;             // SQUID
-    port2app[9090]  = WEB;             // AUTOPROXY 
+    state->port2app[80]    = WEB;
+    state->port2app[443]   = WEB;
+    state->port2app[8080]  = WEB;
+    state->port2app[3128]  = WEB;             // SQUID
+    state->port2app[3130]  = WEB;             // SQUID
+    state->port2app[9090]  = WEB;             // AUTOPROXY 
 
-    port2app[6688]  = SHARING;
-    port2app[6697]  = SHARING;
-    port2app[6699]  = SHARING;
-    port2app[4329]  = SHARING;
-    port2app[4444]  = SHARING;
-    port2app[5555]  = SHARING;
-    port2app[6666]  = SHARING;
-    port2app[7777]  = SHARING;
-    port2app[6346]  = SHARING;
-    port2app[1214]  = SHARING;
+    state->port2app[6688]  = SHARING;
+    state->port2app[6697]  = SHARING;
+    state->port2app[6699]  = SHARING;
+    state->port2app[4329]  = SHARING;
+    state->port2app[4444]  = SHARING;
+    state->port2app[5555]  = SHARING;
+    state->port2app[6666]  = SHARING;
+    state->port2app[7777]  = SHARING;
+    state->port2app[6346]  = SHARING;
+    state->port2app[1214]  = SHARING;
     for (i = 4000; i <= 4999; i++) {
-        port2app[i] = SHARING;
+        state->port2app[i] = SHARING;
     }
 
-    port2app[22]    = NETWORK;         // SSH
-    port2app[23]    = NETWORK;         // TELNET
-    port2app[992]   = NETWORK;         // TELNET
+    state->port2app[22]    = NETWORK;         // SSH
+    state->port2app[23]    = NETWORK;         // TELNET
+    state->port2app[992]   = NETWORK;         // TELNET
 
-    port2app[25]    = EMAIL;             //SMTP
-    port2app[465]   = EMAIL;             //SMTPS
-    port2app[109]   = EMAIL;             //POP
-    port2app[110]   = EMAIL;             //POP
-    port2app[995]   = EMAIL;             //POP
-    port2app[143]   = EMAIL;             //IMAP
-    port2app[220]   = EMAIL;             //IMAP
-    port2app[993]   = EMAIL;             //IMAP
-    port2app[119]   = EMAIL;             //NNTP
-    port2app[563]   = EMAIL;             //NNTP
+    state->port2app[25]    = EMAIL;             //SMTP
+    state->port2app[465]   = EMAIL;             //SMTPS
+    state->port2app[109]   = EMAIL;             //POP
+    state->port2app[110]   = EMAIL;             //POP
+    state->port2app[995]   = EMAIL;             //POP
+    state->port2app[143]   = EMAIL;             //IMAP
+    state->port2app[220]   = EMAIL;             //IMAP
+    state->port2app[993]   = EMAIL;             //IMAP
+    state->port2app[119]   = EMAIL;             //NNTP
+    state->port2app[563]   = EMAIL;             //NNTP
 
-    port2app[20]    = NETWORK;	// FTP
-    port2app[21]    = NETWORK;	// FTP
-    port2app[989]   = NETWORK;	// FTP
-    port2app[990]   = NETWORK;	// FTP
-    port2app[53]    = NETWORK;      //DNS
-    port2app[161]   = NETWORK;          //SNMP
-    port2app[162]   = NETWORK;          //SNMP
-    port2app[123]   = NETWORK;          //NTP
-    port2app[873]   = NETWORK;    	//RSYNC
-    port2app[1110]  = NETWORK;     //NFS
-    port2app[2049]  = NETWORK;     //NFS
-    port2app[135]   = NETWORK;        //NETBIOS
-    port2app[137]   = NETWORK;        //NETBIOS
-    port2app[138]   = NETWORK;        //NETBIOS
-    port2app[139]   = NETWORK;        //NETBIOS
-    port2app[445]   = NETWORK;        //NETBIOS
-    port2app[568]   = NETWORK;        //NETBIOS
-    port2app[569]   = NETWORK;        //NETBIOS
-    port2app[1512]  = NETWORK;        //NETBIOS
-    port2app[311]   = NETWORK;        //APPLETALK
-    port2app[387]   = NETWORK;        //APPLETALK
-    port2app[548]   = NETWORK;        //APPLETALK
+    state->port2app[20]    = NETWORK;	// FTP
+    state->port2app[21]    = NETWORK;	// FTP
+    state->port2app[989]   = NETWORK;	// FTP
+    state->port2app[990]   = NETWORK;	// FTP
+    state->port2app[53]    = NETWORK;      //DNS
+    state->port2app[161]   = NETWORK;          //SNMP
+    state->port2app[162]   = NETWORK;          //SNMP
+    state->port2app[123]   = NETWORK;          //NTP
+    state->port2app[873]   = NETWORK;    	//RSYNC
+    state->port2app[1110]  = NETWORK;     //NFS
+    state->port2app[2049]  = NETWORK;     //NFS
+    state->port2app[135]   = NETWORK;        //NETBIOS
+    state->port2app[137]   = NETWORK;        //NETBIOS
+    state->port2app[138]   = NETWORK;        //NETBIOS
+    state->port2app[139]   = NETWORK;        //NETBIOS
+    state->port2app[445]   = NETWORK;        //NETBIOS
+    state->port2app[568]   = NETWORK;        //NETBIOS
+    state->port2app[569]   = NETWORK;        //NETBIOS
+    state->port2app[1512]  = NETWORK;        //NETBIOS
+    state->port2app[311]   = NETWORK;        //APPLETALK
+    state->port2app[387]   = NETWORK;        //APPLETALK
+    state->port2app[548]   = NETWORK;        //APPLETALK
 
-    port2app[4662]  = SHARING;              //E_DONKEY
-    port2app[7070]  = SHARING;              //E_DONKEY
-    port2app[1214]  = SHARING;              //FASTTRACK
-    port2app[6346]  = SHARING;              //GNUTELLA
-    port2app[412]   = SHARING;              //DIRECT_CONNECT
-    port2app[5000]  = SHARING;              //IMESH_CONTROL
-    port2app[4329]  = SHARING;              //IMESH_DATA
-    port2app[6574]  = SHARING;              //ROMNET
-    port2app[8311]  = SHARING;              //SCOUR_EX
-    port2app[5500]  = SHARING;              //HOTLINE
-    port2app[5501]  = SHARING;              //HOTLINE
+    state->port2app[4662]  = SHARING;              //E_DONKEY
+    state->port2app[7070]  = SHARING;              //E_DONKEY
+    state->port2app[1214]  = SHARING;              //FASTTRACK
+    state->port2app[6346]  = SHARING;              //GNUTELLA
+    state->port2app[412]   = SHARING;              //DIRECT_CONNECT
+    state->port2app[5000]  = SHARING;              //IMESH_CONTROL
+    state->port2app[4329]  = SHARING;              //IMESH_DATA
+    state->port2app[6574]  = SHARING;              //ROMNET
+    state->port2app[8311]  = SHARING;              //SCOUR_EX
+    state->port2app[5500]  = SHARING;              //HOTLINE
+    state->port2app[5501]  = SHARING;              //HOTLINE
     
     
     /* 
      * process input arguments 
      */
+    state->meas_ivl = 1;
     for (i = 0; args && args[i]; i++) { 
 	if (strstr(args[i], "interval")) {
 	    char * len = index(args[i], '=') + 1;
-	    meas_ivl = atoi(len); 
+	    state->meas_ivl = atoi(len); 
 	} 
     }
 	 
@@ -210,19 +210,19 @@ init(__unused void *mem, __unused size_t msize, char *args[])
      * a packet length. for the timestamp, we use a default value of 
      * one second or whatever we receive from configuration 
      */ 
-    bzero(&indesc, sizeof(pktdesc_t));
-    indesc.ts = TIME2TS(meas_ivl, 0); 
-    indesc.ih.proto = 0xff;
-    N16(indesc.ih.len) = 0xffff;
-    N16(indesc.tcph.src_port) = 0xffff;
-    N16(indesc.tcph.dst_port) = 0xffff;
+    bzero(&state->indesc, sizeof(pktdesc_t));
+    state->indesc.ts = TIME2TS(state->meas_ivl, 0); 
+    state->indesc.ih.proto = 0xff;
+    N16(state->indesc.ih.len) = 0xffff;
+    N16(state->indesc.tcph.src_port) = 0xffff;
+    N16(state->indesc.tcph.dst_port) = 0xffff;
     
-    bzero(&outdesc, sizeof(pktdesc_t));
-    outdesc.ts = TIME2TS(meas_ivl, 0);
-    outdesc.flags = COMO_AVG_PKTLEN; 
-    N16(outdesc.ih.len) = 0xffff;
-    
-    pkt = (pkt_t *) template; 
+    bzero(&state->outdesc, sizeof(pktdesc_t));
+    state->outdesc.ts = TIME2TS(state->meas_ivl, 0);
+    state->outdesc.flags = COMO_AVG_PKTLEN; 
+    N16(state->outdesc.ih.len) = 0xffff;
+
+    pkt = (pkt_t *) state->template; 
     COMO(caplen) = sizeof(struct _como_iphdr);
     COMO(len) = COMO(caplen);
     COMO(type) = COMOTYPE_COMO;
@@ -231,16 +231,17 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     COMO(l3type) = ETHERTYPE_IP;
     COMO(l3ofs) = 0;
     COMO(l4ofs) = sizeof(struct _como_iphdr);
-    COMO(payload) = template + sizeof(pkt_t);
+    COMO(payload) = state->template + sizeof(pkt_t);
     IP(vhl) = 0x45;
     IP(proto) = IPPROTO_TCP;
 
-    return TIME2TS(meas_ivl, 0);
+    STATE(self) = state; 
+    return TIME2TS(state->meas_ivl, 0);
 }
 
 
 static int
-check(pkt_t * pkt)
+check(__unused void * self, pkt_t * pkt)
 {
     /*
      * if the stream contains per-flow information,
@@ -249,12 +250,13 @@ check(pkt_t * pkt)
     if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
         return 0;
 
-    return 1;
+    return isTCP;
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
+    STATEDESC * state = STATE(self);
     FLOWDESC *x = F(fh);
     int app; 
 
@@ -264,18 +266,18 @@ update(pkt_t *pkt, void *fh, int isnew)
         bzero(x->pkts, sizeof(x->pkts)); 
     }
 
-    if (COMO(l3type) == ETHERTYPE_IP && COMO(l4type) == IPPROTO_TCP) {
-	app = port2app[H16(TCP(src_port))] & port2app[H16(TCP(dst_port))];
-	if (COMO(type) == COMOTYPE_NF) {
-	    x->bytes[app] += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
-	    x->pkts[app] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
-	} else if (COMO(type) == COMOTYPE_SFLOW) {
-	    x->bytes[app] += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
-	    x->pkts[app] += H32(SFLOW(sampling_rate));
-	} else {
-	    x->bytes[app] += COMO(len);
-	    x->pkts[app]++;
-	}
+    app = state->port2app[H16(TCP(src_port))] &
+	  state->port2app[H16(TCP(dst_port))];
+    if (COMO(type) == COMOTYPE_NF) {
+	x->bytes[app] += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
+	x->pkts[app] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } else if (COMO(type) == COMOTYPE_SFLOW) {
+	x->bytes[app] += (uint64_t) COMO(len) * 
+			 (uint64_t) H32(SFLOW(sampling_rate));
+	x->pkts[app] += H32(SFLOW(sampling_rate));
+    } else {
+	x->bytes[app] += COMO(len);
+	x->pkts[app]++;
     }
 
     return 0;
@@ -283,24 +285,22 @@ update(pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(void *fh, char *buf, size_t len)
+store(void * self, void *fh, char *buf)
 {
+    STATEDESC * state = STATE(self);
     FLOWDESC *x = F(fh);
     int i;
     
-    if (len < sizeof(app_t))
-        return -1;
-
     PUTH32(buf, x->ts); 
     for (i = 0; i < APPLICATIONS; i++) 
-	PUTH64(buf, x->bytes[APPCODE(i)] / meas_ivl);
+	PUTH64(buf, x->bytes[APPCODE(i)] / state->meas_ivl);
     for (i = 0; i < APPLICATIONS; i++) 
-	PUTH32(buf, x->pkts[APPCODE(i)] / meas_ivl);
+	PUTH32(buf, x->pkts[APPCODE(i)] / state->meas_ivl);
     return sizeof(app_t);
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(app_t)) {
         ts = 0;
@@ -349,7 +349,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 #define PLAINFMT	"%12ld "	
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[4096];
     static char * fmt; 
@@ -357,6 +357,7 @@ print(char *buf, size_t *len, char * const args[])
     static int no_records = 0;
     static int isrelative = 0; 
     static app_t values;
+    STATEDESC * state = STATE(self);
     app_t * x; 
     int i; 
 
@@ -389,7 +390,7 @@ print(char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce
                  * communication messages.
                  */
-                granularity = MAX(atoi(val) / meas_ivl, 1);   
+                granularity = MAX(atoi(val) / state->meas_ivl, 1);   
             } 
         } 
 
@@ -492,14 +493,15 @@ print(char *buf, size_t *len, char * const args[])
 }
 
 static int
-replay(char *buf, char *out, size_t * len, int *count)
+replay(void * self, char *buf, char *out, size_t * len, int *count)
 {
     static int npkts = 0; 
+    STATEDESC * state = STATE(self);
     pkt_t * pkt; 
     size_t out_len; 
     size_t plen; 
     
-    pkt = (pkt_t *) template; 
+    pkt = (pkt_t *) state->template; 
     plen = COMO(caplen) + sizeof(pkt_t);
 
     if (*len < plen) 
@@ -530,7 +532,7 @@ replay(char *buf, char *out, size_t * len, int *count)
     
     for (out_len = 0; out_len < *len && npkts > 0; npkts--) { 
 	COMO(payload) = out + out_len + sizeof(pkt_t);
-	bcopy(template, out + out_len, sizeof(pkt_t) + COMO(caplen));
+	bcopy(state->template, out + out_len, sizeof(pkt_t) + COMO(caplen));
 	out_len += sizeof(pkt_t) + COMO(caplen);
     } 
     
@@ -544,8 +546,8 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: sizeof(app_t),
-    indesc: &indesc,
-    outdesc: &outdesc,
+    indesc: NULL,
+    outdesc: NULL,
     init: init,
     check: check,
     hash: NULL,
@@ -559,5 +561,5 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: replay,
-    formats: "plain pretty gnuplot gnuplot-relative"
+    formats: "plain pretty gnuplot gnuplot-relative",
 };

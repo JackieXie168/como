@@ -69,6 +69,7 @@ loglevel_name(int flags)
     return s;
 }
 
+
 static void
 _logmsg(int flags, const char *fmt, va_list ap)
 {
@@ -84,25 +85,16 @@ _logmsg(int flags, const char *fmt, va_list ap)
     gettimeofday(&tv, NULL);
     if (flags != LOGUI)
         asprintf(&fmt1, "[%5ld.%06ld %2s] %s",
-		tv.tv_sec %86400, tv.tv_usec, map.procname, fmt);
+		tv.tv_sec %86400, tv.tv_usec, getprocname(map.whoami), fmt);
     else
         asprintf(&fmt1, "%s", fmt);
     vasprintf(&buf, fmt1, ap);
-    if (map.supervisor_fd >= 0) {
-	//como_writen(map.supervisor_fd, buf, 0);
-        /* XXX */
-        void send_string(char *str);
-        send_string(buf);
-    } else {
-	/* do not print messages to stdout when we are in inline mode
-         * and printing the results of a query
-         */
-        if (!map.il_inquery) {
-            fprintf(stdout, "%s", buf);
-            fflush(stdout);
-        }
-    }
     free(fmt1);
+
+    if (map.supervisor_fd >= 0) 
+        send_string(buf);
+    else 
+	fprintf(stdout, "%s", buf);
     free(buf);
 }
 
@@ -140,7 +132,7 @@ _epanic(const char * file, const int line, const char *fmt, ...)
     va_list ap;
  
     asprintf(&fmt1, "[%2s]  **** PANIC: (%s:%d) %s: %s\n",
-        map.procname, file, line, fmt, strerror(errno));
+        getprocname(map.whoami), file, line, fmt, strerror(errno));
     va_start(ap, fmt);
     vasprintf(&buf, fmt1, ap);
     va_end(ap);
@@ -166,7 +158,7 @@ _epanicx(const char * file, const int line, const char *fmt, ...)
     va_list ap;
 
     asprintf(&fmt1, "[%2s]  **** PANIC: (%s:%d) %s\n",
-	map.procname, file, line, fmt);
+	getprocname(map.whoami), file, line, fmt);
     va_start(ap, fmt);
     vasprintf(&buf, fmt1, ap);
     va_end(ap);

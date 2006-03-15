@@ -47,13 +47,20 @@ FLOWDESC {
     uint64_t pkts[65536];		/* pkts per port number */
 };
 
-static uint32_t meas_ivl = 1;		/* interval (secs) */
+#define STATEDESC   struct _ports_state
+STATEDESC {
+    uint32_t meas_ivl;		/* interval (secs) */
+};
 
 static timestamp_t
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char *args[])
 {
+    STATEDESC *state;
     int i;
     char *len;
+    
+    state = mdl_mem_alloc(self, sizeof(STATEDESC));
+    state->meas_ivl = 1;
     
     /* 
      * process input arguments 
@@ -61,28 +68,30 @@ init(__unused void *mem, __unused size_t msize, char *args[])
     for (i = 0; args && args[i]; i++) { 
 	if (strstr(args[i], "interval")) {
 	    len = index(args[i], '=') + 1; 
-	    meas_ivl = atoi(len); 
+	    state->meas_ivl = atoi(len); 
 	} 
     }
 
-    return TIME2TS(meas_ivl, 0); 
+    STATE(self) = state; 
+    return TIME2TS(state->meas_ivl, 0); 
 }
 
 static int
-check(pkt_t *pkt)
+check(__unused void * self, pkt_t *pkt)
 {
     return (isTCP || isUDP); 	/* accept only TCP or UDP packets */
 }
 
 
 static int
-update(pkt_t *pkt, void *rp, int isnew)
+update(void * self, pkt_t *pkt, void *rp, int isnew)
 {
+    STATEDESC * state = STATE(self);
     FLOWDESC *x = F(rp);
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC)); 
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % meas_ivl);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % state->meas_ivl);
     }
 
     if (isTCP) {
@@ -97,14 +106,11 @@ update(pkt_t *pkt, void *rp, int isnew)
 }
 
 static ssize_t
-store(void *rp, char *buf, size_t len)
+store(__unused void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
     int i; 
     
-    if (len < sizeof(FLOWDESC))
-        return -1;
-
     PUTH32(buf, x->ts);
     for (i = 0; i < 65536; i++) 
 	PUTH64(buf, x->pkts[i]); 
@@ -113,7 +119,7 @@ store(void *rp, char *buf, size_t len)
 }
 
 static size_t
-load(char *buf, size_t len, timestamp_t *ts)
+load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
 {
     if (len < sizeof(FLOWDESC)) { 
         ts = 0;
@@ -139,7 +145,7 @@ load(char *buf, size_t len, timestamp_t *ts)
     "plot \"-\" using 1:2 with dots lw 5 lt 3\n" 			\
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[1024*1024];
     static char * fmt; 
@@ -208,6 +214,6 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "plain gnuplot nozoom"
+    formats: "plain gnuplot nozoom",
 };
 

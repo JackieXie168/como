@@ -11,15 +11,14 @@ MODULES= \
 	topdest.so \
 	connx.so \
 	application.so \
-        topports.so \
+	topports.so \
 	ssid.so \
 	list.so \
-  	ports.so \
+	ports.so \
 	active-flows.so \
-	frames.so \
-	trace-nf.so 
-
-#    interarrival.so
+	frames.so 
+#	trace-nf.so 
+#	interarrival.so
 
 ifneq ($(shell uname),CYGWIN_NT-5.1)
         MODULES += tuple.so \
@@ -37,7 +36,6 @@ ifdef ENABLE_SNORT_MODULE
         snort-syntax.c
     SRCS_snort.so = \
         snort-syntax.c \
-        snort-mem.c \
         bm.c
     DEPS_snort.so = \
         snort-lexic.c

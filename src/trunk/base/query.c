@@ -143,7 +143,7 @@ send_status(int client_fd, int node_id)
 	ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
 	if (ptr && rlen > 0) {
 	    /* we got something, give the record to load() */
-	    sz = mdl->callbacks.load(ptr, rlen, &ts);
+	    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
 	}
 
 	len = sprintf(buf, 
@@ -213,7 +213,7 @@ findfile(int fd, qreq_t * req)
 	    return -1;
 
 	/* give the record to load() */
-	ld(ptr, len, &ts); 
+	ld(req->src, ptr, len, &ts); 
 
 	if (TS2SEC(ts) < req->start) {
 	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
@@ -256,12 +256,10 @@ findfile(int fd, qreq_t * req)
  */
 #define	GR_LOSTSYNC	((void *)getrecord)
 static void *
-getrecord(int fd, off_t * ofs, load_fn *ld, ssize_t *len, timestamp_t *ts)
+getrecord(int fd, off_t * ofs, module_t * mdl, ssize_t *len, timestamp_t *ts)
 {
     ssize_t sz; 
     char * ptr; 
-
-    assert(ld != NULL); 
 
     /* 
      * mmap len bytes starting from last ofs. 
@@ -276,7 +274,7 @@ getrecord(int fd, off_t * ofs, load_fn *ld, ssize_t *len, timestamp_t *ts)
 	return NULL;
 
     /* give the record to load() */
-    sz = ld(ptr, *len, ts); 
+    sz = mdl->callbacks.load(mdl, ptr, *len, ts); 
     *ofs += sz; 
 
     /*
@@ -313,7 +311,7 @@ printrecord(module_t * mdl, char * ptr, char * args[], int client)
     for (i = 0; args != NULL && args[i] != NULL; i++) 
 	logmsg(V_LOGQUERY, "print arg #%d: %s\n", i, args[i]); 
 
-    out = mdl->callbacks.print(ptr, &len, args);
+    out = mdl->callbacks.print(mdl, ptr, &len, args);
     if (out == NULL) 
         panicx("module %s failed to print\n", mdl->name); 
 
@@ -363,7 +361,7 @@ replayrecord(module_t * mdl, char * ptr, int client)
     count = 0;
     do {
 	len = DEFAULT_REPLAY_BUFSIZE;
-	left = mdl->callbacks.replay(ptr, out, &len, &count);
+	left = mdl->callbacks.replay(mdl, ptr, out, &len, &count);
 	if (left < 0)
 	    panicx("%s.replay returns error", mdl->name);
 
@@ -586,8 +584,13 @@ query(int client_fd, int node_id)
     int mode, ret;
     char * httpstr;
 
-    /* set the name of this process */
-    map.procname = "qd"; 
+    /* 
+     * every new process has to set its name, specify the type of memory
+     * the modules will be able to allocate and use, and change the process
+     * name accordingly. 
+     */
+    map.whoami = QUERY;
+    map.mem_type = COMO_PRIVATE_MEM;
     setproctitle("ONDEMAND");
 
     /* connect to the supervisor so we can send messages */
@@ -596,7 +599,7 @@ query(int client_fd, int node_id)
 	client_fd, node_id, getpid()); 
 
     if (map.debug) {
-	if (strstr(map.debug, map.procname) != NULL) {
+	if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
 	    logmsg(V_LOGWARN, "waiting 60s for the debugger to attach\n");
 	    sleep(60);
 	    logmsg(V_LOGWARN, "wakeup, ready to work\n");
@@ -684,6 +687,12 @@ query(int client_fd, int node_id)
     } 
 	
     /* 
+     * prepare the state for the module 
+     */
+    req->mdl->ptr = 
+	mem_copy_map(req->mdl->master_map, req->mdl->master_ptr, NULL);
+
+    /* 
      * if we have to retrieve the data using the replay callback of
      * another module instead of reading the output file of the module,
      * we need to create a new instance of the module itself. 
@@ -759,7 +768,7 @@ query(int client_fd, int node_id)
 	char * ptr; 
 
         len = req->src->bsize; 
-        ptr = getrecord(file_fd, &ofs, req->src->callbacks.load, &len, &ts);
+        ptr = getrecord(file_fd, &ofs, req->src, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
 	    if (len == -1) 
 		panic("reading from file %s ofs %lld", req->src->output, ofs); 
@@ -768,7 +777,7 @@ query(int client_fd, int node_id)
 		/* notify the end of stream to the module */
 		if (req->format == Q_OTHER || req->format == Q_HTML) 
 		    printrecord(req->mdl, NULL, NULL, client_fd); 
-		logmsg(V_LOGQUERY, "reached end of file %s\n", req->src->output); 
+		logmsg(V_LOGQUERY, "reached end of file %s\n",req->src->output);
 		break;
 	    }
 	}

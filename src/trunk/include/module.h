@@ -34,6 +34,7 @@
 #include "stdpkt.h"
 #include "comotypes.h"
 #include "comofunc.h"
+#include "memory.h"
 
 /*
  * Some useful macros to write modules
@@ -53,6 +54,14 @@
  * One more indirection is needed within compare_fn()
  */
 #define CMPEF(x) ((EFLOWDESC *)((*(char **) x) + sizeof(rec_t)))
+
+/* 
+ * STATEDESC is defined by each individual module and stored 
+ * somewhere in the module_t data structure (opaque to modules). 
+ * we use STATE() to retrieve the state from that structure 
+ */
+//#define STATE(x)	((STATEDESC *)((module_t *) (x))->ptr)
+#define STATE(x)	(((module_t *) (x))->ptr)
 
 /*
  * Macros to copy integers from host to network byte order. 

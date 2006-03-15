@@ -62,7 +62,7 @@ _smalloc(const char * file, const int line, size_t sz)
     v = malloc(sz);
     if (v == NULL) {
         fprintf(stderr, "[%2s]  **** PANIC: malloc %u bytes (%s:%d): %s\n",
-            map.procname, sz, file, line, strerror(errno));
+            getprocname(map.whoami), sz, file, line, strerror(errno));
         abort();
     }
 
@@ -88,7 +88,7 @@ _scalloc(const char * file, const int line, int n, size_t sz)
     v = calloc((unsigned int) n, sz);
     if (v == NULL) {
 	fprintf(stderr, "[%2s]  **** PANIC: calloc n:%d sz:%u (%s:%d)\n", 
-	    map.procname, n, sz, file, line);
+	    getprocname(map.whoami), n, sz, file, line);
 	abort();
     }
 
@@ -114,7 +114,7 @@ _srealloc(const char * file, const int line, void * ptr, size_t sz)
     v = realloc(ptr, sz);
     if (v == NULL) {
         fprintf(stderr, "[%2s]  **** PANIC: calloc (%s:%d)\n",
-            map.procname, file, line);
+            getprocname(map.whoami), file, line);
         abort();
     }
     
@@ -140,7 +140,7 @@ _sstrdup(const char * file, const int line, const char * str)
     v = strdup(str); 
     if (v == NULL) {
 	fprintf(stderr, "[%2s]  **** PANIC: strdup (%s:%d)\n", 
-	    map.procname, file, line);
+	    getprocname(map.whoami), file, line);
 	abort();
     }
 

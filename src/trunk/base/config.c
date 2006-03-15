@@ -35,7 +35,6 @@
 #include <dirent.h>	/* opendir */
 #include <sys/types.h>	/* mkdir, opendir */
 #include <sys/stat.h>	/* mkdir */
-
 #include <errno.h>
 
 #include "como.h"
@@ -142,7 +141,7 @@ keyword_t keywords[] = {
     { "module-limit",TOK_MODULE_MAX,  2, CTX_GLOBAL },
     { "query-port",  TOK_QUERYPORT,   2, CTX_GLOBAL|CTX_VIRTUAL },
     { "sniffer",     TOK_SNIFFER,     3, CTX_GLOBAL },
-    { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL|CTX_MODULE },
+    { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL },
     { "output",      TOK_OUTPUT,      2, CTX_MODULE },
     { "hashsize",    TOK_HASHSIZE,    2, CTX_MODULE },
     { "source",      TOK_SOURCE,      2, CTX_MODULE },
@@ -441,10 +440,6 @@ load_module(module_t *mdl, int idx)
 
     cb = &mdl->callbacks;
 
-    /* allocate module's private memory, if any */
-    if (mdl->msize)
-	mdl->mem = safe_calloc(1, mdl->msize);
-
     if (mdl->args) {
         /* Count how many args we have for this module */
         for (narg = 0; mdl->args[narg] != NULL; narg++);
@@ -481,11 +476,43 @@ load_module(module_t *mdl, int idx)
         }
     }
     
-    /* initialize module */
-    mdl->flush_ivl = cb->init == NULL? 
-	DEFAULT_CAPTURE_IVL: cb->init(mdl->mem, mdl->msize, mdl->args);
-    if (mdl->flush_ivl == 0) 
-	panicx("could not initialize %s\n", mdl->name); 
+    /* 
+     * SUPERVISOR needs to allocate memory for this new module in the 
+     * shared memory. Before doing so it needs to stop CAPTURE, allocate 
+     * the memory and then let CAPTURE resume its operations. This is 
+     * to avoid a fine grained locking mechanisms for the shared memory. 
+     * 
+     * XXX This code makes the assumption that new modules are loaded 
+     *     rather unfrequently and that the init() callback is quick. 
+     *     We may need to revisit these assumptions in the future. 
+     */
+    if (map.whoami == SUPERVISOR) { 
+        /* 
+	 * send lock message to CAPTURE 
+	 */ 
+        sup_send_ca_lock();
+
+        /* 
+	 * create a memory list for this module to 
+	 * allocate memory and for EXPORT to flush 
+	 * memory.
+	 */ 
+        mdl->mem_map = new_memlist(32); 
+        mdl->flush_map = mdl->mem_map; 
+        mdl->master_map = new_memlist(32); 
+
+	/* initialize module */
+	mdl->flush_ivl = 
+	    (cb->init == NULL)? DEFAULT_CAPTURE_IVL: cb->init(mdl, mdl->args);
+	if (mdl->flush_ivl == 0) 
+	    panicx("could not initialize %s\n", mdl->name);
+
+	mdl->master_ptr = mdl->ptr;
+	mdl->ptr = NULL;
+
+        /* Done, tell CAPTURE to resume its execution */
+        sup_send_ca_unlock();
+    } 
 
     /* Restore the module's args and free the backup array */
     if (mdl->args) {
@@ -518,7 +545,12 @@ free_module(module_t *mdl)
 	free(mdl->description);
     free(mdl->output);
     free(mdl->source);
-    free(mdl->mem);
+    /* Merge the module's memory list into the CoMo main map.
+     * We need to pause and resume the CAPTURE process to avoid conflicts */
+    sup_send_ca_lock();
+    mem_free_map(mdl->master_map);
+    mem_free_map(mdl->mem_map);
+    sup_send_ca_unlock();
     if (mdl->args) {
         i = 0;
         arg = mdl->args[i];
@@ -533,7 +565,6 @@ free_module(module_t *mdl)
     mdl->description = NULL;
     mdl->output = NULL;
     mdl->source = NULL;
-    mdl->mem = NULL;
     mdl->args = NULL;
 }
 
@@ -835,13 +866,12 @@ do_config(int argc, char *argv[])
 	    mdl->status = MDL_LOADING;
 	    mdl->seen = 1;
 
-	    logmsg(LOGUI, "... module %-16s [node %d]", mdl->name, mdl->node); 
+	    logmsg(LOGUI, "... module %s [%d][%d] ", 
+		   mdl->name, mdl->node, mdl->priority); 
+	    logmsg(LOGUI, " filter %s; out %s (%uMB)\n", 
+		   mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
 	    if (mdl->description != NULL) 
-		    logmsg(LOGUI,"[%s]", mdl->description); 
-	    logmsg(LOGUI, "\n    - prio %d; filter %s; out %s (max %uMB)\n", 
-		    mdl->priority, mdl->filter_str, mdl->output,
-                mdl->streamsize / (1024*1024));
-
+		logmsg(LOGUI, "    -- %s\n", mdl->description); 
 	    scope = CTX_GLOBAL;
         } else if (scope == CTX_VIRTUAL) { 
 	    map.virtual_nodes++;
@@ -878,15 +908,9 @@ do_config(int argc, char *argv[])
 
     case TOK_MEMSIZE:
         /* this keyword can be used in two contexts */
-        if (scope == CTX_GLOBAL) {
-            map.mem_size = atoi(argv[1]);
-            if (map.mem_size <= 0 || map.mem_size > 512)
-                panic("invalid memory size %d, range is 1..512\n", 
-		    map.mem_size);
-        } else if (scope == CTX_MODULE) {
-            /* private module memory */
-            mdl->msize = atoi(argv[1]);
-        }
+	map.mem_size = atoi(argv[1]);
+	if (map.mem_size <= 0 || map.mem_size > 512)
+	    panic("invalid memory size %d, range is 1..512\n", map.mem_size);
         break;
 
     case TOK_MODULE:
@@ -1496,7 +1520,7 @@ parse_cmdline(int argc, char *argv[])
 
             logmsg(LOGUI, "... module %-16s [node:%d]", mdl->name, mdl->node);
             if (mdl->description != NULL)
-                logmsg(LOGUI,"[%s]", mdl->description);
+                logmsg(LOGUI,"[%s]\n", mdl->description);
             logmsg(LOGUI, 
 		   "\n    - prio %d; filter %s; out %s (max %uMB)\n",
                    mdl->priority, mdl->filter_str, mdl->output,

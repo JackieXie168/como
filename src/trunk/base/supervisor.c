@@ -32,6 +32,7 @@
 #include <sys/wait.h>	/* wait3() */
 #include <string.h>     /* bzero */
 #include <errno.h>      /* errno */
+#include <err.h>	/* errx */
 
 #include "como.h"
 #include "storage.h"
@@ -41,7 +42,7 @@
 extern struct _como map;
 
 struct _child_info_t {
-    char *name;
+    procname_t who;
     pid_t pid;
 };
 
@@ -56,27 +57,30 @@ static struct _child_info_t my_children[10];
  * The last argument is an optional fd to be passed to the program.
  */
 pid_t
-start_child(char *name, char *procname, void (*mainloop)(int fd), int fd)
+start_child(procname_t who, int mem_type, void (*mainloop)(int fd), int fd)
 {
     pid_t pid;
     u_int i;
 
     /* find a slot for the child */
-    for (i=0; i < sizeof(my_children); i++)
-	if (my_children[i].name == NULL)
+    for (i = 0; i < sizeof(my_children); i++)
+	if (my_children[i].who == NONE) 
 	    break;
-    if (i == sizeof(my_children)) {
-	fprintf(stderr, "--- cannot create child %s, no more slots\n", name);
-	exit(1); /* XXX do proper cleanup */
-    }
+    if (i == sizeof(my_children)) 
+	errx(EXIT_FAILURE, 
+	     "--- cannot create child %s, no more slots\n", 
+	     getprocfullname(who));
 
-    my_children[i].name = name;
-    if (procname == NULL) {
+    my_children[i].who = who;
+    if (who == SUPERVISOR) {
 	/* i am the supervisor. */
 	pid = getpid();
-    /* Print log messages on the terminal */
-    map.supervisor_fd = -1;
-	logmsg(LOGWARN, "starting process %-20s pid %d\n", name, pid); 
+
+	/* print log messages on the terminal */
+	map.supervisor_fd = -1;
+        map.mem_type = mem_type;
+	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
+	    getprocfullname(who), pid); 
 	my_children[i].pid = pid;
 	mainloop(fd);
 	exit(0);
@@ -88,30 +92,38 @@ start_child(char *name, char *procname, void (*mainloop)(int fd), int fd)
 	char *buf;
 
 	/* XXX TODO: close unneeded sockets */
-	map.procname = procname;
+
+	/*
+	 * every new process has to set its name, specify the type of memory 
+	 * the modules will be able to allocate and use, and change the 
+	 * process name accordingly.  
+	 */
+	map.whoami = who;
+	map.mem_type = mem_type;
 	map.supervisor_fd = create_socket("supervisor.sock", NULL);
 
 	/* XXX should close all unused descriptors */
 	// fclose(stdout); // XXX
 	// fclose(stderr); // XXX
 
-	logmsg(LOGWARN, "starting process %-20s pid %d\n", name, getpid()); 
+	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
+	       getprocfullname(who), getpid()); 
 
-	asprintf(&buf, "%s", name);
+	asprintf(&buf, "%s", getprocfullname(who));
 	setproctitle(buf);
 	free(buf);
 
 	if (map.debug) {
-	    if (strstr(map.debug, map.procname) != NULL) {
-		logmsg(LOGWARN, "waiting 60s for the debugger to attach\n");
+	    if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
+		logmsg(V_LOGWARN, "waiting 60s for the debugger to attach\n");
 		sleep(60);
-		logmsg(LOGWARN, "wakeup, ready to work\n");
+		logmsg(V_LOGWARN, "wakeup, ready to work\n");
 	    }
 	}
 	mainloop(fd);
 	exit(0);
     }
-    my_children[i].name = name;
+    my_children[i].who = who;
     my_children[i].pid = pid;
     
     return pid;
@@ -187,7 +199,7 @@ static void
 handle_children(void)
 {
     u_int j;
-    char *name = "unknown";
+    procname_t who = OTHER; 
     pid_t pid;
     int statbuf; 
 
@@ -196,8 +208,7 @@ handle_children(void)
 	return;
     for (j = 0; j < sizeof(my_children); j++) {
 	if (my_children[j].pid == pid) {
-	    name = my_children[j].name;
-	    my_children[j].name = NULL;
+	    who = my_children[j].who;
 	    break;
 	}
     }
@@ -207,13 +218,13 @@ handle_children(void)
 
     if (WIFEXITED(statbuf)) 
 	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (status: %d)\n",
-	    pid, name, WEXITSTATUS(statbuf)); 
+	    pid, getprocfullname(who), WEXITSTATUS(statbuf)); 
     else if (WIFSIGNALED(statbuf)) 
 	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (signal: %d)\n",
-	    pid, name, WTERMSIG(statbuf));
+	    pid, getprocfullname(who), WTERMSIG(statbuf));
     else 
 	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (unknown!!)\n", 
-	    pid, name); 
+	    pid, getprocfullname(who)); 
 }
 
 
@@ -332,8 +343,6 @@ inline_mode(int accept_fd)
     if (ret < 0)
 	panic("inline mode: write error: %s\n", strerror(errno));
 
-    map.il_inquery = 1;
-    
     /* 
      * read the reply while processing possible messages
      * coming from other processes
@@ -363,8 +372,6 @@ inline_mode(int accept_fd)
 	    panic("inline mode: error reading data");
     }
 
-    map.il_inquery = 0;
-    
     free(buf);
     free(local);
     free(msg);

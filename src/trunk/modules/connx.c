@@ -56,28 +56,40 @@ FLOWDESC {
     uint64_t pkts;
 };
 
-static timestamp_t idle_timeout = TIME2TS(60,0);     /* idle timeout (secs) */
+#define STATEDESC   struct _connx_state
+STATEDESC {
+    timestamp_t idle_timeout;     /* idle timeout (secs) */
+};
 
 static timestamp_t
-init(__unused void *mem, __unused size_t msize, char *args[])
+init(void * self, char *args[])
 {
+    STATEDESC *state;
     int i;
 
+    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
+    state->idle_timeout = TIME2TS(60,0);
+
+    /* 
+     * process input arguments
+     */
     for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "idle-timeout")) {
             char * val = index(args[i], '=') + 1;
-            idle_timeout = TIME2TS(atoi(val), 0);
+            state->idle_timeout = TIME2TS(atoi(val), 0);
         }
     }
+
+    STATE(self) = state; 
     return TIME2TS(1,0);
 }
 
 static uint32_t
-hash(pkt_t *pkt)
+hash(__unused void * self, pkt_t *pkt)
 {
     uint sport, dport;
 
-    if (pkt->l3type != ETHERTYPE_IP) 
+    if (!isIP) 
 	return 0; 
 
     if (IP(proto) == IPPROTO_TCP) {
@@ -94,17 +106,13 @@ hash(pkt_t *pkt)
 }
 
 static int
-match(pkt_t *pkt, void *fh)
+match(__unused void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     uint16_t sport = 0, dport = 0; 
 
-    if (pkt->l3type != ETHERTYPE_IP) {
-	if (x->proto == 0)
-	    return 1;
-	else
-	    return 0;
-    }
+    if (!isIP) 
+	return x->proto? 1 : 0; 
 
     if (IP(proto) == IPPROTO_TCP) {
         sport = N16(TCP(src_port));
@@ -126,7 +134,7 @@ match(pkt_t *pkt, void *fh)
 }
 
 static int
-update(pkt_t *pkt, void *fh, int isnew)
+update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -161,7 +169,7 @@ update(pkt_t *pkt, void *fh, int isnew)
 }
 
 static int
-ematch(void *efh, void *fh)
+ematch(__unused void * self, void *efh, void *fh)
 {
     FLOWDESC  *x  = F(fh);
     EFLOWDESC *ex = EF(efh);
@@ -176,7 +184,7 @@ ematch(void *efh, void *fh)
 }
 
 static int
-export(void *efh, void *fh, int isnew)
+export(__unused void * self, void *efh, void *fh, int isnew)
 {
     FLOWDESC  *x  = F(fh);
     EFLOWDESC *ex = EF(efh);
@@ -210,14 +218,15 @@ compare(const void *efh1, const void *efh2)
 }
 
 static int
-action(void *efh, timestamp_t current_time, __unused int count)
+action(void * self, void *efh, timestamp_t current_time, __unused int count)
 {
     EFLOWDESC *ex = EF(efh);
+    STATEDESC * state = STATE(self);
 
     if (efh == NULL) 
 	return ACT_GO;
 
-    if (current_time - ex->last > idle_timeout) 
+    if (current_time - ex->last > state->idle_timeout) 
         return (ACT_STORE | ACT_DISCARD);
 
     /* are LRU sorted, STOP when we found the first flow not expired */
@@ -226,13 +235,10 @@ action(void *efh, timestamp_t current_time, __unused int count)
 
 
 static ssize_t
-store(void *efh, char *buf, size_t len)
+store(__unused void * self, void *efh, char *buf)
 {
     EFLOWDESC *ex = EF(efh);
     
-    if (len < sizeof(EFLOWDESC))
-        return -1;
-
     PUTH64(buf, ex->first);
     PUTH64(buf, ex->last);
     PUTN32(buf, N32(ex->src_ip));
@@ -250,7 +256,7 @@ store(void *efh, char *buf, size_t len)
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(EFLOWDESC)) {
         ts = 0;
@@ -269,7 +275,7 @@ load(char * buf, size_t len, timestamp_t * ts)
 
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
     EFLOWDESC *ex = (EFLOWDESC *) buf; 
     static char s[2048];
