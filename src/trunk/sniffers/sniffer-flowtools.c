@@ -32,13 +32,16 @@
 #include <string.h>     /* memset, memcpy */
 #include <glob.h>	/* glob */
 #include <errno.h>	/* errno values */
-#include <ftlib.h>      /* flow-tools stuff */
 #include <assert.h>
 
 #include "sniffers.h"
 #include "como.h"
 #include "comotypes.h"
 #include "heap.h"
+
+#include <ftlib.h>      /* flow-tools stuff 
+			 * NOTE: this .h must be included last 
+			 */
 
 /*
  * SNIFFER  ---    Flow-tools files
