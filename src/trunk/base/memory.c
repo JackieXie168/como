@@ -337,8 +337,9 @@ mfree_mem(memlist_t * m, void * p, uint size)
 {
     mem_block_t * x;
 
-    assert(m != NULL); 
-    assert(p != NULL); 
+    assert(m != NULL);
+    if (p == NULL)
+	return;
 
     x = (mem_block_t *)p - 1;
     checkptr(x); 
@@ -578,7 +579,6 @@ mdl_mem_free(module_t * mdl, void *p)
 {
     /* check input parameters */
     assert(mdl != NULL);
-    assert(p != NULL); 
 
     if ((char*)p < shared_mem->low || (char*)p >= shared_mem->high)	
         free(p);
