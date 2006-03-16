@@ -180,13 +180,10 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *efh, char *buf, size_t len)
+store(__unused void * self, void *efh, char *buf)
 {
     FLOWDESC *x = F(efh);
     uint32_t src, dst;
-
-    if (len < sizeof(FLOWDESC))
-        return -1;
 
     /* anonyimize the address with mask  */
     src = x->src_ip & (0xffffffff << (32 - x->src_mask));
