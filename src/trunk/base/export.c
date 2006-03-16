@@ -621,8 +621,6 @@ export_mainloop(__unused int fd)
      */
     logmsg(LOGDEBUG, "wait for 1st msg from SU\n");
     recv_message(map.supervisor_fd, &export_callbacks);
-    /* This is not a typo, we need to wait for two messages */
-    recv_message(map.supervisor_fd, &export_callbacks);
 
     /* allocate the timers */
     init_timers();

@@ -787,8 +787,6 @@ capture_mainloop(int accept_fd)
      */
     logmsg(LOGDEBUG, "wait for 1st msg from SU\n");
     recv_message(map.supervisor_fd, &capture_callbacks);
-    /* This is not a typo, we need to wait for two messages */
-    recv_message(map.supervisor_fd, &capture_callbacks);
 
     /*
      * This is the actual main loop where we monitor the various
