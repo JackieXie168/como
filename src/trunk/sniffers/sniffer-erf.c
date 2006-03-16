@@ -67,6 +67,9 @@ struct _snifferinfo {
 static int
 sniffer_start(source_t * src) 
 {
+    metadesc_t *outmd;
+    pkt_t *pkt;
+    
     /* open the ERF trace file */
     src->fd = open(src->device, O_RDONLY); 
     if (src->fd < 0)
@@ -75,6 +78,15 @@ sniffer_start(source_t * src)
     src->flags = SNIFF_FILE|SNIFF_SELECT|SNIFF_TOUCHED; 
     src->polling = 0; 
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
+
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
+
     return 0;		/* success */
 }
 

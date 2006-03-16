@@ -61,6 +61,8 @@ init(void * self, char *args[])
     STATEDESC *state;
     char *len;
     int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
     
     state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
     state->meas_ivl = 5;
@@ -83,6 +85,16 @@ init(void * self, char *args[])
 	    state->mask <<= atoi(len); 
 	}
     }
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xffff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
 
     STATE(self) = state; 
     return TIME2TS(state->meas_ivl, 0);
@@ -355,8 +367,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
-    indesc: NULL, 
-    outdesc: NULL, 
     init: init,
     check: check,
     hash: hash,

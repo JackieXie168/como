@@ -28,15 +28,21 @@ SRCS_como := \
 	logging.c \
 	storage.c \
 	storage-client.c \
-	heap.c \
 	os.c \
 	ipc.c \
+	metadesc.c \
+	pktmeta.c \
+	headerinfo.c \
 	filter-syntax.c \
 	util-io.c \
 	util-safe.c \
 	util-misc.c \
 	util-socket.c \
 	util-timers.c 
+
+SRCS_como += \
+	$(BASEDIR)/lib/heap.c \
+	$(BASEDIR)/lib/hash.c
 
 LIBS = $(LIBDL) m		
 LIBDIRS = /usr/local/lib

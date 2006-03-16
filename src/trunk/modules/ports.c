@@ -58,6 +58,8 @@ init(void * self, char *args[])
     STATEDESC *state;
     int i;
     char *len;
+    pkt_t *pkt;
+    metadesc_t *inmd;
     
     state = mdl_mem_alloc(self, sizeof(STATEDESC));
     state->meas_ivl = 1;
@@ -71,17 +73,22 @@ init(void * self, char *args[])
 	    state->meas_ivl = atoi(len); 
 	} 
     }
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:~tcp");
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:~udp");
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
 
     STATE(self) = state; 
     return TIME2TS(state->meas_ivl, 0); 
 }
-
-static int
-check(__unused void * self, pkt_t *pkt)
-{
-    return (isTCP || isUDP); 	/* accept only TCP or UDP packets */
-}
-
 
 static int
 update(void * self, pkt_t *pkt, void *rp, int isnew)
@@ -199,10 +206,8 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: sizeof(FLOWDESC),
-    indesc: NULL, 
-    outdesc: NULL, 
     init: init,
-    check: check,
+    check: NULL,
     hash: NULL,
     match: NULL,
     update: update,

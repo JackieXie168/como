@@ -39,12 +39,84 @@
 
 int ieee80211_hdrlen(pkt_t * pkt);
 
+static __inline__ uint32_t
+comotype_lookup_len(int t)
+{
+    switch (t) {
+    case COMOTYPE_ANY:
+    case COMOTYPE_NONE:
+    	return 0;
+    case COMOTYPE_SFLOW:
+	return sizeof(struct _como_sflow);
+    case COMOTYPE_NF:
+	return sizeof(struct _como_nf);
+    case COMOTYPE_RADIO:
+	return sizeof(struct _como_radio);
+    case COMOTYPE_LINK:
+    case COMOTYPE_COMO:
+	return 0;
+    }
+    assert_not_reached();
+    return 0;
+}
+
+static __inline__ uint32_t
+linktype_lookup_len(int t)
+{
+    switch (t) {
+    case LINKTYPE_ANY:
+    case LINKTYPE_NONE:
+	return 0;
+    case LINKTYPE_ETH:
+	return sizeof(struct _como_eth);
+    case LINKTYPE_VLAN:
+	return sizeof(struct _como_vlan);
+    case LINKTYPE_ISL:
+	return sizeof(struct _como_isl);
+    case LINKTYPE_HDLC:
+	return sizeof(struct _como_hdlc);
+    /*case LINKTYPE_80211:*/
+    /* FIXME: what to do here? */
+    }
+    assert_not_reached();
+    return 0;
+}
+
+static __inline__ uint32_t
+l3type_lookup_len(int t)
+{
+    switch (t) {
+    case L3TYPE_ANY:
+    case L3TYPE_NONE:
+	return 0;
+    case ETHERTYPE_IP:
+	return sizeof(struct _como_iphdr);
+    }
+    assert_not_reached();
+    return 0;
+}
+
+static __inline__ uint32_t
+l4type_lookup_len(int t)
+{
+    switch (t) {
+    case L4TYPE_ANY:
+    case L4TYPE_NONE:
+	return 0;
+    case IPPROTO_TCP:
+	return sizeof(struct _como_tcphdr);
+    case IPPROTO_UDP:
+	return sizeof(struct _como_udphdr);
+    }
+    return 0;
+}
+
 /* 
  * figure out if a packet is ISL.
  * use the destination address to do this. 
  */
 static __inline__ int 
-isISL(pkt_t * pkt) 
+linktype_try_peek_ISL(pkt_t * pkt) 
 {
     const char val[] = {0x01, 0x00, 0x0c, 0x00, 0x00}; 
     int i; 
@@ -59,6 +131,11 @@ isISL(pkt_t * pkt)
     return 1;
 }
 
+static __inline__ int 
+linktype_try_peek_VLAN(pkt_t * pkt) 
+{
+    return H16(ETH(type)) == ETHERTYPE_VLAN;
+}
 
 /* 
  * -- updatel4 
@@ -69,7 +146,7 @@ static void
 updatel4(pkt_t * pkt)
 {
     COMO(l4ofs) = COMO(l3ofs);
-    COMO(l4type) = 0;
+    COMO(l4type) = L4TYPE_NONE;
 
     if (COMO(l3type) == ETHERTYPE_IP
 	&& COMO(caplen) > COMO(l3ofs) + sizeof(struct _como_iphdr)) {
@@ -79,6 +156,7 @@ updatel4(pkt_t * pkt)
     /*
      * TODO: IPV6
      */
+    COMO(l7ofs) = COMO(l4ofs) + l4type_lookup_len(COMO(l4type));
 }
 
 /*
@@ -90,35 +168,35 @@ updatel4(pkt_t * pkt)
 void
 updateofs(pkt_t * pkt, layer_t l, int type)
 {
-    assert(COMO(type) != 0);
+    assert(COMO(type) != COMOTYPE_NONE);
 
     /*
      * update l2of
      */
-    switch (COMO(type)) {
-    case COMOTYPE_SFLOW:
-	COMO(l2ofs) = sizeof(struct _como_sflow);
-	break;
-    case COMOTYPE_NF:
-	COMO(l2ofs) = sizeof(struct _como_nf);
-	break;
-    case COMOTYPE_RADIO:
-	COMO(l2ofs) = sizeof(struct _como_radio);
-	break;
-    case COMOTYPE_LINK:
-    case COMOTYPE_COMO:
-	COMO(l2ofs) = 0;
-	break;
-    default:
-	assert_not_reached();
+    COMO(l2ofs) = comotype_lookup_len(COMO(type));
+
+    /*
+     * initialise l3ofs
+     */
+    COMO(l3ofs) = COMO(l2ofs);
+
+    if (l == LALL) {
+	COMO(l3ofs) += linktype_lookup_len(COMO(l2type));
+	
+	COMO(l4ofs) = COMO(l3ofs);
+	
+	if (COMO(l3type) == ETHERTYPE_IP) {
+		COMO(l4ofs) += sizeof(struct _como_iphdr);
+	}
+	
+	return;
     }
 
     /*
-     * initialise l2type, l3type and l3ofs
+     * reset l2type and l3type
      */
-    COMO(l2type) = 0;
-    COMO(l3type) = 0;
-    COMO(l3ofs) = COMO(l2ofs);
+    COMO(l2type) = LINKTYPE_NONE;
+    COMO(l3type) = L3TYPE_NONE;
 
     if (l == L2) {
 
@@ -127,11 +205,11 @@ updateofs(pkt_t * pkt, layer_t l, int type)
 	 */
 	switch (type) {
 	case LINKTYPE_ETH:
-	    if (H16(ETH(type)) == ETHERTYPE_VLAN) {
+	    if (linktype_try_peek_VLAN(pkt)) {
 		COMO(l2type) = LINKTYPE_VLAN;
 		COMO(l3type) = H16(VLAN(ethtype));
 		COMO(l3ofs) += sizeof(struct _como_vlan);
-	    } else if (isISL(pkt)) {
+	    } else if (linktype_try_peek_ISL(pkt)) {
 		COMO(l2type) = LINKTYPE_ISL;
 		COMO(l3type) = H16(ISL(ethtype));
 		COMO(l3ofs) += sizeof(struct _como_isl);
@@ -156,7 +234,7 @@ updateofs(pkt_t * pkt, layer_t l, int type)
 
 	    break;
 	}
-    } else {
+    } else if (l == L3) {
 	COMO(l3type) = type;
     }
 

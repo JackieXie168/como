@@ -172,6 +172,8 @@ sniffer_start(source_t * src)
     struct _snifferinfo * info; 
     struct sk98_ioctl_map args;
     int fd;
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
     /* Start up the timestamps library 
      * 
@@ -232,6 +234,14 @@ sniffer_start(source_t * src)
     src->fd = fd; 
     src->flags = SNIFF_TOUCHED|SNIFF_SELECT;
     src->polling = 0;
+    
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    
     return 0;	/* success */
 }
 

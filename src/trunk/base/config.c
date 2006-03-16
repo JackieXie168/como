@@ -38,6 +38,7 @@
 #include <errno.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "sniffers.h"
 
 /* global data structure that contains all
@@ -544,6 +545,8 @@ free_module(module_t *mdl)
     if (mdl->description != NULL) 
 	free(mdl->description);
     free(mdl->output);
+    metadesc_list_free(mdl->indesc);
+    metadesc_list_free(mdl->outdesc);
     free(mdl->source);
     /* Merge the module's memory list into the CoMo main map.
      * We need to pause and resume the CAPTURE process to avoid conflicts */
@@ -564,6 +567,8 @@ free_module(module_t *mdl)
     mdl->name = NULL;
     mdl->description = NULL;
     mdl->output = NULL;
+    mdl->indesc = NULL;
+    mdl->outdesc = NULL;
     mdl->source = NULL;
     mdl->args = NULL;
 }

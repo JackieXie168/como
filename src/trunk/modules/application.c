@@ -100,12 +100,6 @@ typedef struct {
 
 #define STATEDESC   struct _application_state
 STATEDESC {
-    /* 
-     * packet description and templates for the 
-     * replay() callback or to know if we can process
-     * the packets from given sniffer
-     */
-    pktdesc_t indesc, outdesc;
     char template[1024]; 
     int meas_ivl; 		/* measurement granularity (secs) */
     uint8_t port2app[65536];	/* mapping port number to app */
@@ -117,6 +111,7 @@ init(void * self, char *args[])
     STATEDESC *state;
     pkt_t * pkt; 
     int i;
+    metadesc_t *inmd, *outmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC));
     memset(state->port2app, UNKNOWN, sizeof(state->port2app));
@@ -210,18 +205,25 @@ init(void * self, char *args[])
      * a packet length. for the timestamp, we use a default value of 
      * one second or whatever we receive from configuration 
      */ 
-    bzero(&state->indesc, sizeof(pktdesc_t));
-    state->indesc.ts = TIME2TS(state->meas_ivl, 0); 
-    state->indesc.ih.proto = 0xff;
-    N16(state->indesc.ih.len) = 0xffff;
-    N16(state->indesc.tcph.src_port) = 0xffff;
-    N16(state->indesc.tcph.dst_port) = 0xffff;
     
-    bzero(&state->outdesc, sizeof(pktdesc_t));
-    state->outdesc.ts = TIME2TS(state->meas_ivl, 0);
-    state->outdesc.flags = COMO_AVG_PKTLEN; 
-    N16(state->outdesc.ih.len) = 0xffff;
-
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:~tcp");
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    /* setup outdesc */
+    outmd = metadesc_define_out(self, 0);
+    outmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    outmd->flags = META_PKT_LENS_ARE_AVERAGED;
+    
+    pkt = metadesc_tpl_add(outmd, "como:none:~ip:none");
+    IP(vhl) = 0xff;
+    IP(proto) = 0xff;
+    
+    /* create packet template used in replay function */
     pkt = (pkt_t *) state->template; 
     COMO(caplen) = sizeof(struct _como_iphdr);
     COMO(len) = COMO(caplen);
@@ -231,9 +233,54 @@ init(void * self, char *args[])
     COMO(l3type) = ETHERTYPE_IP;
     COMO(l3ofs) = 0;
     COMO(l4ofs) = sizeof(struct _como_iphdr);
+    COMO(l7ofs) = COMO(l4ofs);
     COMO(payload) = state->template + sizeof(pkt_t);
     IP(vhl) = 0x45;
     IP(proto) = IPPROTO_TCP;
+    
+    
+#if 0
+    /* setup indesc */
+    indesc = flowdesc_new("option1", "option2");
+    indesc->ts_resolution = TIME2TS(meas_ivl, 0);
+
+    pkt = flowdesc_tpl_add(&indesc, "any:any:~ip:~tcp");
+/*    			   COMOTYPE_ANY, 0
+    			   LINKTYPE_ANY, 0
+    			   ETHERTYPE_IP, 1
+    			   IPPROTO_TCP,  1);*/
+
+    COMO(caplen) = sizeof(_como_iphdr) + sizeof(_como_tcphdr);
+    N16(IP(len)) = 0xffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+
+    pkt = flowdesc_tpl_add(&indesc,
+    			   COMOTYPE_ANY,
+    			   LINKTYPE_ANY,
+    			   ETHERTYPE_IP,
+    			   IPPROTO_UDP);
+
+    COMO(caplen) = sizeof(_como_iphdr) + sizeof(_como_udphdr);
+    N16(IP(len)) = 0xffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
+
+
+    /* free desc */
+    flowdesc_free(indesc);
+
+    /* pktoption writer */
+    myopt_t myopt;
+    COMO(pktopts) = buf + sizeof(pkt_t);
+    pktoption_set_with_name(pkt, "option1", &myopt, sizeof(myopt));
+    COMO(payload) = (char *) pkt + pkt->caplen + pkt->pktoptslen;
+
+    /* pktoption reader */
+    myopt_t *myopt;
+    uint32_t myoptlen;
+    pktoption_get_with_name(pkt, "option1", &myopt, &myoptlen);
+#endif
 
     STATE(self) = state; 
     return TIME2TS(state->meas_ivl, 0);
@@ -546,8 +593,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: sizeof(app_t),
-    indesc: NULL,
-    outdesc: NULL,
     init: init,
     check: check,
     hash: NULL,

@@ -92,6 +92,8 @@ sniffer_start(source_t * src)
     uint promisc = LIBPCAP_DEFAULT_PROMISC;
     uint slen = LIBPCAP_DEFAULT_SNAPLEN;
     uint tout = LIBPCAP_DEFAULT_TIMEOUT;
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
     if (src->args) {
         /* process input arguments */
@@ -130,6 +132,16 @@ sniffer_start(source_t * src)
     info = (struct _snifferinfo *) src->ptr; 
     info->handle = adhandle; 
 
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    COMO(caplen) = slen;
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    COMO(caplen) = slen;
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    COMO(caplen) = slen;
+    
     return 0;
 }
 

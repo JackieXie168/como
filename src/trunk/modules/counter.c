@@ -39,7 +39,7 @@
 #include "module.h"
 
 
-#define FLOWDESC    struct _counters
+#define FLOWDESC    struct _counter
 FLOWDESC {
     timestamp_t ts;
     uint64_t    bytes;
@@ -56,6 +56,8 @@ init(void * self, char *args[])
 {
     STATEDESC * state; 
     int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
     state->meas_ivl = 1;
@@ -65,6 +67,16 @@ init(void * self, char *args[])
             state->meas_ivl = atoi(val);
         }
     }
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:none");
+    
+/*    inmd = metadesc_define_in(self, 1, "sampling_rate");
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:none");*/
 
     STATE(self) = state;
     return TIME2TS(state->meas_ivl, 0);
@@ -251,8 +263,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
-    indesc: NULL, 
-    outdesc: NULL,
     init: init,
     check: check,
     hash: NULL,

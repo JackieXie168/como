@@ -69,6 +69,8 @@ sniffer_start(source_t *src)
     struct ifreq ifr;
     int fd = -1;
     int n;
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
     if (strlen(src->device)+1 > sizeof(ifr.ifr_name)) {
         errno = EINVAL;
@@ -153,6 +155,13 @@ sniffer_start(source_t *src)
     src->flags = SNIFF_SELECT|SNIFF_TOUCHED; 
     src->polling = 0; 
     src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
+    
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
 
     return 0;		/* success */
 }

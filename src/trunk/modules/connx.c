@@ -39,7 +39,7 @@
 #include "module.h"
 
 
-#define FLOWDESC    struct _tuple_stat
+#define FLOWDESC    struct _connx_stat
 #define EFLOWDESC   FLOWDESC 
 
 
@@ -66,6 +66,8 @@ init(void * self, char *args[])
 {
     STATEDESC *state;
     int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
     state->idle_timeout = TIME2TS(60,0);
@@ -80,6 +82,32 @@ init(void * self, char *args[])
         }
     }
 
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(1,0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xffff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:~tcp");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xffff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:~udp");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xffff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
+
     STATE(self) = state; 
     return TIME2TS(1,0);
 }
@@ -88,9 +116,6 @@ static uint32_t
 hash(__unused void * self, pkt_t *pkt)
 {
     uint sport, dport;
-
-    if (!isIP) 
-	return 0; 
 
     if (IP(proto) == IPPROTO_TCP) {
         sport = N16(TCP(src_port));
@@ -110,9 +135,6 @@ match(__unused void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     uint16_t sport = 0, dport = 0; 
-
-    if (!isIP) 
-	return x->proto? 1 : 0; 
 
     if (IP(proto) == IPPROTO_TCP) {
         sport = N16(TCP(src_port));
@@ -139,30 +161,28 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh);
 
     if (isnew) {
-	x->first = pkt->ts;
+	x->first = COMO(ts);
 	x->bytes = 0;
 	x->pkts = 0;
 
-	if (isIP) { 
-	    x->src_ip = IP(src_ip);
-	    x->dst_ip = IP(dst_ip);
+	x->src_ip = IP(src_ip);
+	x->dst_ip = IP(dst_ip);
 
-	    if (IP(proto) == IPPROTO_TCP) {
-		x->src_port = TCP(src_port);
-		x->dst_port = TCP(dst_port);
-	    } else if (IP(proto) == IPPROTO_UDP) {
-		x->src_port = UDP(src_port);
-		x->dst_port = UDP(dst_port);
-	    } else {
-		N16(x->src_port) = N16(x->dst_port) = 0;
-	    }
-
-	    x->proto = IP(proto);
+	if (IP(proto) == IPPROTO_TCP) {
+	    x->src_port = TCP(src_port);
+	    x->dst_port = TCP(dst_port);
+	} else if (IP(proto) == IPPROTO_UDP) {
+	    x->src_port = UDP(src_port);
+	    x->dst_port = UDP(dst_port);
+	} else {
+	    N16(x->src_port) = N16(x->dst_port) = 0;
 	}
+
+	x->proto = IP(proto);
     }
 
-    x->last = pkt->ts;
-    x->bytes += pkt->len;
+    x->last = COMO(ts);
+    x->bytes += COMO(len);
     x->pkts++;
 
     return 0;
@@ -311,8 +331,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
-    indesc: NULL,
-    outdesc: NULL,
     init: init,
     check: NULL,
     hash: hash,  

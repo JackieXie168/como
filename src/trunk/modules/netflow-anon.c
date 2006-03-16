@@ -39,7 +39,7 @@
 #include <time.h>
 #include "module.h"
 
-#define FLOWDESC    struct _tuple_stat
+#define FLOWDESC    struct _netflow_anon
 
 FLOWDESC {
     timestamp_t ts;
@@ -71,6 +71,32 @@ FLOWDESC {
 static timestamp_t 
 init(__unused void * self, __unused char *args[])
 {
+    pkt_t *pkt;
+    metadesc_t *inmd;
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(300, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "nf:none:~ip:none");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    
+    pkt = metadesc_tpl_add(inmd, "nf:none:~ip:~tcp");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(inmd, "nf:none:~ip:~udp");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
+    
     return TIME2TS(300,0);
 }
 
@@ -82,7 +108,7 @@ check(__unused void * self, pkt_t * pkt)
      * if the stream contains per-flow information,
      * drop all packets after the first.
      */
-    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
+    if (!(NF(flags) & COMONF_FIRST))
         return 0;
  
     return 1;
@@ -591,8 +617,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
-    indesc: NULL,
-    outdesc: NULL,
     init: init,
     check: check,
     hash: hash,

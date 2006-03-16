@@ -63,6 +63,8 @@ init(void * self, char *args[])
 {
     STATEDESC *state;
     int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC));
     bzero(state, sizeof(STATEDESC));
@@ -86,7 +88,15 @@ init(void * self, char *args[])
             state->meas_ivl = atoi(val);
         }
     }
-
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xffff;
+    
     STATE(self) = state; 
     return TIME2TS(state->meas_ivl, 0);
 }
@@ -111,6 +121,8 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 	x->pkts[IP(proto)] += H32(SFLOW(sampling_rate));
     } else {
         x->bytes[IP(proto)] += H16(IP(len)); 
+        /* CHECKME: is this more correct?
+         * x->bytes[IP(proto)] += H16(COMO(len)); */
         x->pkts[IP(proto)]++;
     }
 
@@ -396,8 +408,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
-    indesc: NULL, 
-    outdesc: NULL,
     init: init,
     check: NULL,
     hash: NULL,

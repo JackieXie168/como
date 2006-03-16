@@ -84,7 +84,9 @@ sniffer_start(source_t * src)
         logmsg(LOGWARN, "sniffer-como: write error: %s\n", strerror(errno));
 	return -1;
     } 
-    
+
+#if 0
+    /* FIXME: sniffer-como can't get pktdesc anymore */
     /*
      * a pktdesc_t for the stream is the first data to be received
      */
@@ -93,6 +95,7 @@ sniffer_start(source_t * src)
         logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
 	return -1; 
     } 
+#endif
 
     src->fd = sd; 
     src->flags = SNIFF_TOUCHED|SNIFF_POLL; 	/* just to slow it down... */

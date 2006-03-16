@@ -403,8 +403,9 @@ static int
 sniffer_start(source_t * src) 
 {
     struct _snifferinfo * info;
-    pktdesc_t * p; 
     int ret;
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
     /* 
      * populate the sniffer specific information
@@ -467,21 +468,42 @@ sniffer_start(source_t * src)
      * given that the output stream is not a plain packet 
      * stream, describe it in the source_t data structure 
      */ 
-    p = src->output = safe_calloc(1, sizeof(pktdesc_t));
-    p->ts = TIME2TS(120, 0);
-    p->caplen = sizeof(struct _como_iphdr) + sizeof(struct _como_tcphdr); 
-    p->flags = COMO_AVG_PKTLEN; 
+    outmd = metadesc_define_sniffer_out(src, 0);
+    //outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
+    
+    outmd->ts_resolution = TIME2TS(120, 0);
+    outmd->flags = META_PKT_LENS_ARE_AVERAGED;
     if (info->flags & FLOWTOOLS_COMPACT) 
-	p->flags |= COMO_FLOW_PACKETS;
-    N16(p->ih.len) = 0xffff;
-    p->ih.proto = 0xff;
-    N32(p->ih.src_ip) = 0xffffffff;
-    N32(p->ih.dst_ip) = 0xffffffff;
-    N16(p->tcph.src_port) = 0xffff;
-    N16(p->tcph.dst_port) = 0xffff;
-    p->tcph.flags = 0xff;
-    N16(p->udph.src_port) = 0xffff;
-    N16(p->udph.dst_port) = 0xffff;
+	outmd->flags |= META_PKTS_ARE_TUPLES;
+    
+    /* NOTE: templates defined from more generic to more restrictive */
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:none");
+    COMO(caplen) = sizeof(struct _como_iphdr);
+    N16(IP(len)) = 0xffff;
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~tcp");
+    COMO(caplen) = sizeof(struct _como_iphdr) +
+		   sizeof(struct _como_tcphdr);
+    N16(IP(len)) = 0xffff;
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    TCP(flags) = 0xff;
+    
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~udp");
+    COMO(caplen) = sizeof(struct _como_iphdr) +
+		   sizeof(struct _como_udphdr);
+    N16(IP(len)) = 0xffff;
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
     
     return 0; 
 }
@@ -595,7 +617,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 		free(flow); 
 	    } else {  
 		flow->pkt.ts += flow->increment; 
-		NFP(&flow->pkt, flags) &= ~COMONF_FIRST;
+		NFP((&flow->pkt), flags) &= ~COMONF_FIRST;
 		heap_insert(info->heap, flow); 
 	    } 
 	} 
@@ -637,8 +659,6 @@ sniffer_stop(source_t * src)
 	close(src->fd); 
     } 
     free(src->ptr);
-    
-    free(src->output);
 }
 
 

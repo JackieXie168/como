@@ -67,6 +67,7 @@ struct _snifferinfo {
     to_como_radio_fn to_como_radio;
 };
 
+static char s_protos[32];
 
 /* libpcap magic */
 #define PCAP_MAGIC 0xa1b2c3d4
@@ -109,6 +110,9 @@ sniffer_start(source_t * src)
     int rd;
     int fd;
     to_como_radio_fn to_como_radio = NULL;
+    metadesc_t *outmd;
+    pkt_t *pkt;
+    const headerinfo_t *lchi, *l2hi;
 
     fd = open(src->device, O_RDONLY);
     if (fd < 0) {
@@ -181,6 +185,19 @@ sniffer_start(source_t * src)
     info->l2type = l2type;
     info->littleendian = swapped;
     info->to_como_radio = to_como_radio;
+    
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    lchi = headerinfo_lookup_with_type_and_layer(type, LCOMO);
+    l2hi = headerinfo_lookup_with_type_and_layer(l2type, L2);
+    assert(lchi);
+    assert(lchi);
+    
+    snprintf(s_protos, 32, "%s:%s:any:any", lchi->name, l2hi->name);
+    pkt = metadesc_tpl_add(outmd, s_protos);
+    COMO(caplen) = pf.snaplen;
+    
     return 0;
 }
 
