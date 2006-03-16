@@ -335,9 +335,9 @@ set_field(char *ptr, size_t size, uint64_t value)
      sizeof(typeof(((struct _como_icmphdr *)NULL)->field)), (uint64_t)value))
 
 #else				/* BUILD_FOR_ARM */
-
-#define NF(field)							\
-    (((struct _como_nf *) pkt->payload)->field)
+#define NF(field)	NFP(pkt,field)
+#define NFP(pkt,field)							\
+    (((struct _como_nf *) (pkt)->payload)->field)
 
 #define SFLOW(field)							\
     (((struct _como_sflow *) pkt->payload)->field)
