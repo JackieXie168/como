@@ -91,6 +91,8 @@ sniffer_start(source_t * src)
     sniff_pcap_noblock sp_noblock; 
     sniff_pcap_datalink sp_link; 
     sniff_pcap_close sp_close; 
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
     if (src->args) { 
 	/* process input arguments */
@@ -165,7 +167,7 @@ sniffer_start(source_t * src)
 
 #if 0 
     /* we do not support DLT_ values different from EN10MB. for 802.11
-     * frames one can use sniffer-prism instead. 
+     * frames one can use sniffer-radio instead. 
      */
     case DLT_IEEE802_11: 
 	info->type = COMOTYPE_WLAN; 
@@ -188,6 +190,17 @@ sniffer_start(source_t * src)
     src->fd = sp_fileno(info->pcap);
     src->flags = SNIFF_TOUCHED|SNIFF_SELECT; 
     src->polling = 0;
+
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    COMO(caplen) = snaplen;
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    COMO(caplen) = snaplen;
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    COMO(caplen) = snaplen;
+
     return 0; 		/* success */
 }
 

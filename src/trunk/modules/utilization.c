@@ -63,21 +63,25 @@ EFLOWDESC {
 STATEDESC {
     timestamp_t meas_ivl;
     timestamp_t wmark_ivl;
-    pktdesc_t reqs;
 };
 
 static timestamp_t
 init(void * self, __unused char **args)
 {
     STATEDESC * state;
+    pkt_t *pkt;
+    metadesc_t *inmd;
     
     state = mdl_mem_alloc(self, sizeof(STATEDESC));
     state->meas_ivl = TIME2TS(1, 0);
     state->wmark_ivl = TIME2TS(0, 100000);
-    bzero(&(state->reqs), sizeof(pktdesc_t));
-    state->reqs.ts = state->wmark_ivl;
-    N16(state->reqs.ih.len) = 0xffff;
-
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = state->wmark_ivl;
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:none");
+    
     STATE(self) = state; 
     return state->meas_ivl;
 }
@@ -273,8 +277,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
-    indesc: NULL,
-    outdesc: NULL,
     init: init,
     check: NULL,
     hash: NULL,

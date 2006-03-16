@@ -57,7 +57,7 @@ EFLOWDESC {
     uint32_t count;
 };
 
-#define STATEDESC   struct _activeflows_state
+#define STATEDESC   struct _active_flows_state
 STATEDESC {
     int meas_ivl;
     uint32_t flowcount; 
@@ -69,6 +69,8 @@ init(void * self, char * args[])
 {
     STATEDESC *state;
     int i; 
+    pkt_t *pkt;
+    metadesc_t *inmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC));
     state->meas_ivl = 1;
@@ -84,6 +86,29 @@ init(void * self, char * args[])
 	    state->meas_ivl = atoi(len); 
 	}
     }
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:~tcp");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:~udp");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
 
     STATE(self) = state;
     return TIME2TS(state->meas_ivl, 0);
@@ -277,8 +302,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC), 
-    indesc: NULL, 
-    outdesc: NULL, 
     init: init,
     check: NULL,
     hash: hash,

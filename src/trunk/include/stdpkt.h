@@ -78,6 +78,9 @@ struct _como_pkt {
     uint16_t l2ofs;		/* offset where layer2 header starts */
     uint16_t l3ofs;		/* offset where layer3 header starts */
     uint16_t l4ofs; 		/* offset where layer4 header starts */
+    uint16_t l7ofs; 		/* offset where layer4 header ends */
+    uint32_t pktmetaslen;
+    char * pktmetas;
     char * payload; 		/* pointer to packet */ 
 };
 
@@ -85,21 +88,39 @@ struct _como_pkt {
 /* 
  * CoMo packet types 
  */
-#define COMOTYPE_COMO		0x0010	/* CoMo-specific (e.g., replay()) */
-#define COMOTYPE_NF		0x0015	/* NetFlow records (NetFlow v5 info) */
-#define COMOTYPE_SFLOW		0x0018	/* sFlow records (sFlow v5 info) */
-#define COMOTYPE_LINK		0x0019	/* Encapsulated in supported l2
+enum COMOTYPE {
+    COMOTYPE_NONE =		0x0000, /* No-type */
+    COMOTYPE_COMO =		0x0010,	/* CoMo-specific (e.g., replay()) */
+    COMOTYPE_NF =		0x0015,	/* NetFlow records (NetFlow v5 info) */
+    COMOTYPE_SFLOW =		0x0018,	/* sFlow records (sFlow v5 info) */
+    COMOTYPE_LINK =		0x0019,	/* Encapsulated in supported l2
 					   protocol */
-#define COMOTYPE_RADIO		0x0017	/* Radio info */
+    COMOTYPE_RADIO =		0x0017,	/* Radio info */
+    COMOTYPE_ANY =		0xffff
+};
 
 /* 
  * Known layer 2 types 
  */
-#define LINKTYPE_ETH		0x0001	/* Ethernet */
-#define LINKTYPE_HDLC		0x0002	/* Cisco HDLC */
-#define LINKTYPE_VLAN		0x0003	/* 802.1q packet */
-#define LINKTYPE_ISL		0x0004	/* Cisco ISL */
-#define LINKTYPE_80211   	0x0006	/* IEEE 802.11 header */
+enum LINKTYPE {
+    LINKTYPE_NONE =		0x0000, /* No-type */
+    LINKTYPE_ETH =		0x0001,	/* Ethernet */
+    LINKTYPE_HDLC =		0x0002,	/* Cisco HDLC */
+    LINKTYPE_VLAN =		0x0003,	/* 802.1q packet */
+    LINKTYPE_ISL =		0x0004,	/* Cisco ISL */
+    LINKTYPE_80211 =		0x0006,	/* IEEE 802.11 header */
+    LINKTYPE_ANY =		0xffff
+};
+
+enum L3TYPE {
+    L3TYPE_NONE =		0x0000, /* No-type */
+    L3TYPE_ANY =		0xffff
+};
+
+enum L4TYPE {
+    L4TYPE_NONE =		0x0000, /* No-type */
+    L4TYPE_ANY =		0xffff
+};
 
 /*
  * macros to use for packet header fields. these can be
@@ -184,6 +205,7 @@ set_field(char *ptr, size_t size, uint64_t value)
 #else
 
 #define COMO(field)             (((struct _como_pkt *) pkt)->field)
+#define COMOP(pkt,field)	(((struct _como_pkt *) pkt)->field)
 
 #endif
 
@@ -335,13 +357,14 @@ set_field(char *ptr, size_t size, uint64_t value)
      sizeof(typeof(((struct _como_icmphdr *)NULL)->field)), (uint64_t)value))
 
 #else				/* BUILD_FOR_ARM */
+
 #define NF(field)	NFP(pkt,field)
 #define NFP(pkt,field)							\
     (((struct _como_nf *) (pkt)->payload)->field)
 
-#define SFLOW(field)							\
-    (((struct _como_sflow *) pkt->payload)->field)
-
+#define SFLOW(field)	SFLOWP(pkt,field)
+#define SFLOWP(pkt,field)						\
+    (((struct _como_sflow *) (pkt)->payload)->field)
 
 /* Layer 2 macros */
 #define ETH(field)							\
@@ -371,9 +394,9 @@ set_field(char *ptr, size_t size, uint64_t value)
 
 #endif				/* BUILD_FOR_ARM */
 
-#define ETHP(pkt, field)        ETH(field)
-#define IPP(pkt, field)         IP(field)
-#define IPV6P(pkt, field)       IPV6(field)
+#define ETHP(pkt,field)        ETH(field)
+#define IPP(pkt,field)         IP(field)
+#define IPV6P(pkt,field)       IPV6(field)
 
 #endif				/* SAFEMACROS */
 
@@ -394,15 +417,38 @@ set_field(char *ptr, size_t size, uint64_t value)
 /*
  * Helper macros
  */
-#define isIP            (COMO(l3type) == ETHERTYPE_IP)
+#define isLINK		(COMO(type) == COMOTYPE_LINK)
+#define isNF		(COMO(type) == COMOTYPE_NF)
+#define isSFLOW		(COMO(type) == COMOTYPE_SFLOW)
+#define isRADIO		(COMO(type) == COMOTYPE_RADIO)
+
+#define is80211		(COMO(l2type) == LINKTYPE_80211)
+#define isETH		(COMO(l2type) == LINKTYPE_ETH)
+#define isHDLC		(COMO(l2type) == LINKTYPE_HDLC)
+#define isISL		(COMO(l2type) == LINKTYPE_ISL)
+#define isVLAN		(COMO(l2type) == LINKTYPE_VLAN)
+
+#define isIP		(COMO(l3type) == ETHERTYPE_IP)
+
 #define isTCP           (isIP && (IP(proto) == IPPROTO_TCP))
 #define isUDP           (isIP && (IP(proto) == IPPROTO_UDP))
 #define isICMP          (isIP && (IP(proto) == IPPROTO_ICMP))
 #define isIPV6          (COMO(l3type) == ETHERTYPE_IPV6)
 
-#define hasL2		(COMO(l2ofs) < COMO(l3ofs))
-#define hasL3		(COMO(l3ofs) < COMO(l4ofs))
-#define hasL4		(COMO(l4ofs) > COMO(l3ofs) &&			\
-    COMO(l4ofs) <= COMO(caplen))
+#define hasL2		hasL2P(pkt)
+#define hasL3		hasL3P(pkt)
+#define hasL4		hasL4P(pkt)
+
+#define hasL2P(pkt)	(COMOP(pkt,l2ofs) < COMOP(pkt,l3ofs))
+#define hasL3P(pkt)	(COMOP(pkt,l3ofs) < COMOP(pkt,l4ofs))
+#define hasL4P(pkt)	(COMOP(pkt,l4ofs) < COMOP(pkt,l7ofs))
+
+#define sizeofL2	(COMO(l3ofs) - COMO(l2ofs))
+#define sizeofL3	(COMO(l4ofs) - COMO(l3ofs))
+#define sizeofL4	(COMO(l7ofs) - COMO(l4ofs))
+
+#define sizeofL2P(pkt)	(COMOP(pkt,l3ofs) - COMOP(pkt,l2ofs))
+#define sizeofL3P(pkt)	(COMOP(pkt,l4ofs) - COMOP(pkt,l3ofs))
+#define sizeofL4P(pkt)	(COMOP(pkt,l7ofs) - COMOP(pkt,l4ofs))
 
 #endif				/* _COMO_STDPKT_H */

@@ -76,7 +76,7 @@ EFLOWDESC {
 #define ALERT_BYTES		0x1
 #define ALERT_PKTS		0x2
     
-#define STATEDESC   struct _anomalyewma_state
+#define STATEDESC   struct _anomaly_ewma_state
 STATEDESC {
     int meas_ivl;     		/* measurement interval */
     double weight;		/* weigth for EWMA */
@@ -92,6 +92,8 @@ init(void * self, char *args[])
 {
     STATEDESC *state;
     int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
     bzero(state, sizeof(STATEDESC)); 
@@ -112,6 +114,12 @@ init(void * self, char *args[])
 	    state->change_thresh = strtod(val, NULL); 
         } 
     }
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:none");
 
     STATE(self) = state; 
     return TIME2TS(state->meas_ivl, 0);
@@ -123,12 +131,12 @@ update(__unused void * self, pkt_t *pkt, void *rp, int isnew)
     FLOWDESC *x = F(rp);
 
     if (isnew) {
-	x->ts = pkt->ts;
+	x->ts = COMO(ts);
 	x->bytes = 0; 
 	x->pkts = 0;
     }
 
-    x->bytes += pkt->len;
+    x->bytes += COMO(len);
     x->pkts++;
     return 0;
 }
@@ -385,8 +393,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: 2*sizeof(struct alert_record), 
-    indesc: NULL, 
-    outdesc: NULL,
     init: init,
     check: NULL,
     hash: NULL,

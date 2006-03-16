@@ -452,12 +452,12 @@ sniffer_start(source_t * src)
     int fd;
     struct sockaddr_in addr_in;
     struct hostent *bindinfo;
-    pktdesc_t *p;
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
     sf_log("sflow start\n");
 
     assert(src->ptr == NULL);
-    assert(src->output == NULL);
 
     /* 
      * populate the sniffer specific information
@@ -514,52 +514,63 @@ sniffer_start(source_t * src)
 
     src->fd = fd;
 
-    if (info->flow_type_tag != SFLFLOW_HEADER) {
-	/* fill packet descriptor info */
-	p = src->output = safe_calloc(1, sizeof(pktdesc_t));
-	p->ts = TIME2TS(1, 0);
-	p->caplen = 0xffff;	/* FIXME: how to represent unknown? */
-	p->flags = 0;
-	switch (info->flow_type_tag) {
-	case SFLFLOW_ETHERNET:
-	    memset(&p->eth, 0xff, sizeof(struct _como_eth));
-	    p->caplen = sizeof(struct _como_eth);	/* COMOTYPE_ETH size */
-	    break;
-	case SFLFLOW_IPV4:
-	    p->ih.tos = 0xff;
-	    N16(p->ih.len) = 0xffff;
-	    p->ih.proto = 0xff;
-	    N32(p->ih.src_ip) = 0xffffffff;
-	    N32(p->ih.dst_ip) = 0xffffffff;
-	    N16(p->tcph.src_port) = 0xffff;
-	    N16(p->tcph.dst_port) = 0xffff;
-	    p->tcph.flags = 0xff;
-	    N16(p->udph.src_port) = 0xffff;
-	    N16(p->udph.dst_port) = 0xffff;
-	    p->caplen =
-		sizeof(struct _como_iphdr) + sizeof(struct _como_tcphdr);
-	    break;
-	case SFLFLOW_IPV6:
-	    /*
-	     * FIXME: IPv6 is not in packet descriptor
-	     */
-	    N16(p->tcph.src_port) = 0xffff;
-	    N16(p->tcph.dst_port) = 0xffff;
-	    p->tcph.flags = 0xff;
-	    N16(p->udph.src_port) = 0xffff;
-	    N16(p->udph.dst_port) = 0xffff;
-	    p->caplen = 40 + sizeof(struct _como_tcphdr);
-	    break;
-	}
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
+    
+    outmd->ts_resolution = TIME2TS(1, 0);
+    
+    switch (info->flow_type_tag) {
+    case SFLFLOW_HEADER:
+	pkt = metadesc_tpl_add(outmd, "sflow:any:any:any");
+	COMO(caplen) = 0xffff;
+	break;
+    case SFLFLOW_ETHERNET:
+	pkt = metadesc_tpl_add(outmd, "sflow:eth:none:none");
+	COMO(caplen) = sizeof(struct _como_eth);
+	break;
+    case SFLFLOW_IPV4:
+	/* NOTE: templates defined from more generic to more restrictive */
+	pkt = metadesc_tpl_add(outmd, "sflow:none:~ip:none");
+	COMO(caplen) = sizeof(struct _como_iphdr);
+	IP(tos) = 0xff;
+	N16(IP(len)) = 0xffff;
+	IP(proto) = 0xff;
+	N32(IP(src_ip)) = 0xffffffff;
+	N32(IP(dst_ip)) = 0xffffffff;
+	
+	pkt = metadesc_tpl_add(outmd, "sflow:none:~ip:~tcp");
+	COMO(caplen) = sizeof(struct _como_iphdr) +
+		       sizeof(struct _como_tcphdr);
+	IP(tos) = 0xff;
+	N16(IP(len)) = 0xffff;
+	IP(proto) = 0xff;
+	N32(IP(src_ip)) = 0xffffffff;
+	N32(IP(dst_ip)) = 0xffffffff;
+	N16(TCP(src_port)) = 0xffff;
+	N16(TCP(dst_port)) = 0xffff;
+	TCP(flags) = 0xff;
+	
+	pkt = metadesc_tpl_add(outmd, "sflow:none:~ip:~udp");
+	COMO(caplen) = sizeof(struct _como_iphdr) +
+		       sizeof(struct _como_udphdr);
+	IP(tos) = 0xff;
+	N16(IP(len)) = 0xffff;
+	IP(proto) = 0xff;
+	N32(IP(src_ip)) = 0xffffffff;
+	N32(IP(dst_ip)) = 0xffffffff;
+	N16(UDP(src_port)) = 0xffff;
+	N16(UDP(dst_port)) = 0xffff;
+	break;
+    case SFLFLOW_IPV6:
+	/* TODO */
+	logmsg(LOGWARN, "IPV6 not supported\n");
+	goto error;
     }
 
     return 0;
   error:
     free(src->ptr);
     src->ptr = NULL;
-
-    free(src->output);
-    src->output = NULL;
 
     return -1;
 }
@@ -732,6 +743,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		memcpy(COMO(payload), &como_sflow_hdr,
 		       sizeof(struct _como_sflow));
 		COMO(caplen) = sizeof(struct _como_sflow);
+		
+		/* no options since here */
+		COMO(pktmetaslen) = 0;
 
 		/* set layer 2 and 3 to start after sflow header */
 		COMO(l2ofs) = sizeof(struct _como_sflow);
@@ -876,7 +890,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		    break;
 		    updateofs(pkt, L3, ETHERTYPE_IPV6);
 		}
-		nbytes += COMO(caplen);
+		COMO(pktmetas) = COMO(payload) + COMO(caplen);
+		pktmeta_set(pkt, "sampling_rate", &como_sflow_hdr.sampling_rate,
+			    sizeof(uint32_t));
+		
+		nbytes += COMO(caplen) + COMO(pktmetaslen);
 		npkts++;
 		pkt++;
 	    }
@@ -915,8 +933,6 @@ sniffer_stop(source_t * src)
     }
 
     free(src->ptr);
-
-    free(src->output);
 }
 
 sniffer_t sflow_sniffer = {

@@ -64,6 +64,8 @@ sniffer_start(source_t * src)
     struct timeval tout, poll;
     struct _snifferinfo * info;
     int fd;
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
     /* open DAG */
     if ((fd = dag_open(src->device)) < 0)
@@ -96,6 +98,15 @@ sniffer_start(source_t * src)
     src->fd = fd; 
     src->flags = SNIFF_TOUCHED|SNIFF_POLL; 
     src->polling = TIME2TS(0, 1000); 
+
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
+
     return 0;		/* success */
 }
 

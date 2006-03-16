@@ -127,7 +127,6 @@ STATEDESC {
     unsigned snaplen; 		/* bytes to capture in each packet */ 
     char str[65536]; 
     int fmt; 
-    // pktdesc_t outdesc;
 };
 
 static timestamp_t 
@@ -135,6 +134,8 @@ init(void * self, char * args[])
 {
     STATEDESC *state;
     int i; 
+    pkt_t *pkt;
+    metadesc_t *inmd, *outmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC));
     state->snaplen = 65535;
@@ -145,6 +146,18 @@ init(void * self, char * args[])
 	    state->snaplen = atoi(len); 	    /* set the snaplen */
 	} 
     }
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(1, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:none");
+    
+    /* setup outdesc */
+    outmd = metadesc_define_out(self, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "any:any:any:any");
+    COMO(caplen) = state->snaplen;
 
     STATE(self) = state; 
     return TIME2TS(1,0); 
@@ -613,8 +626,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: 65535,
-    indesc: NULL, 
-    outdesc: NULL, 
     init: init,
     check: NULL,
     hash: NULL,

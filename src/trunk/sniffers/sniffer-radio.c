@@ -602,6 +602,8 @@ static monitor_t monitors[] = {
     {NULL, NULL, NULL, NULL, NULL}
 };
 
+static char s_protos[32];
+
 /*
  * -- sniffer_start
  * 
@@ -624,6 +626,9 @@ sniffer_start(source_t * src)
     pcap_close_fn sp_close;
     char *mon_name = MONITOR_NAME_DEFAULT;
     monitor_t *mon;
+    metadesc_t *outmd;
+    pkt_t *pkt;
+    const headerinfo_t *lchi;
 
     if (src->args) {
 	/* process input arguments */
@@ -758,6 +763,17 @@ sniffer_start(source_t * src)
     src->fd = sp_fileno(info->pcap);
     src->flags = SNIFF_TOUCHED | SNIFF_SELECT;
     src->polling = 0;
+    
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(src, 0);
+    
+    lchi = headerinfo_lookup_with_type_and_layer(info->type, LCOMO);
+    assert(lchi);
+    
+    snprintf(s_protos, 32, "%s:802.11:any:any", lchi->name);
+    pkt = metadesc_tpl_add(outmd, s_protos);
+    COMO(caplen) = snaplen;
+    
     return 0;			/* success */
   error:
     if (info && info->pcap) {

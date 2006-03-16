@@ -89,7 +89,7 @@ struct _source {
     int fd;                     /* file descriptor we are using */
     char *device;		/* device name */
     char *args;			/* optional arguments */
-    pktdesc_t *output;		/* packet stream description */
+    metadesc_t *outdesc;	/* offered output metadesc list */
     void *ptr;			/* sniffer-dependent information */ 
     uint32_t flags;		/* sniffer flags */
     timestamp_t polling; 	/* polling interval, if needed */
@@ -104,8 +104,6 @@ struct _source {
 #define SNIFF_FROZEN	0x0010	/* frozen to slow down (only for SNIFF_FILE) */
 #define SNIFF_COMPLETE  0x0020  /* complete, i.e. finish the buffer */
 
-typedef enum { L2 = 2, L3 = 3 } layer_t;
-
 /* generic function used by sniffer-*.c */
 void updateofs(pkt_t * pkt, layer_t l, int type);
 
@@ -117,5 +115,10 @@ typedef int (*to_como_radio_fn)(const char *, struct _como_radio *);
 int avs_header_to_como_radio(const char *buf, struct _como_radio *r);
 
 int prism2_header_to_como_radio(const char *buf, struct _como_radio *r);
+
+/*
+ * metadesc.c
+ */
+metadesc_t * metadesc_define_sniffer_out(source_t *src, int pktopt_count, ...);
 
 #endif /* _COMO_SNIFFERS_H */

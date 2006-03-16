@@ -57,9 +57,25 @@ FLOWDESC {
     uint8_t  channel;  /* current channel number */
     uint8_t  len;
     uint8_t  addr[MAC_ADDR_SIZE];
-    char ssid[SSID_SIZE];
+    char     ssid[SSID_SIZE];
 };
 
+static timestamp_t 
+init(__unused void *self, __unused char *args[])
+{
+    pkt_t *pkt;
+    metadesc_t *inmd;
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(1, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "radio:802.11:none:none");
+    
+    pkt = metadesc_tpl_add(inmd, "none:802.11:none:none");
+    
+    return TIME2TS(1, 0);
+}
 
 static uint32_t
 hash(__unused void * self, pkt_t *pkt) 
@@ -75,11 +91,8 @@ hash(__unused void * self, pkt_t *pkt)
 static int
 check(__unused void * self, pkt_t * pkt)
 {
-    if (COMO(l2type) == LINKTYPE_80211) {
-	return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
-		(IEEE80211_BASE(fc_subtype) == MGMT_SUBTYPE_BEACON));
-    }
-    return 0;
+    return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
+	   (IEEE80211_BASE(fc_subtype) == MGMT_SUBTYPE_BEACON));
 }
 
 
@@ -315,9 +328,7 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: 65535,
-    indesc: NULL, 
-    outdesc: NULL, 
-    init: NULL,
+    init: init,
     check: check,
     hash: hash,
     match: match,

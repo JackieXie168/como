@@ -58,6 +58,8 @@ init(void * self, char *args[])
     STATEDESC *state;
     char *len;
     int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
     
     state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
     state->meas_ivl = 1;
@@ -76,6 +78,18 @@ init(void * self, char *args[])
 	    state->topn = atoi(len);
 	}
     }
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:~tcp");
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:none:~udp");
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
 
     STATE(self) = state; 
     return TIME2TS(state->meas_ivl, 0); 
@@ -91,7 +105,7 @@ check(__unused void * self, pkt_t *pkt)
     if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
         return 0;
 
-    return (isTCP || isUDP); 	/* accept only TCP or UDP packets */
+    return 1;
 }
 
 
@@ -293,8 +307,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: sizeof(FLOWDESC),
-    indesc: NULL, 
-    outdesc: NULL, 
     init: init,
     check: check,
     hash: NULL,

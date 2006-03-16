@@ -49,10 +49,21 @@ FLOWDESC {
     uint64_t    databytes;
 };
 
-static int
-check(__unused void * self, pkt_t * pkt)
+static timestamp_t
+init(void * self, __unused char *args[])
 {
-    return (COMO(l2type) == LINKTYPE_80211);
+    pkt_t *pkt;
+    metadesc_t *inmd;
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(1, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "radio:802.11:none:none");
+    
+    pkt = metadesc_tpl_add(inmd, "none:802.11:none:none");
+    
+    return TIME2TS(1, 0);
 }
 
 static int
@@ -207,10 +218,8 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
-    indesc: NULL, 
-    outdesc: NULL,
-    init: NULL,
-    check: check,
+    init: init,
+    check: NULL,
     hash: NULL,
     match: NULL,
     update: update,

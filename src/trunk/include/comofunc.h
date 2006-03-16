@@ -230,6 +230,31 @@ void reset_timers(void);
 
 #endif
 
+/*
+ * metadesc.c
+ */
+metadesc_t * metadesc_define_in (module_t *self, int pktmeta_count, ...);
+metadesc_t * metadesc_define_out(module_t *self, int pktmeta_count, ...);
+pkt_t *      metadesc_tpl_add   (metadesc_t *fd, const char *protos);
+void         test_metadesc      ();
+
+/*
+ * pktmetaion.c
+ */
+void          pktmeta_set            (pkt_t *pkt, const char *name,
+				     void *opt, uint16_t opt_len);
+void *        pktmeta_get            (pkt_t *pkt, const char *name,
+				     uint16_t *opt_len);
+
+/*
+ * headerinfo.c
+ */
+const headerinfo_t * headerinfo_lookup_with_name_and_layer(const char *name,
+							   layer_t l);
+const headerinfo_t * headerinfo_lookup_with_type_and_layer(uint32_t type,
+							   layer_t l);
+
+
 #define assert_not_reached()	\
     assert((logmsg(LOGWARN, "should not be reached.\n"), 0))
 

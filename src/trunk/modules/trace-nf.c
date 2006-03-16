@@ -39,7 +39,7 @@
 #include "comofunc.h"
 #include "module.h"
 
-#define FLOWDESC    struct _tuple_stat
+#define FLOWDESC    struct _trace_nf_stat
 
 FLOWDESC {
     timestamp_t start_ts; 
@@ -59,14 +59,8 @@ FLOWDESC {
     n32_t duration; 
 };
 
-#define STATEDESC   struct _tracenf_state
+#define STATEDESC   struct _trace_nf_state
 STATEDESC {
-    /*
-     * packet description and templates for the
-     * replay() callback or to know if we can process
-     * the packets from given sniffer
-     */    
-    pktdesc_t indesc, outdesc;
     int compact;
     uint32_t mask;
 };
@@ -75,15 +69,15 @@ STATEDESC *state;
 callbacks_t callbacks;
 
 static timestamp_t
-init(void *mem, int do_init, char *args[])
+init(void * self, char *args[])
 {
+    STATEDESC * state;
     timestamp_t ivl;
     int i; 
+    pkt_t * pkt; 
+    metadesc_t *inmd, *outmd;
 
-    state = (STATEDESC *) mem;
-    
-    if (!do_init)
-        return TIME2TS(1,0);
+    state = mdl_mem_alloc(self, sizeof(STATEDESC));
     
     /*
      * process input arguments
@@ -112,48 +106,64 @@ init(void *mem, int do_init, char *args[])
      * a packet length. for the timestamp, we use a default value of
      * one second or whatever we receive from configuration
      */
-    bzero(&state->indesc, sizeof(pktdesc_t));
-    state->indesc.ts = ivl; 
-    state->indesc.ih.proto = 0xff;
-    N16(state->indesc.ih.len) = 0xffff;
-    N32(state->indesc.ih.src_ip) = ~0; 
-    N32(state->indesc.ih.dst_ip) = ~0; 
-    N16(state->indesc.tcph.src_port) = 0xffff;
-    N16(state->indesc.tcph.dst_port) = 0xffff;
-    N16(state->indesc.udph.src_port) = 0xffff;
-    N16(state->indesc.udph.dst_port) = 0xffff;
     
-    bzero(&state->outdesc, sizeof(pktdesc_t));
-    state->outdesc.ts = ivl; 
-    state->outdesc.flags = COMO_AVG_PKTLEN;
-    N16(state->outdesc.ih.len) = 0xffff;
-    state->outdesc.ih.proto = 0xff;
-    N32(state->outdesc.ih.src_ip) = 0xffffffff;
-    N32(state->outdesc.ih.dst_ip) = 0xffffffff;
-    N16(state->outdesc.tcph.src_port) = 0xffff;
-    N16(state->outdesc.tcph.dst_port) = 0xffff;
-    N16(state->outdesc.udph.src_port) = 0xffff;
-    N16(state->outdesc.udph.dst_port) = 0xffff;
-    N16(state->outdesc.nf.input) = ~0;
-    N16(state->outdesc.nf.output) = ~0;
-    N16(state->outdesc.nf.src_as) = ~0;
-    N16(state->outdesc.nf.dst_as) = ~0;
-    N64(state->outdesc.nf.bytecount) = ~0;
-    N32(state->outdesc.nf.pktcount) = ~0;
-    state->outdesc.nf.flags = COMONF_FIRST;
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = ivl;
     
-    callbacks.indesc = &state->indesc;
-    callbacks.outdesc = &state->outdesc;
+    pkt = metadesc_tpl_add(inmd, "nf:none:~ip:none");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
     
+    pkt = metadesc_tpl_add(inmd, "nf:none:~ip:~tcp");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(inmd, "nf:none:~ip:~udp");
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
+    
+    /* setup outdesc */
+    outmd = metadesc_define_out(self, 0);
+    outmd->ts_resolution = ivl;
+    outmd->flags = META_PKT_LENS_ARE_AVERAGED;
+    
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:none");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~tcp");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~udp");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
+
+    STATE(self) = state;
     return TIME2TS(1,0);
 }
 
 static int
 check(pkt_t * pkt)
 {
-    if (COMO(type) != COMOTYPE_NF) 
-	return 0;
-
     /*
      * if the stream contains per-flow information, 
      * drop all packets after the first. 
@@ -466,8 +476,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC), 
-    indesc: NULL,
-    outdesc: NULL,
     init: init,
     check: check,
     hash: NULL,

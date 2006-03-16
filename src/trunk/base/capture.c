@@ -36,6 +36,7 @@
 #include <assert.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "sniffers.h"
 #include "sniffer-list.h"
 
@@ -96,6 +97,7 @@ handle_sigpipe()
  * a module; it does so by checking the values of their pktdesc_t, in
  * particular matching the bitmask part.
  */
+#if 0
 static int
 match_desc(pktdesc_t * req, pktdesc_t * bid)
 {
@@ -129,6 +131,7 @@ match_desc(pktdesc_t * req, pktdesc_t * bid)
 
     return 1;
 }
+#endif
 
 #define SHMEM_USAGE(mdl) \
     map.stats->mdl_stats[(mdl)->index].mem_usage_shmem
@@ -416,12 +419,6 @@ ca_init_module(module_t * mdl)
 {
     source_t *src;
     
-    /* Default values for filter stuff */
-    mdl->filter_tree = NULL;
-
-    /* Parse the filter string from the configuration file */
-    parse_filter(mdl->filter_str, &(mdl->filter_tree), NULL);
-
     /*
      * we browse the list of sniffers to make sure that this module
      * understands the packets coming them. to do so, we compare the
@@ -429,15 +426,53 @@ ca_init_module(module_t * mdl)
      * with the output descriptor defined in the source.
      * if there is a mismatch, the module is shut down.
      */
-    for (src = map.sources; src != NULL; src = src->next) {
-	if (!match_desc(mdl->callbacks.indesc, src->output)) {
-	    logmsg(LOGWARN, "module %s does not get %s packets\n",
-		   mdl->name, src->cb->name);
-	    mdl->status = MDL_INCOMPATIBLE;
-	    map.stats->modules_active--;
-	    break;
+     /* NOTE: Blindly assume the module can get any kind of pkts */
+    if (mdl->indesc) {
+    	char *desc_flt;
+    	
+	for (src = map.sources; src != NULL; src = src->next) {
+	    metadesc_match_t bm;
+	    if (!src->outdesc) {
+		logmsg(LOGWARN, "sniffer %s does not provide outdesc\n",
+		       src->cb->name);
+		continue;
+	    }
+	    if (!metadesc_best_match(src->outdesc, mdl->indesc, &bm)) {
+		logmsg(LOGWARN, "module %s does not get %s packets\n",
+		       mdl->name, src->cb->name);
+		mdl->status = MDL_INCOMPATIBLE;
+		map.stats->modules_active--;
+		break;
+	    }
 	}
+	
+	desc_flt = metadesc_determine_filter(mdl->indesc);
+	if (desc_flt) {
+	    if (strcmp(mdl->filter_str, "all") == 0) {
+		mdl->filter_str = desc_flt;
+	    } else {
+		char *flt;
+		asprintf(&flt,"%s and (%s)", desc_flt, mdl->filter_str);
+		free(mdl->filter_str);
+		mdl->filter_str = flt;
+	    }
+	}
+	
+	/* CHECKME: probably the indesc should not be freed here! */
+	/*
+	metadesc_list_free(mdl->indesc);
+	mdl->indesc = NULL;
+	*/
     }
+    
+    logmsg(LOGDEBUG, "module %s will be filtered with %s\n",
+	   mdl->name, mdl->filter_str);
+    
+    /* Default values for filter stuff */
+    mdl->filter_tree = NULL;
+
+    /* Parse the filter string from the configuration file */
+    parse_filter(mdl->filter_str, &(mdl->filter_tree), NULL);
 
     /* copy the master memory region */
     mdl->ptr = mem_copy_map(mdl->master_map, mdl->master_ptr, mdl->mem_map);

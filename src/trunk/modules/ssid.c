@@ -66,6 +66,8 @@ init(void * self, char *args[])
 {
     STATEDESC *state;
     int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
 
     state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
     state->meas_ivl = 1;
@@ -79,7 +81,15 @@ init(void * self, char *args[])
             state->meas_ivl = atoi(val);
         }
     }
-
+    
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "radio:802.11:none:none");
+    
+    pkt = metadesc_tpl_add(inmd, "none:802.11:none:none");
+    
     STATE(self) = state; 
     return TIME2TS(state->meas_ivl, 0);
 }
@@ -92,11 +102,8 @@ init(void * self, char *args[])
 static int
 check(__unused void * self, pkt_t * pkt) 
 {
-    if (COMO(l2type) == LINKTYPE_80211) {
-	return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
-		(IEEE80211_BASE(fc_subtype) == MGMT_SUBTYPE_BEACON));
-    }
-    return 0;
+    return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
+	   (IEEE80211_BASE(fc_subtype) == MGMT_SUBTYPE_BEACON));
 }
 
 
@@ -251,8 +258,6 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
-    indesc: NULL, 
-    outdesc: NULL,
     init: init,
     check: check,
     hash: NULL,

@@ -55,7 +55,10 @@ typedef struct _mdl_statistics	mdl_stats_t; 	/* statistic counters */
 
 typedef struct _proc_callbacks  proc_callbacks_t; /* callbacks of core procs */
 
-typedef struct _como_pktdesc    pktdesc_t;      /* Packet description */
+typedef struct _como_metadesc	metadesc_t;
+typedef struct _como_metatpl	metatpl_t;
+
+typedef struct _como_headerinfo headerinfo_t;
 
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
@@ -236,11 +239,11 @@ struct _callbacks {
     size_t ca_recordsize; 
     size_t ex_recordsize; 
     size_t st_recordsize;
-    pktdesc_t   * indesc;   /* packet requirements */
-    pktdesc_t   * outdesc;  /* packet offer */
+    
+    /* callbacks called by the supervisor process */
+    init_fn     * init;
 
     /* callbacks called by the capture process */
-    init_fn     * init;
     check_fn    * check;
     hash_fn     * hash;
     match_fn    * match;
@@ -294,6 +297,9 @@ struct _module {
 
     treenode_t * filter_tree;   /* filter data */
     char * filter_str;          /* filter expression */
+
+    metadesc_t *indesc;		/* requested input metadesc list */
+    metadesc_t *outdesc;	/* offered output metadesc list */
 
     memlist_t * master_map;	/* blocks allocated after init() */
     void * master_ptr;          /* module private state after init() */
@@ -504,29 +510,45 @@ struct _statistics {
 #define MDL_STATS(mdl) \
     (& map.stats->mdl_stats[(mdl)->index])
     
+typedef enum {
+    META_PKT_LENS_ARE_AVERAGED = 0x1,
+    META_HAS_FULL_PKTS = 0x2,
+    META_PKTS_ARE_TUPLES = 0x4
+} meta_flags_t;
 
-/*
- * pktdesc_t describes both what a module is going to read or what a
- * sniffer/module is going to write in its ingoing/outgoing pkt_t streams.
- * The fields within the "bm" structure are all bitmasks.
- */
-struct _como_pktdesc {
-    uint64_t ts;                        /* timestamp granularity */
-    uint16_t caplen;                    /* packet capture lenght (max) */
-    uint16_t flags;                     /* flags for several options */
-#define COMO_AVG_PKTLEN         0x0001  /* pkt len are averaged */
-#define COMO_FULL_PKT           0x0002  /* full packet capture */
-#define COMO_FLOW_PACKETS	0x0004	/* one packet per 5-tuple flow */
+typedef uint16_t pktmeta_type_t;
 
-    struct _como_isl isl;               /* Cisco ISL bitmask */
-    struct _como_eth eth;               /* Ethernet bitmask */
-    struct _como_hdlc hdlc;             /* Cisco HDLC bitmask */
-    struct _como_vlan vlan;             /* 802.1q bitmask */
-    struct _como_nf nf;			/* NetFlow bitmask */
-    struct _como_iphdr ih;              /* IP header bitmask */
-    struct _como_tcphdr tcph;           /* TCP header bitmask */
-    struct _como_udphdr udph;           /* UDP header bitmask */
-    struct _como_icmphdr icmph;         /* ICMP header bitmask */
+struct _como_metatpl {
+    struct _como_metatpl *_next;
+    char *protos;
+    pkt_t tpl;
+};
+
+struct _como_metadesc {
+    struct _como_metadesc *_next;
+    module_t *_mdl;
+    uint32_t _tpl_count;
+    struct _como_metatpl *_first_tpl;
+    timestamp_t ts_resolution;
+    meta_flags_t flags;
+    uint32_t pktmeta_count;
+    pktmeta_type_t *pktmeta_types;
+};
+
+typedef enum {
+    LCOMO = 1,
+    L2 = 2,
+    L3 = 3,
+    L4 = 4,
+    L7 = 7,
+    LALL = 0xffff
+} layer_t;
+
+struct _como_headerinfo {
+    const char *name;
+    layer_t layer;
+    uint16_t type;
+    uint16_t hdr_len;
 };
 
 /*
