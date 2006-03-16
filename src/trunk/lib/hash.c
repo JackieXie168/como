@@ -349,7 +349,7 @@ hash_lookup_string(hash_t *tablePtr, const char *key)
 {
     hash_entry_t *hPtr;
     
-    assert(tablePtr->keyType = HASHKEYS_STRING);
+    assert(tablePtr->keyType == HASHKEYS_STRING);
     
     hPtr = hash_lookup_internal(tablePtr, (void *) key);
     
@@ -362,7 +362,7 @@ hash_lookup_ulong(hash_t *tablePtr, unsigned long key)
 {
     hash_entry_t *hPtr;
     
-    assert(tablePtr->keyType = HASHKEYS_ULONG);
+    assert(tablePtr->keyType == HASHKEYS_ULONG);
     
     hPtr = hash_lookup_internal(tablePtr, (void *) key);
     
@@ -374,7 +374,7 @@ hash_lookup(hash_t *tablePtr, void *key)
 {
     hash_entry_t *hPtr;
     
-    assert(tablePtr->keyType = HASHKEYS_POINTER);
+    assert(tablePtr->keyType == HASHKEYS_POINTER);
     
     hPtr = hash_lookup_internal(tablePtr, key);
     
@@ -482,7 +482,7 @@ hash_insert_internal(hash_t *tablePtr, void *key, void *value)
 int
 hash_insert_string(hash_t *tablePtr, const char *key, void *value)
 {
-    assert(tablePtr->keyType = HASHKEYS_STRING);
+    assert(tablePtr->keyType == HASHKEYS_STRING);
     
     return hash_insert_internal(tablePtr, (void *) key, value);
 }
@@ -490,7 +490,7 @@ hash_insert_string(hash_t *tablePtr, const char *key, void *value)
 int
 hash_insert_ulong(hash_t *tablePtr, unsigned long key, void *value)
 {
-    assert(tablePtr->keyType = HASHKEYS_ULONG);
+    assert(tablePtr->keyType == HASHKEYS_ULONG);
     
     return hash_insert_internal(tablePtr, (void *) key, value);
 }
@@ -498,7 +498,7 @@ hash_insert_ulong(hash_t *tablePtr, unsigned long key, void *value)
 int
 hash_insert(hash_t *tablePtr, void *key, void *value)
 {
-    assert(tablePtr->keyType = HASHKEYS_POINTER);
+    assert(tablePtr->keyType == HASHKEYS_POINTER);
     
     return hash_insert_internal(tablePtr, key, value);
 }
@@ -571,7 +571,7 @@ hash_remove_internal(hash_t *tablePtr, void *key)
 int
 hash_remove_string(hash_t *tablePtr, const char *key)
 {
-    assert(tablePtr->keyType = HASHKEYS_STRING);
+    assert(tablePtr->keyType == HASHKEYS_STRING);
     
     return hash_remove_internal(tablePtr, (void *) key);
 }
@@ -579,7 +579,7 @@ hash_remove_string(hash_t *tablePtr, const char *key)
 int
 hash_remove_ulong(hash_t *tablePtr, unsigned long key)
 {
-    assert(tablePtr->keyType = HASHKEYS_ULONG);
+    assert(tablePtr->keyType == HASHKEYS_ULONG);
     
     return hash_remove_internal(tablePtr, (void *) key);
 }
@@ -587,7 +587,7 @@ hash_remove_ulong(hash_t *tablePtr, unsigned long key)
 int
 hash_remove(hash_t *tablePtr, void *key)
 {
-    assert(tablePtr->keyType = HASHKEYS_POINTER);
+    assert(tablePtr->keyType == HASHKEYS_POINTER);
     
     return hash_remove_internal(tablePtr, key);
 }
