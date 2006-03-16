@@ -44,6 +44,8 @@ enum msg_ids {
     MSG_CA_UNLOCK
 };
 
+static int s_new_modules_sent = 0;
+
 /*
  * Macros to read and write strings and vars to a socket.
  *
@@ -271,6 +273,9 @@ sup_send_new_modules(void)
     }
 
     logmsg(LOGDEBUG, "sent new modules to all procs\n");
+    
+    s_new_modules_sent = 1;
+    
     return 0;
 }
 
@@ -355,6 +360,9 @@ sup_send_ca_lock(void)
 {
     char msg_id = MSG_CA_LOCK;
     int i;
+    
+    if (s_new_modules_sent == 0)
+	return;
 
     logmsg(LOGDEBUG, "Sending lock message\n");
 
@@ -387,6 +395,9 @@ sup_send_ca_unlock(void)
 {
     char msg_id = MSG_CA_UNLOCK;
     int i;
+
+    if (s_new_modules_sent == 0)
+	return;
 
     logmsg(LOGDEBUG, "Sending unlock message\n");
 
