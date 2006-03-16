@@ -528,7 +528,8 @@ validate_query(qreq_t * req, int node_id)
             return httpstr;
         }
 
-	if (!req->src->callbacks.outdesc || !req->src->callbacks.replay) {
+/*FIXME	if (!req->src->callbacks.outdesc || !req->src->callbacks.replay) {*/
+	if (!req->src->callbacks.replay) {
 	    /*	
 	     * the source module does not have the replay() callback or 
 	     * a description of the packets it can generate. return an 
@@ -747,6 +748,8 @@ query(int client_fd, int node_id)
 	break;
 	
     case Q_COMO: 
+#if 0
+FIXME
 	/*
 	 * transmit the output stream description
 	 */
@@ -754,7 +757,7 @@ query(int client_fd, int node_id)
 			  sizeof(pktdesc_t)); 
 	if (ret < 0)
 	    panic("could not send pktdesc");
-
+#endif
 	/* allocate the output buffer */
 	output = safe_calloc(1, DEFAULT_REPLAY_BUFSIZE);
         break;
