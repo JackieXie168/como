@@ -115,8 +115,8 @@ start_child(procname_t who, int mem_type, void (*mainloop)(int fd), int fd)
 
 	if (map.debug) {
 	    if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-		logmsg(V_LOGWARN, "waiting 60s for the debugger to attach\n");
-		sleep(60);
+		logmsg(V_LOGWARN, "waiting 30s for the debugger to attach\n");
+		sleep(30);
 		logmsg(V_LOGWARN, "wakeup, ready to work\n");
 	    }
 	}
