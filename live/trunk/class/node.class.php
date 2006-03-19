@@ -10,6 +10,8 @@
 
 class Node {
     var $comonode;
+    var $hostaddr;
+    var $hostport;
     var $nodename;
     var $nodeplace;
     var $comment;
@@ -28,12 +30,19 @@ class Node {
     var $timebound;
 
     /*  Constructor  */
-    function Node($host, $timeperiod, $timebound) {
-        $this->comonode = $host;
-        $this->timeperiod = $timeperiod;
-        $this->timebound = $timebound;
-
-	$query = file_get_contents("http://$host/?status");
+    function Node($comonode, $timeperiod, $timebound) {
+        /*  Check to make sure there is a host and port number */
+        $hostarray = split (":", $comonode);
+        if ((count($hostarray)) == 2 && is_numeric ($hostarray[1])) {
+	    $this -> comonode = $comonode;
+	    $this -> hostaddr = $hostarray[0];
+	    $this -> hostport = $hostarray[1];
+	    $this -> timeperiod = $timeperiod;
+	    $this -> timebound = $timebound;
+	    $query = file_get_contents("http://$comonode/?status");
+	} else {
+            $query = FALSE;
+        }
 	if ($query == FALSE) {
             $this->status="FAIL";
 	} else {
