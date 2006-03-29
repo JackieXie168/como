@@ -119,3 +119,16 @@ prism2_header_to_como_radio(const char *buf, struct _como_radio *r)
 
     return sizeof(prism2_header);
 }
+
+int
+avs_or_prism2_header_to_como_radio(const char *buf, struct _como_radio *r)
+{
+    int len;
+
+    len = avs_header_to_como_radio(buf, r);
+    if (len > 0)
+	return len;
+
+    return prism2_header_to_como_radio(buf, r);
+}
+

@@ -166,7 +166,7 @@ sniffer_start(source_t * src)
 	       "datalink 802.11 with Prism header (%d)\n", pf.linktype);
 	type = COMOTYPE_RADIO;
 	l2type = LINKTYPE_80211;
-	to_como_radio = prism2_header_to_como_radio;
+	to_como_radio = avs_or_prism2_header_to_como_radio;
 	break;
     default: 
 	logmsg(LOGWARN, 
