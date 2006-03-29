@@ -116,6 +116,8 @@ int avs_header_to_como_radio(const char *buf, struct _como_radio *r);
 
 int prism2_header_to_como_radio(const char *buf, struct _como_radio *r);
 
+int avs_or_prism2_header_to_como_radio(const char *buf, struct _como_radio *r);
+
 /*
  * metadesc.c
  */

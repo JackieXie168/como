@@ -483,18 +483,6 @@ orinoco_close(const char *dev, __unused void *data_)
     free(data);
 }
 
-static int
-orinoco_to_como_radio(const char *buf, struct _como_radio *r)
-{
-    int len;
-
-    len = avs_header_to_como_radio(buf, r);
-    if (len > 0)
-	return len;
-
-    return prism2_header_to_como_radio(buf, r);
-}
-
 typedef struct {
     int mode;
     int ch;
@@ -596,7 +584,7 @@ none_close(__unused const char *dev, __unused void *data)
 
 static monitor_t monitors[] = {
     {"none", none_open, none_close, NULL, NULL},
-    {"orinoco", orinoco_open, orinoco_close, orinoco_to_como_radio, NULL},
+    {"orinoco", orinoco_open, orinoco_close, avs_or_prism2_header_to_como_radio, NULL},
     {"wlext", wlext_open, wlext_close, NULL, NULL},
     {"hostap", hostap_open, wlext_close, avs_header_to_como_radio, NULL},
     {NULL, NULL, NULL, NULL, NULL}
