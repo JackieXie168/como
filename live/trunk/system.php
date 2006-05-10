@@ -37,7 +37,7 @@ if ($nodeinfo == false) {
     </div>
     <?php include("include/footer.php"); ?>
     <?php
-    exit;
+#    exit;
 }
 
 /* parse the node information */

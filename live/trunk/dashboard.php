@@ -24,15 +24,42 @@
 	include("include/footer.php.inc");
 	exit;
     }
+    
 
     require_once ("comolive.conf");
     require_once ("class/node.class.php");
+    include("include/getinputvars.php.inc");
     $node = new Node($comonode, $TIMEPERIOD, $TIMEBOUND);
+    /*  If cannot connect to node, fail with error  */
+    if ($node -> status == "FAIL") {
+        print "<center>An attempt to query $node->comonode has failed.<br>";
+        print "Please ensure hostname and port are correct and try again.<br>";
+	print "<br><br><br><br><br><br>";
+	include("include/footer.php.inc");
+	exit;
+    }
     /*
     * GET input variables
     */
-    include("include/getinputvars.php.inc");
-$test = "block";
+    $input_vars = init_env($node);
+    $module = $input_vars['module'];
+    $fiter = $input_vars['filter'];
+    $etime = $input_vars['etime'];
+    $stime = $input_vars['stime'];
+    $format = $input_vars['format'];
+    $http_query_string = $input_vars['http_query_string'];
+
+    
+    /*  Check if this is a distributed query  
+     *  Eventually this will be a como module, however, we will hard 
+     *  code it to get an idea of our future direction
+     */
+#    if ($module == "distquery") {
+#print "module is $module and comonode is $comonode< br>";
+#        print "this is a distributed query<br>";
+#        print "currently not supported<br>";
+#        exit;
+#    }
 ?>
 
 <body>
@@ -143,6 +170,8 @@ function initializeMenu(menuId, triggerId, module) {
 		$modargs = $modargs . "urlargs=interval=$interval&";
 		$modargs = $modargs . "urlargs=module=tuple&";
 		$modargs = $modargs . "urlargs=source=tuple&";
+		$modargs = $modargs . "urlargs=format=plain&";
+		$modargs = $modargs . "urlargs=extra=blincview&";
 	      }
 	      if ($sec_array[$i] == "topports"){
 		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
@@ -150,7 +179,6 @@ function initializeMenu(menuId, triggerId, module) {
 		$modargs = $modargs . "source=tuple&";
 		$modargs = $modargs . "interval=$interval&";
 	      }
-
               print "<div class=menubar>";
 	      print "<a href=# id=$sec_array[$i]Trig class=trig>";
               print "$sec_array[$i]</a>";
@@ -168,38 +196,6 @@ function initializeMenu(menuId, triggerId, module) {
               print "</div>";
               print "</div>\n";
 	  }
-#	
-#          print "<iframe width=100% frameborder=0 ";
-#          print "src=generic_query.php?comonode=$comonode&";
-#          print "module=alert&format=html&";
-# 	  print "&stime=$stime&etime=$etime&url=dashboard.php&";
-#          print "urlargs=comonode=$comonode&";
-#	  print "urlargs=module=$module&";
-#	  if ($module == $special) {
-#	      print "urlargs=source=tuple&urlargs=interval=$interval&";
-#	  }
-#	  print "urlargs=filter={$node->loadedmodule[$module]}>";
-#          print "</iframe>\n";
-#
-#      	  print "<iframe width=100% frameborder=0 "; 
-#          print "src=generic_query.php?comonode=$comonode&";
-#          print "module=topdest&format=html&";
-#	  print "filter=ip&topn=5&source=tuple&interval=$interval";
-# 	  print "&stime=$stime&etime=$etime&url=broadcast.php&";
-#	  print "urlargs=stime=$stime&urlargs=etime=$etime&";
-#	  print "urlargs=module=$module&";
-#	  print "urlargs=filter={$node->loadedmodule[$module]}>";
-#          print "</iframe>\n";
-#
-#      	  print "<iframe width=100% height=150 frameborder=0 "; 
-#          print "src=generic_query.php?comonode=$comonode&";
-#          print "module=topports&format=html&";
-#	  print "filter=tcp%20or%20udp&topn=5&source=tuple&interval=$interval";
-# 	  print "&stime=$stime&etime=$etime&url=broadcast.php&";
-#	  print "urlargs=stime=$stime&urlargs=etime=$etime&";
-#	  print "urlargs=module=$module&";
-#	  print "urlargs=filter={$node->loadedmodule[$module]}>";
-#          print "</iframe>\n";
       ?>
     </td>
   </tr>

@@ -1,7 +1,12 @@
+<!--  $Id$  -->
 <?php
     require_once("comolive.conf");
     $startstr = gmstrftime("%a %b %d %T %Y", $stime);
     $endstr = gmstrftime("%a %b %d %T %Y", $etime);
+    /*  Remove this section as soon as distquery is a como module  */
+    if ($module == "distquery") 
+        $module = "traffic";
+    /*  End remove  */
     $firstpacket = gmstrftime("%a %b %d %T %Y", $node->modinfo[$module]['stime']);
     $duration = $etime - $stime;
     $days = floor($duration / 86400); 
