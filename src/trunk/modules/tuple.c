@@ -486,7 +486,7 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
 		}
 	    }
 	} else {
-	    N32(NF(pktcount)) = 1;
+	    N32(NF(pktcount)) = htonl(1);
 	    if (howmany == (int) npkts)
 		COMO(len) += (uint32_t) nbytes % npkts;
 	}
