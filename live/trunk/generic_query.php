@@ -1,4 +1,5 @@
 <?php
+    require_once ("include/header.php.inc");
     require_once("comolive.conf");
     if (!(isset($G)))
         $G = init_global();
@@ -117,7 +118,9 @@
 	    $fp = fopen ("$absblincfile.dat", "w");
 	    fwrite ($fp, $data[1]);
 	    fclose ($fp);
-	    system("{$G['BLINCVIEWCMD']} {$G['DOT']} $absblincfile < $absblincfile.dat", $return);
+            $BLINCVIEWCMD = $G['BLINCVIEWCMD'];
+            $DOT = $G['DOT'];
+	    system("$BLINCVIEWCMD $DOT $absblincfile < $absblincfile.dat", $return);
 #		system("CONVERT $absblincfile.png1 $absblincfile.png", $return);
 
 	    /*  This will take there request uri information and 
