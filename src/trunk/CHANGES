@@ -1,6 +1,80 @@
 $Id$
 
 -------------------------------------
+---- CoMo v1.0 (TBD) 
+--
+
+. Implemented sFlow sniffer
+
+  Sniffer to support sFlow format (see RFC 3176). It supports receiving
+  directly the raw data from the switches. It introduces a new L2 type 
+  (COMOTYPE_SFLOW). 
+
+. Major rewrite of IPC code
+ 
+  Rewritten inter-process communication code. It is now used for all 
+  communications between SUPERVISOR, CAPTURE, EXPORT and STORAGE including 
+  tables flushed, I/O block writes/reads. 
+
+. Major rewrite of the packet stream meta descriptions
+ 
+  Rewritten the way modules and sniffers describe the packet streams 
+  they are capable of generating. The new code allows for simpler 
+  specification of the templates as well as easier and more efficient 
+  matching of the templates. 
+
+. Memory management for modules
+
+  Modules can now allocate memory as well in the shared spaced (i.e. 
+  that can be available to all callbacks). 
+
+. Support for multiple exporters in sniffer-flowtools
+
+  It is now possible to receive and process a NetFlow stream (via flowtools)
+  that contains flow records coming from multiple routers. An option 
+  in the sniffer-flowtools allows to pick which exporter the modules should
+  be looking at ("exporter=a.b.c.d").
+
+. Virtual Nodes
+
+. Hash library
+
+  A generic hash table implementation has been added. It has already been
+  integrated into the core and its genericity allows for its usage also by
+  modules.
+
+. Major rewrite of inline mode
+
+  The new inline mode can be invoked by using the command: 
+
+      "como [options] module-name[:module-args] [filter]"
+
+  This mode of operations forces como to run one single module and 
+  output all the module records to standard output as if a query with 
+  argument "format=pretty" were run. 
+
+. Changes in the callbacks data structure
+
+. Rewrite of wireless support 
+
+  The wireless support has undergone a major rewrite in order to acquire
+  support for more chipsets coming with different radio information.
+  A tiny layer of software maps between the different radio header to the
+  CoMo preferred radio structure. The L2 type COMOTYPE_RADIO is used to
+  denote the presence of such structure in captured packets.
+  The sniffer-prism2 has been replaced with the more generic sniffer-radio,
+  that supports on Linux the PrismII and Atheros chipsets interfaced with
+  orinoco, hostap and madwifi drivers. The chipset is automatically put in
+  monitor mode by sniffer-radio. Eventually this sniffer is able to support any
+  chipset for which the Linux driver implements the monitor mode ioctl.
+  The sniffer-pcap can read traces of 802.11 packets with or without radio
+  information.
+
+.  
+
+
+
+-------------------------------------
 ---- CoMo v0.5 (Dec 16th, 2005)
 --
 

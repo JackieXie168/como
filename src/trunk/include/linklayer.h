@@ -102,14 +102,11 @@ struct _como_nf {
     uint8_t dst_mask;		/* destination prefix mask */
     uint8_t engine_type;	/* type of switching engine (RP,VIP,etc.) */
     uint8_t engine_id;		/* slot number of the flow switching engine */
-    uint8_t flags;		/* packet flags (e.g., first pkt of flow) */
     n16_t sampling;		/* sampling rate */
     n32_t pktcount;		/* no. pkts represented (compact mode) */
-    n64_t bytecount;		/* no. bytes represented (compact mode) */
     n32_t duration;		/* flow duration (in milliseconds) */
 };
 
-#define COMONF_FIRST	0x01	/* first pkt of flow */
 
 /*
  * sFlow record

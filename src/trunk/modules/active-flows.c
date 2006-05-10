@@ -57,8 +57,8 @@ EFLOWDESC {
     uint32_t count;
 };
 
-#define STATEDESC   struct _active_flows_state
-STATEDESC {
+#define CONFIGDESC   struct _active_flows_config
+CONFIGDESC {
     int meas_ivl;
     uint32_t flowcount; 
     uint32_t current_ts; 
@@ -67,15 +67,15 @@ STATEDESC {
 static timestamp_t
 init(void * self, char * args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     int i; 
     pkt_t *pkt;
     metadesc_t *inmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC));
-    state->meas_ivl = 1;
-    state->flowcount = 0; 
-    state->current_ts = 0; 
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC));
+    config->meas_ivl = 1;
+    config->flowcount = 0; 
+    config->current_ts = 0; 
     
     /*
      * process input arguments
@@ -83,13 +83,13 @@ init(void * self, char * args[])
     for (i = 0; args && args[i]; i++) {
 	if (strstr(args[i], "interval")) {
 	    char * len = index(args[i], '=') + 1; 
-	    state->meas_ivl = atoi(len); 
+	    config->meas_ivl = atoi(len); 
 	}
     }
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
     IP(proto) = 0xff;
@@ -110,8 +110,8 @@ init(void * self, char * args[])
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
 
-    STATE(self) = state;
-    return TIME2TS(state->meas_ivl, 0);
+    CONFIG(self) = config;
+    return TIME2TS(config->meas_ivl, 0);
 }
 
 
@@ -186,12 +186,12 @@ static int
 export(void * self, __unused void *efh, __unused void *fh, int isnew)
 { 
     FLOWDESC *x = F(fh);
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
 
     if (isnew) 
-        state->current_ts = x->ts - x->ts % state->meas_ivl; 
+        config->current_ts = x->ts - x->ts % config->meas_ivl; 
 
-    state->flowcount++;
+    config->flowcount++;
     return 0;
 }
 
@@ -211,11 +211,11 @@ action(__unused void * self, void *efh,
 static ssize_t
 store(void * self, __unused void *efh, char *buf)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
 
-    PUTH32(buf, state->current_ts);
-    PUTH32(buf, state->flowcount); 
-    state->flowcount = 0; 
+    PUTH32(buf, config->current_ts);
+    PUTH32(buf, config->flowcount); 
+    config->flowcount = 0; 
 
     return sizeof(EFLOWDESC);
 }
@@ -255,7 +255,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static int granularity = 1;
     static int count = 0; 
     static int no_records = 0; 
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     EFLOWDESC *x; 
 
     if (buf == NULL && args != NULL) { 
@@ -270,7 +270,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce
                  * communication messages.
                  */
-                granularity = MAX(atoi(val) / state->meas_ivl, 1);
+                granularity = MAX(atoi(val) / config->meas_ivl, 1);
 	    } 
 	}
 

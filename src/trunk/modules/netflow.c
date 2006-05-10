@@ -255,7 +255,7 @@ update(pkt_t *pkt, rec_t *fh, int is_new, __unused unsigned drop_cntr)
     x->unix_nsecs = TS2USEC(pkt->ts);
     x->Last = x->sysUpTime = get_uptime(pkt->ts);
     /*
-     * it is *not* useless to update sysUpTime (as previously stated here)
+     * it is *not* useless to update sysUpTime (as previously configd here)
      * because it is needed to compute the actual flow start and end time
      */
     

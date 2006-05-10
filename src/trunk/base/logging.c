@@ -39,6 +39,7 @@
 #include <assert.h>
 
 #include "como.h"
+#include "ipc.h"
 
 extern struct _como map;	/* root of the data */
 
@@ -63,9 +64,8 @@ loglevel_name(int flags)
     char *qu= flags & LOGQUERY ? "QUERY " : "";
     char *sn= flags & LOGSNIFFER ? "SNIFFER " : "";
     char *ti= flags & LOGTIMER ? "TIMER " : "";
-    char *db= flags & LOGDEBUG ? "DEBUG " : "";
 
-    sprintf(s, "%s%s%s%s%s%s%s%s%s", ui, wa, st, ca, ex, qu, sn, ti, db);
+    sprintf(s, "%s%s%s%s%s%s%s%s", ui, wa, st, ca, ex, qu, sn, ti);
     return s;
 }
 
@@ -75,7 +75,6 @@ _logmsg(int flags, const char *fmt, va_list ap)
 {
     static int printit;	/* one copy per process */
     char *buf;
-    char *fmt1;
     struct timeval tv;
 
     if (flags)
@@ -83,16 +82,18 @@ _logmsg(int flags, const char *fmt, va_list ap)
     if (!printit)
         return;
     gettimeofday(&tv, NULL);
-    if (flags != LOGUI)
-        asprintf(&fmt1, "[%5ld.%06ld %2s] %s",
-		tv.tv_sec %86400, tv.tv_usec, getprocname(map.whoami), fmt);
-    else
-        asprintf(&fmt1, "%s", fmt);
-    vasprintf(&buf, fmt1, ap);
-    free(fmt1);
+    if (flags != LOGUI) {
+	char *fmt1;
+	asprintf(&fmt1, "[%5ld.%06ld %2s] %s",
+		 tv.tv_sec %86400, tv.tv_usec, getprocname(map.whoami), fmt);
+	vasprintf(&buf, fmt1, ap);
+	free(fmt1);
+    } else {
+	vasprintf(&buf, fmt, ap);
+    }
 
-    if (map.supervisor_fd >= 0) 
-        send_string(buf);
+    if (map.whoami != SUPERVISOR) 
+        ipc_send(SUPERVISOR, IPC_ECHO, buf, strlen(buf) + 1); 
     else 
 	fprintf(stdout, "%s", buf);
     free(buf);

@@ -252,7 +252,7 @@ unsigned int (*check_funcs[7])(ruleinfo_t *, pkt_t *);
 /* Declaration of the Bison-generated parsing routine */
 int parse_rules(char *rules);
 
-STATEDESC *state;
+CONFIGDESC *config;
     
 /**
  * -- check_proto
@@ -920,7 +920,7 @@ init(void *mem, int do_init, char *args[])
 {
     char *line;
     
-    state = mem;
+    config = mem;
     
     /* Initialize array of pointers to check functions */
     check_funcs[0] = check_proto;
@@ -934,8 +934,8 @@ init(void *mem, int do_init, char *args[])
     if (!do_init)
         return TIME2TS(1,0);
 
-    /* Blank the memory that saves the module's state */
-    memset((void *)state, 0, sizeof(STATEDESC)); 
+    /* Blank the memory that saves the module's config */
+    memset((void *)config, 0, sizeof(CONFIGDESC)); 
     
     /* Check whether we have rules */
     if (!args[0]) {
@@ -952,11 +952,11 @@ init(void *mem, int do_init, char *args[])
         line = strtok(NULL, "\n");
     }
     
-    if (state->nrules == 0)
+    if (config->nrules == 0)
         logmsg(LOGWARN, "SNORT: parsing rules: empty rules file\n");
     
     logmsg(LOGMODULE, "SNORT: rules loaded = %d / rules read = %d\n",
-           state->nrules, state->nrules_read);
+           config->nrules, config->nrules_read);
     
     return TIME2TS(1,0);
 }
@@ -979,20 +979,20 @@ check(pkt_t *pkt)
     
     /* Initialize the rule_match array */
     for(idx = 0; idx < MAX_SIMULT_HDRS; idx++)
-        state->rule_match[idx] = -1;
+        config->rule_match[idx] = -1;
     
     /* See if the incoming packet matches any of the
      * rules' headers */    
     idx = 0;
-    for (i = 0; i < state->nhdrs; i++) {
+    for (i = 0; i < config->nhdrs; i++) {
         ok = 1;
         /* Go through the list of pointers to check functions */
-        for (fp = state->hdrs_array[i]->funcs; fp != NULL && ok; fp = fp->next)
-            ok &= check_funcs[fp->function](state->hdrs_array[i], pkt);
+        for (fp = config->hdrs_array[i]->funcs; fp != NULL && ok; fp = fp->next)
+            ok &= check_funcs[fp->function](config->hdrs_array[i], pkt);
         if (ok) {
             /* Save which rule headers matched the packet */
             found = 1;
-            state->rule_match[idx] = i;
+            config->rule_match[idx] = i;
             idx++;
             /* If we have reached the max number of simultaneous rule
              * headers than a packet can match, stop the check */
@@ -1020,7 +1020,7 @@ update(pkt_t *pkt, void *fh, __unused int isnew)
     pktinfo_t *p = (pktinfo_t *)(f->buf);
     
     for (idx = 0; idx < MAX_SIMULT_HDRS; idx++)
-        p->rules[idx] = state->rule_match[idx];
+        p->rules[idx] = config->rule_match[idx];
     
     memcpy(&(p->pkt), pkt, sizeof(pkt_t));
     /* Modify the packet caplen if needed */
@@ -1097,7 +1097,7 @@ action(void *efh, __unused timestamp_t current_time, __unused int count)
     pkt = &(ep->pkt);
     
     idx = 0;
-    i = state->hdrs_array[ep->rules[idx]];
+    i = config->hdrs_array[ep->rules[idx]];
     while (i && ep->rules[idx] != -1 && idx < MAX_SIMULT_HDRS) {
         /* First check whether the rule is active */
         active = 0;
@@ -1114,7 +1114,7 @@ action(void *efh, __unused timestamp_t current_time, __unused int count)
             case SNTOK_PASS:
                 return ACT_DISCARD;
             case SNTOK_ACTIV:
-                for (d = state->dr[opt->activates]; d; d = d->next) {
+                for (d = config->dr[opt->activates]; d; d = d->next) {
                     if (d->activates->active == 0) {
                         d->activates->curr_count = d->activates->count;
                         d->activates->active = 1;
@@ -1132,7 +1132,7 @@ action(void *efh, __unused timestamp_t current_time, __unused int count)
         }
 
         idx++;
-        i = state->hdrs_array[ep->rules[idx]];
+        i = config->hdrs_array[ep->rules[idx]];
     }
     
     /* The packet didn't match */
@@ -1467,7 +1467,7 @@ print(char *buf, size_t *len, char * const args[])
     
     pktinfo = (pktinfo_t *)buf; 
     pkt = &(pktinfo->pkt);
-    opt = state->hdrs_array[pktinfo->rule]->opts_array[pktinfo->opt];
+    opt = config->hdrs_array[pktinfo->rule]->opts_array[pktinfo->opt];
 
     ts = pkt->ts;
     t = (time_t) TS2SEC(ts);
@@ -1715,5 +1715,5 @@ callbacks_t callbacks = {
     print:      print,
     replay:     NULL,
     formats:    "log alert ulog ualert como gnuplot debug",
-    statesize:  sizeof(STATEDESC)
+    configsize:  sizeof(CONFIGDESC)
 };

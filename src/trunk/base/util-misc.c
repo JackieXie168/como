@@ -25,85 +25,20 @@
  *
  * $Id$
  *
- * Debugging and various utility functions.
  */
 
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h> 			/* va_start */
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>     
-#include <dlfcn.h>
 #undef __unused        /* XXX linux's netdb.h has a variable with this name */
 #include <netdb.h>                     /* gethostbyname */
 #include <assert.h>
 
 #include "como.h"
 
-
-/**
- * -- load_object
- *
- * dynamically links a library in. used for all modules as
- * well as for the filters.
- * 
- * XXX in the future we may want to use it for sniffers as well.
- *
- */
-void *
-load_object(char *base_name, char *symbol)
-{
-    void *handle;
-    return load_object_h(base_name, symbol, &handle);
-}
-
-/**
- * -- load_object_h
- *
- * dynamically links a library, and also stores the handle for a later
- * library unlink using unload_object()
- *
- */
-void *
-load_object_h(char *base_name, char *symbol, void **handle)
-{
-    void *sym;
-
-    *handle = dlopen(base_name, RTLD_NOW);
-    if (*handle == NULL) {
-        logmsg(LOGWARN, "dlopen(%s, RTLD_NOW) error [%s]\n",
-                base_name, dlerror());
-        return NULL;
-    }
-    sym = dlsym(*handle, symbol);
-    if (sym == NULL) {
-        logmsg(LOGWARN, "module %s missing '%s' (%s)\n",
-                base_name, symbol, dlerror());
-        dlclose(*handle);
-        return NULL;
-    }
-    logmsg(LOGCONFIG, "loaded shared object %s\n", base_name);
-
-    return (void *) sym;
-}
-
-/**
- * -- unload_object
- *
- * unlinks the shared library referenced by the handled
- * returned from load_object.
- *
- */
-void
-unload_object(void *handle)
-{
-    if (dlclose(handle))
-        logmsg(LOGCONFIG, "unknown error unloading shared library\n");
-    else
-        logmsg(LOGCONFIG, "unloaded shared object\n");
-}
 
 /* 
  * -- getprotoname
@@ -152,74 +87,10 @@ alias[256] = {
     "241","242","243","244","245","246","247","248","249","250",
     "251","252","253","254","255"};
 
-__inline__ char *
+char *
 getprotoname(int proto) 
 {
     return alias[proto]; 
 }
 	    
 
-static struct {
-    procname_t who; 
-    char * name;
-    char * fullname; 
-} procalias[] = { 
-    {SUPERVISOR, 	"su", "SUPERVISOR"}, 
-    {CAPTURE, 		"ca", "CAPTURE"}, 
-    {EXPORT, 		"ex", "EXPORT"},
-    {STORAGE, 		"st", "STORAGE"}, 
-    {QUERY, 		"qu", "QUERY"},
-    {OTHER, 		"ot", "OTHER"},
-    {NONE, 		"??", "NONE"}
-};
-
-__inline__ char * 
-getprocname(procname_t who)
-{
-    int i; 
-
-    for (i = 0; procalias[i].who != who && procalias[i].who != NONE; i++) 
-	;
-
-    return procalias[i].name;
-}
-
-__inline__ char * 
-getprocfullname(procname_t who)
-{
-    int i; 
-
-    for (i = 0; procalias[i].who != who && procalias[i].who != NONE; i++) 
-	;
-
-    return procalias[i].fullname;
-}
-
-#if 0 
-
-/*
- * Debugging code.
- * XXX is never used in any part of the code. But we still keep it
- * in case it turns out to be useful (lr 2005.02.16)
- */
-/*
- * op == 0: set counter to value
- * op != 0: add value to counter
- */
-void
-count_set(int off, int op, int value, char *name)
-{
-    ctr_t *ctr = &map.stats.base,
-    *last = &map.last_stats.base,
-    *t = &map.stats_times.base;
-
-    ctr[off] = op ? ctr[off] + (uint)value : (uint)value;
-    if ((uint)map.now.tv_sec != t[off]) {
-        t[off] = map.now.tv_sec;
-        logmsg(V_LOGDEBUG, "COUNT %8d [%8d] %s\n",
-            ctr[off], ctr[off] - last[off], name);
-        fflush(stdout);
-        last[off] = ctr[off];
-    }
-}
-#endif

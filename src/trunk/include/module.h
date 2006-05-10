@@ -56,12 +56,24 @@
 #define CMPEF(x) ((EFLOWDESC *)((*(char **) x) + sizeof(rec_t)))
 
 /* 
- * STATEDESC is defined by each individual module and stored 
+ * CONFIG is defined by each individual module and stored 
  * somewhere in the module_t data structure (opaque to modules). 
- * we use STATE() to retrieve the state from that structure 
+ * we use CONFIG() to retrieve the state from that structure 
  */
-//#define STATE(x)	((STATEDESC *)((module_t *) (x))->ptr)
-#define STATE(x)	(((module_t *) (x))->ptr)
+#define CONFIG(x)	(((module_t *) (x))->config)
+/* 
+ * ESTATE is defined by each individual module and stored 
+ * somewhere in the module_t data structure (opaque to modules). 
+ * we use ESTATE() to retrieve the state from that structure 
+ */
+
+#define ESTATE(x)	(((module_t *) (x))->estate)
+/* 
+ * FSTATE is defined by each individual module and stored 
+ * somewhere in the module_t data structure (opaque to modules). 
+ * we use FSTATE() to retrieve the state from that structure 
+ */
+#define FSTATE(x)	(((module_t *) (x))->fstate)
 
 /*
  * Macros to copy integers from host to network byte order. 

@@ -36,6 +36,15 @@
 #
 
 #
+# . Installation prefix
+#
+#   Running `make install' will install como binary in PREFIX/bin and the
+#   modules in PREFIX/lib/como-COMOVER. The PREFIX/var/lib/como-COMOVER dir
+#   will be used as the default basedir.
+#
+# PREFIX=/usr/local
+
+#
 # . Support for NetFlow v5 streams (using flow-tools)
 #
 #   Uncommenting this line will enable the support for NetFlow files. 

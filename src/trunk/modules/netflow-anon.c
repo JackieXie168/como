@@ -101,19 +101,6 @@ init(__unused void * self, __unused char *args[])
 }
 
 
-static int
-check(__unused void * self, pkt_t * pkt)
-{
-    /*
-     * if the stream contains per-flow information,
-     * drop all packets after the first.
-     */
-    if (!(NF(flags) & COMONF_FIRST))
-        return 0;
- 
-    return 1;
-}
-
 static uint32_t
 hash(__unused void * self, pkt_t *pkt)
 {
@@ -198,7 +185,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
     ms = H32(NF(duration));
     end_ts = pkt->ts + TIME2TS(ms / 1000, (ms % 1000) * 1000); 
     x->duration = TS2SEC(end_ts - x->ts) * 1000 + TS2MSEC(end_ts - x->ts);
-    x->bytes += H64(NF(bytecount));
+    x->bytes += H32(NF(pktcount)) * COMO(len);
     x->pkts += (uint64_t) H32(NF(pktcount));
 
     return 0;
@@ -618,7 +605,7 @@ callbacks_t callbacks = {
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
     init: init,
-    check: check,
+    check: NULL,
     hash: hash,
     match: match,
     update: update,

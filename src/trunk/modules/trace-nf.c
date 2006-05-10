@@ -59,32 +59,31 @@ FLOWDESC {
     n32_t duration; 
 };
 
-#define STATEDESC   struct _trace_nf_state
-STATEDESC {
+#define CONFIGDESC   struct _trace_nf_config
+CONFIGDESC {
     int compact;
     uint32_t mask;
 };
-STATEDESC *state;
 
 callbacks_t callbacks;
 
 static timestamp_t
 init(void * self, char *args[])
 {
-    STATEDESC * state;
+    CONFIGDESC * config;
     timestamp_t ivl;
     int i; 
     pkt_t * pkt; 
     metadesc_t *inmd, *outmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC));
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC));
     
     /*
      * process input arguments
      */
     ivl = TIME2TS(1,0); 
-    state->compact = 0;
-    state->mask = ~0;
+    config->compact = 0;
+    config->mask = ~0;
     for (i = 0; args && args[i]; i++) {
 	char * x; 
 
@@ -93,11 +92,11 @@ init(void * self, char *args[])
 	    ivl = TIME2TS(atoi(x), 0);
 	}
 	if (strstr(args[i], "compact")) {
-	    state->compact = 1;
+	    config->compact = 1;
 	}
         if (strstr(args[i], "mask")) { 
 	    x = index(args[i], '=') + 1; 
-	    state->mask <<= atoi(x);
+	    config->mask <<= atoi(x);
 	}
     }
 
@@ -157,23 +156,13 @@ init(void * self, char *args[])
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
 
-    STATE(self) = state;
+    CONFIG(self) = config;
     return TIME2TS(1,0);
 }
 
-static int
-check(pkt_t * pkt)
-{
-    /*
-     * if the stream contains per-flow information, 
-     * drop all packets after the first. 
-     */
-    return (NF(flags) & COMONF_FIRST); 
-}
-
 
 static int
-update(pkt_t *pkt, void *fh, __unused int isnew)
+update(__unused void * self, pkt_t *pkt, void *fh, __unused int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -193,7 +182,7 @@ update(pkt_t *pkt, void *fh, __unused int isnew)
     }
 
     x->sampling = NF(sampling);
-    x->bytes += H64(NF(bytecount)); 
+    x->bytes += H32(NF(pktcount)) * COMO(len);
     x->pkts += H32(NF(pktcount));
     x->src_as = NF(src_as);
     x->dst_as = NF(dst_as);
@@ -205,13 +194,10 @@ update(pkt_t *pkt, void *fh, __unused int isnew)
 }
 
 static ssize_t
-store(void *efh, char *buf, size_t len)
+store(__unused void * self, void *efh, char *buf)
 {
     FLOWDESC *x = F(efh);
     
-    if (len < sizeof(FLOWDESC))
-        return -1;
-
     PUTH64(buf, x->start_ts);
     PUTN32(buf, N32(x->src_ip));
     PUTN32(buf, N32(x->dst_ip));
@@ -232,7 +218,7 @@ store(void *efh, char *buf, size_t len)
 }
 
 static size_t
-load(char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         ts = 0;
@@ -296,8 +282,9 @@ load(char * buf, size_t len, timestamp_t * ts)
 
 
 static char *
-print(char *buf, size_t *len, char * const args[])
+print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
+    CONFIGDESC * config = CONFIG(self);
     static char s[2048];
     static char * fmt;
     char src[20], dst[20];
@@ -335,8 +322,8 @@ print(char *buf, size_t *len, char * const args[])
 
     x = (FLOWDESC *) buf;
     ts = (time_t) TS2SEC(NTOHLL(x->start_ts)); 
-    saddr.s_addr = N32(x->src_ip) & htonl(state->mask);
-    daddr.s_addr = N32(x->dst_ip) & htonl(state->mask);
+    saddr.s_addr = N32(x->src_ip) & htonl(config->mask);
+    daddr.s_addr = N32(x->dst_ip) & htonl(config->mask);
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 
@@ -358,8 +345,9 @@ print(char *buf, size_t *len, char * const args[])
 
 
 static int
-replay(char *buf, char *out, size_t * len, int *count)
+replay(void * self, char *buf, char *out, size_t * len, int *count)
 {
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC * x;
     size_t outlen;
     uint64_t nbytes, npkts; 
@@ -414,7 +402,6 @@ replay(char *buf, char *out, size_t * len, int *count)
         NFX(input, x->input)
         NFX(output, x->output)
 	NFX(sampling, x->sampling);
-	NFX(bytecount, x->bytes); 
 	NFX(pktcount, htonl((uint32_t) npkts));
 	NFX(duration, x->duration);
 	
@@ -440,13 +427,11 @@ replay(char *buf, char *out, size_t * len, int *count)
 	if (howmany == (int) npkts) 
 	    COMO(len) += (uint32_t) nbytes % npkts; 
 
-	NF(flags) = (outlen == 0)? COMONF_FIRST : 0; 
         NF(src_as) = x->src_as;
         NF(dst_as) = x->dst_as;
         NF(input) = x->input;
         NF(output) = x->output;
 	NF(sampling) = x->sampling;
-	N64(NF(bytecount)) = x->bytes;
 	N32(NF(pktcount)) = htonl((uint32_t) npkts);
 	NF(duration) = x->duration;
 
@@ -462,13 +447,13 @@ replay(char *buf, char *out, size_t * len, int *count)
 
 	outlen += pktsz; 
 
-	if (state->compact) 	/* just one packet per flow */
+	if (config->compact) 	/* just one packet per flow */
 	    break;
     } 
 
     *len = outlen;
     *count = howmany;
-    return (state->compact? 0 : (npkts - howmany));
+    return (config->compact? 0 : (npkts - howmany));
 }
 
 
@@ -477,7 +462,7 @@ callbacks_t callbacks = {
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC), 
     init: init,
-    check: check,
+    check: NULL,
     hash: NULL,
     match: NULL,
     update: update,
@@ -489,6 +474,5 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: replay,
-    formats: "plain pretty html",
-    statesize: sizeof(STATEDESC)
+    formats: "plain pretty html"
 };

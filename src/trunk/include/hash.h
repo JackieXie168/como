@@ -53,7 +53,8 @@ typedef enum {
 	HASHKEYS_POINTER =	2
 } HASHKEYS;
 
-hash_t *hash_new          (module_t *mdl, int keyType, hash_key_fn hashKeyFn,
+hash_t *hash_new          (allocator_t *alc,
+			   int keyType, hash_key_fn hashKeyFn,
 			   compare_hash_keys_fn compareKeysFn);
 void *  hash_lookup_string(hash_t *tablePtr, const char *key);
 void *  hash_lookup_ulong (hash_t *tablePtr, unsigned long key);

@@ -47,8 +47,8 @@ FLOWDESC {
     uint32_t pkts;	/* number of packets */
 };
 
-#define STATEDESC   struct _topdest_state
-STATEDESC {
+#define CONFIGDESC   struct _topdest_config
+CONFIGDESC {
     uint32_t meas_ivl;  	    /* interval (secs) */
     int topn;                       /* number of top destinations */
     uint32_t mask;                  /* prefix mask */
@@ -58,17 +58,17 @@ STATEDESC {
 static timestamp_t
 init(void * self, char *args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     char *len;
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
     
-    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
-    state->meas_ivl = 5;
-    state->topn = 20;
-    state->mask = 0xffffffff;
-    state->last_export = 0;
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config->meas_ivl = 5;
+    config->topn = 20;
+    config->mask = 0xffffffff;
+    config->last_export = 0;
     
     /* 
      * process input arguments 
@@ -76,19 +76,19 @@ init(void * self, char *args[])
     for (i = 0; args && args[i]; i++) { 
 	if (!strncmp(args[i], "interval", 8)) {
 	    len = index(args[i], '=') + 1; 
-	    state->meas_ivl = atoi(len); 
+	    config->meas_ivl = atoi(len); 
 	} else if (!strncmp(args[i], "topn", 4)) {
 	    len = index(args[i], '=') + 1;
-	    state->topn = atoi(len);
+	    config->topn = atoi(len);
 	} else if (!strncmp(args[i], "mask", 4)) {
 	    len = index(args[i], '=') + 1;
-	    state->mask <<= atoi(len); 
+	    config->mask <<= atoi(len); 
 	}
     }
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
     IP(proto) = 0xff;
@@ -96,21 +96,8 @@ init(void * self, char *args[])
     N32(IP(src_ip)) = 0xffffffff;
     N32(IP(dst_ip)) = 0xffffffff;
 
-    STATE(self) = state; 
-    return TIME2TS(state->meas_ivl, 0);
-}
-
-static int
-check(__unused void * self, pkt_t * pkt)
-{ 
-    /*
-     * if the stream contains per-flow information,
-     * drop all packets after the first.
-     */
-    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
-        return 0;
-
-    return 1;
+    CONFIG(self) = config; 
+    return TIME2TS(config->meas_ivl, 0);
 }
 
 
@@ -131,17 +118,17 @@ static int
 update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % state->meas_ivl);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % config->meas_ivl);
         x->dst_ip = H32(IP(dst_ip)); 
         x->bytes = 0;
         x->pkts = 0;
     }
 
     if (COMO(type) == COMOTYPE_NF) { 
-	x->bytes += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling)); 
+	x->bytes += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
 	x->pkts += H32(NF(pktcount)) * H16(NF(sampling)); 
     } else if (COMO(type) == COMOTYPE_SFLOW) {
 	x->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
@@ -194,7 +181,7 @@ compare(const void *efh1, const void *efh2)
 static int
 action(void * self, void *efh, timestamp_t current_time, int count)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
 
     if (efh == NULL) { 
 	/* 
@@ -203,15 +190,15 @@ action(void * self, void *efh, timestamp_t current_time, int count)
 	 * if not stop. 
 	 */
         uint32_t now = TS2SEC(current_time);
-	uint32_t ivl = now - now % state->meas_ivl; 
-	if (ivl - state->last_export < state->meas_ivl) 
+	uint32_t ivl = now - now % config->meas_ivl; 
+	if (ivl - config->last_export < config->meas_ivl) 
 	    return ACT_STOP;		/* too early */
 
-	state->last_export = ivl; 
+	config->last_export = ivl; 
 	return ACT_GO; 		/* dump the records */
     }
 
-    return (count < state->topn)? ACT_STORE|ACT_DISCARD : ACT_DISCARD; 
+    return (count < config->topn)? ACT_STORE|ACT_DISCARD : ACT_DISCARD; 
 }
 
 
@@ -232,7 +219,7 @@ static size_t
 load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
 {
     if (len < sizeof(EFLOWDESC)) {
-        ts = 0;
+        *ts = 0;
         return 0; 
     }
 
@@ -289,7 +276,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static char s[2048];
     static char * fmt; 
     static char urlstr[2048] = "#"; 
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     EFLOWDESC *x; 
     struct in_addr addr;
     time_t ts;
@@ -310,7 +297,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
                 *len = 0; 
                 fmt = PLAINFMT;
             } else if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR, state->topn); 
+                *len = sprintf(s, HTMLHDR, config->topn); 
                 fmt = HTMLFMT;
             } else if (!strncmp(args[n], "url=", 4)) {
 		url = args[n] + 4; 
@@ -341,7 +328,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
     x = (EFLOWDESC *) buf; 
     ts = (time_t) ntohl(x->ts);
-    addr.s_addr = x->dst_ip & htonl(state->mask);
+    addr.s_addr = x->dst_ip & htonl(config->mask);
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
 		   NTOHLL(x->bytes), ntohl(x->pkts));
@@ -349,7 +336,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
         float mbps; 
 	char tmp[2048] = "#";
 	
-        mbps = (float) (NTOHLL(x->bytes) * 8) / (float) state->meas_ivl;
+        mbps = (float) (NTOHLL(x->bytes) * 8) / (float) config->meas_ivl;
 	mbps /= 1000000;
 	if (urlstr[0] != '#') 
 	    sprintf(tmp, urlstr, inet_ntoa(addr));
@@ -368,10 +355,11 @@ callbacks_t callbacks = {
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
     init: init,
-    check: check,
+    check: NULL,
     hash: hash,
     match: match,
     update: update,
+    flush: NULL,
     ematch: ematch,
     export: export,
     compare: compare,

@@ -33,10 +33,14 @@
 #include <string.h>     /* bzero */
 #include <errno.h>      /* errno */
 #include <err.h>	/* errx */
+#include <assert.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "storage.h"
-#include "query.h"	// XXX query_ondemand();
+#include "query.h"	// XXX query();
+#include "ipc.h"
+
 
 /* global state */
 extern struct _como map;
@@ -46,7 +50,7 @@ struct _child_info_t {
     pid_t pid;
 };
 
-static struct _child_info_t my_children[10];
+static struct _child_info_t my_children[10]; 
 
 
 /*
@@ -57,14 +61,15 @@ static struct _child_info_t my_children[10];
  * The last argument is an optional fd to be passed to the program.
  */
 pid_t
-start_child(procname_t who, int mem_type, void (*mainloop)(int fd), int fd)
+start_child(procname_t who, int mem_type, 
+	void (*mainloop)(int out_fd, int in_fd), int fd)
 {
     pid_t pid;
     u_int i;
 
     /* find a slot for the child */
     for (i = 0; i < sizeof(my_children); i++)
-	if (my_children[i].who == NONE) 
+	if (!isvalidproc(my_children[i].who))
 	    break;
     if (i == sizeof(my_children)) 
 	errx(EXIT_FAILURE, 
@@ -72,55 +77,56 @@ start_child(procname_t who, int mem_type, void (*mainloop)(int fd), int fd)
 	     getprocfullname(who));
 
     my_children[i].who = who;
-    if (who == SUPERVISOR) {
-	/* i am the supervisor. */
-	pid = getpid();
-
-	/* print log messages on the terminal */
-	map.supervisor_fd = -1;
-        map.mem_type = mem_type;
-	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
-	    getprocfullname(who), pid); 
-	my_children[i].pid = pid;
-	mainloop(fd);
-	exit(0);
-    }
 
     /* ok, fork a regular process and return pid to the caller. */
     pid = fork();
     if (pid == 0) {	/* child */
 	char *buf;
+	int out_fd, idx;
 
 	/* XXX TODO: close unneeded sockets */
+	// fclose(stdout); // XXX
+	// fclose(stderr); // XXX
 
 	/*
 	 * every new process has to set its name, specify the type of memory 
 	 * the modules will be able to allocate and use, and change the 
 	 * process name accordingly.  
 	 */
+	map.parent = map.whoami;
 	map.whoami = who;
 	map.mem_type = mem_type;
-	map.supervisor_fd = create_socket("supervisor.sock", NULL);
 
-	/* XXX should close all unused descriptors */
-	// fclose(stdout); // XXX
-	// fclose(stderr); // XXX
+	/*
+	 * remove all modules in the map (it will
+	 * receive the proper information from SUPERVISOR)
+	 *
+	 * XXX this is not that great but no other workaround comes
+	 *     to mind. the problem is when an IPC_MODULE_ADD message
+	 *     comes we don't want to waste time figuring out if we
+	 *     already have that module somewhere or not. And those
+	 *     messages may come when we are doing something important,
+	 *     while this is done at the very beginning.
+	 *
+	 */
+	for (idx = 0; idx < map.module_max; idx++)
+	    if (map.modules[idx].status != MDL_UNUSED) 
+		remove_module(&map, &map.modules[idx]);
+	assert(map.module_used == 0); 
+	assert(map.module_last == -1);
 
-	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
-	       getprocfullname(who), getpid()); 
+	/* connect to SUPERVISOR */
+        out_fd = ipc_connect(map.parent);
+        assert(out_fd > 0);
 
 	asprintf(&buf, "%s", getprocfullname(who));
 	setproctitle(buf);
 	free(buf);
 
-	if (map.debug) {
-	    if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-		logmsg(V_LOGWARN, "waiting 30s for the debugger to attach\n");
-		sleep(30);
-		logmsg(V_LOGWARN, "wakeup, ready to work\n");
-	    }
-	}
-	mainloop(fd);
+	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
+	       getprocfullname(who), getpid()); 
+
+	mainloop(fd, out_fd);
 	exit(0);
     }
     my_children[i].who = who;
@@ -130,64 +136,105 @@ start_child(procname_t who, int mem_type, void (*mainloop)(int fd), int fd)
 }
 
 
-#if 0
 /*
- * -- echo_log_msgs()
+ * -- ipc_echo_handler()
  *
- * Read log messages from the indicated socket and print them on the local
- * terminal using logmsg()
+ * processes IPC_ECHO messages by printing their content to screen 
+ * and to file if required.  
  * 
- * Return 0 on success, >0 in case of failure.
- *
+ * XXX the logfile should go thru STORAGE to allow for circular 
+ *     files and better disk scheduling.
+ * 
  */
-static int 
-echo_log_msgs(int fd, FILE * logfile) 
+static void 
+su_ipc_echo(__unused procname_t sender, __unused int fd, void * buf, 
+	    __unused size_t len) 
 {
-    static char buf[4097];
-    int overflow = 0;
-    int pos = 0;
-    int nread = 0;
+    logmsg(LOGUI, "%s", buf); 
+    if (map.logfile != NULL) 
+	fprintf(map.logfile, "%s", (char *) buf);
+}
+
+
+/*
+ * -- ipc_sync_handler()
+ * 
+ * on receipt of an IPC_SYNC, send an IPC_MODULE_ADD for all 
+ * active modules in the map. this is used to synchronize the 
+ * SUPERVISOR with another process that has just started on 
+ * which modules should be running. 
+ * 
+ */
+static void
+su_ipc_sync(procname_t sender, __unused int fd, __unused void * b, 
+	    __unused size_t l)
+{
+    int i; 
+    
+    if (sender == QUERY || sender == STORAGE)
+	return;
 
     /* 
-     * Loop as long as we have a partially-read log message to 
-     * process. 
+     * initialize all modules and send the start signal to 
+     * the other processes 
      */
-    do {
-        bzero(buf, sizeof(buf));
+    for (i = 0; i < map.module_max; i++) { 
+        char * pack;
+        int sz;
 
-        /* 
-	 * Make sure the buffer is NULL-terminated by leaving a
-         * NULL at the end 
-	 */
-        nread = read(fd, buf, sizeof(buf) - 1);
-        if (nread <= 0) {     /* end of file on a socket ? */
-            logmsg(LOGWARN, "reading fd[%d] got %d (%s)\n",
-                fd, nread, strerror(errno));
-            return 1;
-        }
+	if (map.modules[i].status != MDL_ACTIVE) 
+	    continue; 
 
-        logmsg(V_LOGDEBUG, "message(s) from fd[%d] (%d bytes)\n", fd, nread);
+        /* prepare the module for transmission */
+        pack = pack_module(&map.modules[i], &sz);
 
-        /*
-	 * Walk through the buffer, printing out messages.
-	 * Note that it's safe to read nread + 1 into the
-         * buffer because we added an extra byte at the end
-         * of the buffer. 
-	 */
-        for (pos = 0; pos <= nread; pos += strlen(buf + pos) + 1) {
-            logmsg(LOGUI, "%s", buf + pos);
-	    if (logfile != NULL) 
-		fprintf(logfile, "%s", buf + pos); 
-	} 
+        /* inform the other processes */
+        ipc_send(sender, IPC_MODULE_ADD, pack, sz);
 
-        /* Did we chop a log message in half? */
-        overflow = (pos == nread);
+        free(pack);
+    }
 
-    } while (overflow);
-
-    return 0;
+    /* now we can send the start message */
+    ipc_send(sender, IPC_MODULE_START, &map.stats, sizeof(void *));
 }
-#endif
+
+
+/*  
+ * -- su_ipc_record 
+ * 
+ * prints a record to screen. this is used only when running
+ * in inline mode 
+ *
+ */
+static void
+su_ipc_record(__unused procname_t sender, __unused int fd, 
+	void * buf, __unused size_t l)
+{
+    assert(map.running == INLINE);  
+    fprintf(stdout, "%s", (char *) buf); 
+}
+
+
+/*  
+ * -- su_ipc_done 
+ * 
+ * EXPORT should send this message to report that there are 
+ * no more records to be processed. This messages happens only
+ * in inine mode. As a result we exit (sending a SIGPIPE to all 
+ * children as well).
+ *
+ */
+static void
+su_ipc_done(__unused procname_t sender, __unused int fd, 
+	__unused void * b, __unused size_t l)
+{
+    assert(map.running == INLINE); 
+    ipc_send(CAPTURE, IPC_EXIT, NULL, 0); 
+    ipc_send(EXPORT, IPC_EXIT, NULL, 0); 
+    ipc_send(STORAGE, IPC_EXIT, NULL, 0); 
+    exit(EXIT_SUCCESS);
+}
+
 
 /* 
  * -- handle_children
@@ -199,7 +246,7 @@ static void
 handle_children(void)
 {
     u_int j;
-    procname_t who = OTHER; 
+    procname_t who = 0;
     pid_t pid;
     int statbuf; 
 
@@ -228,208 +275,263 @@ handle_children(void)
 }
 
 
-/* 
- * -- inline_mode
+/*
+ * -- cleanup
  * 
- * Running in inline mode. A query-ondemand process is forked 
- * straight away, query is run and printed to stdout. 
- * 
+ * cleanup() called at termination time to
+ * remove the byproducts of the compilation.
+ * The function is registered with atexit(), which does not provide  
+ * a way to unregister the function itself. So we have to check which
+ * process died (through map.procname) and determine what to do accordingly.
  */
-void
-inline_mode(int accept_fd) 
+static void
+cleanup()
 {
-    struct timeval to = {1, 0};
-    fd_set valid_fds;
-    int max_fd;
-    int num_procs;
-    char *msg, *local, data[2];
-    int ret, sd, cd, i, n_ready;
-    pid_t pid;
-    fd_set r;
-    char *buf;
-
-    /* add CA,EX,ST processes to the ipc file descriptor list */
-        
-    max_fd = 0;
-    num_procs = 0;
-    max_fd = add_fd(accept_fd, &valid_fds, max_fd);
-    ipc_init();
-    
-    for (; num_procs < 3;) {
-	r = valid_fds;
-	n_ready = select(max_fd, &r, NULL, NULL, &to);
-	for (i = 0; n_ready > 0 && i < max_fd; i++) {
-	    if (!FD_ISSET(i, &r))
-		continue;
-
-	    n_ready--;
-	    if (i == accept_fd) {
-		int x;
-		x = accept(i, NULL, NULL);
-		if (x < 0) {
-		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n",
-			   i, x, strerror(errno));
-		} else {
-		    if (num_procs < 3) {
-			/* XXX ugly hack. only add to proc_fds the first 3
-			 * processes that connect to supervisor. they will
-			 * be CA, EX or ST in no particular order.
-			 * queries' fds don't belong into proc_fds.
-			 */
-			num_procs++;
-			register_ipc_fd(x); //XXX XXX
-		    }
-		    max_fd = add_fd(x, &valid_fds, max_fd);
-		    logmsg(V_LOGDEBUG, "accept fd[%d] ok new desc %d\n",
-			   i, x);
-		}
-		continue;
-	    }
-	}
+    char *cmd;
+ 
+    if (map.whoami != SUPERVISOR) {
+        logmsg(V_LOGWARN, "terminating normally\n");
+        return;
     }
+    logmsg(LOGUI, "\n\n\n--- about to exit... remove work directory %s\n",
+        map.workdir);
+    asprintf(&cmd, "rm -rf %s\n", map.workdir);
+    system(cmd);
+    logmsg(LOGUI, "--- done, thank you for using como\n");
+}
+  
 
-    /* Check that at least one module has been specified in the
-       command line */
-    if (!map.il_module) {
-	logmsg(LOGWARN, "inline mode selected but no modules specified "
-	       "in the command line. please use -M \"module_name\".\n");
-	exit(0);
-    }
-    
-    logmsg(LOGWARN, "running CoMo in inline mode...\n");
-    
+/*
+ * -- apply_map_changes
+ *
+ * compare two map data structures (struct _como) to verify
+ * if anything relevant has changed. any change that we can
+ * accomodate will be applied immediately.
+ *
+ * XXX right now we only allow to add or remove modules.
+ *     it should be possible to modify more configuration
+ *     parameters on-the-fly.
+ * 
+ * XXX this function doesn't handle multiple virtual nodes. 
+ *
+ */
+static void
+apply_map_changes(struct _como * x)
+{
+    int i, j;
+
     /*
-     * tell processes to load the modules.
+     * browse thru the list of modules to find if all
+     * modules in the running config are also present
+     * in the new one. if not, remove them.
      */
-    if (sup_send_new_modules() < 0) /* failed */
-	logmsg(LOGWARN, "Failed to load modules\n");
+    for (i = 0; i <= map.module_last; i++) {
+	int found = 0; 
+
+	if (map.modules[i].status == MDL_UNUSED) 
+	    continue; 
+
+        for (j = 0; j <= x->module_last; j++) {
+            if (match_module(&x->modules[j], &map.modules[i])) { 
+		/* don't need to look at this again */
+		x->modules[j].status = MDL_UNUSED; 
+		found = 1;
+                break;
+	    } 
+        }
     
-    /* create the socket on which query-ondemand will accept the query */
-    asprintf(&buf, "S:http://localhost:%d/", map.node.query_port);
-    sd = create_socket(buf, NULL);
-    if (sd < 0)
-	panic("inline mode: cannot create server socket: %s\n",
-	      strerror(errno));
-    free(buf);
+        if (!found) {
+	    int active = (map.modules[i].status == MDL_ACTIVE); 
 
-    /* fork a process to serve the query */
-    pid = fork();
-    if (pid < 0) 
-	logmsg(LOGWARN, "fork query-ondemand: %s\n", strerror(errno));
+            remove_module(&map, &map.modules[i]);
 
-    if (pid == 0) {	/* here is the child... */
-	close(accept_fd);
-        query(sd, 0);
-	exit(EXIT_SUCCESS);
-    } 
+	    /* inform the other processes */
+	    ipc_send(CAPTURE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
+	    ipc_send(EXPORT, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
+	    ipc_send(STORAGE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
 
-    /* parent */
-    close(sd);
-    
-    /* wait 5 seconds before starting the query */
-    logmsg(LOGWARN, "waiting 5 seconds before starting the query...\n");
-    sleep(5);
-    
-    /* send the query string followed by "\n\n" */
-    asprintf(&buf, "http://localhost:%d/?module=%s&filter=%s&%s",
-	     map.node.query_port, map.il_module->name,
-	     map.il_module->filter_str, map.il_qargs);
-    cd = create_socket(buf, &local);
-    if (cd < 0)
-	panic("inline mode: cannot create client socket: %s\n",
-	      strerror(errno));
-    asprintf(&msg, "GET %s HTTP/1.0\n\n", local);
-    ret = como_writen(cd, msg, 0);
-    if (ret < 0)
-	panic("inline mode: write error: %s\n", strerror(errno));
+	    if (active) { 
+		map.stats->modules_active--; 
 
-    /* 
-     * read the reply while processing possible messages
-     * coming from other processes
-     */
-    memset(data, 0, 2);
-    ret = como_readn(cd, (char *)&data, 1);
-    if (ret < 0) /* eof */
-        panic("inline mode: error reading data");
-    while (ret > 0) { 
-	fprintf(stderr, "%s", data);
-	r = valid_fds;
-	n_ready = select(max_fd, &r, NULL, NULL, &to);
-	for (i = 0; n_ready > 0 && i < max_fd; i++) {
-	    if (!FD_ISSET(i, &r))
-		continue;
+		/* free metadesc information. to do this 
+		 * we need to freeze CAPTURE for a while 
+		 */ 
+		ipc_send_blocking(CAPTURE, IPC_FREEZE, NULL, 0);
+	        metadesc_list_free(map.modules[i].indesc);
+		metadesc_list_free(map.modules[i].outdesc);
+		ipc_send(CAPTURE, IPC_ACK, NULL, 0); 
+	    } 
 
-	    n_ready--;
-	    /* receive & process messages */
-	    if (sup_recv_message(i) < 0) {
-		close(i);
-		del_fd(i, &valid_fds, max_fd);
-		unregister_ipc_fd(i);
-	    }
 	}
-	ret = como_readn(cd, (char *)&data, 1);
-	if (ret < 0) /* eof */
-	    panic("inline mode: error reading data");
     }
 
-    free(buf);
-    free(local);
-    free(msg);
+    /*
+     * now add any modules in the new map that do
+     * not exist in the old map
+     */
+    for (j = 0; j <= x->module_last; j++) {
+        module_t * mdl;
+	char * pack;
+	int sz; 
+
+        if (x->modules[j].status == MDL_UNUSED)
+            continue;
+
+	/* add this module to the main map */
+        mdl = copy_module(&map, &x->modules[j], x->modules[j].node); 
+	if (activate_module(mdl, map.libdir)) {
+	    remove_module(&map, mdl);
+	    continue;
+	} 
+
+	/* initialize this module, before doing so we 
+	 * need to freeze CAPTURE to avoid conflicts in 
+	 * the shared memory
+	 */
+	ipc_send_blocking(CAPTURE, IPC_FREEZE, NULL, 0);
+        if (init_module(mdl)) { 
+	    /* let CAPTURE resume */
+	    ipc_send(CAPTURE, IPC_ACK, NULL, 0); 
+	    remove_module(&map, mdl);
+	    continue;
+	} 
+		
+	/* prepare the module for transmission */
+        pack = pack_module(mdl, &sz);
+
+	/* inform the other processes */
+   	ipc_send(CAPTURE, IPC_MODULE_ADD, pack, sz); 
+   	ipc_send(EXPORT, IPC_MODULE_ADD, pack, sz); 
+   	ipc_send(STORAGE, IPC_MODULE_ADD, pack, sz); 
+
+	free(pack);
+	map.stats->modules_active++; 
+    }
 }
 
 
 /*
-* -- supervisor_mainloop
-* 
-* Basically mux incoming messages and show them to the console.
-* Also take care of processes dying. XXX update this comment
-*/
+ * -- reconfigure
+ * 
+ * this is called when a SIGHUP is received to cause
+ * como process again the config files and command line
+ * parameters.
+ *
+ */
+static void
+reconfigure()
+{
+    struct _como tmp_map;
+
+    init_map(&tmp_map);
+    configure(&tmp_map, map.ac, map.av);
+    apply_map_changes(&tmp_map);
+}
+
+
+/*
+ * -- supervisor_mainloop
+ * 
+ * Basically mux incoming messages and show them to the console.
+ * Also take care of processes dying. XXX update this comment
+ */
 void
 supervisor_mainloop(int accept_fd)
 {
     fd_set valid_fds;
     node_t * node;
+    int * external_fd;	/* for http queries */
     int max_fd;
-    int *client_fd;	/* for http queries */
-    int num_procs;
+    int i; 
     
-    if (map.il_mode) {
-        inline_mode(accept_fd); 
+    /* catch some signals */
+    signal(SIGINT, exit);               /* catch SIGINT to clean up */
+    signal(SIGHUP, reconfigure);        /* catch SIGHUP to update config */
+
+    /* register a handler for exit */
+    atexit(cleanup);
+
+    /* init my children array */
+    bzero(my_children, sizeof(my_children)); 
+
+    /* register handlers for IPC */
+    ipc_clear();
+    ipc_register(IPC_ECHO, su_ipc_echo); 
+    ipc_register(IPC_SYNC, su_ipc_sync); 
+    ipc_register(IPC_RECORD, su_ipc_record); 
+    ipc_register(IPC_DONE, su_ipc_done); 
+
+    if (map.running == INLINE) {
+        inline_mainloop(accept_fd); 
 	return; 
     } 
 
     max_fd = 0;
-    num_procs = 0;
     FD_ZERO(&valid_fds);
+
+    /* accept connections from other processes */
     max_fd = add_fd(accept_fd, &valid_fds, max_fd);
 
     /* 
-     * Start listening for query requests destined to all nodes.
+     * create sockets and accept connections from the outside world. 
+     * they are queries that can be destined to any of the virtual nodes. 
      */
-    client_fd = safe_calloc(map.virtual_nodes + 1, sizeof(int));
-    for (node = &map.node; node; node = node->next) { 
+    external_fd = safe_calloc(map.node_count, sizeof(int));
+    for (node = map.node; node; node = node->next) { 
 	char *buf;
 
 	asprintf(&buf, "S:http://localhost:%d/", node->query_port);
-	client_fd[node->id] = create_socket(buf, NULL);
-	if (client_fd[node->id] < 0)
-	    panic("creating the socket %s: %s\n", buf, strerror(errno));
-	max_fd = add_fd(client_fd[node->id], &valid_fds, max_fd);
+	external_fd[node->id] = create_socket(buf, NULL);
+	if (external_fd[node->id] < 0)
+	    panic("creating the socket %s", buf);
+	max_fd = add_fd(external_fd[node->id], &valid_fds, max_fd);
 	free(buf);
     }
 
-    /*
-     * initialize resource management and
-     * interprocess communication
-     */
+    /* initialize all modules */ 
+    for (i = 0; i < map.module_max; i++) {
+	module_t * mdl = &map.modules[i]; 
+
+	if (mdl->status != MDL_LOADING) 
+	    continue;
+
+	if (activate_module(mdl, map.libdir)) {
+	    logmsg(LOGWARN, "cannot start module %s\n", mdl->name); 
+	    remove_module(&map, mdl);
+	    continue; 
+  	} 
+
+	if (init_module(mdl)) { 
+	    logmsg(LOGWARN, "cannot initialize module %s\n", mdl->name); 
+	    remove_module(&map, mdl);
+	    continue; 
+  	} 
+
+	map.stats->modules_active++;
+    } 
+
+    /* initialize resource management */
     resource_mgmt_init();
-    ipc_init();
 
     for (;;) { 
+#ifdef RESOURCE_MANAGEMENT
+	/* 
+	 * to do resource management we need the select timeout to 
+	 * be shorter so that supervisor can be more reactive to 
+	 * sudden changes in the resource usage. 
+	 * 
+	 * XXX shouldn't the other processes be more reactive and 
+	 *     supervisor just wait for an "heads up" from them? 
+	 */
+	struct timeval to = {0, 50000};
+#else
+	struct timeval to = {1, 0};
+#endif
         int secs, dd, hh, mm, ss;
 	struct timeval now;
-	struct timeval to = {1, 0};
-	int i, n_ready;
+	int n_ready;
+	int ipcr;
+	
 	fd_set r = valid_fds;
 
 	/* 
@@ -442,39 +544,26 @@ supervisor_mainloop(int accept_fd)
         mm = (secs % 3600) / 60;
         ss = secs % 60; 
 
-	fprintf(stderr, 
-	    "\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); "
-	    "pkts %llu drops %d; mdl %d/%d\r", 
-	    dd, hh, mm, ss,
-	    map.stats->mem_usage_cur/(1024*1024), 
-	    map.stats->mem_usage_peak/(1024*1024), 
-	    map.mem_size, map.stats->table_queue, 
-	    map.stats->pkts, map.stats->drops,
-	    map.stats->modules_active, map.module_count); 
-
-#ifdef RESOURCE_MANAGEMENT
-	/* 
-	 * to do resource management we need the select timeout to 
-	 * be shorter so that supervisor can be more reactive to 
-	 * sudden changes in the resource usage. 
-	 * 
-	 * XXX shouldn't the other processes be more reactive and 
-	 *     supervisor just wait for an "heads up" from them? 
-	 */
-	to.tv_sec = 0; 
-	to.tv_usec = 50000; 
-#endif
+	if (map.running == NORMAL) 
+	    fprintf(stderr, 
+		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); "
+		"pkts %llu drops %d; mdl %d/%d\r", 
+		dd, hh, mm, ss,
+		map.stats->mem_usage_cur/(1024*1024), 
+		map.stats->mem_usage_peak/(1024*1024), 
+		map.mem_size, map.stats->table_queue, 
+		map.stats->pkts, map.stats->drops,
+		map.stats->modules_active, map.module_used); 
 
 	n_ready = select(max_fd, &r, NULL, NULL, &to);
 	fprintf(stderr, "%78s\r", ""); /* clean the line */
 
 	for (i = 0; n_ready > 0 && i < max_fd; i++) {
-	    int id; 
-
+	    int id;
+	    
 	    if (!FD_ISSET(i, &r))
 		continue;
 
-	    n_ready--;
 	    if (i == accept_fd) {
 		int x;
 		x = accept(i, NULL, NULL);
@@ -482,87 +571,75 @@ supervisor_mainloop(int accept_fd)
 		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n",
 			    i, x, strerror(errno));
 		} else {
-		    if (num_procs < 3) {
-			/* XXX ugly hack. only add to proc_fds the first 3
-			 * processes that connect to supervisor. they will be
-			 * CA, EX or ST in no particular order. queries' fds
-			 * don't belong into proc_fds.
-			 */
-			num_procs++;
-			register_ipc_fd(x); //XXX XXX
-		    }
 		    max_fd = add_fd(x, &valid_fds, max_fd);
-		    logmsg(V_LOGDEBUG, "accept fd[%d] ok new desc %d\n", i, x);
 		}
-		continue;
+		goto next_one;
 	    }
 
-	    for (id = 0; id <= map.virtual_nodes && i != client_fd[id]; id++) 
-		;
-
-	    if (i == client_fd[id]) { 
+	    for (id = 0; id < map.node_count; id++) {
 		struct sockaddr_in addr;
 		socklen_t len;
 		int cd;
 		pid_t pid;
 	    
+		if (i != external_fd[id]) 
+		    continue; 
+
 		len = sizeof(addr);
-		cd = accept(client_fd[id], (struct sockaddr *)&addr, &len); 
+		cd = accept(external_fd[id], (struct sockaddr *)&addr, &len); 
 		if (cd < 0) {
 		    /* check if accept was unblocked by a signal */
 		    if (errno == EINTR)
 			continue;
 
 		    logmsg(LOGWARN, "accepting connection: %s\n",
-			    strerror(errno));
+			strerror(errno));
 		}
 
-		logmsg(LOGQUERY, 
+		logmsg(LOGQUERY,
 		       "query from %s on fd %d\n", 
 		       inet_ntoa(addr.sin_addr), cd); 
 
-		/* fork a process to serve the query */
+		/* 
+		 * fork a process to serve the query. 
+	 	 * we don't use start_child here because we need to 
+		 * pass down the virtual node information and we don't 
+		 * really care to know if the query succeds or fails. 
+	   	 */
 		pid = fork(); 	
 		if (pid < 0) 
 		    logmsg(LOGWARN, "fork query-ondemand: %s\n",
 				strerror(errno));
 
 		if (pid == 0) {	/* here is the child... */
-		    for (i=0; i < max_fd; i++)
+		    for (i = 3; i < max_fd; i++) {
 			if (i != cd)
 			    close(i);
+		    }
 		    query(cd, id); 
 		    exit(EXIT_SUCCESS); 
 		} else	/* parent */
 		    close(cd);
-		continue;
+		goto next_one;
 	    }
 
-	    /* receive & process messages */
-	    if (sup_recv_message(i) < 0) {
+	    /* this is internal. use ipc handler */
+	    ipcr = ipc_handle(i);
+	    switch (ipcr) {
+	    case IPC_ERR:
+		/* an error. close the socket */
+		logmsg(LOGWARN, "error on IPC handle from %d\n", i);
+	    case IPC_EOF:
 		close(i);
-		del_fd(i, &valid_fds, max_fd);
-		unregister_ipc_fd(i);
+		max_fd = del_fd(i, &valid_fds, max_fd);
+		break;
 	    }
-	    
-	    /* echo message on stdout */
-	    /* XXX For now all messages are handled with sup_recv_message
-	     * Should we change that ???
-	     */
-#if 0 
-	    if (echo_log_msgs(i) != 0) { 
-		close(i); 
-		del_fd(i, &valid_fds, max_fd);
-	    } 
-#endif
+  next_one:
+	    n_ready--;
 	}
 
 	handle_children(); /* handle dead children etc */
-
-        if (num_procs >= 3) {
-            schedule(); /* resource management */
-            reconfigure(); /* if needed, reconfigure */
-        }
+	schedule(); /* resource management */
     }
 }
 

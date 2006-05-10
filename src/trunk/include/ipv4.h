@@ -29,11 +29,19 @@
 #ifndef _COMO_IPV4_H
 #define _COMO_IPV4_H
 
+#include "comoendian.h"
+
 /* 
  * IP header 
  */
 struct _como_iphdr {	
-    uint8_t	vhl;
+#ifdef COMO_LITTLE_ENDIAN
+    uint8_t	ihl:4;
+    uint8_t	version:4;
+#else
+    uint8_t	version:4;
+    uint8_t	ihl:4;
+#endif
     uint8_t	tos;
     n16_t	len;
     n16_t	id;
@@ -54,12 +62,33 @@ struct _como_tcphdr {
     n16_t	src_port;
     n16_t	dst_port;
     n32_t	seq;
-    n32_t	ack;
-    uint8_t	hlen;
-    uint8_t	flags;
+    n32_t	ack_seq;
+#ifdef COMO_LITTLE_ENDIAN
+    uint16_t	res1:4;
+    uint16_t	hlen:4;
+    uint16_t	fin:1;
+    uint16_t	syn:1;
+    uint16_t	rst:1;
+    uint16_t	psh:1;
+    uint16_t	ack:1;
+    uint16_t	urg:1;
+    uint16_t	ece:1;
+    uint16_t	cwr:1;
+#else
+    uint16_t	hlen:4;
+    uint16_t	res1:4;
+    uint16_t	cwr:1;
+    uint16_t	ece:1;
+    uint16_t	urg:1;
+    uint16_t	ack:1;
+    uint16_t	psh:1;
+    uint16_t	rst:1;
+    uint16_t	syn:1;
+    uint16_t	fin:1;
+#endif
     n16_t	win;
     n16_t	cksum;
-    n16_t	urg;
+    n16_t	urg_ptr;
     char  	payload[0]; 
 };
 

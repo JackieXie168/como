@@ -14,6 +14,9 @@ varfile_local=$(varfile).local
 all:	$(varfile_local)
 	sh ./build.sh -f `pwd`/$(varfile_local) $(.MAKEFLAGS) all
 
+install:
+	sh ./build.sh -f `pwd`/$(varfile_local) $(.MAKEFLAGS) install
+
 clean:  $(varfile_local)
 	sh ./build.sh -f `pwd`/$(varfile_local) clean
 

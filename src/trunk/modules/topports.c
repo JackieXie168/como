@@ -46,8 +46,8 @@ FLOWDESC {
     uint64_t pkts[65536];		/* pkts per port number */
 };
 
-#define STATEDESC   struct _topports_state
-STATEDESC {
+#define CONFIGDESC   struct _topports_config
+CONFIGDESC {
     uint32_t meas_ivl;		/* interval (secs) */
     int topn;    		/* number of top ports */
 };
@@ -55,15 +55,15 @@ STATEDESC {
 static timestamp_t
 init(void * self, char *args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     char *len;
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
     
-    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
-    state->meas_ivl = 1;
-    state->topn = 20;
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config->meas_ivl = 1;
+    config->topn = 20;
 
     /* 
      * process input arguments 
@@ -71,17 +71,17 @@ init(void * self, char *args[])
     for (i = 0; args && args[i]; i++) { 
 	if (strstr(args[i], "interval")) {
 	    len = index(args[i], '=') + 1; 
-	    state->meas_ivl = atoi(len); 
+	    config->meas_ivl = atoi(len); 
 	} 
 	if (strstr(args[i], "topn")) {
 	    len = index(args[i], '=') + 1;
-	    state->topn = atoi(len);
+	    config->topn = atoi(len);
 	}
     }
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:~tcp");
     N16(TCP(src_port)) = 0xffff;
@@ -91,39 +91,26 @@ init(void * self, char *args[])
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
 
-    STATE(self) = state; 
-    return TIME2TS(state->meas_ivl, 0); 
-}
-
-static int
-check(__unused void * self, pkt_t *pkt)
-{
-    /*
-     * if the stream contains per-flow information,
-     * drop all packets after the first.
-     */
-    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
-        return 0;
-
-    return 1;
+    CONFIG(self) = config; 
+    return TIME2TS(config->meas_ivl, 0); 
 }
 
 
 static int
 update(void * self, pkt_t *pkt, void *rp, int isnew)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC *x = F(rp);
     uint64_t newbytes = H16(IP(len)); 
     uint32_t newpkts = 1; 
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC)); 
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % state->meas_ivl);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % config->meas_ivl);
     }
 
     if (COMO(type) == COMOTYPE_NF) {
-        newbytes = H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
+        newbytes = H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
         newpkts = H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
     } else if (COMO(type) == COMOTYPE_SFLOW) {
 	newbytes = (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
@@ -157,7 +144,7 @@ struct topports {
 static ssize_t
 store(void * self, void *rp, char *buf)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC *x = F(rp);
     int top_ports[65536 + 1];		/* we need one more than max port */
     int i, j;
@@ -170,7 +157,7 @@ store(void * self, void *rp, char *buf)
 	if (x->bytes[i] == 0)
 	    continue;
 
-	for (j = state->topn - 1; j >= 0; j--) {
+	for (j = config->topn - 1; j >= 0; j--) {
 	    if (x->bytes[i] < x->bytes[top_ports[j]])
 		break;
 
@@ -182,7 +169,7 @@ store(void * self, void *rp, char *buf)
     /* 
      * save the first top N entries 
      */
-    for (i = 0; i < state->topn && x->bytes[top_ports[i]] > 0; i++) { 
+    for (i = 0; i < config->topn && x->bytes[top_ports[i]] > 0; i++) { 
 	PUTH32(buf, x->ts);
 	PUTH32(buf, top_ports[i]); 
 	PUTH64(buf, x->bytes[top_ports[i]]);
@@ -252,7 +239,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt; 
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     struct topports *x; 
     time_t ts;
 
@@ -270,7 +257,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
                 fmt = PLAINFMT;
             } 
             if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR, state->topn); 
+                *len = sprintf(s, HTMLHDR, config->topn); 
                 fmt = HTMLFMT;
             } 
         } 
@@ -291,7 +278,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), ntohl(x->port),
 		   NTOHLL(x->bytes), NTOHLL(x->pkts));
     } else if (fmt == HTMLFMT) { 
-	float mbps = (float) NTOHLL(x->bytes) * 8 / (float) state->meas_ivl;
+	float mbps = (float) NTOHLL(x->bytes) * 8 / (float) config->meas_ivl;
 	mbps /= 1000000;
 	*len = sprintf(s, fmt, ntohl(x->port), mbps); 
     } else { 
@@ -308,7 +295,7 @@ callbacks_t callbacks = {
     ex_recordsize: 0, 
     st_recordsize: sizeof(FLOWDESC),
     init: init,
-    check: check,
+    check: NULL,
     hash: NULL,
     match: NULL,
     update: update,

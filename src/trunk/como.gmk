@@ -55,8 +55,22 @@ DBGFLAGS?=-g
 # Optimization flags
 # OPTFLAGS?=-O2
 
+INSTALL=/usr/bin/install
+
+# Install dirs
+PREFIX?=/usr/local
+INST_BINDIR?=$(DESTDIR)$(PREFIX)/bin
+INST_LIBDIR?=$(DESTDIR)$(PREFIX)/lib/como-$(COMOVER)
+INST_DATADIR?=$(DESTDIR)$(PREFIX)/var/lib/como-$(COMOVER)
+INST_MANDIR?=$(DESTDIR)$(PREFIX)/share/man/man1
+DEFAULT_CFGFILE?=$(PREFIX)/etc/como/como.conf
+
 # #define's used to build this version of the code.
-DEFS+=-DCOMO_VERSION=\"0.6-current\"
+COMOVER = 0.99
+DEFS +=	-DCOMO_VERSION=\"$(COMOVER)\" \
+	-DDEFAULT_LIBDIR=\"$(INST_LIBDIR)\" \
+	-DDEFAULT_BASEDIR=\"$(INST_DATADIR)\" \
+	-DDEFAULT_CFGFILE=\"$(DEFAULT_CFGFILE)\"
 
 # You are really not supposed to touch this!
 # Here we have a lot of make magic to compute actual file names
@@ -109,9 +123,24 @@ x=$(MODULES:C/^/$(MODULEDIR)\//)
 # compute the list of modules (with .so extensions)
 modules_so=$(x:.c=.so)
 
+INSTALLS = $(addprefix install-,$(PROGS)) \
+	   $(addprefix install-,$(MODULES)) \
+	   $(addprefix install-,$(MANS))
+
 all:	$(PROGS) $(MODULES) $(OTHER)
 
-.PHONY: clean
+.PHONY: clean install mkinstalldirs $(INSTALLS)
+
+install: all mkinstalldirs $(INSTALLS) 
+	@echo "install done."
+
+mkinstalldirs:
+	@echo -n "Creating install directories... "
+	@test -d $(INST_BINDIR) || mkdir -p $(INST_BINDIR)
+	@test -d $(INST_LIBDIR) || mkdir -p $(INST_LIBDIR)
+	@test -d $(INST_DATADIR) || mkdir -p $(INST_DATADIR)
+	@test -d $(INST_MANDIR) || mkdir -p $(INST_MANDIR)
+	@echo "ok."
 
 clean:
 	rm -rf $(PROGS) $(MODULES) $(OTHER) $(TEMPORARY) *.core *.pid core.* \
@@ -168,6 +197,10 @@ else
 	$$(CC) $$(CFLAGS) -Wl,--export-dynamic -o $$(@) $$(^) \
 		$$(LIBOPTS) $$(LIBS_$(PROG):%=-l%)
 endif
+
+install-$(PROG):
+	@echo "install($(PROG))"
+	@$$(INSTALL) -m 0755 $(PROG) $$(INST_BINDIR)/$(PROG)
 endef
 
 # Template rule to compile a module from several source files
@@ -183,6 +216,10 @@ $(MODULE): $(addsuffix .c,$(basename $(MODULE)))
 	@echo "building module $(MODULE)"
 	$$(CC) $$(CFLAGS) -shared -Wl,-x -o $$(@) $$(^) \
 		$$(LIBOPTS) $$(LIBS_$(MODULE):%=-l%)
+
+install-$(MODULE):
+	@echo "install($(MODULE))"
+	@$$(INSTALL) -m 0755 $(MODULE) $$(INST_LIBDIR)/$(MODULE)
 endef
 
 # The template rule is instantiated as needed for each particular program

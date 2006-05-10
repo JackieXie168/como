@@ -37,11 +37,13 @@
 /*
  * New definitions of object types
  */
+typedef struct _como		como_t;		/* main como map */
 typedef struct _module          module_t;       /* module package */
+typedef uint32_t		procname_t;	/* process names */
 typedef struct _callbacks       callbacks_t;    /* callbacks */
-typedef struct _como_msg        msg_t;          /* message capture/export */
+typedef struct _flushmsg        flushmsg_t;     /* message capture/export */
 
-typedef struct _memlist         memlist_t;      /* opaque, memory manager */
+typedef struct memmap_t         memmap_t;      /* opaque, memory manager */
 typedef struct _expiredmap	expiredmap_t;	/* expired list of mem maps */
 
 typedef struct _record 	        rec_t;          /* table record header */
@@ -53,35 +55,55 @@ typedef struct _tsc		tsc_t; 		/* timers (using TSC) */
 typedef struct _statistics	stats_t; 	/* statistic counters */
 typedef struct _mdl_statistics	mdl_stats_t; 	/* statistic counters */
 
-typedef struct _proc_callbacks  proc_callbacks_t; /* callbacks of core procs */
-
 typedef struct _como_metadesc	metadesc_t;
 typedef struct _como_metatpl	metatpl_t;
 
 typedef struct _como_headerinfo headerinfo_t;
 
+typedef struct _como_allocator  allocator_t;
+
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
 typedef enum { 
-    NONE = 0,
-    SUPERVISOR = 4, 
-    CAPTURE = 12, 
-    EXPORT = 23, 
-    STORAGE = 35, 
-    QUERY = 87, 
-    OTHER = 101
-} procname_t; 
+    NORMAL = 0, 
+    INLINE = 1
+} runmodes_t;
 
 typedef enum {
-    MDL_INVALID, 			/* unused for debugging */
-    MDL_UNUSED,				/* module removed, free entry */
-    MDL_LOADING,            /* module is being loaded */
+    MDL_UNUSED,				/* module unused, free entry */
+    MDL_LOADING,            		/* module is being loaded */
     MDL_INCOMPATIBLE,			/* not compatible with sniffer */
     MDL_ACTIVE, 			/* active and processing packets */
-    MDL_PASSIVE, 			/* passive waiting for queries */
-    MDL_FROZEN,				/* temporary frozen */
-    MDL_DISABLED            /* disabled due to resource mgmt */
-} state_t;				
+    MDL_DISABLED            		/* disabled or turned off */
+} status_t;				
+
+typedef void * (*alc_malloc_fn) (size_t size,
+				 const char * file, int line,
+				 void *data);
+
+typedef void * (*alc_calloc_fn) (size_t nmemb, size_t size,
+				 const char * file, int line,
+				 void *data);
+
+typedef void * (*alc_free_fn)   (void *ptr,
+				 const char * file, int line,
+				 void *data);
+
+struct _como_allocator {
+    alc_malloc_fn	malloc;
+    alc_calloc_fn	calloc;
+    alc_free_fn		free;
+    void *		data;
+};
+
+#define alc_malloc(alc, size)		\
+    (alc)->malloc(size, __FILE__, __LINE__, (alc)->data)
+
+#define alc_calloc(alc, nmemb, size)	\
+    (alc)->calloc(nmemb, size, __FILE__, __LINE__, (alc)->data)
+
+#define alc_free(alc, ptr)		\
+    (alc)->free(ptr, __FILE__, __LINE__, (alc)->data)
 
 /*
  * Module callbacks
@@ -127,11 +149,19 @@ typedef int (match_fn)(void * self, pkt_t *pkt, void *fh);
  * update_fn() run from capture to update *fh with the info from *pkt.
  * is_new is 1 if *fh was never used before hence needs to be
  * initialized.
+ * fs points to current flush state.
  * Returns 1 if *fh becomes full after the call, 0 otherwise (failure is
  * not contemplated).
  * Mandatory.
  */
 typedef int (update_fn)(void * self, pkt_t *pkt, void *fh, int is_new);
+
+/**
+ * flush_fn() run from capture at every flush interval to obtain a clean
+ * flush state.
+ * Not mandatory, default module state is NULL.
+ */
+typedef void * (flush_fn)(void * self);
 
 /**
  * ematch_fn() same as match_fn() but now it uses the current capture
@@ -146,6 +176,7 @@ typedef int (ematch_fn)(void * self, void *eh, void *fh);
  * export_fn() same as update_fn(), is the core of export's processing.
  * It updates *efh with the info in *fh.
  * new_rec = 1 if *fh has just been allocated.
+ * fs points to current flush state.
  * Returns 1 if *fh becomes full after the call, 0 otherwise (failure is
  * not contemplated).
  * Not mandatory; if defined, an action_fn() should be defined too.
@@ -179,9 +210,10 @@ typedef int (compare_fn)(const void *, const void *);
 typedef int (action_fn)(void * self, void * fh, timestamp_t t, int count);
 #define	ACT_DISCARD	0x0400
 #define	ACT_STORE	0x4000
+#define	ACT_STORE_BATCH	0x8000
 #define	ACT_STOP	0x0040
 #define ACT_GO		0x0010
-#define	ACT_MASK	(ACT_DISCARD|ACT_STORE|ACT_STOP|ACT_GO)
+#define	ACT_MASK	(ACT_DISCARD|ACT_STORE|ACT_STORE_BATCH|ACT_STOP|ACT_GO)
 
 /**
  * store_fn() writes the record in the buffer,
@@ -248,6 +280,7 @@ struct _callbacks {
     hash_fn     * hash;
     match_fn    * match;
     update_fn   * update;
+    flush_fn	* flush;
 
     /* callbacks called by the export process */
     ematch_fn   * ematch;  
@@ -301,13 +334,14 @@ struct _module {
     metadesc_t *indesc;		/* requested input metadesc list */
     metadesc_t *outdesc;	/* offered output metadesc list */
 
-    memlist_t * master_map;	/* blocks allocated after init() */
-    void * master_ptr;          /* module private state after init() */
-
-    memlist_t * mem_map;        /* memory map currently used */
-    void * ptr;                 /* current private state */
-
-    memlist_t * flush_map;      /* map to temporarily keep blocks to be freed */
+    allocator_t alc;
+    
+    memmap_t * init_map;       /* memory map used in init() */
+    memmap_t * shared_map;     /* memory map currently used in sh memory */
+    memmap_t * inprocess_map;  /* memory map currently used in cur process */
+    void * config;               /* persistent config state */
+    void * fstate;		/* flush state */
+    void * estate;		/* export state */
 
     char * output;              /* output file basename */
     char ** args;               /* parameters for the module */
@@ -316,19 +350,19 @@ struct _module {
     callbacks_t callbacks;      /* callbacks (static, from the shared obj) */
     void * cb_handle;           /* handle of module's dynamic libraries */
 
-    state_t status; 		/* current module status */
+    status_t status; 		/* current module status */
     size_t memusage; 		/* current memory usage */
 
     ctable_t *ca_hashtable;  	/* capture hash table */
     uint ca_hashsize;    	/* capture hash table size (by config) */
     timestamp_t flush_ivl;	/* capture flush interval */
+    int ca_pkts_count;		/* capture processed pkts count */
 
     etable_t *ex_hashtable;  	/* export hash table */
     uint ex_hashsize; 	   	/* export hash table size (by config) */
     earray_t *ex_array; 	/* array of export records */
 
     int	file;			/* output file for export records */
-    size_t bsize;		/* blocksize ... */
     off_t streamsize;       	/* max bytestream size */
     off_t offset;		/* current offset in the export file */
 
@@ -358,15 +392,6 @@ struct _record {
     int full;               /* set if this record is full */
 };
 
-
-/*
- * Message exchanged between CAPTURE and EXPORT.
- */
-struct _como_msg {
-    memlist_t * m;
-    expiredmap_t * ex;
-};
-
 /* 
  * Expired memory maps are stored by CAPTURE waiting to be sent to 
  * EXPORT on a per-module basis to pass the state. They contain the 
@@ -375,9 +400,10 @@ struct _como_msg {
  */
 struct _expiredmap { 
     expiredmap_t * next;	/* next expired map */
-    module_t * mdl;		/* module that is using this table */
+    module_t * mdl; 		/* module using this table */
     ctable_t * ct;		/* capture table expired */
-    void * ptr;			/* private module state */
+    void * fstate;		/* flush state */
+    memmap_t * shared_map;	/* module shared map */
 };
 
 /*
@@ -442,24 +468,6 @@ struct _tsc {
 };
 
 
-/*
- * callbacks of core processes
- */
-/* TODO document better */
-typedef void (filter_init_fn)(char *filter_file);
-typedef void (mdl_init_fn)(module_t *mdl);
-typedef void (mdl_enable_fn)(module_t *mdl);
-typedef void (mdl_disable_fn)(module_t *mdl);
-typedef void (mdl_remove_fn)(module_t *mdl);
-
-struct _proc_callbacks {
-    filter_init_fn * const filter_init;
-    mdl_init_fn * const module_init;
-    mdl_enable_fn * const module_enable;
-    mdl_disable_fn * const module_disable;
-    mdl_remove_fn * const module_remove;
-};
-
 /* 
  * statistic counters 
  */
@@ -513,7 +521,7 @@ struct _statistics {
 typedef enum {
     META_PKT_LENS_ARE_AVERAGED = 0x1,
     META_HAS_FULL_PKTS = 0x2,
-    META_PKTS_ARE_TUPLES = 0x4
+    META_PKTS_ARE_FLOWS = 0x4
 } meta_flags_t;
 
 typedef uint16_t pktmeta_type_t;
@@ -526,7 +534,7 @@ struct _como_metatpl {
 
 struct _como_metadesc {
     struct _como_metadesc *_next;
-    module_t *_mdl;
+    allocator_t *_alc;
     uint32_t _tpl_count;
     struct _como_metatpl *_first_tpl;
     timestamp_t ts_resolution;

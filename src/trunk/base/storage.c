@@ -36,6 +36,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <assert.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -45,8 +46,10 @@
 #include <sys/un.h>	/* AF_UNIX sockets */
 
 #include "como.h"
+#include "comopriv.h"
 #define _COMO_STORAGE_SERVER  /* enables private types in storage.h */
 #include "storage.h"
+#include "ipc.h"
 
 
 /*
@@ -362,17 +365,15 @@ static void
 senderr(int s, int id, int code)
 {
     csmsg_t m;
-    int wr;
 
     memset(&m, 0, sizeof(m));
     if (code == 0)
 	panic("storage failing a request without giving a reason");
-    m.type = S_ERROR;
     m.id = id;
-    m.arg = code; 
-    wr = write(s, (char *) &m, sizeof(m));
-    if (wr < 0)
-        panic("sending error message got %d (%s)\n", wr, strerror(errno)); 
+    m.arg = code;
+    if (ipc_send_with_fd(s, S_ERROR, &m, sizeof(m)) != IPC_OK) {
+	panic("sending error message: %s\n", strerror(errno));
+    }
 
     logmsg(LOGSTORAGE, "out: ERROR - id: %d; code: %d;\n", id, code);
 }
@@ -388,16 +389,14 @@ static void
 sendack(int s, int id, off_t ofs, size_t sz)
 {
     csmsg_t m;
-    int wr;
 
     memset(&m, 0, sizeof(m));
-    m.type = S_ACK;
     m.id = id;
-    m.ofs = ofs; 
-    m.size = sz; 
-    wr = write(s, &m, sizeof(m));
-    if (wr < 0)
-        panic("sending ack got %d (%s)\n", wr, strerror(errno)); 
+    m.ofs = ofs;
+    m.size = sz;
+    if (ipc_send_with_fd(s, S_ACK, &m, sizeof(m)) != IPC_OK) {
+	panic("sending ack: %s\n", strerror(errno));
+    }
 
     logmsg(V_LOGSTORAGE, "out: ACK - id: %d, ofs: %12lld, sz: %8d\n",
 		id, ofs, sz);
@@ -581,7 +580,8 @@ flush_wb(csbytestream_t *bs)
  * 
  */
 static void
-handle_open(int s, csmsg_t * in)
+handle_open(__unused procname_t sender, int s, csmsg_t * in,
+	    __unused size_t len)
 {
     csbytestream_t *bs; 
     csclient_t *cl;
@@ -731,7 +731,8 @@ client_unlink(csclient_t *cl)
  *
  */
 static void
-handle_close(__unused int s, csmsg_t * in)
+handle_close(__unused procname_t sender, __unused int fd, csmsg_t * in,
+	     __unused size_t len)
 {
     csbytestream_t * bs;
     csclient_t * cl;
@@ -855,7 +856,8 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
  * handle_seek
  */
 static void
-handle_seek(int s, csmsg_t * in)
+handle_seek(__unused procname_t sender, int s, csmsg_t * in,
+	    __unused size_t len)
 {
     csfile_t * cf;
     csclient_t * cl;
@@ -930,7 +932,7 @@ handle_seek(int s, csmsg_t * in)
 }
 
 /** 
- * -- handle_read
+ * -- region_read
  * 
  * handles all read operations. it may result in mmapping a new 
  * region, returning EOF or blocking the client to wait for new 
@@ -938,7 +940,7 @@ handle_seek(int s, csmsg_t * in)
  *
  */ 
 static void
-handle_read(int s, csmsg_t * in, csclient_t *cl)
+region_read(int s, csmsg_t * in, csclient_t *cl)
 {
     csbytestream_t *bs;
     csfile_t *cf;
@@ -976,7 +978,7 @@ handle_read(int s, csmsg_t * in, csclient_t *cl)
     /* check the first two easy cases */
     if (bs->file_first == NULL) {	/* no files... */
 	if (bs->the_writer != NULL)
-	    panicx("impossible case in handle_read\n");
+	    panicx("impossible case in region_read\n");
 
 	/* send an EOF */
 	sendack(s, in->id, (off_t)0, (size_t)0); 
@@ -1114,7 +1116,7 @@ wakeup_clients(csbytestream_t *bs)
 	logmsg(V_LOGSTORAGE, "waking up id: %d\n", p->client->id); 
 	p->client->blocked = 0; 
 	p->client->timeout = CS_DEFAULT_TIMEOUT; 
-        handle_read(p->sock, &p->msg, p->client);
+        region_read(p->sock, &p->msg, p->client);
         
         /* free this element and move to next */
         waking = p->next;
@@ -1124,7 +1126,7 @@ wakeup_clients(csbytestream_t *bs)
 
 
 /**  
- * -- handle_write
+ * -- region_write
  *
  * handles all write operations, i.e. mmaps the region of
  * interest and resizes the file if needed. also, wakes up all
@@ -1132,7 +1134,7 @@ wakeup_clients(csbytestream_t *bs)
  *   
  */         
 static void
-handle_write(int s, csmsg_t * in, csclient_t *cl)   
+region_write(int s, csmsg_t * in, csclient_t *cl)   
 {
     off_t bs_offset, want, have;
     size_t reg_size;
@@ -1243,7 +1245,7 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
         }
 
         /* finally, prepare to extend the file */
-        buf = safe_calloc(ext, 1); 
+        buf = safe_calloc(1, ext); 
         if (write(bs->wfd, buf, ext) < 0) {
             logmsg(LOGWARN, "id: %d,%s; write to extend file failed: %s\n",
                 in->id, bs->name, strerror(errno));
@@ -1294,7 +1296,8 @@ handle_write(int s, csmsg_t * in, csclient_t *cl)
  * 
  */
 static void
-handle_inform(csmsg_t * in)
+handle_inform(__unused procname_t sender, __unused int fd, csmsg_t * in,
+	      __unused size_t len)
 {
     csclient_t * cl;
     off_t bs_offset; 
@@ -1348,7 +1351,8 @@ handle_inform(csmsg_t * in)
  *
  */
 static void
-handle_region(int s, csmsg_t * in)
+handle_region(__unused procname_t sender, int fd, csmsg_t * in,
+	      __unused size_t len)
 {
     csclient_t * cl;
 
@@ -1357,14 +1361,14 @@ handle_region(int s, csmsg_t * in)
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
         logmsg(LOGWARN, "S_REGION: invalid id (%d)\n", in->id);
-	senderr(s, in->id, EINVAL);
+	senderr(fd, in->id, EINVAL);
         return;
     }
         
     cl = cs_state.clients[in->id];
     if (cl == NULL) {
         logmsg(LOGWARN, "S_REGION: client does not exists (id: %d)\n", in->id);
-	senderr(s, in->id, EBADF);
+	senderr(fd, in->id, EBADF);
         return;
     }
 
@@ -1380,50 +1384,10 @@ handle_region(int s, csmsg_t * in)
      */ 
     cl->timeout = CS_DEFAULT_TIMEOUT; 
     if (cl->mode == CS_WRITER)  	/* write mode */
-	handle_write(s, in, cl);
+	region_write(fd, in, cl);
     else
-	handle_read(s, in, cl);
+	region_read(fd, in, cl);
 }
-
-
-/** 
- * -- handlemsg
- * 
- * handles messages from the clients and calls the 
- * relevant function. 
- * 
- */
-static void 
-handlemsg(int s, csmsg_t * in)
-{
-    switch (in->type) {
-    default: 
-        logmsg(LOGSTORAGE, "unknown message %d", in->type);
-	senderr(s, in->id, EINVAL); 
-	return; 
-
-    case S_CLOSE: 				/* close the file */
-	handle_close(s, in);
-	return;
-
-    case S_OPEN: 
-	handle_open(s, in);
-	return;
-
-    case S_REGION: 				/* new region request */
-	handle_region(s, in);
-	return;
-
-    case S_SEEK: 				/* seek request */
-	handle_seek(s, in);
-	return;
-
-    case S_INFORM: 				/* info message */ 
-	handle_inform(in);
-	return;
-    }
-}
-
 
 /*
  * -- scheduler 
@@ -1550,21 +1514,21 @@ scheduler(timestamp_t elapsed)
     }
 }
 
+
 /*
- * callbacks: none
+ * -- st_ipc_exit 
+ *
  */
-static proc_callbacks_t storage_callbacks = {
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
+static void
+st_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
+             __unused size_t len)
+{
+    assert(sender == map.parent);  
+    exit(EXIT_SUCCESS); 
+}
 
 
-
-
-/** 
+/* 
  * -- storage_mainloop 
  * 
  * This is the mainloop of the hf-server process. It waits on a select
@@ -1576,26 +1540,60 @@ static proc_callbacks_t storage_callbacks = {
  *
  */
 void
-storage_mainloop(int accept_fd)
+storage_mainloop(int accept_fd, int supervisor_fd)
 {
-    /* 
-     * init data structures, mainly file descriptors  
-     */
-    bzero(&cs_state, sizeof(cs_state)); 
-    cs_state.max_fd = add_fd(accept_fd, &cs_state.valid_fds, cs_state.max_fd);
-    cs_state.max_fd = add_fd(map.supervisor_fd, &cs_state.valid_fds, cs_state.max_fd);
+    int max_fd; 
+    fd_set valid_fds; 
 
+    /* register file descriptors */ 
+    max_fd = 0; 
+    FD_ZERO(&valid_fds); 
+
+    /* ignore SIGHUP */ 
+    signal(SIGHUP, SIG_IGN); 
+    
+    /* register handlers for IPC messages */
+    ipc_clear();
+    ipc_register(S_CLOSE, (ipc_handler_fn) handle_close);
+    ipc_register(S_OPEN, (ipc_handler_fn) handle_open);
+    ipc_register(S_REGION, (ipc_handler_fn) handle_region);
+    ipc_register(S_SEEK, (ipc_handler_fn) handle_seek);
+    ipc_register(S_INFORM, (ipc_handler_fn) handle_inform);
+    ipc_register(IPC_EXIT, st_ipc_exit);
+
+    /* accept connections from other processes */
+    max_fd = add_fd(accept_fd, &valid_fds, max_fd);
+
+    /* listen to SUPERVISOR */
+    max_fd = add_fd(supervisor_fd, &valid_fds, max_fd);
+
+    /* init data structures */
+    bzero(&cs_state, sizeof(cs_state)); 
+
+    /*
+     * now that all sockets are ready we can wait for
+     * the debugger if needed.
+     */
+    if (map.debug) {
+        if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
+            logmsg(V_LOGWARN, "waiting 30s for the debugger to attach\n");
+            sleep(30);
+            logmsg(V_LOGWARN, "wakeup, ready to work\n");
+        }
+    }
+ 
     /*
      * The real main loop.
      */
     for (;;) {
-        fd_set r = cs_state.valid_fds;
+        fd_set r = valid_fds;
 	struct timeval * pto;
 	struct timeval last; 
 	struct timeval to = { 5, 200000 };	// XXX just to put something?
 	timestamp_t elapsed; 
         int n_ready;
 	int i;
+	int ipcr;
 
 	/*
 	 * use a timeout if we have files open. this way the 
@@ -1604,55 +1602,39 @@ storage_mainloop(int accept_fd)
         pto = (cs_state.client_count > 0) ? &to : NULL; 
 
 	gettimeofday(&last, 0); 
-	n_ready = select(cs_state.max_fd, &r, NULL, NULL, pto); 
+	n_ready = select(max_fd, &r, NULL, NULL, pto); 
 	if (n_ready < 0) 
 	    panic("waiting for select (%s)\n", strerror(errno)); 
-        logmsg(V_LOGDEBUG, "waking up, n_ready %d\n", n_ready); 
 
-	for (i = 0; n_ready > 0 && i < cs_state.max_fd; i++) {
-	    csmsg_t m;
-	    int ret;
+	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 
 	    if (!FD_ISSET(i, &r))
 		continue;
 
 	    n_ready--;
 
-	    if (i == map.supervisor_fd) {
-                recv_message(map.supervisor_fd, &storage_callbacks);
-		continue;
-	    }
-
 	    if (i == accept_fd) {
 		int x;
 
-	        logmsg(V_LOGDEBUG, "accept on socket %d\n", i);
 		x = accept(i, NULL, NULL);
-	        logmsg(V_LOGDEBUG, "accept on socket %d returns %d\n", i, x);
 		if (x < 0) {
 		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n", 
 			i, x, strerror(errno));
-		} else {
- 		    cs_state.max_fd = add_fd(x, &cs_state.valid_fds, 
-					     cs_state.max_fd);
-		    logmsg(V_LOGDEBUG, "accept fd[%d] ok new desc %d\n", i, x);
-		}
+		} else 
+ 		    max_fd = add_fd(x, &valid_fds, max_fd);
 		continue;
 	    }
-
-	    /* process the incoming message */
-	    bzero(&m, sizeof(m));
-	    ret = read(i, &m, sizeof(m));
-	    if (ret <= 0) {
-		/* the other process left, remove this file descriptor 
-		 * from the list
-		 */
-		cs_state.max_fd = del_fd(i,&cs_state.valid_fds,cs_state.max_fd);
+	    
+	    ipcr = ipc_handle(i);
+	    switch (ipcr) {
+	    case IPC_ERR:
+		/* an error. close the socket */
+		logmsg(LOGWARN, "error on IPC handle from %d\n", i);
+	    case IPC_EOF:
 		close(i);
-		continue;
+		del_fd(i, &valid_fds, max_fd);
+		break;
 	    }
-	    logmsg(V_LOGSTORAGE, "message from fd[%d] (%d bytes)\n", i, ret);
-	    handlemsg(i, &m); 
         }       
 
 	/* 

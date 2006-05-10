@@ -16,9 +16,9 @@ MODULES= \
 	list.so \
 	ports.so \
 	active-flows.so \
-	frames.so 
-#	trace-nf.so 
-#	interarrival.so
+	frames.so \
+	trace-nf.so \
+	dhcp.so
 
 ifneq ($(shell uname),CYGWIN_NT-5.1)
         MODULES += tuple.so \

@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2004 Intel Corporation
+/*-
+ * Copyright (c) 2004-2006, Intel Corporation 
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,67 +22,61 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $Id$
- *
- * Debugging and various utility functions.
+ * 
+ * $Id: ipc.h,v 1.4 2006/05/07 22:11:58 iannak1 Exp $
  */
 
+#ifndef _COMO_IPC_H_
+#define _COMO_IPC_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h> 			/* va_start */
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>     
-#include <dlfcn.h>
-#include <sys/types.h>			/* inet_ntop */
-#include <assert.h>
+typedef enum _ipc_types		ipctype_t; 
+typedef void (*ipc_handler_fn)(procname_t who, int fd, void *buf, size_t len);
 
-#include "como.h"
+enum _ipc_types {
+   IPC_ERROR, 
+   IPC_SYNC,
+   IPC_ACK, 
+   IPC_ECHO, 
+   IPC_MODULE_ADD, 
+   IPC_MODULE_DEL,
+   IPC_MODULE_START, 
+   IPC_FREEZE,
+   IPC_FLUSH,
+   IPC_RECORD, 
+   IPC_DONE,
+   IPC_EXIT,
 
+  /* storage IPCs */
+   S_ERROR, 
+   S_NODATA, 
+   S_ACK, 
+   S_OPEN, 
+   S_CLOSE, 
+   S_REGION, 
+   S_SEEK, 
+   S_INFORM,
+
+   IPC_MAX 	/* this must be last */
+}; 
+
+#define IPC_OK		0
+#define IPC_ERR		-1
+#define IPC_EOF		-2
 
 /* 
- * keeps reading until complete. 
+ * function prototypes 
  */
-int
-como_read(int fd, char *buf, size_t nbytes)
-{
-    int n = 0;
-    
-    while (n < (int) nbytes) {
-        int ret = read(fd, buf + n, nbytes - n);
-        if (ret == -1)
-            return -1;
-        if (ret == 0) /* EOF */
-            break;
-        
-        n += ret;
-    }
-    
-    return n; /* <= nbytes */
-}
+int  ipc_listen();
+int  ipc_connect(procname_t name);
+void ipc_finish();
+int  ipc_send(procname_t name, ipctype_t type, const void *data, size_t sz);
+int  ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz);
+int  ipc_send_blocking(procname_t name, ipctype_t type, const void *data,
+		       size_t sz);
+int  ipc_handle(int fd);
+void ipc_register(ipctype_t type, ipc_handler_fn fn);
+void ipc_clear();
+int  ipc_getfd(procname_t who);
+int  ipc_wait_reply_with_fd(int fd, ipctype_t *type, void *data, size_t *sz);
 
-/*
- * keeps writing until complete. If nbytes = 0, we assume it is
- * a string and do a strlen here.
- */
-int
-como_writen(int fd, const char *buf, size_t nbytes)
-{
-    size_t n = 0;
-
-    if (nbytes == 0)
-	nbytes = strlen(buf);
-    while (n < nbytes) {
-	int ret = write(fd, buf + n, nbytes - n);
-
-	if (ret == -1)
-	    return -1;
-
-        n += ret;
-    }
-   
-    return n; /* == nbytes */
-}
-
+#endif	/* _COMO_IPC_H_ */

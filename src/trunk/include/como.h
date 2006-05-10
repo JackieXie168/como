@@ -29,6 +29,7 @@
 #ifndef _COMO_COMO_H
 #define _COMO_COMO_H
 
+#include <stdio.h>
 #include <sys/time.h>   /* struct timeval */
 
 #include "comotypes.h"
@@ -66,10 +67,17 @@ typedef struct _node	node_t;
  */
 struct _como {
     procname_t whoami; 		/* process using this instance */
+    procname_t parent; 		/* parent process */
+    runmodes_t running;         /* mode of operation */ 
+
+    int ac;			/* command line arguments */
+    char **av;			/* command line arguments */
+
     char * workdir;		/* work directory for templates etc. */
     char * basedir;     	/* base directory for output files */
     char * libdir;		/* base directory for modules */
     int logflags;       	/* log flags (i.e., what to log) */
+    FILE * logfile;		/* log file */
 
     size_t mem_size;    	/* memory size for capture/export (MB) */
     int mem_type;		/* defines how to allocate memory */
@@ -77,24 +85,20 @@ struct _como {
 #define COMO_SHARED_MEM 	0x02
 #define COMO_PERSISTENT_MEM 	0x04
 
-
-    int virtual_nodes;		/* no. of virtual nodes */
-    node_t node;		/* node information */
+    node_t * node;		/* node information */
+    int node_count;		/* no. of nodes */
 
     stats_t * stats; 		/* statistic counters */
 
-    source_t *sources;		/* list of input data feeds */
+    source_t *sources;		/* list of input data feeds (sniffers) */
 
     module_t * modules; 	/* array of modules */ 
     int module_max;  		/* max no. of modules */
-    int module_count;   	/* current no. of modules */
-    module_t *curr_mdl;         /* module currently running */
+    int module_used; 	  	/* number of used entries */
+    int module_last;  		/* last used entry in modules array */
 
     size_t maxfilesize; 	/* max file size in one bytestream */
-
     int maxqueries;
-
-    int supervisor_fd;		/* util routines etc */
 
     char *debug;		/* debug mode */
 	/*
@@ -104,11 +108,19 @@ struct _como {
 	 * matching function.
 	 */
 
-    int il_mode;            	/* flag set if running in inline mode */
-    module_t * il_module;	/* module that needs to be run in inline mode */
-    char * il_qargs;		/* query args for the inline mode */
+    module_t * inline_mdl;	/* module that needs to be run in inline mode */
 };
 
+
+/*
+ * standard names for master processes.
+ * no parent and no id
+ */
+#define SUPERVISOR      0x00010000
+#define CAPTURE         0x00020000
+#define EXPORT          0x00030000
+#define STORAGE         0x00040000
+#define QUERY           0x00050000
 
 
 /* log flags. The high bits are only set for verbose logging */
@@ -122,11 +134,11 @@ struct _como {
 #define	LOGQUERY	0x0080
 #define	LOGSNIFFER	0x0100	/* sniffers debugging 			*/
 #define LOGTIMER	0x0200	/* print timing information 		*/
-#define LOGMODULE	0x0400	/* modules debugging 			*/
-#define	LOGDEBUG	0x8000
+#define LOGMODULE	0x0400	/* modules */
+#define LOGIPC		0x0800	/* IPC */
 #define	LOGALL		(LOGUI|LOGWARN|LOGMEM|LOGCONFIG|LOGCAPTURE| \
-				LOGEXPORT|LOGSTORAGE|LOGQUERY|LOGDEBUG| \
-				LOGSNIFFER|LOGTIMER|LOGMODULE)
+				LOGEXPORT|LOGSTORAGE|LOGQUERY|LOGSNIFFER| \
+				LOGTIMER|LOGMODULE|LOGIPC)
 
 #define	V_LOGUI		(LOGUI << 16) 
 #define	V_LOGWARN	(LOGWARN << 16)
@@ -139,12 +151,11 @@ struct _como {
 #define	V_LOGSNIFFER	(LOGSNIFFER << 16)
 #define	V_LOGTIMER	(LOGTIMER << 16)
 #define	V_LOGMODULE	(LOGMODULE << 16)
-#define	V_LOGDEBUG	(LOGDEBUG << 16)
+#define	V_LOGIPC	(LOGIPC << 16)
 
 /*
  * default values 
  */
-#define DEFAULT_CFGFILE 	"como.conf"	/* configuration file */
 #define DEFAULT_STREAMSIZE 	(1024*1024*1024)/* bytestream size */
 #define DEFAULT_FILESIZE 	(128*1024*1024)	/* single file size in stream */
 #define DEFAULT_BLOCKSIZE 	4096		/* block size */

@@ -35,19 +35,21 @@
 #include <sys/types.h>
 #include <err.h>
 #include <assert.h>
-
-#ifdef linux
-#include <mcheck.h>
-#else
-#define mcheck(x)
-#endif
+#include <signal.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "storage.h"
+#include "ipc.h"
+#include "query.h"
 
 extern struct _como map;	/* Global state structure */
 
-int storage_fd;                 /* socket to storage */
+int storage_fd;                 /* socket to storage 
+				 * 
+				 * XXX this is temporary until IPC are
+				 *     used to communicate with STORAGE too
+				 */
 
 
 /**
@@ -69,7 +71,7 @@ create_record(module_t * mdl, uint32_t hash)
     if (et->records >= ea->size) { 
 	size_t len; 
 
-	logmsg(LOGWARN, "need to reallocate ex_array for %s (%d -> %d)\n", 
+	logmsg(V_LOGEXPORT, "need to reallocate ex_array for %s (%d -> %d)\n", 
 	    mdl->name, ea->size, et->records * 2); 
 
 	len = sizeof(earray_t) + et->records * 2 * sizeof(rec_t *);
@@ -184,27 +186,78 @@ static int
 call_store(module_t * mdl, rec_t *rp)
 {
     char *dst;
-    int ret; 
+    int ret, done = 0;
+    
+    ssize_t bsize = mdl->callbacks.st_recordsize; 
 
     start_tsctimer(map.stats->ex_mapping_timer); 
+    
+    if (map.running == INLINE) {
+	/* running inline */
+	dst = alloca(bsize); /* NOTE: might be replaced with a heap allocated
+				area using a static variable to keep track of
+				it */
+    }
+    
+    do {
+	if (map.running == NORMAL) { 
+	    dst = csmap(mdl->file, mdl->offset, (ssize_t *) &bsize);
+	    if (dst == NULL)
+		panic("fail csmap for module %s", mdl->name);
+	    if (bsize < (ssize_t) mdl->callbacks.st_recordsize) {
+		logmsg(LOGWARN, "cannot write to disk for module %s\n",
+		       mdl->name);
+		logmsg(0, "   need %d bytes, got %d\n",
+		       mdl->callbacks.st_recordsize, bsize);
+		return -1;
+	    }
+	}
 
-    dst = csmap(mdl->file, mdl->offset, (ssize_t *) &mdl->bsize); 
-    if (dst == NULL)
-	panic("fail csmap for module %s", mdl->name);
-
-    /* call the store() callback */
-    ret = mdl->callbacks.store(mdl, rp, dst);
-    if (ret < 0) {
-	logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
-	return ret; 
-    } 
-
-    /*
-     * update the offset and commit the bytes written to 
-     * disk so far so that they are available to readers 
-     */
-    mdl->offset += ret;
-    cscommit(mdl->file, mdl->offset); 
+	/* call the store() callback */
+	ret = mdl->callbacks.store(mdl, rp, dst);
+	if (ret < 0) {
+	    logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
+	    return ret;
+	}
+	
+	if (ret <= bsize) {
+	    done = 1;
+	} else {
+	    ret -= ACT_STORE_BATCH;
+	}
+	
+	if (map.running == NORMAL) { 
+	    /*
+	     * update the offset and commit the bytes written to 
+	     * disk so far so that they are available to readers 
+	     */
+	    mdl->offset += ret;
+	    cscommit(mdl->file, mdl->offset);
+	} else {
+	    char * p;
+	    size_t left;
+	    
+	    /* now the dst pointer contains the entire output of 
+	     * store. note that store could save more than one record
+	     * in a single call. we pass this pointer to the load callback
+	     * to get that information. 
+	     */
+	    p = dst;
+	    left = ret;
+	    while (left > 0) {
+		size_t sz;
+		timestamp_t ts;
+		sz = mdl->callbacks.load(mdl, p, ret, &ts);
+		
+		/* print this record */
+		printrecord(mdl, p, NULL, -1);
+		
+		/* move to next */
+		p += sz;
+		left -= sz;
+	    }
+	}
+    } while (done == 0);
 
     end_tsctimer(map.stats->ex_mapping_timer); 
     return ret;
@@ -227,10 +280,8 @@ call_store(module_t * mdl, rec_t *rp)
  *
  */
 static void
-process_table(expiredmap_t * ex, memlist_t * mem)
+process_table(ctable_t * ct, module_t * mdl)
 {
-    ctable_t * ct = ex->ct;
-    module_t * mdl = ex->mdl;
     int (*record_fn)(module_t *, rec_t *);
     int record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
     
@@ -239,12 +290,6 @@ process_table(expiredmap_t * ex, memlist_t * mem)
      * bypass the rest of the export code (see above)
      */
     record_fn = mdl->callbacks.export? export_record : call_store;
-
-    /* 
-     * store the current flush_map in the module data structure so 
-     * that callbacks can free memory too. 
-     */
-    mdl->flush_map = mem; 
 
     /*
      * scan all buckets and save the information to the output file.
@@ -287,12 +332,6 @@ process_table(expiredmap_t * ex, memlist_t * mem)
                 /* update the memory counters */
                 MDL_STATS(mdl)->mem_usage_shmem_f += record_size;
 
-	        /* XXX we use mdl_mem_free here. in the future this 
-	         *     should only happen within the module themselves 
-		 *     and export should not be in charge of freeing memory
-		 *     for the modules.
-		 */
-		mdl_mem_free(mdl, rec);	/* done, free this record */
 		rec = p;		/* move to the next one */
 	    }
 
@@ -307,38 +346,6 @@ process_table(expiredmap_t * ex, memlist_t * mem)
      */
     if (mdl->callbacks.export) 
 	mdl->ex_hashtable->ts = ct->ivl; 
-}
-
-/**
- * -- ignore_capture_table
- *
- * Walk through a capture table and just free its contents
- * and update memory counters.
- */
-static void
-ignore_capture_table(expiredmap_t * ex, memlist_t * mem)
-{
-    ctable_t * ct = ex->ct;
-    module_t * mdl = ex->mdl;
-    int record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
-
-    mdl->flush_map = mem; 
-    for (; ct->first_full < ct->size; ct->first_full++) {
-        rec_t *rec = ct->bucket[ct->first_full];
-        while(rec != NULL) {
-            rec_t *end  = rec->next;
-
-            while (rec->prev) 
-	        rec = rec->prev;
-
-            while (rec != end) {
-                rec_t *p = rec->next;
-                mdl_mem_free(mdl, rec);
-                MDL_STATS(mdl)->mem_usage_shmem_f += record_size;
-                rec = p;
-            }
-        }
-    }
 }
 
 /** 
@@ -420,8 +427,6 @@ store_records(module_t * mdl, timestamp_t ts)
     if (mdl->callbacks.compare != NULL)  
 	qsort(ea->record, et->records, sizeof(rec_t*), mdl->callbacks.compare); 
 
-    mcheck(NULL);
-
     /* now go thru the sorted list of records and 
      * store whatever needs to be stored 
      */
@@ -433,24 +438,22 @@ store_records(module_t * mdl, timestamp_t ts)
 
 	what = mdl->callbacks.action(mdl, ea->record[i], ts, i);
 	/* only bits in the mask are valid */
-	logmsg(V_LOGEXPORT, "action %d returns 0x%x (%s%s%s)\n",
+	logmsg(V_LOGEXPORT, "action %d returns 0x%x (%s%s%s%s)\n",
 		i, what,
 		what & ACT_STORE ? "STORE ":"",
+		what & ACT_STORE_BATCH ? "STORE_BATCH ":"",
 		what & ACT_DISCARD ? "DISCARD ":"",
 		what & ACT_STOP ? "STOP ":""
 		);
 	assert( (what | ACT_MASK) == ACT_MASK );
-	mcheck(NULL);
 
-	if (what & ACT_STORE) {
+	if ((what & ACT_STORE) || (what & ACT_STORE_BATCH)) {
 	    /* store the thing. Do not destroy if store returns < 0
 	     * because it means a failure
 	     */
 	    if (call_store(mdl, ea->record[i]) < 0)
 		continue;
 	}
-
-	mcheck(NULL);
 
 	/* check if the module wants to discard this record */
 	if (what & ACT_DISCARD)
@@ -459,8 +462,6 @@ store_records(module_t * mdl, timestamp_t ts)
 	    break;
     }
 
-    mcheck(NULL);
-
     /* reorganize the export record array so that all 
      * used entries are at the beginning of the array with no holes
      */
@@ -468,85 +469,115 @@ store_records(module_t * mdl, timestamp_t ts)
 		et->records * sizeof(rec_t *));
     bzero(&ea->record[et->records], (ea->size - et->records) * sizeof(rec_t*));
     ea->first_full = 0;
-    mcheck(NULL);
 }
 
-/**
- * -- init_export_tables
- *
- * Allocate the hash table and record array.
+
+/* 
+ * -- ex_ipc_module_add
+ * 
+ * handle IPC_MODULE_ADD messages by unpacking the module, 
+ * activating it and initializing the data structures it 
+ * needs to run in EXPORT. 
+ * 
  */
 static void
-init_export_tables(module_t *mdl)
+ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz) 
 {
-    /* allocate hash table */
+    module_t * mdl;
     int len;
+
+    /* only the parent process should send this message */
+    assert(src == map.parent);
+
+    /* find an empty slot in the modules array */
+    mdl = new_module(&map, "tmp", -1); 
+
+    /* unpack the received module info */
+    if (unpack_module(pack, sz, mdl)) {
+        logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n");
+        return;
+    }
+
+    if (activate_module(mdl, map.libdir)) {
+        logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
+        return;
+    }
+
+    /*
+     * initialize hash table and record array
+     */
     len = sizeof(etable_t) + mdl->ex_hashsize * sizeof(void *);
     mdl->ex_hashtable = safe_calloc(1, len);
     mdl->ex_hashtable->size = mdl->ex_hashsize;
-
+        
     /* allocate record array */
     len = sizeof(earray_t) + mdl->ex_hashsize * sizeof(void *);
     mdl->ex_array = safe_calloc(1, len);
     mdl->ex_array->size = mdl->ex_hashsize;
 
-    mcheck(NULL);
-    map.stats->mdl_stats[mdl->index].mem_usage_export += 
+    map.stats->mdl_stats[mdl->index].mem_usage_export +=
         sizeof(etable_t) + sizeof(earray_t) +
         2 * mdl->ex_hashsize * sizeof(void *);
 
-}
-
-/**
- * -- init_module
- *
- * Do export-specific module initialization of a module. 
- */
-static void
-ex_init_module(module_t *mdl)
-{
-    char * nm; 
     /*
-     * initialize hash table and record array
+     * open output file unless we are running in inline mode 
      */
-    init_export_tables(mdl);
-    /*
-     * open output file
-     */
-    logmsg(V_LOGEXPORT, "module %s: opening file\n", mdl->name);
-    asprintf(&nm, "%s", mdl->output);
-    mdl->file = csopen(nm, CS_WRITER, mdl->streamsize, storage_fd);
-    if (mdl->file < 0) 
-        panic("cannot open file %s for %s", nm, mdl->name);
-    free(nm);
-    mdl->offset = csgetofs(mdl->file);
-    mdl->ptr = mem_copy_map(mdl->master_map, mdl->master_ptr, NULL);
-}
+    if (map.running == NORMAL) {
+	logmsg(V_LOGEXPORT, "module %s: opening file\n", mdl->name);
+	mdl->file = csopen(mdl->output, CS_WRITER, mdl->streamsize, storage_fd);
+	if (mdl->file < 0)
+	    panic("cannot open file %s for %s", mdl->output, mdl->name);
+	mdl->offset = csgetofs(mdl->file);
+    } else { 
+	char * x[] = {NULL}; 
+	char ** p = mdl->args? mdl->args : x; 
 
-/**
- * -- ex_disable_module
- *
- * Free all memory used by a module.
- */
+	/* setup the print format (make sure we 
+	 * don't send a NULL args pointer down)
+	 */
+	printrecord(mdl, NULL, p, -1);
+    } 
+}
+ 
+
+/* 
+ * -- ex_ipc_module_del
+ * 
+ * removes a module from the map. it also frees all data 
+ * structures related to that module and close the output 
+ * file. 
+ * 
+ */ 
 static void
-ex_disable_module(module_t *mdl)
+ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
+		  __unused size_t len)
 {
-    etable_t * et = mdl->ex_hashtable;
-    earray_t * ea = mdl->ex_array;
+    module_t * mdl;
+    etable_t * et; 
+    earray_t * ea;
     uint32_t i, rec_size;
     mdl_stats_t *stats;
+    int idx;
 
+    /* only the parent process should send this message */
+    assert(sender == map.parent);
+
+    idx = *(int *)buf;
+    mdl = &map.modules[idx];
+    et = mdl->ex_hashtable;
+    ea = mdl->ex_array;
     stats = &map.stats->mdl_stats[mdl->index];
     rec_size = sizeof(rec_t) + mdl->callbacks.ex_recordsize;
-
+ 
     /*
      * drop export hash table
      */
     stats->mem_usage_export -= sizeof(etable_t) + et->size * sizeof(void *);
     free(et);
     mdl->ex_hashtable = NULL;
+
     /*
-     * drop records 
+     * drop records
      */
     for (i = 0; i < ea->size; i++) {
         if (ea->record[i]) {
@@ -555,42 +586,131 @@ ex_disable_module(module_t *mdl)
             ea->record[i] = NULL;
         }
     }
+
     /*
      * drop export array
      */
     stats->mem_usage_export -= sizeof(earray_t) + ea->size * sizeof(void *);
     free(ea);
     mdl->ex_array = NULL;
-}
-
-/*
- * -- ex_remove_module
- *
- * Free all memory used by a module and close its
- * output file. Forget about that module.
- */
-static void
-ex_remove_module(module_t *mdl)
-{
-    if (mdl->status != MDL_DISABLED)
-        ex_disable_module(mdl);
 
     csclose(mdl->file, mdl->offset);
+    
+    remove_module(&map, mdl);
 }
 
+/* 
+ * -- ex_ipc_flush
+ * 
+ * process the expired tables that have been received from CAPTURE.
+ * 
+ */ 
+static void
+ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
+{
+    expiredmap_t *exp;
+    
+    assert(sender == sibling(CAPTURE));
+    assert(len == sizeof(expiredmap_t *));
+    
+    for (exp = *((expiredmap_t **) buf); exp; exp = exp->next) {
+	module_t * mdl; 
+
+	/*
+	 * use the correct module flush state & shared map
+	 */
+	mdl = exp->mdl; 
+	mdl->fstate = exp->fstate;
+	mdl->shared_map = exp->shared_map;
+	
+	/* if in inline mode, make sure this is the inline module */
+	assert(map.running == NORMAL || mdl == map.inline_mdl); 
+
+	/*
+	 * Process the table, if the module it belongs to is active.
+	 */
+	if (mdl->status != MDL_ACTIVE)
+	    continue;
+	
+	/* process capture table and update export table */
+	start_tsctimer(map.stats->ex_table_timer);
+	process_table(exp->ct, mdl);
+	end_tsctimer(map.stats->ex_table_timer);
+
+	/* process export table, storing/discarding records */
+	start_tsctimer(map.stats->ex_store_timer);
+	store_records(mdl, exp->ct->ts);
+	end_tsctimer(map.stats->ex_store_timer);
+    }
+
+    /*
+     * The tables have been processed. Return them to capture
+     * so it can merge and reuse the memory.
+     */
+    ipc_send_with_fd(fd, IPC_FLUSH, buf, len);
+}
+
+
 /*
- * callbacks of the export process
+ * -- ex_ipc_start 
+ *
+ * handle IPC_MODULE_START message sent by the parent process to 
+ * indicate when it is possible to start processing traces and 
+ * forward it to CAPTURE (sibling).
+ *
  */
-static proc_callbacks_t export_callbacks = {
-    NULL,                   /* ignore new filter functions */
-    ex_init_module,         /* initialize a module */
-    init_export_tables,     /* enable a module */
-    ex_disable_module,      /* disable a module */
-    ex_remove_module        /* remove a module */
-};
+static void
+ex_ipc_start(procname_t sender, __unused int fd, void * buf, size_t len)
+{
+    /* only the parent process should send this message */
+    assert(sender == map.parent);
+    map.stats = *((void **) buf);
+    ipc_send(sibling(CAPTURE), IPC_MODULE_START, buf, len); 
+}
 
 
-/**
+/*
+ * -- ex_ipc_done
+ *
+ * handle IPC_DONE messages sent by CAPTURE (sibling). 
+ * if we are processing this it means we are really done 
+ * store this information in the map.
+ *
+ */
+static void
+ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
+	__unused size_t len)
+{
+    /* only the parent process should send this message */
+    assert(sender == sibling(CAPTURE)); 
+
+    /* this should happen only in inline mode */ 
+    assert(map.running == INLINE); 
+
+    /* 
+     * we will not receive any more messages from CAPTURE. let's 
+     * try to store all records we have before reporting to be 
+     * done. 
+     */
+    store_records(map.inline_mdl, ~0); 
+    ipc_send(map.parent, IPC_DONE, NULL, 0); 
+}
+
+
+/*
+ * -- ex_ipc_exit 
+ *
+ */
+static void
+ex_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
+             __unused size_t len)
+{
+    assert(sender == map.parent);  
+    exit(EXIT_SUCCESS); 
+}
+
+
+/*
  * -- export_mainloop
  *
  * This is the EXPORT process main loop. It sits there
@@ -604,122 +724,86 @@ static proc_callbacks_t export_callbacks = {
  * the action() callback tells us to do (save, discard, etc.).
  */
 void
-export_mainloop(__unused int fd)
+export_mainloop(__unused int in_fd, int parent_fd)
 {
     int capture_fd; 
     int	max_fd;
     fd_set rx;
-    uint pkt_thresh;
 
-    mcheck(NULL);
+    /* initialize select()able file descriptors */
+    max_fd = -1; 
+    FD_ZERO(&rx);
 
-    storage_fd = create_socket("storage.sock", NULL);
-    capture_fd = create_socket("capture.sock", NULL);
+    /* ignore SIGHUP */
+    signal(SIGHUP, SIG_IGN); 
+
+    /* register handlers for IPC messages */ 
+    ipc_clear();
+    ipc_register(IPC_MODULE_ADD, ex_ipc_module_add);
+    ipc_register(IPC_MODULE_DEL, ex_ipc_module_del);
+    ipc_register(IPC_MODULE_START, ex_ipc_start);
+    ipc_register(IPC_FLUSH, (ipc_handler_fn) ex_ipc_flush);
+    ipc_register(IPC_DONE, ex_ipc_done);
+    ipc_register(IPC_EXIT, ex_ipc_exit);
+    
+    /* listen to the parent */
+    max_fd = add_fd(parent_fd, &rx, max_fd); 
+
+    storage_fd = ipc_connect(STORAGE); 
+    max_fd = add_fd(storage_fd, &rx, max_fd); 
+
+    capture_fd = ipc_connect(sibling(CAPTURE)); 
+    max_fd = add_fd(capture_fd, &rx, max_fd); 
 
     /*
-     * The first message from supervisor contains the modules information.
+     * now that all sockets are ready we can wait for
+     * the debugger if needed.
      */
-    logmsg(LOGDEBUG, "wait for 1st msg from SU\n");
-    recv_message(map.supervisor_fd, &export_callbacks);
-
+    if (map.debug) {
+        if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
+            logmsg(V_LOGWARN, "waiting 30s for the debugger to attach\n");
+            sleep(30);
+            logmsg(V_LOGWARN, "wakeup, ready to work\n");
+        }
+    }
+ 
     /* allocate the timers */
     init_timers();
-
-    mcheck(NULL);
-    /* find max fd for the select */
-    max_fd = map.supervisor_fd > capture_fd ? map.supervisor_fd : capture_fd;
-
-    FD_ZERO(&rx);
-    FD_SET(capture_fd, &rx);
-    FD_SET(map.supervisor_fd, &rx);
 
     /*
      * The real main loop. First process the flow_table's we 
      * receive from the CAPTURE process, then look at the export 
      * tables to see if any action is required.
      */
-    pkt_thresh = 100000;
     for (;;) {
 	fd_set r = rx;
-	int ret;
+	int n_ready;
+        int i;
+        int ipcr;
 
 	start_tsctimer(map.stats->ex_full_timer); 
 
-	mcheck(NULL);
-	ret = select(max_fd + 1, &r, NULL, NULL, NULL);
-	if (ret < 0 && errno != EINTR) 
+	n_ready = select(max_fd + 1, &r, NULL, NULL, NULL);
+	if (n_ready < 0 && errno != EINTR) 
 	    panic("error in the select (%s)\n", strerror(errno)); 
 
 	start_tsctimer(map.stats->ex_loop_timer); 
 
-	/*
-	 * Message from supervisor
-	 */
-	if (FD_ISSET(map.supervisor_fd, &r))
-            recv_message(map.supervisor_fd, &export_callbacks);
-
-        /*
-         * Message from capture
-         */
-
-	if (FD_ISSET(capture_fd, &r)) {
-	    msg_t x;
-
-	    logmsg(V_LOGEXPORT, "received a message from capture\n");
-
-	    /*
-	     * Received a list of expired flow headers from CAPTURE. 
-	     * Process all of them one by one. 
-	     */
-	    ret = read(capture_fd, &x, sizeof(x));
-	    if (ret != sizeof(x)) 
-		panic("error reading capture_fd");
-
-	    /*
-	     * process the tables that have been received
-	     */
-	    while (x.ex != NULL) {
-		expiredmap_t * next = x.ex->next;
-		size_t sz;
-
-		logmsg(LOGEXPORT, "expired table for %s\n", x.ex->mdl->name); 
-
-		/*
-		 * Process the table, if the module it belongs to is active.
-		 */
-		if (x.ex->mdl->status == MDL_ACTIVE) {
-		    mcheck(NULL);
-		    /* process capture table and update export table */
-		    start_tsctimer(map.stats->ex_table_timer); 
-		    process_table(x.ex, x.m);
-		    end_tsctimer(map.stats->ex_table_timer); 
-		    mcheck(NULL);
-
-		    /* process export table, storing/discarding records */
-		    start_tsctimer(map.stats->ex_store_timer); 
-		    store_records(x.ex->mdl, x.ex->ct->ts); 
-		    end_tsctimer(map.stats->ex_store_timer); 
-		    mcheck(NULL);
-		} else
-		    ignore_capture_table(x.ex, x.m);
-
-		/* update memory counter */
-		MDL_STATS(x.ex->mdl)->mem_usage_shmem_f += sz;
-		
-		/* free the capture table, the expired map and move to next */
-		sz = sizeof(ctable_t) + x.ex->ct->size * sizeof(void *);
-		mem_flush(x.ex->ct, x.m);  
-		mem_flush(x.ex->ptr, x.m);  
-		mem_flush(x.ex, x.m);
-		mcheck(NULL);
-		x.ex = next;
+    	for (i = 0; n_ready > 0 && i < max_fd; i++) {
+	    if (!FD_ISSET(i, &r))
+		continue;
+	    
+	    ipcr = ipc_handle(i);
+	    switch (ipcr) {
+	    case IPC_ERR:
+		/* an error. close the socket */
+		logmsg(LOGWARN, "error on IPC handle from %d\n", i);
+	    case IPC_EOF:
+		close(i);
+		max_fd = del_fd(i, &rx, max_fd);
 	    }
-
-	    /*
-	     * The tables have been processed and deleted. Return the memory
-	     * map to capture so it can merge and reuse the memory.
-	     */
-	    write(capture_fd, &x, sizeof(x));
+	    
+	    n_ready--;
 	}
 
 	end_tsctimer(map.stats->ex_loop_timer); 

@@ -53,6 +53,7 @@
 #define BUFSIZE		(1024*1024)
 struct _snifferinfo { 
     char buf[BUFSIZE]; 	     /* base of the capture buffer */
+    char * base; 	     /* pointer to first valid byte in buffer */
     int nbytes; 	     /* valid bytes in buffer */
 };
 
@@ -98,7 +99,7 @@ sniffer_start(source_t * src)
 #endif
 
     src->fd = sd; 
-    src->flags = SNIFF_TOUCHED|SNIFF_POLL; 	/* just to slow it down... */
+    src->flags = SNIFF_TOUCHED|SNIFF_SELECT; 	
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     return sd;
 }
@@ -125,6 +126,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 
     info = (struct _snifferinfo *) src->ptr; 
 
+    if (info->nbytes > 0) 
+	memmove(info->buf, info->base, info->nbytes); 
+
     /* read CoMo packets from stream */
     rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes);
     if (rd < 0)   
@@ -145,22 +149,16 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 	    break;
 
 	/* check if we have the payload as well */
-        if (left < ntohl(p->caplen) + sizeof(pkt_t)) 
+        if (left < p->caplen + sizeof(pkt_t)) 
             break;
 
 	/* ok, copy the packet header */
-	COMO(ts) = NTOHLL(p->ts); 
-	COMO(len) = ntohl(p->len); 
-	COMO(caplen) = ntohl(p->caplen);
-        COMO(type) = ntohs(p->type); 
-        COMO(dropped) = ntohs(p->dropped); 
-        COMO(type) = ntohs(p->type); 
-        COMO(l2type) = ntohs(p->l2type); 
-  	COMO(l3type) = ntohs(p->l3type); 
-  	COMO(l4type) = ntohs(p->l4type); 
-        COMO(l2ofs) = ntohs(p->l2ofs); 
-        COMO(l3ofs) = ntohs(p->l3ofs); 
-        COMO(l4ofs) = ntohs(p->l4ofs); 
+	/* XXX we assume to receive packet in the same endianness 
+	 *     we are running in. we need to make the replay() callback
+	 *     operate in network-byte order or start having the 
+ 	 *     COMO header always in network-byte order. 
+	 */     
+	bcopy(p, pkt, sizeof(pkt_t)); 
 
 	/* the payload is just after the packet. update 
 	 * the payload pointer. 
@@ -172,7 +170,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
     }
 
     info->nbytes -= (base - info->buf);
-    bcopy(base, info->buf, info->nbytes);
+    info->base = base; 
     return npkts;
 }
 

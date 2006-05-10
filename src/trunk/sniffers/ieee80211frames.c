@@ -301,6 +301,9 @@ static void
 parse80211_assoc_req(struct _p80211info *pi)
 {
     struct _ieee80211_assoc_req *stype;
+    
+    if (pi->rl < ASSOC_REQ_FIXED_LEN)
+	return;
 
     stype = (struct _ieee80211_assoc_req *) pi->pkt_data;
 
@@ -332,6 +335,9 @@ parse80211_assoc_res(struct _p80211info *pi)
 {
     struct _ieee80211_assoc_res *stype;
 
+    if (pi->rl < ASSOC_RES_FIXED_LEN)
+	return;
+
     stype = (struct _ieee80211_assoc_res *) pi->pkt_data;
 
     N16(pi->wlan_mgmt->cap) = stype->cap;
@@ -355,6 +361,9 @@ static void
 parse80211_reassoc_req(struct _p80211info *pi)
 {
     struct _ieee80211_reassoc_req *stype;
+
+    if (pi->rl < REASSOC_REQ_FIXED_LEN)
+	return;
 
     stype = (struct _ieee80211_reassoc_req *) pi->pkt_data;
 
@@ -380,6 +389,9 @@ parse80211_reassoc_res(struct _p80211info *pi)
 {
     struct _ieee80211_reassoc_res *stype;
 
+    if (pi->rl < REASSOC_RES_FIXED_LEN)
+	return;
+
     stype = (struct _ieee80211_reassoc_res *) pi->pkt_data;
 
     N16(pi->wlan_mgmt->cap) = stype->cap;
@@ -403,6 +415,9 @@ static void
 parse80211_auth(struct _p80211info *pi)
 {
     struct _ieee80211_auth *stype;
+
+    if (pi->rl < AUTH_FIXED_LEN)
+	return;
 
     stype = (struct _ieee80211_auth *) pi->pkt_data;
     /*
@@ -429,6 +444,9 @@ parse80211_deauth(struct _p80211info *pi)
 {
     struct _ieee80211_deauth *stype;
 
+    if (pi->rl < DEAUTH_FIXED_LEN)
+	return;
+
     stype = (struct _ieee80211_deauth *) pi->pkt_data;
     /*
      * fill management body structure with fixed fields
@@ -450,6 +468,9 @@ static void
 parse80211_probe_res(struct _p80211info *pi)
 {
     struct _ieee80211_probe_res *stype;
+
+    if (pi->rl < PROBE_RES_FIXED_LEN)
+	return;
 
     stype = (struct _ieee80211_probe_res *) pi->pkt_data;
 
@@ -489,6 +510,9 @@ parse80211_disassoc(struct _p80211info *pi)
 {
     struct _ieee80211_disassoc *stype;
 
+    if (pi->rl < DISASSOC_FIXED_LEN)
+	return;
+
     stype = (struct _ieee80211_disassoc *) pi->pkt_data;
 
     N16(pi->wlan_mgmt->rc) = (stype->rc);
@@ -508,6 +532,9 @@ static void
 parse80211_beacon(struct _p80211info *pi)
 {
     struct _ieee80211_beacon *stype;
+
+    if (pi->rl < BEACON_FIXED_LEN)
+	return;
 
     stype = (struct _ieee80211_beacon *) pi->pkt_data;
 
@@ -537,7 +564,10 @@ parse80211_mgmt_frame(const char *buf, int buf_len, char *dest)
     struct _p80211info pi;
     struct _ieee80211_mgmt_hdr *h;
 
-    /*  FIXME: parser is not giving errors! */
+    if (buf_len < (int) sizeof(struct _ieee80211_mgmt_hdr)) {
+    	/* The snaplen is too small: give up! */
+    	return 0;
+    }
 
     h = (struct _ieee80211_mgmt_hdr *) buf;
 

@@ -98,8 +98,8 @@ typedef struct {
 } app_t;
 
 
-#define STATEDESC   struct _application_state
-STATEDESC {
+#define CONFIGDESC   struct _application_config
+CONFIGDESC {
     char template[1024]; 
     int meas_ivl; 		/* measurement granularity (secs) */
     uint8_t port2app[65536];	/* mapping port number to app */
@@ -108,95 +108,95 @@ STATEDESC {
 static timestamp_t 
 init(void * self, char *args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     pkt_t * pkt; 
     int i;
     metadesc_t *inmd, *outmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC));
-    memset(state->port2app, UNKNOWN, sizeof(state->port2app));
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC));
+    memset(config->port2app, UNKNOWN, sizeof(config->port2app));
 
     /* initialize the port-to-application mapping array */
-    state->port2app[80]    = WEB;
-    state->port2app[443]   = WEB;
-    state->port2app[8080]  = WEB;
-    state->port2app[3128]  = WEB;             // SQUID
-    state->port2app[3130]  = WEB;             // SQUID
-    state->port2app[9090]  = WEB;             // AUTOPROXY 
+    config->port2app[80]    = WEB;
+    config->port2app[443]   = WEB;
+    config->port2app[8080]  = WEB;
+    config->port2app[3128]  = WEB;             // SQUID
+    config->port2app[3130]  = WEB;             // SQUID
+    config->port2app[9090]  = WEB;             // AUTOPROXY 
 
-    state->port2app[6688]  = SHARING;
-    state->port2app[6697]  = SHARING;
-    state->port2app[6699]  = SHARING;
-    state->port2app[4329]  = SHARING;
-    state->port2app[4444]  = SHARING;
-    state->port2app[5555]  = SHARING;
-    state->port2app[6666]  = SHARING;
-    state->port2app[7777]  = SHARING;
-    state->port2app[6346]  = SHARING;
-    state->port2app[1214]  = SHARING;
+    config->port2app[6688]  = SHARING;
+    config->port2app[6697]  = SHARING;
+    config->port2app[6699]  = SHARING;
+    config->port2app[4329]  = SHARING;
+    config->port2app[4444]  = SHARING;
+    config->port2app[5555]  = SHARING;
+    config->port2app[6666]  = SHARING;
+    config->port2app[7777]  = SHARING;
+    config->port2app[6346]  = SHARING;
+    config->port2app[1214]  = SHARING;
     for (i = 4000; i <= 4999; i++) {
-        state->port2app[i] = SHARING;
+        config->port2app[i] = SHARING;
     }
 
-    state->port2app[22]    = NETWORK;         // SSH
-    state->port2app[23]    = NETWORK;         // TELNET
-    state->port2app[992]   = NETWORK;         // TELNET
+    config->port2app[22]    = NETWORK;         // SSH
+    config->port2app[23]    = NETWORK;         // TELNET
+    config->port2app[992]   = NETWORK;         // TELNET
 
-    state->port2app[25]    = EMAIL;             //SMTP
-    state->port2app[465]   = EMAIL;             //SMTPS
-    state->port2app[109]   = EMAIL;             //POP
-    state->port2app[110]   = EMAIL;             //POP
-    state->port2app[995]   = EMAIL;             //POP
-    state->port2app[143]   = EMAIL;             //IMAP
-    state->port2app[220]   = EMAIL;             //IMAP
-    state->port2app[993]   = EMAIL;             //IMAP
-    state->port2app[119]   = EMAIL;             //NNTP
-    state->port2app[563]   = EMAIL;             //NNTP
+    config->port2app[25]    = EMAIL;             //SMTP
+    config->port2app[465]   = EMAIL;             //SMTPS
+    config->port2app[109]   = EMAIL;             //POP
+    config->port2app[110]   = EMAIL;             //POP
+    config->port2app[995]   = EMAIL;             //POP
+    config->port2app[143]   = EMAIL;             //IMAP
+    config->port2app[220]   = EMAIL;             //IMAP
+    config->port2app[993]   = EMAIL;             //IMAP
+    config->port2app[119]   = EMAIL;             //NNTP
+    config->port2app[563]   = EMAIL;             //NNTP
 
-    state->port2app[20]    = NETWORK;	// FTP
-    state->port2app[21]    = NETWORK;	// FTP
-    state->port2app[989]   = NETWORK;	// FTP
-    state->port2app[990]   = NETWORK;	// FTP
-    state->port2app[53]    = NETWORK;      //DNS
-    state->port2app[161]   = NETWORK;          //SNMP
-    state->port2app[162]   = NETWORK;          //SNMP
-    state->port2app[123]   = NETWORK;          //NTP
-    state->port2app[873]   = NETWORK;    	//RSYNC
-    state->port2app[1110]  = NETWORK;     //NFS
-    state->port2app[2049]  = NETWORK;     //NFS
-    state->port2app[135]   = NETWORK;        //NETBIOS
-    state->port2app[137]   = NETWORK;        //NETBIOS
-    state->port2app[138]   = NETWORK;        //NETBIOS
-    state->port2app[139]   = NETWORK;        //NETBIOS
-    state->port2app[445]   = NETWORK;        //NETBIOS
-    state->port2app[568]   = NETWORK;        //NETBIOS
-    state->port2app[569]   = NETWORK;        //NETBIOS
-    state->port2app[1512]  = NETWORK;        //NETBIOS
-    state->port2app[311]   = NETWORK;        //APPLETALK
-    state->port2app[387]   = NETWORK;        //APPLETALK
-    state->port2app[548]   = NETWORK;        //APPLETALK
+    config->port2app[20]    = NETWORK;	// FTP
+    config->port2app[21]    = NETWORK;	// FTP
+    config->port2app[989]   = NETWORK;	// FTP
+    config->port2app[990]   = NETWORK;	// FTP
+    config->port2app[53]    = NETWORK;      //DNS
+    config->port2app[161]   = NETWORK;          //SNMP
+    config->port2app[162]   = NETWORK;          //SNMP
+    config->port2app[123]   = NETWORK;          //NTP
+    config->port2app[873]   = NETWORK;    	//RSYNC
+    config->port2app[1110]  = NETWORK;     //NFS
+    config->port2app[2049]  = NETWORK;     //NFS
+    config->port2app[135]   = NETWORK;        //NETBIOS
+    config->port2app[137]   = NETWORK;        //NETBIOS
+    config->port2app[138]   = NETWORK;        //NETBIOS
+    config->port2app[139]   = NETWORK;        //NETBIOS
+    config->port2app[445]   = NETWORK;        //NETBIOS
+    config->port2app[568]   = NETWORK;        //NETBIOS
+    config->port2app[569]   = NETWORK;        //NETBIOS
+    config->port2app[1512]  = NETWORK;        //NETBIOS
+    config->port2app[311]   = NETWORK;        //APPLETALK
+    config->port2app[387]   = NETWORK;        //APPLETALK
+    config->port2app[548]   = NETWORK;        //APPLETALK
 
-    state->port2app[4662]  = SHARING;              //E_DONKEY
-    state->port2app[7070]  = SHARING;              //E_DONKEY
-    state->port2app[1214]  = SHARING;              //FASTTRACK
-    state->port2app[6346]  = SHARING;              //GNUTELLA
-    state->port2app[412]   = SHARING;              //DIRECT_CONNECT
-    state->port2app[5000]  = SHARING;              //IMESH_CONTROL
-    state->port2app[4329]  = SHARING;              //IMESH_DATA
-    state->port2app[6574]  = SHARING;              //ROMNET
-    state->port2app[8311]  = SHARING;              //SCOUR_EX
-    state->port2app[5500]  = SHARING;              //HOTLINE
-    state->port2app[5501]  = SHARING;              //HOTLINE
+    config->port2app[4662]  = SHARING;              //E_DONKEY
+    config->port2app[7070]  = SHARING;              //E_DONKEY
+    config->port2app[1214]  = SHARING;              //FASTTRACK
+    config->port2app[6346]  = SHARING;              //GNUTELLA
+    config->port2app[412]   = SHARING;              //DIRECT_CONNECT
+    config->port2app[5000]  = SHARING;              //IMESH_CONTROL
+    config->port2app[4329]  = SHARING;              //IMESH_DATA
+    config->port2app[6574]  = SHARING;              //ROMNET
+    config->port2app[8311]  = SHARING;              //SCOUR_EX
+    config->port2app[5500]  = SHARING;              //HOTLINE
+    config->port2app[5501]  = SHARING;              //HOTLINE
     
     
     /* 
      * process input arguments 
      */
-    state->meas_ivl = 1;
+    config->meas_ivl = 1;
     for (i = 0; args && args[i]; i++) { 
 	if (strstr(args[i], "interval")) {
 	    char * len = index(args[i], '=') + 1;
-	    state->meas_ivl = atoi(len); 
+	    config->meas_ivl = atoi(len); 
 	} 
     }
 	 
@@ -208,7 +208,7 @@ init(void * self, char *args[])
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:~tcp");
     N16(TCP(src_port)) = 0xffff;
@@ -216,15 +216,16 @@ init(void * self, char *args[])
     
     /* setup outdesc */
     outmd = metadesc_define_out(self, 0);
-    outmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    outmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     outmd->flags = META_PKT_LENS_ARE_AVERAGED;
     
     pkt = metadesc_tpl_add(outmd, "como:none:~ip:none");
-    IP(vhl) = 0xff;
+    IP(version) = 0xf;
+    IP(ihl) = 0xf;
     IP(proto) = 0xff;
     
     /* create packet template used in replay function */
-    pkt = (pkt_t *) state->template; 
+    pkt = (pkt_t *) config->template; 
     COMO(caplen) = sizeof(struct _como_iphdr);
     COMO(len) = COMO(caplen);
     COMO(type) = COMOTYPE_COMO;
@@ -234,8 +235,9 @@ init(void * self, char *args[])
     COMO(l3ofs) = 0;
     COMO(l4ofs) = sizeof(struct _como_iphdr);
     COMO(l7ofs) = COMO(l4ofs);
-    COMO(payload) = state->template + sizeof(pkt_t);
-    IP(vhl) = 0x45;
+    COMO(payload) = config->template + sizeof(pkt_t);
+    IP(version) = 0x4;
+    IP(ihl) = 0x5;
     IP(proto) = IPPROTO_TCP;
     
     
@@ -282,28 +284,15 @@ init(void * self, char *args[])
     pktoption_get_with_name(pkt, "option1", &myopt, &myoptlen);
 #endif
 
-    STATE(self) = state; 
-    return TIME2TS(state->meas_ivl, 0);
+    CONFIG(self) = config; 
+    return TIME2TS(config->meas_ivl, 0);
 }
 
-
-static int
-check(__unused void * self, pkt_t * pkt)
-{
-    /*
-     * if the stream contains per-flow information,
-     * drop all packets after the first.
-     */
-    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
-        return 0;
-
-    return isTCP;
-}
 
 static int
 update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC *x = F(fh);
     int app; 
 
@@ -313,10 +302,10 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
         bzero(x->pkts, sizeof(x->pkts)); 
     }
 
-    app = state->port2app[H16(TCP(src_port))] &
-	  state->port2app[H16(TCP(dst_port))];
+    app = config->port2app[H16(TCP(src_port))] &
+	  config->port2app[H16(TCP(dst_port))];
     if (COMO(type) == COMOTYPE_NF) {
-	x->bytes[app] += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
+	x->bytes[app] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
 	x->pkts[app] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
     } else if (COMO(type) == COMOTYPE_SFLOW) {
 	x->bytes[app] += (uint64_t) COMO(len) * 
@@ -334,15 +323,15 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 static ssize_t
 store(void * self, void *fh, char *buf)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC *x = F(fh);
     int i;
     
     PUTH32(buf, x->ts); 
     for (i = 0; i < APPLICATIONS; i++) 
-	PUTH64(buf, x->bytes[APPCODE(i)] / state->meas_ivl);
+	PUTH64(buf, x->bytes[APPCODE(i)] / config->meas_ivl);
     for (i = 0; i < APPLICATIONS; i++) 
-	PUTH32(buf, x->pkts[APPCODE(i)] / state->meas_ivl);
+	PUTH32(buf, x->pkts[APPCODE(i)] / config->meas_ivl);
     return sizeof(app_t);
 }
 
@@ -404,7 +393,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static int no_records = 0;
     static int isrelative = 0; 
     static app_t values;
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     app_t * x; 
     int i; 
 
@@ -437,7 +426,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce
                  * communication messages.
                  */
-                granularity = MAX(atoi(val) / state->meas_ivl, 1);   
+                granularity = MAX(atoi(val) / config->meas_ivl, 1);   
             } 
         } 
 
@@ -543,12 +532,12 @@ static int
 replay(void * self, char *buf, char *out, size_t * len, int *count)
 {
     static int npkts = 0; 
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     pkt_t * pkt; 
     size_t out_len; 
     size_t plen; 
     
-    pkt = (pkt_t *) state->template; 
+    pkt = (pkt_t *) config->template; 
     plen = COMO(caplen) + sizeof(pkt_t);
 
     if (*len < plen) 
@@ -579,7 +568,7 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
     
     for (out_len = 0; out_len < *len && npkts > 0; npkts--) { 
 	COMO(payload) = out + out_len + sizeof(pkt_t);
-	bcopy(state->template, out + out_len, sizeof(pkt_t) + COMO(caplen));
+	bcopy(config->template, out + out_len, sizeof(pkt_t) + COMO(caplen));
 	out_len += sizeof(pkt_t) + COMO(caplen);
     } 
     
@@ -594,7 +583,7 @@ callbacks_t callbacks = {
     ex_recordsize: 0, 
     st_recordsize: sizeof(app_t),
     init: init,
-    check: check,
+    check: NULL,
     hash: NULL,
     match: NULL,
     update: update,

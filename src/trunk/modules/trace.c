@@ -118,32 +118,31 @@ static const char *sc_text[] = {
 
 FLOWDESC {
     int len; 
-    char buf[2048]; 
+    char buf[2048]; /* FIXME: snaplen shouldn't be greater than this! */
 };
 
 
-#define STATEDESC   struct _trace_state
-STATEDESC {
+#define CONFIGDESC   struct _trace_config
+CONFIGDESC {
     unsigned snaplen; 		/* bytes to capture in each packet */ 
-    char str[65536]; 
     int fmt; 
 };
 
 static timestamp_t 
 init(void * self, char * args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     int i; 
     pkt_t *pkt;
     metadesc_t *inmd, *outmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC));
-    state->snaplen = 65535;
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC));
+    config->snaplen = 65535;
 
     for (i = 0; args && args[i]; i++) {
 	if (strstr(args[i], "snaplen=")) { 
 	    char * len = index(args[i], '=') + 1; 
-	    state->snaplen = atoi(len); 	    /* set the snaplen */
+	    config->snaplen = atoi(len); 	    /* set the snaplen */
 	} 
     }
     
@@ -157,20 +156,20 @@ init(void * self, char * args[])
     outmd = metadesc_define_out(self, 0);
     
     pkt = metadesc_tpl_add(outmd, "any:any:any:any");
-    COMO(caplen) = state->snaplen;
+    COMO(caplen) = config->snaplen;
 
-    STATE(self) = state; 
+    CONFIG(self) = config; 
     return TIME2TS(1,0); 
 }
 
 static int
 update(void * self, pkt_t *pkt, void *fh, __unused int isnew)
 {
-    STATEDESC * state = STATE(self); 
+    CONFIGDESC * config = CONFIG(self); 
     FLOWDESC *x = F(fh);
     int len; 
 
-    len = (COMO(caplen) > state->snaplen) ? state->snaplen : COMO(caplen);
+    len = (COMO(caplen) > config->snaplen) ? config->snaplen : COMO(caplen);
     memcpy(x->buf, pkt, sizeof(pkt_t)); 
     ((pkt_t *) x->buf)->payload = NULL;
     ((pkt_t *) x->buf)->caplen = len;
@@ -243,7 +242,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
  * utility function used to pretty print tcp's control bits status
  */
 static char*
-print_tcp_flags(uint8_t flags) 
+print_tcp_flags(pkt_t *pkt) 
 {
     static char s[7];
     size_t i;
@@ -251,28 +250,28 @@ print_tcp_flags(uint8_t flags)
     i = 0; 
     s[i] = '.'; 
 
-    if (flags & 0x01) 
+    if (TCP(fin)) 
 	s[i++] = 'F';
 
-    if (flags & 0x02) 
+    if (TCP(syn)) 
 	s[i++] = 'S';
 	
-    if (flags & 0x04) 
+    if (TCP(rst)) 
 	s[i++] = 'R';
   	
-    if (flags & 0x08) 
+    if (TCP(psh)) 
 	s[i++] = 'P';
 
-    if (flags & 0x10) 
+    if (TCP(ack)) 
 	s[i++] = 'A';
   	
-    if (flags & 0x20) 
+    if (TCP(urg)) 
 	s[i++] = 'U';
   	
-    if (flags & 0x40) 
+    if (TCP(ece)) 
 	s[i++] = 'E';
   	
-    if (flags & 0x80) 
+    if (TCP(cwr)) 
 	s[i++] = 'C';
   	
     s[i] = '\0';
@@ -306,8 +305,8 @@ struct pcap_packet {
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
 {
-    STATEDESC * state = STATE(self); 
-    char payload[65536];
+    CONFIGDESC * config = CONFIG(self); 
+    static char str[65536];
     struct pcap_file_header * fhdr; 
     struct pcap_packet * x; 
     pkt_t p, pktbuf, *pkt; 
@@ -321,7 +320,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	/* first call, process the arguments */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=pcap")) {
-		fhdr = (struct pcap_file_header *) state->str; 
+		fhdr = (struct pcap_file_header *) str; 
 		fhdr->magic = TCPDUMP_MAGIC;
 		fhdr->version_major = PCAP_VERSION_MAJOR;
 		fhdr->version_minor = PCAP_VERSION_MINOR;
@@ -331,19 +330,19 @@ print(void * self, char *buf, size_t *len, char * const args[])
 		fhdr->linktype = 1;
    
 		*len = sizeof(struct pcap_file_header);
-                state->fmt = PCAPFMT;
-		return state->str; 
-            }
-       }
+                config->fmt = PCAPFMT;
+		return str; 
+	    }
+	}
         *len = 0;
-	state->fmt = PRETTYFMT;
-	return state->str;
+	config->fmt = PRETTYFMT;
+	return str;
     } 
 
     if (buf == NULL && args == NULL) { 
 	/* last call, nothing to do */
         *len = 0; 
-        return state->str; 
+        return str; 
     } 
 
     /* copy the packet CoMo header, converting 
@@ -361,21 +360,20 @@ print(void * self, char *buf, size_t *len, char * const args[])
     p.l2ofs = ntohs(COMO(l2ofs)); 
     p.l3ofs = ntohs(COMO(l3ofs)); 
     p.l4ofs = ntohs(COMO(l4ofs)); 
-    bcopy(buf + sizeof(pkt_t), payload, p.caplen);
-    p.payload = payload;
+    p.payload = buf + sizeof(pkt_t);
 
     /* now we are ready to process this packet */
     pkt = (pkt_t *) &p; 
 
-    if (state->fmt == PCAPFMT) { 
-        x = (struct pcap_packet *) state->str; 
+    if (config->fmt == PCAPFMT) { 
+        x = (struct pcap_packet *) str; 
 	x->ts.tv_sec = TS2SEC(COMO(ts)); 
 	x->ts.tv_usec = TS2USEC(COMO(ts)); 
 	x->len = COMO(len); 
 	x->caplen = COMO(caplen); 
 	memcpy(x->payload, pkt->payload, COMO(caplen)); 
         *len = COMO(caplen) + sizeof(struct pcap_packet); 
-	return state->str; 
+	return str; 
     } 
 	
     /* 
@@ -386,7 +384,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     hh = (TS2SEC(COMO(ts)) % 86400) /3600; 
     mm = (TS2SEC(COMO(ts)) % 3600) / 60; 
     ss = TS2SEC(COMO(ts)) % 60; 
-    *len = sprintf(state->str, "%02d:%02d:%02d.%06u ",
+    *len = sprintf(str, "%02d:%02d:%02d.%06u ",
 		   hh, mm, ss, (uint) TS2USEC(COMO(ts))); 
 
     /* 
@@ -398,35 +396,35 @@ print(void * self, char *buf, size_t *len, char * const args[])
          * print IP header information 
          */
 	*len += 
-	    sprintf(state->str + *len, "IP | %s - ", getprotoname(IP(proto))); 
+	    sprintf(str + *len, "IP | %s - ", getprotoname(IP(proto))); 
         *len += 
-	    sprintf(state->str + *len, "tos 0x%x ttl %d id %d length: %d - ", 
+	    sprintf(str + *len, "tos 0x%x ttl %d id %d length: %d - ", 
 		    IP(tos), IP(ttl), H16(IP(id)), H16(IP(len)));   
 
 	/* 
          * print IP addresses and port numbers (if any) 
          */
         addr = N32(IP(src_ip)); 
-	*len += sprintf(state->str + *len, inet_ntoa(*(struct in_addr*) &addr));
+	*len += sprintf(str + *len, inet_ntoa(*(struct in_addr*) &addr));
 	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP)  
-	    *len += sprintf(state->str + *len, ":%d", H16(UDP(src_port))); 
+	    *len += sprintf(str + *len, ":%d", H16(UDP(src_port))); 
 
-	*len += sprintf(state->str + *len, " > "); 
+	*len += sprintf(str + *len, " > "); 
 
         addr = N32(IP(dst_ip)); 
-	*len += sprintf(state->str + *len,inet_ntoa(*(struct in_addr *) &addr));
+	*len += sprintf(str + *len,inet_ntoa(*(struct in_addr *) &addr));
 	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP)  
-	    *len += sprintf(state->str + *len, ":%d", H16(UDP(dst_port))); 
+	    *len += sprintf(str + *len, ":%d", H16(UDP(dst_port))); 
 
         /* 
 	 * print TCP specific information 
          */
 	if (IP(proto) == IPPROTO_TCP) { 
-	    *len += sprintf(state->str + *len, 
+	    *len += sprintf(str + *len, 
 			" %s seq %u ack %u win %u", 
-			print_tcp_flags(TCP(flags)), 
+			print_tcp_flags(pkt), 
 			(uint) H32(TCP(seq)), 
-			(uint) H32(TCP(ack)), 
+			(uint) H32(TCP(ack_seq)), 
 		 	(uint16_t) H16(TCP(win))); 
 	}
     } else if (COMO(l2type) == LINKTYPE_80211) {
@@ -434,18 +432,18 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
 	case IEEE80211TYPE_MGMT:
             snprintf(ssid, MGMT_BODY(ssid_len) + 1, MGMT_BODY(ssid));
-	    *len += sprintf(state->str + *len, "%s ",
+	    *len += sprintf(str + *len, "%s ",
 			    mgmt_subtypes[IEEE80211_BASE(fc_subtype)]);
 	    switch (IEEE80211_BASE(fc_subtype)) {
 	    case MGMT_SUBTYPE_BEACON:
 	    case MGMT_SUBTYPE_PROBE_RES:
-                *len += sprintf(state->str + *len, "%s %s", ssid,"[");
+                *len += sprintf(str + *len, "%s %s", ssid,"[");
                 for (i = 0; i < MGMT_BODY(rates_len); i++) {
-                    *len += sprintf(state->str + *len, "%2.1f%s ",
+                    *len += sprintf(str + *len, "%2.1f%s ",
                         (0.5 * (MGMT_BODY(rates[i]) & 0x7f)), 
                         (MGMT_BODY(rates[i]) & 0x80 ? "*" : "" ));
                 }
-		*len += sprintf(state->str + *len, "Mbit] ch: %d %s %s",
+		*len += sprintf(str + *len, "Mbit] ch: %d %s %s",
 				MGMT_BODY(ch),
 				CAPINFO_ESS(H16(MGMT_BODY(cap))) ? "ESS" :
 				"IBSS",
@@ -455,23 +453,23 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	    case MGMT_SUBTYPE_DISASSOC:
 	    case MGMT_SUBTYPE_DEAUTH:
 		/* CHECKME: was using ntohs around rc */
-		*len += sprintf(state->str + *len, "%s", H16(MGMT_BODY(rc)) <
+		*len += sprintf(str + *len, "%s", H16(MGMT_BODY(rc)) <
 				RC_RESERVED_VALUES ? rc_text[H16(MGMT_BODY(rc))]
 				: "RESERVED");
 		break;
 	    case MGMT_SUBTYPE_ASSOC_REQ:
 	    case MGMT_SUBTYPE_PROBE_REQ:
-                *len += sprintf(state->str + *len, "%s [", ssid);
+                *len += sprintf(str + *len, "%s [", ssid);
                 for (i = 0; i < MGMT_BODY(rates_len); i++) {
-                    *len += sprintf(state->str + *len, "%2.1f%s ",
+                    *len += sprintf(str + *len, "%2.1f%s ",
                         (0.5 * (MGMT_BODY(rates[i]) & 0x7f)),
                         (MGMT_BODY(rates[i]) & 0x80 ? "*" : "" ));
                 }  
-                *len += sprintf(state->str + *len, "Mbit]");
+                *len += sprintf(str + *len, "Mbit]");
 		break;
 	    case MGMT_SUBTYPE_ASSOC_RES:
 	    case MGMT_SUBTYPE_REASSOC_RES:
-		*len += sprintf(state->str + *len, "AID(%x) %s %s",
+		*len += sprintf(str + *len, "AID(%x) %s %s",
 				H16(MGMT_BODY(aid)),
 				CAPINFO_PRIVACY(H16(MGMT_BODY(cap))) ? "PRIVACY"
 				: "",
@@ -480,9 +478,9 @@ print(void * self, char *buf, size_t *len, char * const args[])
 				: "RESERVED");
 		break;
 	    case MGMT_SUBTYPE_REASSOC_REQ:
-		*len += sprintf(state->str + *len, "%s %s", ssid, "AP:");
+		*len += sprintf(str + *len, "%s %s", ssid, "AP:");
 		for (i = 0; i < MAC_ADDR_SIZE; i++)
-		    *len += sprintf(state->str + *len, "%02x%s", 
+		    *len += sprintf(str + *len, "%02x%s", 
 				MGMT_BODY(ap_addr[i]), 
 				i < (MAC_ADDR_SIZE-1) ? ":": ""); 
 		break;
@@ -495,41 +493,41 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	case IEEE80211TYPE_CTRL:
 	    switch (IEEE80211_BASE(fc_subtype)) {
 	    case CTRL_SUBTYPE_PS_POLL:
-		*len += sprintf(state->str + *len, "Power Save-Poll AID(%02x)", 
+		*len += sprintf(str + *len, "Power Save-Poll AID(%02x)", 
 				H16(MGMT_BODY(aid)));
 		break;
 	    case CTRL_SUBTYPE_RTS:
-		*len += sprintf(state->str + *len, "Request-To-Send TA:"); 
+		*len += sprintf(str + *len, "Request-To-Send TA:"); 
 		for (i = 0; i < MAC_ADDR_SIZE; i++)
-		    *len += sprintf(state->str + *len, "%02x%s", 
+		    *len += sprintf(str + *len, "%02x%s", 
 				CTRL_RTS(ta[i]), 
 				i < (MAC_ADDR_SIZE-1) ? ":": ""); 
 		break;
 	    case CTRL_SUBTYPE_CTS:
-		*len += sprintf(state->str + *len, "Clear-To-Send RA:"); 
+		*len += sprintf(str + *len, "Clear-To-Send RA:"); 
 		for (i = 0; i < MAC_ADDR_SIZE; i++)
-		    *len += sprintf(state->str + *len, "%02x%s", 
+		    *len += sprintf(str + *len, "%02x%s", 
 				CTRL_CTS(ra[i]), 
 				i < (MAC_ADDR_SIZE-1) ? ":": ""); 
 		break;
 	    case CTRL_SUBTYPE_ACK:
-		*len += sprintf(state->str + *len, "Acknowledgment RA:"); 
+		*len += sprintf(str + *len, "Acknowledgment RA:"); 
 		for (i = 0; i < MAC_ADDR_SIZE; i++)
-		    *len += sprintf(state->str + *len, "%02x%s", 
+		    *len += sprintf(str + *len, "%02x%s", 
 				CTRL_ACK(ra[i]), 
 				i < (MAC_ADDR_SIZE-1) ? ":": ""); 
 		break;
 	    case CTRL_SUBTYPE_CF_END:
-		*len += sprintf(state->str + *len, "CF-End RA:"); 
+		*len += sprintf(str + *len, "CF-End RA:"); 
 		for (i = 0; i < MAC_ADDR_SIZE; i++)
-		    *len += sprintf(state->str + *len, "%02x%s", 
+		    *len += sprintf(str + *len, "%02x%s", 
 				CTRL_END(ra[i]), 
 				i < (MAC_ADDR_SIZE-1) ? ":" : ""); 
 		break;
 	    case CTRL_SUBTYPE_END_ACK:
-		*len += sprintf(state->str + *len, "CF-End + CF-Ack RA:"); 
+		*len += sprintf(str + *len, "CF-End + CF-Ack RA:"); 
 		for (i = 0; i < MAC_ADDR_SIZE; i++)
-		    *len += sprintf(state->str + *len, "%02x%s", 
+		    *len += sprintf(str + *len, "%02x%s", 
 				CTRL_END_ACK(ra[i]), 
 				i < (MAC_ADDR_SIZE-1) ? ":" : ""); 
 	       break;
@@ -540,55 +538,60 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	case IEEE80211TYPE_DATA:
 	    switch (IEEE80211_BASE(fc_subtype)) {
 	    case DATA_SUBTYPE_DATA:
-		*len += sprintf(state->str + *len, "Data Type NOT Supported"); 
+		*len += sprintf(str + *len, "Data Type NOT Supported"); 
 		break;
 	    case DATA_SUBTYPE_DATA_CFACK: 
-		*len += sprintf(state->str + *len, "Data + CF-Ack"); 
+		*len += sprintf(str + *len, "Data + CF-Ack"); 
 		break;
 	    case DATA_SUBTYPE_DATA_CFPL:   
-		*len += sprintf(state->str + *len, "Data + CF-Poll"); 
+		*len += sprintf(str + *len, "Data + CF-Poll"); 
 		break;
 	    case DATA_SUBTYPE_DATA_CFACKPL: 
-		*len += sprintf(state->str + *len, "Data + CF-Ack + CF-Poll"); 
+		*len += sprintf(str + *len, "Data + CF-Ack + CF-Poll"); 
 	       break;
 	    case DATA_SUBTYPE_NULL:    
-		*len += sprintf(state->str + *len, "Null Function (no data)"); 
+		*len += sprintf(str + *len, "Null Function (no data)"); 
 		break;
 	    case DATA_SUBTYPE_CFACK:    
-		*len += sprintf(state->str + *len, "CF-Ack (no data)"); 
+		*len += sprintf(str + *len, "CF-Ack (no data)"); 
 		break;
 	    case DATA_SUBTYPE_CFPL:       
-		*len += sprintf(state->str + *len, "CF-Poll (no data)"); 
+		*len += sprintf(str + *len, "CF-Poll (no data)"); 
 		break;
 	    case DATA_SUBTYPE_CFACKPL:   
-		*len += sprintf(state->str + *len,"CF-Ack + CF-Poll (no data)");
+		*len += sprintf(str + *len,"CF-Ack + CF-Poll (no data)");
 		break;
             default:
 		break;
 	    }
             break;
 	default:
-	    *len += sprintf(state->str + *len, "Print Not Supported");
+	    *len += sprintf(str + *len, "Print Not Supported");
 	    break;
 	}
-    }
-    else
-	*len += sprintf(state->str + *len, "Print Not Supported");
-    *len += sprintf(state->str + *len, "\n");
-    return state->str; 
+    } else
+	*len += sprintf(str + *len, "Print Not Supported");
+    *len += sprintf(str + *len, "\n");
+    return str; 
 }
 
 static int  
 replay(__unused void * self, char *buf, char *out, size_t * len, int *count)
 {
-    pkt_t * pkt = (pkt_t *) buf; 
-    size_t need = ntohl(COMO(caplen)) + sizeof(pkt_t);
+    pkt_t * pkt; 
+    size_t need; 
 
+    if (buf == NULL)		/* this module does not buffer any records */
+	return 0; 
+
+    pkt = (pkt_t *) buf; 
+    need = ntohl(COMO(caplen)) + sizeof(pkt_t);
     if (*len < need) 
 	return -1; 
 
     bcopy(buf, out, need); 
     pkt = (pkt_t *) out;
+
     /* Convert the header data into host byte order */
 #ifdef BUILD_FOR_ARM
     COMOX(ts, NTOHLL(COMO(ts))); 
@@ -615,6 +618,7 @@ replay(__unused void * self, char *buf, char *out, size_t * len, int *count)
     COMO(l3ofs) = ntohs(COMO(l3ofs)); 
     COMO(l4ofs) = ntohs(COMO(l4ofs)); 
 #endif
+
     COMO(payload) = out + sizeof(pkt_t);
     *len = need;
     *count = 1;

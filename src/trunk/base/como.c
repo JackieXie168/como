@@ -33,19 +33,15 @@
 #include <sys/socket.h>
 #include <string.h>		/* strlen strcpy strncat memset */
 
-#ifdef linux
-#include <mcheck.h>
-#else 
-#define mcheck(x)
-#endif
-
 /* Required for symlink deletion */
 #include <errno.h>
 #include <signal.h>	// signal... 
 #include <unistd.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "storage.h"	// mainloop
+#include "ipc.h"	// ipc_listen()
 
 /*
  * the "map" is the root of the data. it contains all the
@@ -53,29 +49,6 @@
  * it is needed by all processes that will use their local copy.
  */
 struct _como map;
-
-/*
- * cleanup() called at termination time to
- * remove the byproducts of the compilation.
- * The function is registered with atexit(), which does not provide
- * a way to unregister the function itself. So we have to check which
- * process died (through map.procname) and determine what to do accordingly.
- */
-static void
-cleanup()
-{
-    char *cmd;
-
-    if (map.whoami != SUPERVISOR) { 
-	logmsg(V_LOGWARN, "terminating normally\n");
-	return;
-    }
-    logmsg(LOGUI, "\n\n\n--- about to exit... remove work directory %s\n",
-	map.workdir);
-    asprintf(&cmd, "rm -rf %s\n", map.workdir);
-    system(cmd);
-    logmsg(LOGUI, "--- done, thank you for using como\n");
-}
 
 
 /*
@@ -91,11 +64,7 @@ int
 main(int argc, char *argv[])
 {
     pid_t pid;
-    int capture_fd; 
-    int storage_fd;
-    int supervisor_fd;
-
-    mcheck(NULL); 	
+    int supervisor_fd, capture_fd, storage_fd;
 
 #ifdef linux
     /* linux does not support setproctitle. we have our own. */
@@ -103,19 +72,7 @@ main(int argc, char *argv[])
 #endif
 
     /* set default values */
-    memset(&map, 0, sizeof(map));
-    map.whoami = SUPERVISOR; 
-    map.supervisor_fd = -1;
-    map.logflags = DEFAULT_LOGFLAGS; 
-    map.mem_size = DEFAULT_MEMORY; 
-    map.maxfilesize = DEFAULT_FILESIZE; 
-    map.module_max = DEFAULT_MODULE_MAX; 
-    map.modules = safe_calloc(map.module_max, sizeof(module_t)); 
-    map.workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
-    map.node.name = strdup("CoMo Node"); 
-    map.node.location = strdup("Unknown"); 
-    map.node.type = strdup("Unknown");
-    map.node.query_port = DEFAULT_QUERY_PORT; 
+    init_map(&map); 
 
     /* write welcome message */ 
     logmsg(LOGUI, "----------------------------------------------------\n");
@@ -129,7 +86,9 @@ main(int argc, char *argv[])
     /*
      * parse command line and configuration files
      */
-    configure(argc, argv);
+    map.ac = argc;              /* save argc and argv for later */
+    map.av = argv; 
+    configure(&map, argc, argv);
 
     logmsg(V_LOGUI, "log level: %s\n", loglevel_name(map.logflags)); 
 
@@ -140,47 +99,42 @@ main(int argc, char *argv[])
     memory_init(map.mem_size);
 
     /* 
-     * Before forking processes, create a data structure in shared 
+     * before forking processes, create a data structure in shared 
      * memory to allow CAPTURE, EXPORT, STORAGE, etc to share some 
      * statistics with SUPERVISOR. 
      * We do not have any locking mechanisms on the counters. 
      * They are written by one process and read by SUPERVISOR. They 
      * do not need to be 100% reliable. 
      */
-    map.stats = mem_alloc(sizeof(stats_t)); 
-    bzero(map.stats, sizeof(stats_t)); 
-    map.stats->mdl_stats = mem_alloc(map.module_max * sizeof(mdl_stats_t));
+    map.stats = mem_calloc(1, sizeof(stats_t)); 
+    map.stats->mdl_stats = mem_calloc(map.module_max, sizeof(mdl_stats_t));
     gettimeofday(&map.stats->start, NULL); 
-    map.stats->modules_active = map.module_count; 
     map.stats->first_ts = ~0;
 
-    /*
-     * Prepare to start processes.
-     * Create unix-domain socket for storage and capture (they will be
-     * inherited by the children), and for the supervisor (that is what 
-     * this process will become).
-     */
-    capture_fd = create_socket("S:capture.sock", NULL); 
-    storage_fd = create_socket("S:storage.sock", NULL);
-    supervisor_fd = create_socket("S:supervisor.sock", NULL);
+    /* prepare the SUPERVISOR. STORAGE and CAPTURE sockets */
+    supervisor_fd = ipc_listen(SUPERVISOR); 
+    storage_fd = ipc_listen(STORAGE); 
+    capture_fd = ipc_listen(CAPTURE); 
 
-    /* start the CAPTURE process */
-    pid = start_child(CAPTURE, COMO_SHARED_MEM, capture_mainloop, capture_fd); 
+    /* 
+     * start the processes. Note that the order is important given 
+     * that the data flow is from CAPTURE to EXPORT to STORAGE we 
+     * want to start the processes (and the relevant IPC calls) in 
+     * the reverse order. 
+     */
 
     /* start the STORAGE process */
     pid = start_child(STORAGE, COMO_PRIVATE_MEM, storage_mainloop, storage_fd);
 
-    /*
-     * Start the remaining processes.
-     * SUPERVISOR is not really forked, so right before going to it
-     * we call 'atexit' to register a handler.
-     */
+    /* start the EXPORT process */
     pid = start_child(EXPORT, COMO_PRIVATE_MEM, export_mainloop, -1); 
 
-    signal(SIGINT, exit);
-    atexit(cleanup);
-    pid = start_child(SUPERVISOR, COMO_SHARED_MEM|COMO_PERSISTENT_MEM, 
-	supervisor_mainloop, supervisor_fd);
+    /* start the CAPTURE process */
+    pid = start_child(CAPTURE, COMO_SHARED_MEM, capture_mainloop, capture_fd); 
 
+    /* move to the SUPERVISOR process (we don't fork here) */
+    map.whoami = SUPERVISOR; 
+    map.mem_type = COMO_SHARED_MEM|COMO_PERSISTENT_MEM; 
+    supervisor_mainloop(supervisor_fd);
     return EXIT_SUCCESS; 
 }

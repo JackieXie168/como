@@ -548,7 +548,14 @@ sniffer_start(source_t * src)
 	N32(IP(dst_ip)) = 0xffffffff;
 	N16(TCP(src_port)) = 0xffff;
 	N16(TCP(dst_port)) = 0xffff;
-	TCP(flags) = 0xff;
+	TCP(cwr) = 1;
+	TCP(ece) = 1;
+	TCP(urg) = 1;
+	TCP(ack) = 1;
+	TCP(psh) = 1;
+	TCP(rst) = 1;
+	TCP(syn) = 1;
+	TCP(fin) = 1;
 	
 	pkt = metadesc_tpl_add(outmd, "sflow:none:~ip:~udp");
 	COMO(caplen) = sizeof(struct _como_iphdr) +
@@ -825,7 +832,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 		     * minimum encapsulation length?
 		     */
 		    COMO(len) = el.flowType.ipv4.length;
-		    IP(vhl) = 0x45;	/* version 4, header len 20 bytes */
+		    IP(version) = 4;	/* version 4 */
+		    IP(ihl) = 5;	/* header len 20 bytes */
 		    IP(tos) = (uint8_t) el.flowType.ipv4.tos;
 		    N16(IP(len)) = htons((uint16_t) el.flowType.ipv4.length);
 		    IP(proto) = (uint8_t) el.flowType.ipv4.protocol;
@@ -839,7 +847,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			    htons((uint16_t) el.flowType.ipv4.src_port);
 			N16(TCP(dst_port)) =
 			    htons((uint16_t) el.flowType.ipv4.dst_port);
-			TCP(flags) = el.flowType.ipv4.tcp_flags;
+			/* TCP(flags) */
+			*(COMO(payload) + COMO(l4ofs) + 13) = el.flowType.ipv4.tcp_flags;
 			break;
 		    case IPPROTO_UDP:
 			COMO(caplen) += sizeof(struct _como_udphdr);
@@ -877,7 +886,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 			    htons((uint16_t) el.flowType.ipv6.src_port);
 			N16(TCP(dst_port)) =
 			    htons((uint16_t) el.flowType.ipv6.dst_port);
-			TCP(flags) = el.flowType.ipv6.tcp_flags;
+			/* TCP(flags) */
+			*(COMO(payload) + COMO(l4ofs) + 13) = el.flowType.ipv6.tcp_flags;
 			break;
 		    case IPPROTO_UDP:
 			COMO(caplen) += sizeof(struct _como_udphdr);

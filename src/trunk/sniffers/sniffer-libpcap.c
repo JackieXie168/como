@@ -164,24 +164,10 @@ sniffer_start(source_t * src)
     case DLT_EN10MB: 
 	info->type = LINKTYPE_ETH; 
 	break; 
-
-#if 0 
+    default: 
     /* we do not support DLT_ values different from EN10MB. for 802.11
      * frames one can use sniffer-radio instead. 
      */
-    case DLT_IEEE802_11: 
-	info->type = COMOTYPE_WLAN; 
-	break; 
-
-#ifdef DLT_IEEE802_11_RADIO		
-    /* some version of libpcap do not support this */
-    case DLT_IEEE802_11_RADIO: 
-	info->type = COMOTYPE_WLANR;	/* w/radio information */ 
-	break; 
-#endif
-#endif
-
-    default: 
 	logmsg(LOGWARN, "libpcap sniffer: Unrecognized datalink format\n" );
 	sp_close(info->pcap);
 	return -1;
