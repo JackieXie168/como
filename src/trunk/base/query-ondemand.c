@@ -28,6 +28,7 @@
 
 #include <sys/types.h>		/* fork */
 #include <unistd.h>		/* fork */
+#include <string.h>
 #include <assert.h>
 
 #include "como.h"
@@ -59,6 +60,7 @@ start_ondemand_child(procname_t who, int mem_type,
     if (pid == 0) {     /* child */
         char *buf;
         int out_fd;
+	int idx; 
 
         /* XXX TODO: close unneeded sockets */
         // fclose(stdout); // XXX
@@ -73,6 +75,17 @@ start_ondemand_child(procname_t who, int mem_type,
         map.whoami = who;
         map.mem_type = mem_type;
 
+	/* 
+	 * remove all modules. we will receive them with the 
+	 * proper IPC_MODULE_ADD message. 
+	 */
+        for (idx = 0; idx < map.module_max; idx++)
+            if (map.modules[idx].status != MDL_UNUSED)
+                remove_module(&map, &map.modules[idx]);
+        assert(map.module_used == 0);
+        assert(map.module_last == -1);
+
+	
         /* connect to the parent */
         out_fd = ipc_connect(map.parent);
         assert(out_fd > 0);
@@ -101,6 +114,17 @@ static void
 qd_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
             __unused size_t l)
 {
+    char * pack;
+    int sz;
+
+    /* 
+     * prepare the module for transmission and 
+     * send it to the new process 
+     */ 
+    pack = pack_module(map.inline_mdl, &sz);
+    ipc_send(sender, IPC_MODULE_ADD, pack, sz);
+    free(pack);
+
     ipc_send(sender, IPC_MODULE_START, &map.stats, sizeof(void *));
 }
 
@@ -181,8 +205,10 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* 
      * copy the module we want to run,
      * activate it and initialize it 
+     * NOTE: use the query arguments as extra module arguments
      */
-    map.inline_mdl = copy_module(&map, req->mdl, -1); 
+    map.inline_mdl = copy_module(&map, req->mdl, -1, -1, req->args); 
+ 
     if (activate_module(map.inline_mdl, map.libdir))
 	panicx("cannot activate %s", map.inline_mdl->name); 
 
@@ -206,9 +232,12 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 	node->query_port, req->source, req->start, req->end); 
 
     /* add the arguments */
-    for (nargs = 0; req->args[nargs]; nargs++) 
+    for (nargs = 0; req->args[nargs]; nargs++) {
+	if (strncmp("format=", req->args[nargs], 7) == 0)
+	    continue;
 	len += snprintf(sniffstr + len, sizeof(sniffstr) - len, 
 			"&%s", req->args[nargs]); 
+    }
     
     /* create the entry in the map */
     add_sniffer(&map, "como", sniffstr, NULL); 

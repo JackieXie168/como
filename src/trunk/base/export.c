@@ -483,20 +483,24 @@ store_records(module_t * mdl, timestamp_t ts)
 static void
 ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz) 
 {
+    module_t tmp; 
     module_t * mdl;
     int len;
 
     /* only the parent process should send this message */
     assert(src == map.parent);
 
-    /* find an empty slot in the modules array */
-    mdl = new_module(&map, "tmp", -1); 
-
     /* unpack the received module info */
-    if (unpack_module(pack, sz, mdl)) {
+    if (unpack_module(pack, sz, &tmp)) {
         logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n");
         return;
     }
+
+    /* find an empty slot in the modules array */
+    mdl = copy_module(&map, &tmp, tmp.node, tmp.index, NULL); 
+
+    /* free memory from the tmp module */
+    clean_module(&tmp); 
 
     if (activate_module(mdl, map.libdir)) {
         logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
@@ -692,7 +696,11 @@ ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
      * try to store all records we have before reporting to be 
      * done. 
      */
-    store_records(map.inline_mdl, ~0); 
+    store_records(map.inline_mdl, ~0);
+
+    /* print the footer since running inline (asserted before) */
+    printrecord(map.inline_mdl, NULL, NULL, -1);
+    
     ipc_send(map.parent, IPC_DONE, NULL, 0); 
 }
 
