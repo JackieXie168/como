@@ -76,6 +76,7 @@ void replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd);
 void init_ondemand_module(qreq_t * req); 
 void printrecord(module_t * mdl, char * ptr, char * args[], int client);
 void query_ondemand(int client, qreq_t * req, int node_id); 
+void send_status(int client_fd, int node_id); 
 
 
 #endif /* _COMO_QUERY_H */
