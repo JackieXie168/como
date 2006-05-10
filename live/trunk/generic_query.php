@@ -1,12 +1,13 @@
 <?php
     require_once("comolive.conf");
+    if (!(isset($G)))
+        $G = init_global();
     require_once("class/node.class.php");
     require_once("include/getinputvars.php.inc");
     /*  get the node hostname and port number */
     /*  This is not in the include file because it needs to be called
      *  before the getinputvars.php.inc file is called (Chicken/egg)
      */
-
     if (isset($_GET['comonode'])){
         $comonode = $_GET['comonode'];
     }else{
@@ -16,12 +17,13 @@
         exit;
     }
 
+    /*  Get any extras in the url;  Currently to grab blinc stuff  */
     if (isset($_GET['extra']))
         $extra = $_GET['extra'];
     else
         $extra = "";
 
-    $node = new Node ("$comonode", $TIMEPERIOD, $TIMEBOUND);
+    $node = new Node ("$comonode", $G);
     /*  Get Input Vars  */
     $input_vars = init_env($node);
     $module = $input_vars['module'];
@@ -61,7 +63,7 @@
         $daip="none";
     }
 
-    if (($extra == "blincview") && ($USEBLINCVIEW)) {
+    if (($extra == "blincview") && ($G['USEBLINCVIEW'])) {
 	$filename = $comonode . 
 		     "_" . $extra . "_" . $stime . "_" .
 		     $etime . "_" . $daip . ".blinc";
@@ -71,27 +73,26 @@
     }
 
     /*  File caching check  */
-    if ((file_exists("$RESULTS/$filename")) && ($USECACHE)) {
+    if ((file_exists($G['RESULTS']. "/" . $filename)) && ($G['USECACHE'])) {
         $data = array();
         $data[0] = 1;
-        $data[1] = file_get_contents("$RESULTS/$filename");
+        $data[1] = file_get_contents($G['RESULTS'] . "/" . $filename);
 
     /*  File doesn't exist or USECACHE is off, regen file  */
     } else {
         /*  If USEBLINC is not set, then just print out the html formatted
          *  text that CoMo will return
          */
-        if ($extra == "blincview" && !$USEBLINCVIEW) {
+        if ($extra == "blincview" && !$G['USEBLINCVIEW']) {
             $format = "html";
         }
         require_once ("class/query.class.php");
-        $query = new Query($stime, $etime, $RESULTS, $GNUPLOT,
-                           $CONVERT, $RESOLUTION);
+        $query = new Query($stime, $etime, $G);
         $query_string = $query->get_query_string($module, $format,
                                                  $http_query_string);
         $data = $query->do_query ($node->comonode, $query_string);
         /*  Write html out to a file so we dont have to query all the time */
-        if (($data[0]) && ($USECACHE)){
+        if (($data[0]) && ($G['USECACHE'])){
             $fullname = "{$query -> rootdir}/{$query->results_dir}/$filename";
             $fh = fopen ($fullname, "w");
             fwrite ($fh, $data[1]);
@@ -107,16 +108,16 @@
     #    exit;
     } else {
 	/*  Blinc Code  */
-	if (($extra == "blincview") && ($USEBLINCVIEW)) {
-	    $BRESULTS = $ABSROOT . "/" . $RESULTS;
+	if (($extra == "blincview") && ($G['USEBLINCVIEW'])) {
+	    $BRESULTS = $G['ABSROOT'] . "/" . $G['RESULTS'];
 	    $blincfile = $comonode . 
 			 "_" . $extra . "_" . $stime . "_" .
 			 $etime . "_" . $daip . ".blinc";
 	    $absblincfile = $BRESULTS . "/" . $blincfile;
-	    $fp = fopen ($absblincfile, "w");
+	    $fp = fopen ("$absblincfile.dat", "w");
 	    fwrite ($fp, $data[1]);
 	    fclose ($fp);
-	    system("$BLINCVIEWCMD $DOT $absblincfile < $absblincfile", $return);
+	    system("{$G['BLINCVIEWCMD']} {$G['DOT']} $absblincfile < $absblincfile.dat", $return);
 #		system("CONVERT $absblincfile.png1 $absblincfile.png", $return);
 
 	    /*  This will take there request uri information and 
@@ -131,12 +132,12 @@
 	    print "<center><table><tr><td colspan=2 align=center>";
 	    print "<font size=6>Blinc View</font></td><td></tr>";
 	    print "<tr><td colspan=2>";
-	    print "<a href=$RESULTS/$blincfile.png>";
+	    print "<a href={$G['RESULTS']}/$blincfile.png>";
 	    print "<img width=800 ";
-	    print "src=$RESULTS/$blincfile.png>";
+	    print "src={$G['RESULTS']}/$blincfile.png>";
 	    print "</a>";
 	    print "</td></tr>";
-	    print "<tr><td align=center><a href=$RESULTS/$blincfile.png>";
+	    print "<tr><td align=center><a href={$G['RESULTS']}/$blincfile.png>";
 	    print "Download Image</a></td>";
 	    print "<td><a href=$relinker>Text Output</a><td>";
 

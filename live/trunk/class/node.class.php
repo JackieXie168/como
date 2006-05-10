@@ -28,9 +28,16 @@ class Node {
     var $etime;
     var $timeperiod;
     var $timebound;
+    /*  Some Globals  */
+    var $NODEDB;
 
     /*  Constructor  */
-    function Node($comonode, $timeperiod, $timebound) {
+    function Node($comonode, $G) {
+        $this->NODEDB = $G['NODEDB'];
+
+	$timeperiod = $G['TIMEPERIOD'];
+	$timebound = $G['TIMEBOUND'];
+    
         /*  Check to make sure there is a host and port number */
         $hostarray = split (":", $comonode);
         if ((count($hostarray)) == 2 && is_numeric ($hostarray[1])) {
@@ -39,7 +46,12 @@ class Node {
 	    $this -> hostport = $hostarray[1];
 	    $this -> timeperiod = $timeperiod;
 	    $this -> timebound = $timebound;
+
+            /*  Cache the status query so we don't have to query CoMo  */
+#            $this -> isCached($comonode);
+
 	    $query = file_get_contents("http://$comonode/?status");
+
 	} else {
             $query = FALSE;
         }
@@ -110,6 +122,12 @@ class Node {
             $this->etime = $etime;
 	}
     }
+#    function isCached ($comonode, $RESULTS) {
+#        print "comonode is $comonode";
+        
+        
+#    }
+
     function PrintDebug() {
 	print "<br>DEBUGING INFO<BR>";
         print "nodename: $this->nodename<br>";
@@ -157,7 +175,8 @@ class Node {
      *  "main" for the main window  and "secondary"
      *  for the right hand queries
      */
-    function GetConfigModules ($comonode, $NODEDB, $value) {
+    function GetConfigModules ($comonode, $value) {
+        $NODEDB = $this -> NODEDB;
         if ($value == "main")
 	    $needle = "main_mods";
         if ($value == "secondary")

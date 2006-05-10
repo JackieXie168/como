@@ -7,7 +7,7 @@
     /* 
      * Zoom in  -- halve the interval 
      */
-    if ($interval > $TIMEBOUND) {
+    if ($interval > $G['TIMEBOUND']) {
 	$zstime = $stime + floor($interval/4);
 	$zetime = $etime - floor($interval/4);
 	print "<a href=\"dashboard.php?comonode=$comonode";
@@ -16,6 +16,7 @@
 #	    $duration = $zetime - $zstime; 
 #	    print "&source=tuple&interval=$interval";
 #	}
+
 	if (!is_null($filter)) 
 	    print "&filter=$filter";
 	else 

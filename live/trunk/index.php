@@ -7,13 +7,15 @@
      */
     $includebanner=1;
     include("include/header.php.inc");
-    include("comolive.conf");
+    require_once ("comolive.conf");
+    if (!(isset ($G)))
+	$G = init_global();
     /** get the all the groups that have been created  
     *   They should be located in the db directory and 
     *   have a lst extension
     */
   
-    $dadir = $NODEDB;
+    $dadir = $G['NODEDB'];
     $handle=opendir("$dadir");
     /**
      *  $allgroups is a 2d array containing 
@@ -29,8 +31,8 @@
     $x=0;
     while (false!==($filez= readdir($handle))) {
         if ($filez!= "." && $filez!= ".." && ereg (".*\.lst$", $filez)) {
-	    if (file_exists("$NODEDB/$filez")) {
-	        $desc = file ("$NODEDB/$filez");
+	    if (file_exists("{$G['NODEDB']}/$filez")) {
+	        $desc = file ("{$G['NODEDB']}/$filez");
 	        $allgroups[$x][0] = $filez;
 	        $allgroups[$x][1] = $desc[0];
 		$x++;
@@ -88,7 +90,7 @@ if ($numgroup < 1) {
     print "no como nodes saved";
 } else { 
     for ($i=0;$i<count($allgroups);$i++) {
-	$nodefile = "$NODEDB/{$allgroups[$i][0]}";
+	$nodefile = "{$G['NODEDB']}/{$allgroups[$i][0]}";
         /*  nomnodes is the number of como nodes minus the 2 desc lines  */
         $numnodes = (count(file ("$nodefile"))-2);
 	/*  trim and urlencode the group name if any spaces exist  
@@ -101,7 +103,7 @@ if ($numgroup < 1) {
 	    print "<a href=managenode.php?action=groupdel";
 	    print "&group={$allgroups[$i][0]}";
 	    print "&comonode=blank:44444>";
-            if ($ALLOWCUSTOMIZE) {
+            if ($G['ALLOWCUSTOMIZE']) {
 		print "<div class=grouplink>Remove</a>";
 		print "</div>";
             }
@@ -139,7 +141,7 @@ if ($numgroup < 1) {
 			print "</div>";
                     }
 		    /*  If ALLOWCUSTOMIZE is set  */
-		    if ($ALLOWCUSTOMIZE) {
+		    if ($G['ALLOWCUSTOMIZE']) {
 			print "<a href=managenode.php?action=groupdel";
 			print "&group={$allgroups[$i][0]}";
 			print "&comonode=blank:44444>";
@@ -166,7 +168,7 @@ if ($numgroup < 1) {
 		    print "<td width=150 valign=top>$loc</td>";
 		    print "<td width=150 valign=top>$iface</td>";
 		    print "<td width=500 valign=top>$comment</td>";
-		    if ($name != "Name" && $ALLOWCUSTOMIZE) {
+		    if ($name != "Name" && $G['ALLOWCUSTOMIZE']) {
 			print "<td valign=top align=right>";
 			print "<a href=managenode.php?action=delete";
 			print "&comonode=$comonode";
@@ -190,7 +192,7 @@ if ($numgroup < 1) {
 	<input type=image src=images/go.jpg>
       </form>
 
-    <?  if ($ALLOWCUSTOMIZE) { ?>
+    <?  if ($G['ALLOWCUSTOMIZE']) { ?>
       <br>
       Add a new CoMo node
       <form align=middle action=nodeview.php method=get>

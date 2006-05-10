@@ -12,7 +12,7 @@ $cur_date = getdate(time());
 <!--
 <div id=logo>
     <a intel href=http://www.intel.com>
-    <img src="<?=$MYLOGO?>" border=0></a>
+    <img src="<?=$G['MYLOGO']?>" border=0></a>
 </div>
 -->
 

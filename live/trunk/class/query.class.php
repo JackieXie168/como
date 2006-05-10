@@ -33,7 +33,12 @@ class Query {
     var $fullname;
 
     /*  Constructor  */
-    function Query ($stime, $etime, $results_dir, $gp, $con, $res) { 
+    function Query ($stime, $etime, $G) {
+        $results_dir = $G['RESULTS']; 
+	$gp = $G['GNUPLOT']; 
+	$con = $G['CONVERT'];
+	$res = $G['RESOLUTION'];
+
         $this->GNUPLOT=$gp;
         $this->CONVERT=$con;
         $this->stime=$stime;
