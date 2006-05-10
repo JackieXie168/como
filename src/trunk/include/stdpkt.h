@@ -44,6 +44,7 @@
 #include "ipv6.h"
 #include "wlan.h"
 #include "radio.h"
+#include "dhcp.h"
 
 /*
  * Object types
@@ -59,7 +60,7 @@ typedef struct _como_pkt        pkt_t;  	/* CoMo packet record */
  *       all encoded in host byte order. The rest of the packet (payload)
  *       is as seen on the wire. 
  *       The byte ordering is changed only when a CoMo system sends 
- *       a packet stream to another CoMo system (via the sniffer-dump). 
+ *       a packet stream to another CoMo system (via the sniffer-como). 
  *       In that case the CoMo header is all in network byte order. 
  * 
  * XXX should we make it consistently network byte order? -gianluca
@@ -367,36 +368,54 @@ set_field(char *ptr, size_t size, uint64_t value)
     (((struct _como_sflow *) (pkt)->payload)->field)
 
 /* Layer 2 macros */
-#define ETH(field)							\
+#define ETH(field)	ETHP(pkt,field)
+#define ETHP(pkt,field)							\
     (((struct _como_eth *) (pkt->payload + pkt->l2ofs))->field)
-#define VLAN(field)							\
+
+#define VLAN(field)	VLANP(pkt,field)
+#define VLANP(pkt,field)						\
     (((struct _como_vlan *) (pkt->payload + pkt->l2ofs))->field)
-#define HDLC(field)							\
+
+#define HDLC(field)	HDLCP(pkt,field)
+#define HDLCP(pkt,field)						\
     (((struct _como_hdlc *) (pkt->payload + pkt->l2ofs))->field)
-#define ISL(field)							\
+
+#define ISL(field)	ISLP(pkt,field)
+#define ISLP(pkt,field)							\
     (((struct _como_isl *) (pkt->payload + pkt->l2ofs))->field)
 
 /* Layer 3 macros */
-#define IP(field)							\
+#define IP(field)	IPP(pkt,field)
+#define IPP(pkt,field)							\
     (((struct _como_iphdr *) (pkt->payload + pkt->l3ofs))->field)
-#define IPV6(field)							\
+
+#define IPV6(field)	IPV6P(pkt,field)
+#define IPV6P(pkt,field)						\
      (((union _como_ipv6hdr *) (pkt->payload + pkt->l3ofs))->field)
 
 /* Layer 4 macros */
-#define TCP(field)							\
+#define TCP(field)	TCPP(pkt,field)
+#define TCPP(pkt,field)							\
     (((struct _como_tcphdr *) (pkt->payload + pkt->l4ofs))->field)
-#define UDP(field)							\
+
+#define UDP(field)	UDPP(pkt,field)
+#define UDPP(pkt,field)							\
     (((struct _como_udphdr *) (pkt->payload + pkt->l4ofs))->field)
-#define ICMP(field)							\
+
+#define ICMP(field)	ICMPP(pkt,field)
+#define ICMPP(pkt,field)						\
     (((struct _como_icmphdr *) (pkt->payload + pkt->l4ofs))->field)
-#define ICMPV6(field)							\
-     (((struct _como_icmpv6hdr *) (pkt->payload + pkt->l4ofs))->field)
+
+#define ICMPV6(field)	ICMPV6P(pkt,field)
+#define ICMPV6P(pkt,field)						\
+    (((struct _como_icmpv6hdr *) (pkt->payload + pkt->l4ofs))->field)
+
+/* Application layer */
+#define DHCP(field)	DHCPP(pkt,field)
+#define DHCPP(pkt,field)						\
+    (((struct _como_dhcp *) (pkt->payload + pkt->l7ofs))->field)
 
 #endif				/* BUILD_FOR_ARM */
-
-#define ETHP(pkt,field)        ETH(field)
-#define IPP(pkt,field)         IP(field)
-#define IPV6P(pkt,field)       IPV6(field)
 
 #endif				/* SAFEMACROS */
 

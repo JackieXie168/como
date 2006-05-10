@@ -20,14 +20,13 @@ SRCS_como := \
 	como.c \
 	config.c \
 	memory.c \
-	query.c \
-	query-comms.c \
-	query-ondemand.c \
+	inline.c \
 	export.c \
 	supervisor.c \
 	logging.c \
 	storage.c \
 	storage-client.c \
+	modules.c \
 	os.c \
 	ipc.c \
 	metadesc.c \
@@ -38,7 +37,11 @@ SRCS_como := \
 	util-safe.c \
 	util-misc.c \
 	util-socket.c \
-	util-timers.c 
+	util-timers.c \
+	util-process.c \
+	query.c \
+	query-comms.c \
+	query-ondemand.c
 
 SRCS_como += \
 	$(BASEDIR)/lib/heap.c \

@@ -59,8 +59,8 @@ EFLOWDESC {
     uint32_t hi_watermark;
 };
 
-#define STATEDESC   struct _utilization_state
-STATEDESC {
+#define CONFIGDESC   struct _utilization_config
+CONFIGDESC {
     timestamp_t meas_ivl;
     timestamp_t wmark_ivl;
 };
@@ -68,29 +68,29 @@ STATEDESC {
 static timestamp_t
 init(void * self, __unused char **args)
 {
-    STATEDESC * state;
+    CONFIGDESC * config;
     pkt_t *pkt;
     metadesc_t *inmd;
     
-    state = mdl_mem_alloc(self, sizeof(STATEDESC));
-    state->meas_ivl = TIME2TS(1, 0);
-    state->wmark_ivl = TIME2TS(0, 100000);
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC));
+    config->meas_ivl = TIME2TS(1, 0);
+    config->wmark_ivl = TIME2TS(0, 100000);
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = state->wmark_ivl;
+    inmd->ts_resolution = config->wmark_ivl;
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
     
-    STATE(self) = state; 
-    return state->meas_ivl;
+    CONFIG(self) = config; 
+    return config->meas_ivl;
 }
 
 static int
 update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
-    STATEDESC * state = STATE(self); 
+    CONFIGDESC * config = CONFIG(self); 
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts);
@@ -102,7 +102,7 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 
     x->bytes += pkt->len;
 
-    if (pkt->ts - x->last_watermark > state->wmark_ivl) {
+    if (pkt->ts - x->last_watermark > config->wmark_ivl) {
         x->last_watermark = pkt->ts;
         x->bytes_ivl = 0;
     }
@@ -137,12 +137,12 @@ static int
 action(void * self, void * fh, timestamp_t t, __unused int count)
 {
     EFLOWDESC * ex = EF(fh);
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     
     if (fh == NULL) 
         return ACT_GO;
     
-    if (t > TIME2TS(ex->ts, 0) + state->meas_ivl)
+    if (t > TIME2TS(ex->ts, 0) + config->meas_ivl)
         return ACT_STORE | ACT_DISCARD;
     
     return ACT_STOP;
@@ -202,7 +202,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static int granularity = 1;
     static int no_records = 0;
     static EFLOWDESC values;
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     EFLOWDESC *x; 
     int n;
 
@@ -222,7 +222,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
                 /* aggregate multiple records into one to reduce 
                  * communication messages. 
                  */
-                granularity = MAX(atoi(val)/TS2SEC(state->meas_ivl), 1);
+                granularity = MAX(atoi(val)/TS2SEC(config->meas_ivl), 1);
             } 
 	} 
 
@@ -255,7 +255,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     } 
 
     values.bytes /= granularity; 
-    values.hi_watermark *= (state->meas_ivl / state->wmark_ivl); 
+    values.hi_watermark *= (config->meas_ivl / config->wmark_ivl); 
 
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, 

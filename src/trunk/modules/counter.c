@@ -46,31 +46,31 @@ FLOWDESC {
     uint32_t    pkts;
 };
 
-#define STATEDESC   struct _counter_state
-STATEDESC {
+#define CONFIGDESC   struct _counter_config
+CONFIGDESC {
     int meas_ivl;     /* measurement interval */
 };
 
 static timestamp_t 
 init(void * self, char *args[])
 {
-    STATEDESC * state; 
+    CONFIGDESC * config; 
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
-    state->meas_ivl = 1;
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config->meas_ivl = 1;
     for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "interval")) {
             char * val = index(args[i], '=') + 1;
-            state->meas_ivl = atoi(val);
+            config->meas_ivl = atoi(val);
         }
     }
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
     
@@ -78,22 +78,10 @@ init(void * self, char *args[])
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");*/
 
-    STATE(self) = state;
-    return TIME2TS(state->meas_ivl, 0);
+    CONFIG(self) = config;
+    return TIME2TS(config->meas_ivl, 0);
 }
 
-static int
-check(__unused void * self, pkt_t * pkt)
-{
-    /*
-     * if the stream contains per-flow information,
-     * drop all packets after the first.
-     */
-    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST))
-        return 0;
-  
-    return 1;
-}
 
 static int
 update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
@@ -107,7 +95,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
     }
 
     if (COMO(type) == COMOTYPE_NF) {
-        x->bytes += H64(NF(bytecount)) * (uint64_t) H16(NF(sampling));
+        x->bytes += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
         x->pkts += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
     } else if (COMO(type) == COMOTYPE_SFLOW) {
 	x->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
@@ -124,11 +112,11 @@ static ssize_t
 store(void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
 
     PUTH64(buf, x->ts);
-    PUTH64(buf, x->bytes/state->meas_ivl);
-    PUTH32(buf, x->pkts/state->meas_ivl);
+    PUTH64(buf, x->bytes/config->meas_ivl);
+    PUTH32(buf, x->pkts/config->meas_ivl);
 
     return sizeof(FLOWDESC);
 }
@@ -182,7 +170,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static int no_records = 0; 
     static uint64_t bytes = 0;
     static uint64_t pkts = 0;
-    STATEDESC * state = STATE(self); 
+    CONFIGDESC * config = CONFIG(self); 
     FLOWDESC *x; 
     timestamp_t ts;
     time_t t; 
@@ -207,7 +195,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 		/* aggregate multiple records into one to reduce 
 		 * communication messages. 
 		 */
-		granularity = MAX(atoi(val) / state->meas_ivl, 1);
+		granularity = MAX(atoi(val) / config->meas_ivl, 1);
 	    } else if (!strcmp(args[n], "format=mbps")) {
 		*len = 0; 
 		fmt = MBPSFMT; 
@@ -264,10 +252,11 @@ callbacks_t callbacks = {
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
     init: init,
-    check: check,
+    check: NULL,
     hash: NULL,
     match: NULL,
     update: update,
+    flush: NULL,
     ematch: NULL,
     export: NULL,
     compare: NULL,

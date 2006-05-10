@@ -38,8 +38,10 @@
 #include <errno.h>      /* errno */
 
 #include "como.h"
+#include "comopriv.h"
 #include "storage.h"
 #include "query.h"
+#include "ipc.h"
 
 
 /*
@@ -72,7 +74,7 @@ send_status(int client_fd, int node_id)
     int idx;
 
     /* first find the node */ 
-    for (node = &map.node; node && node->id != node_id; node = node->next)
+    for (node = map.node; node && node->id != node_id; node = node->next)
 	; 
     if (node == NULL)
 	panicx("cannot find virtual node %d", node_id); 
@@ -112,10 +114,10 @@ send_status(int client_fd, int node_id)
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
-    storage_fd = create_socket("storage.sock", NULL);
+    storage_fd = ipc_connect(STORAGE); 
 
     /* send list of loaded modules */
-    for (idx = 0; idx < map.module_count; idx++) { 
+    for (idx = 0; idx <= map.module_last; idx++) { 
 	int file_fd; 
 	off_t ofs; 
 	size_t rlen, sz;
@@ -123,6 +125,9 @@ send_status(int client_fd, int node_id)
 	char * ptr;
 
 	mdl = &map.modules[idx]; 
+
+	if (mdl->status == MDL_UNUSED) 
+	    continue; 
 
 	if (mdl->node != node_id)
 	    continue; 
@@ -139,7 +144,7 @@ send_status(int client_fd, int node_id)
 	
 	/* read first record */
 	ts = 0;
-	rlen = mdl->bsize;
+	rlen = mdl->callbacks.st_recordsize;
 	ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
 	if (ptr && rlen > 0) {
 	    /* we got something, give the record to load() */
@@ -170,7 +175,7 @@ send_status(int client_fd, int node_id)
 	    "Avg. Packets/sec (5 minutes): %d\n",
             (float) map.stats->mem_usage_cur/(1024*1024),
             (float) map.stats->mem_usage_peak/(1024*1024),
-            map.mem_size, map.stats->modules_active, map.module_count,
+            map.mem_size, map.stats->modules_active, map.module_used,
 	    map.stats->pps_24hrs, map.stats->pps_1hr, map.stats->pps_5min); 
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
@@ -200,7 +205,7 @@ findfile(int fd, qreq_t * req)
     int found;
 
     ld = req->src->callbacks.load; 
-    len = req->src->bsize; 
+    len = req->src->callbacks.st_recordsize; 
     ofs = csgetofs(fd);
     found = 0;
     while (!found) { 
@@ -306,7 +311,7 @@ printrecord(module_t * mdl, char * ptr, char * args[], int client)
 {
     char * out; 
     size_t len; 
-    int i; 
+    int i, ret; 
 
     for (i = 0; args != NULL && args[i] != NULL; i++) 
 	logmsg(V_LOGQUERY, "print arg #%d: %s\n", i, args[i]); 
@@ -316,10 +321,15 @@ printrecord(module_t * mdl, char * ptr, char * args[], int client)
         panicx("module %s failed to print\n", mdl->name); 
 
     if (len > 0) {
-        int ret = como_writen(client, out, len);
-	if (ret < 0) 
-	    panic("sending data to the client"); 
-	logmsg(V_LOGDEBUG, "print: %s\n", out); 
+	switch (client) {
+	case -1:
+	    ipc_send(map.parent, IPC_RECORD, out, strlen(out) + 1);
+	    break;
+	default:
+	    ret = como_writen(client, out, len);
+	    if (ret < 0)
+		panic("sending data to the client");
+	}
     }
 }
 
@@ -412,8 +422,8 @@ validate_query(qreq_t * req, int node_id)
         return httpstr;
     }
 
-    /* check if the module is present in the configuration file */
-    for (idx = 0; idx < map.module_count; idx++) {
+    /* check if the module is present in the current configuration */ 
+    for (idx = 0; idx <= map.module_last; idx++) {
         req->mdl = &map.modules[idx];
 
 	if (node_id != req->mdl->node) 
@@ -424,7 +434,7 @@ validate_query(qreq_t * req, int node_id)
 	    break;
     }
 
-    if (idx == map.module_count) { 
+    if (idx > map.module_last) {
 	/*
 	 * the module is not present in the configuration file 
 	 */
@@ -473,30 +483,34 @@ validate_query(qreq_t * req, int node_id)
      *     during the interval of interest.
      */
     if (!req->source) { 
-	char * running_filter; 
+	if (req->filter_str != NULL) { 
+	    char * running_filter; 
 
-	parse_filter(req->mdl->filter_str, NULL, &running_filter); 
+	    parse_filter(req->mdl->filter_str, NULL, &running_filter); 
 
-	/* 
-	 * source is not defined, hence we just want to read 
-	 * the output file. check the filter of the running modules. 
-	 * it needs to be the same as the requested one otherwise the 
-	 * query result would not be the ones we are looking for.  
-	 */
-	if (strcmp(req->filter_cmp, running_filter)) { 
-	    /*
-	     * the module is not present in the configuration file 
+	    /* 
+	     * source is not defined, hence we just want to read 
+	     * the output file. check the filter of the running modules. 
+	     * it needs to be the same as the requested one otherwise the 
+	     * query result would not be the ones we are looking for.  
 	     */
-	    logmsg(LOGWARN, "module %s found but it is not using filter (%s)\n",
-		req->module, req->filter_str); 
-	    sprintf(httpstr, 
-		    "HTTP/1.0 404 Not Found\n"
-		    "Content-Type: text/plain\n\n"
-		    "Module %s found but it is not using filter \"%s\"\n", 
-		    req->module, req->filter_str);
-	    return httpstr;
+	    if (strcmp(req->filter_cmp, running_filter)) { 
+		/*
+		 * the module is not present in the configuration file 
+		 */
+		logmsg(LOGWARN, 
+		       "module %s found but it is not using filter (%s)\n",
+		       req->module, req->filter_str); 
+		sprintf(httpstr, 
+			"HTTP/1.0 404 Not Found\n"
+			"Content-Type: text/plain\n\n"
+			"Module %s found but it is not using filter \"%s\"\n", 
+			req->module, req->filter_str);
+		free(running_filter);
+		return httpstr;
+	    }
+	    free(running_filter);
 	}
-	free(running_filter);
     } else { 
 	/* 
 	 * a source is defined. go look for it and forget about the 
@@ -507,7 +521,7 @@ validate_query(qreq_t * req, int node_id)
 	 *     of the filtering that the source module could have done
 	 *     on the data and we don't do any checks on that.
 	 */
-        for (idx = 0; idx < map.module_count; idx++) {
+        for (idx = 0; idx <= map.module_last; idx++) {
             req->src = &map.modules[idx];
 	    if (node_id != req->src->node) 
 		continue; 
@@ -515,7 +529,7 @@ validate_query(qreq_t * req, int node_id)
 		break;
         }
         
-	if (idx == map.module_count) {
+	if (idx > map.module_last) {
             /* No source module found,
              * return an error message to the client and finish
              */
@@ -578,74 +592,49 @@ void
 query(int client_fd, int node_id)
 {
     qreq_t *req;
-    int storage_fd, file_fd;
+    int supervisor_fd, storage_fd, file_fd;
     off_t ofs; 
     char * output; 
     ssize_t len;
     int mode, ret;
     char * httpstr;
 
+
     /* 
      * every new process has to set its name, specify the type of memory
      * the modules will be able to allocate and use, and change the process
      * name accordingly. 
      */
-    map.whoami = QUERY;
+    map.parent = map.whoami; 
+    map.whoami = buildtag(map.parent, QUERY, client_fd);
     map.mem_type = COMO_PRIVATE_MEM;
-    setproctitle("ONDEMAND");
+    setproctitle(getprocfullname(map.whoami));
 
     /* connect to the supervisor so we can send messages */
-    map.supervisor_fd = create_socket("supervisor.sock", NULL);
+    supervisor_fd = ipc_connect(SUPERVISOR); 
     logmsg(V_LOGWARN, "starting process QUERY #%d: node %d pid %d\n",
 	client_fd, node_id, getpid()); 
 
     if (map.debug) {
 	if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-	    logmsg(V_LOGWARN, "waiting 60s for the debugger to attach\n");
-	    sleep(60);
+	    logmsg(V_LOGWARN, "waiting 10s for the debugger to attach\n");
+	    sleep(10);
 	    logmsg(V_LOGWARN, "wakeup, ready to work\n");
 	}
     }
 
-    if (map.il_mode) {
-        /* we are in inline mode. we need to do the accept on the socket
-         * before reading any data, because supervisor cannot do this for us
-         * as it is acting as our client now */
-        struct sockaddr_in addr;
-	socklen_t slen;
-        int old_client_fd;
-	    
-	slen = sizeof(addr);
-        old_client_fd = client_fd;
-        client_fd = accept(old_client_fd, (struct sockaddr *)&addr, &slen);
-	if (client_fd < 0) {
-	    /* check if accept was unblocked by a signal */
-	    if (errno == EINTR) {
-		logmsg(LOGWARN, "accept unblocked by a signal\n");
-                close(client_fd);
-                return;
-            }
-
-	    logmsg(LOGWARN, "accepting connection: %s\n",
-		   strerror(errno));
-	}
-        
-	close(old_client_fd);
-        
-        logmsg(LOGQUERY, 
-	       "query from %s on fd %d\n", 
-               inet_ntoa(addr.sin_addr), client_fd);
-    }
-    
     req = (qreq_t *) qryrecv(client_fd, map.stats->ts); 
     if (req == NULL) {
 	close(client_fd);
+	close(supervisor_fd);
 	return; 
     } 
 
     logmsg(LOGQUERY,
         "query (%d bytes); node: %d mdl: %s filter: %s\n",  
         ntohs(req->len), node_id, req->module, req->filter_str); 
+    if (req->filter_str) 
+	logmsg(0, "    filter: %s\n", req->filter_str);
     logmsg(0, "    from %d to %d\n", req->start, req->end); 
     if (req->args != NULL) { 
 	int n; 
@@ -662,6 +651,7 @@ query(int client_fd, int node_id)
 	 */
 	send_status(client_fd, node_id);
 	close(client_fd);
+	close(supervisor_fd);
 	return; 
     }
 
@@ -684,39 +674,10 @@ query(int client_fd, int node_id)
 	if (como_writen(client_fd, httpstr, 0) < 0) 
 	    panic("sending data to the client [%d]", client_fd); 
         close(client_fd);
+        close(supervisor_fd);
 	return;
-    } 
-	
-    /* 
-     * prepare the state for the module 
-     */
-    req->mdl->ptr = 
-	mem_copy_map(req->mdl->master_map, req->mdl->master_ptr, NULL);
-
-    /* 
-     * if we have to retrieve the data using the replay callback of
-     * another module instead of reading the output file of the module,
-     * we need to create a new instance of the module itself. 
-     */
-    if (req->source) {
-	init_ondemand_module(req); 
-    } else { 
-	req->src = req->mdl; 	/* the source is the same as the module */
-    } 
+    }
     
-    /* 
-     * connect to the storage process, open the module output file 
-     * and then start reading the file and send the data back 
-     */
-    storage_fd = create_socket("storage.sock", NULL);
-
-    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req->src->output); 
-    mode =  req->wait? CS_READER : CS_READER_NOBLOCK; 
-    file_fd = csopen(req->src->output, mode, 0, storage_fd); 
-    if (file_fd < 0) 
-	panic("opening file %s", req->src->output);
-
-
     /*
      * initializations
      */
@@ -763,6 +724,32 @@ FIXME
         break;
     }
 
+    /* 
+     * if we have to retrieve the data using the replay callback of
+     * another module instead of reading the output file of the module,
+     * go to query_ondemand that will fork a new CAPTURE and EXPORT to 
+     * execute this query.
+     */
+    if (req->source) {
+	query_ondemand(client_fd, req, node_id); 
+	assert_not_reached();
+    } 
+
+    req->src = req->mdl; 	/* the source is the same as the module */
+    
+    /* 
+     * connect to the storage process, open the module output file 
+     * and then start reading the file and send the data back 
+     */
+    storage_fd = ipc_connect(STORAGE);
+
+    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req->src->output); 
+    mode =  req->wait? CS_READER : CS_READER_NOBLOCK; 
+    file_fd = csopen(req->src->output, mode, 0, storage_fd); 
+    if (file_fd < 0) 
+	panic("opening file %s", req->src->output);
+
+
     /* quickly seek the file from which to start the search */
     ofs = findfile(file_fd, req); 
 
@@ -770,19 +757,17 @@ FIXME
 	timestamp_t ts;
 	char * ptr; 
 
-        len = req->src->bsize; 
+        len = req->src->callbacks.st_recordsize; 
         ptr = getrecord(file_fd, &ofs, req->src, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
-	    if (len == -1) 
-		panic("reading from file %s ofs %lld", req->src->output, ofs); 
-
-	    if (len == 0) {
+	    if (errno == ENODATA) {
 		/* notify the end of stream to the module */
 		if (req->format == Q_OTHER || req->format == Q_HTML) 
 		    printrecord(req->mdl, NULL, NULL, client_fd); 
 		logmsg(V_LOGQUERY, "reached end of file %s\n",req->src->output);
 		break;
 	    }
+	    panic("reading from file %s ofs %lld", req->src->output, ofs); 
 	}
 
 	/*
@@ -796,18 +781,9 @@ FIXME
 	    continue;
 	}
 
-    	if (TS2SEC(ts) < req->start)	/* before the required time. */
+    	if (ts < TIME2TS(req->start, 0))	/* before the required time. */
 	    continue;
-    	if (TS2SEC(ts) >= req->end) {
-	    /* 
-	     * we have reached the end of the stream 
-	     * we want to notify the module that there are 
-	     * no more records so that it can cleanup data 
-	     * structures and send the last messages if needed
-	     */
-	    if (req->source) 
-		replay_source(req->mdl, req->src, NULL, client_fd);
-
+    	if (ts >= TIME2TS(req->end, 0)) {
 	    /* 
 	     * ask the module to send the message footer if it 
 	     * has any to send. 
@@ -827,34 +803,32 @@ FIXME
 	    } 
 
 	    logmsg(LOGQUERY, "query completed\n"); 
+	    
 	    break;
 	}
 
-	if (req->source) {
-	    replay_source(req->mdl, req->src, ptr, client_fd);
-	} else { 
-	    switch (req->format) { 
-	    case Q_COMO: 	
-		replayrecord(req->src, ptr, client_fd);
-		break; 
+	switch (req->format) { 
+	case Q_COMO: 	
+	    replayrecord(req->src, ptr, client_fd);
+	    break; 
 
-	    case Q_RAW: 
-		/* send the data to the query client */
-		ret = como_writen(client_fd, ptr, len);
-		if (ret < 0) 
-		    panic("sending data to the client"); 
-		break;
+	case Q_RAW: 
+	    /* send the data to the query client */
+	    ret = como_writen(client_fd, ptr, len);
+	    if (ret < 0) 
+		panic("sending data to the client"); 
+	    break;
 		
-	    case Q_OTHER: 
-	    case Q_HTML:
-		printrecord(req->mdl, ptr, NULL, client_fd); 
-		break;
-	    }
+	case Q_OTHER: 
+	case Q_HTML:
+	    printrecord(req->mdl, ptr, NULL, client_fd); 
+	    break;
 	}
     }
-
+    /* close the file with STORAGE */
+    csclose(file_fd, 0);
     /* close the socket and the file */
-    csclose(file_fd, 0); 
     close(client_fd);
     close(storage_fd);
+    close(supervisor_fd);
 }

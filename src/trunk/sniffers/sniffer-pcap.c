@@ -57,6 +57,7 @@ struct _snifferinfo {
     int littleendian;		/* set if pcap headers are bigendian */
     char buf[BUFSIZE];   	/* base of the capture buffer */
     int nbytes;      	 	/* valid bytes in buffer */
+    char *base;			/* pointer to first valid byte in buffer */
 
     /* 
      * the following are needed to deal 
@@ -227,8 +228,13 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     char * base;                /* current position in input buffer */
     int npkts;                  /* processed pkts */
     int rd;
+    timestamp_t first_seen;
 
-    info = (struct _snifferinfo *) src->ptr; 
+    info = (struct _snifferinfo *) src->ptr;
+    
+    if (info->nbytes > 0) {
+	memmove(info->buf, info->base, info->nbytes);
+    }
 
     /* read pcap records from fd */
     rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes);
@@ -250,6 +256,10 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	int left = info->nbytes - (base - info->buf);
 	int drop_this = 0;
 
+	/* do we have a pcap header? */
+	if (left < (int) sizeof(pcap_hdr_t))
+	    break;
+
 	/* XXX We use bcopy here because the base pointer may not be word
 	 * aligned. This is an issue on some platforms like the Stargate */
 	bcopy(base, &ph, sizeof(pcap_hdr_t));
@@ -262,10 +272,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	    ph.len = swapl(ph.len);
 	}
 
-	/* do we have a pcap header? */
-	if (left < (int) sizeof(pcap_hdr_t))
-	    break;
-
 	/* check if entire record is available */
 	if (left < (int) sizeof(pcap_hdr_t) + ph.caplen)
 	    break;
@@ -276,6 +282,15 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 * (beware that it could be discarded later on)
 	 */
 	COMO(ts) = TIME2TS(ph.ts.tv_sec, ph.ts.tv_usec);
+	
+	if (npkts > 0) {
+	    if (COMO(ts) - first_seen > TIME2TS(1,0)) {
+		/* Never returns more than 1sec of traffic */
+		break;
+	    }
+	} else {
+	    first_seen = COMO(ts);
+	}
 	COMO(len) = ph.len;
 	COMO(type) = info->type;
 
@@ -333,7 +348,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	base += sizeof(pcap_hdr_t) + ph.caplen;
     }
     info->nbytes -= (base - info->buf);
-    bcopy(base, info->buf, info->nbytes);
+    info->base = base;
     return npkts;
 }
 

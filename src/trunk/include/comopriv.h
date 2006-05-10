@@ -44,4 +44,37 @@ char * metadesc_determine_filter(metadesc_t *md);
 
 pktmeta_type_t pktmeta_type_from_name(const char *name);
 
+
+/*
+ * inline.c
+ */
+void inline_mainloop(int accept_fd);
+
+/*
+ * memory.c
+ */
+typedef enum memmap_policy_t {
+    POLICY_HOLD_FREE_BLOCKS = 0x5a,
+    POLICY_HOLD_IN_USE_BLOCKS = 0xa5
+} memmap_policy_t;
+
+void          allocator_init_module(module_t *mdl);
+allocator_t * allocator_safe();
+allocator_t * allocator_shared();
+
+void       memory_init(uint chunk);
+
+memmap_t * memmap_new(allocator_t *alc, uint entries, memmap_policy_t pol);
+void       memmap_destroy(memmap_t *ml);
+
+void *     mem_smalloc(size_t sz, const char * file, int line);
+void *     mem_scalloc(size_t nmemb, size_t sz, const char * file, int line);
+void       mem_sfree(void * p, const char * file, int line);
+void       mem_sreturn(memmap_t *m, void * p, const char * file, int line);
+
+#define mem_malloc(sz)		mem_smalloc(sz, __FILE__, __LINE__)
+#define mem_calloc(nmemb,sz)	mem_scalloc(nmemb, sz, __FILE__, __LINE__)
+#define mem_free(p)		mem_sfree(p, __FILE__, __LINE__)
+#define mem_return(m,p)		mem_sreturn(m, p, __FILE__, __LINE__)
+
 #endif /*COMOPRIV_H_*/

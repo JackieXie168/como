@@ -56,21 +56,21 @@ FLOWDESC {
     uint64_t pkts;
 };
 
-#define STATEDESC   struct _connx_state
-STATEDESC {
+#define CONFIGDESC   struct _connx_config
+CONFIGDESC {
     timestamp_t idle_timeout;     /* idle timeout (secs) */
 };
 
 static timestamp_t
 init(void * self, char *args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
-    state->idle_timeout = TIME2TS(60,0);
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config->idle_timeout = TIME2TS(60,0);
 
     /* 
      * process input arguments
@@ -78,7 +78,7 @@ init(void * self, char *args[])
     for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "idle-timeout")) {
             char * val = index(args[i], '=') + 1;
-            state->idle_timeout = TIME2TS(atoi(val), 0);
+            config->idle_timeout = TIME2TS(atoi(val), 0);
         }
     }
 
@@ -108,7 +108,7 @@ init(void * self, char *args[])
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
 
-    STATE(self) = state; 
+    CONFIG(self) = config; 
     return TIME2TS(1,0);
 }
 
@@ -241,12 +241,12 @@ static int
 action(void * self, void *efh, timestamp_t current_time, __unused int count)
 {
     EFLOWDESC *ex = EF(efh);
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
 
     if (efh == NULL) 
 	return ACT_GO;
 
-    if (current_time - ex->last > state->idle_timeout) 
+    if (current_time - ex->last > config->idle_timeout) 
         return (ACT_STORE | ACT_DISCARD);
 
     /* are LRU sorted, STOP when we found the first flow not expired */

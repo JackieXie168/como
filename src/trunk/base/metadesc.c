@@ -36,20 +36,15 @@
 #include "hash.h"
 
 static metadesc_t *
-metadesc_new_va(module_t *mdl, int pktmeta_count, va_list ap)
+metadesc_new_va(allocator_t *alc, int pktmeta_count, va_list ap)
 {
     metadesc_t *md;
     int i = 0;
     
-    if (mdl) {
-	md = mdl_mem_alloc(mdl, sizeof(metadesc_t));
-	memset(md, 0, sizeof(metadesc_t));
-    } else {
-	md = safe_calloc(1, sizeof(metadesc_t));
-    }
+    md = alc_calloc(alc, 1, sizeof(metadesc_t));
 
     md->_next = NULL;
-    md->_mdl = mdl;
+    md->_alc = alc;
     md->_tpl_count = 0;
     md->_first_tpl = NULL;
     md->flags = 0;
@@ -57,15 +52,8 @@ metadesc_new_va(module_t *mdl, int pktmeta_count, va_list ap)
     md->pktmeta_count = pktmeta_count;
     
     if (pktmeta_count > 0) {
-    	if (mdl) {
-	    md->pktmeta_types = mdl_mem_alloc(mdl, pktmeta_count *
-					      sizeof(pktmeta_type_t));
-	    memset(md->pktmeta_types, 0, pktmeta_count *
-		   sizeof(pktmeta_type_t));
-    	} else {
-	    md->pktmeta_types = safe_calloc(pktmeta_count,
-					    sizeof(pktmeta_type_t));
-    	}
+    	md->pktmeta_types = alc_calloc(alc, pktmeta_count,
+				       sizeof(pktmeta_type_t));
     	
 	while (i < pktmeta_count) {
 	    pktmeta_type_t pktmeta_type;
@@ -92,7 +80,7 @@ metadesc_new(int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(NULL, pktmeta_count, ap);
+    md = metadesc_new_va(allocator_safe(), pktmeta_count, ap);
     va_end(ap);
     
     return md;
@@ -111,7 +99,7 @@ metadesc_list_new(metadesc_t *head, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(NULL, pktmeta_count, ap);
+    md = metadesc_new_va(allocator_safe(), pktmeta_count, ap);
     va_end(ap);
     
     md->_next = head;
@@ -126,7 +114,7 @@ metadesc_define_in(module_t *self, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(self, pktmeta_count, ap);
+    md = metadesc_new_va(&self->alc, pktmeta_count, ap);
     va_end(ap);
     
     md->_next = self->indesc;
@@ -142,7 +130,7 @@ metadesc_define_out(module_t *self, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(self, pktmeta_count, ap);
+    md = metadesc_new_va(&self->alc, pktmeta_count, ap);
     va_end(ap);
     
     md->_next = self->outdesc;
@@ -158,7 +146,7 @@ metadesc_define_sniffer_out(source_t *src, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(0, pktmeta_count, ap);
+    md = metadesc_new_va(allocator_safe(), pktmeta_count, ap);
     va_end(ap);
     
     md->_next = src->outdesc;
@@ -175,28 +163,20 @@ metadesc_list_free(metadesc_t *head)
 {
     metadesc_t *d;
     metatpl_t *t;
+    allocator_t *alc;
     
     while (head) {
+    	alc = head->_alc;
 	while (head->_first_tpl) {
 	    t = head->_first_tpl;
 	    head->_first_tpl = t->_next;
-	    if (head->_mdl) {
-	    	mdl_mem_free(head->_mdl, t->protos);
-		mdl_mem_free(head->_mdl, t);
-	    } else {
-	    	free(t->protos);
-		free(t);
-	    }
+	    alc_free(alc, t->protos);
+	    alc_free(alc, t);
 	}
 	d = head;
 	head = d->_next;
-	if (d->_mdl) {
-	    mdl_mem_free(d->_mdl, d->pktmeta_types);
-	    mdl_mem_free(d->_mdl, d);
-	} else {
-	    free(d->pktmeta_types);
-	    free(d);
-	}
+	alc_free(alc, d->pktmeta_types);
+	alc_free(alc, d);
     }
 }
 
@@ -307,15 +287,9 @@ metadesc_tpl_add(metadesc_t *md, const char *protos)
     
     parse_protos(protos, &pp);
     
-    if (md->_mdl) {
-	tpl = mdl_mem_alloc(md->_mdl, sizeof(metatpl_t) + pp.len);
-	memset(tpl, 0, sizeof(metatpl_t) + pp.len);
-	tpl->protos = mdl_mem_alloc(md->_mdl, strlen(protos) + 1);
-	strcpy(tpl->protos, protos);
-    } else {
-	tpl = safe_calloc(1, sizeof(metatpl_t) + pp.len);
-	tpl->protos = strdup(protos);
-    }
+    tpl = alc_calloc(md->_alc, 1, sizeof(metatpl_t) + pp.len);
+    tpl->protos = alc_malloc(md->_alc, strlen(protos) + 1);
+    strcpy(tpl->protos, protos);
     
     pkt = &tpl->tpl;
     
@@ -367,7 +341,7 @@ metadesc_tpl_add(metadesc_t *md, const char *protos)
  * bitmask exists only in the in template.
  * The check fails when a bitmask is provided only by out template.
  */
-#define CHECK_LAYER(lno)				\
+#define CHECK_LAYER(lno, none)				\
     if (hasL ## lno ## P(pin) && hasL ## lno ## P(pout)) { \
 	char *inmask, *outmask;				\
 	int k = 0, mask_ok = 1;				\
@@ -385,7 +359,8 @@ metadesc_tpl_add(metadesc_t *md, const char *protos)
 	    tout = tout->_next;				\
 	    continue;					\
 	}						\
-    } else if (hasL ## lno ## P(pout)) {		\
+    } else if (pin->l ## lno ## type != none &&		\
+	       hasL ## lno ## P(pout)) {		\
     	tout = tout->_next;				\
     	continue;					\
     }
@@ -443,29 +418,30 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
 	tout = out->_first_tpl;
 	
 	while (tout) {
-	    logmsg(LOGDEBUG, "tin %s vs tout %s:\n", tin->protos, tout->protos);
-
 	    pout = &tout->tpl;
 	    assert(pout->pktmetaslen == 0);
 	    
-	    /* FIXME: check caplen */
+	    /* CHECKME: caplen = 0 means don't care, ok? */
+	    if (pin->caplen != 0 && pout->caplen != 0 &&
+		pin->caplen > pout->caplen) {
+	    	tout = tout->_next;
+	    	continue;
+	    }
 	    
 	    CHECK_TYPE(type, COMOTYPE_ANY, COMOTYPE_NONE);
 	    /* NOTE: no bitmask checking for type */
 	    
 	    CHECK_TYPE(l2type, LINKTYPE_ANY, LINKTYPE_NONE);
-	    CHECK_LAYER(2);
+	    CHECK_LAYER(2, LINKTYPE_NONE);
 	    
 	    CHECK_TYPE(l3type, L3TYPE_ANY, L3TYPE_NONE);
-	    CHECK_LAYER(3);
+	    CHECK_LAYER(3, L3TYPE_NONE);
 	    
 	    CHECK_TYPE(l4type, L4TYPE_ANY, L4TYPE_NONE);
-	    CHECK_LAYER(4);
+	    CHECK_LAYER(4, L4TYPE_NONE);
 	    
 	    tpl_ok++;
 	    tout = tout->_next;
-	    
-	    logmsg(LOGDEBUG, "ok!\n");
 	}
 	
 	if (!tpl_ok)
@@ -478,7 +454,7 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
     
     if (affinity) {
 	/* raise up affinity */
-	if (out->flags & META_PKTS_ARE_TUPLES)
+	if (out->flags & META_PKTS_ARE_FLOWS)
 	    affinity += 2;
 	
 	if (out->flags & META_HAS_FULL_PKTS)
@@ -591,7 +567,7 @@ metadesc_determine_filter(metadesc_t *md)
     	hash_t *seen;
 	if (layers[l][0] == -1) continue;
 	
-	seen = hash_new(NULL, HASHKEYS_POINTER, NULL, NULL);
+	seen = hash_new(allocator_safe(), HASHKEYS_POINTER, NULL, NULL);
 	
 	if (filter_initialized == 0) {
 	    asprintf(&filter, "(");
@@ -791,7 +767,14 @@ test_metadesc()
     N32(IP(dst_ip)) = 0xffffff00;
     N16(TCP(src_port)) = 0xffff;
     N16(TCP(dst_port)) = 0xffff;
-    TCP(flags) = 0xff;
+    TCP(cwr) = 1;
+    TCP(ece) = 1;
+    TCP(urg) = 1;
+    TCP(ack) = 1;
+    TCP(psh) = 1;
+    TCP(rst) = 1;
+    TCP(syn) = 1;
+    TCP(fin) = 1;
     
     outdesc1 = metadesc_list_new(NULL, 0);
     
@@ -809,7 +792,14 @@ test_metadesc()
     N32(IP(dst_ip)) = 0xffffff00;
     N16(TCP(src_port)) = 0xffff;
     N16(TCP(dst_port)) = 0xffff;
-    TCP(flags) = 0xff;
+    TCP(cwr) = 1;
+    TCP(ece) = 1;
+    TCP(urg) = 1;
+    TCP(ack) = 1;
+    TCP(psh) = 1;
+    TCP(rst) = 1;
+    TCP(syn) = 1;
+    TCP(fin) = 1;
     
     pkt = metadesc_tpl_add(outdesc1, "sflow:none:~ip:~udp");
     assert(COMO(type) == COMOTYPE_SFLOW);

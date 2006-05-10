@@ -40,48 +40,60 @@
 /*
  * config.c
  */
-int parse_cmdline(int argc, char *argv[]);
-void configure(int argc, char *argv[]);
-void reconfigure(void);
-int load_callbacks(module_t *mdl);
-module_t *load_module(module_t *mdl, int idx);
-void remove_module(module_t *mdl);
+void configure(como_t * m, int argc, char *argv[]);
+void init_map(como_t * m);
+void add_sniffer(como_t * m, char *want, char *device, char *args);
+
+
+/* 
+ * modules.c 
+ */
+int activate_module(module_t * mdl, char * libdir);
+int check_module(como_t * m, module_t *mdl);
+module_t * new_module(como_t * m, char *name, int node);
+module_t * copy_module(como_t * m, module_t * src, int node);
+void remove_module(como_t * m, module_t *mdl);
+char * pack_module(module_t * mdl, int * len);
+int unpack_module(char * x, size_t len, module_t * mdl);
+int init_module(module_t * mdl); 
+int match_module(module_t * a, module_t * b); 
 
 /* 
  * memory.c
  */
 uint memory_usage();
 uint memory_peak();
-void * mem_alloc(size_t sz);
-void mem_free(void * p);
-void mem_flush(void * p, memlist_t * map);
-int mem_free_map(memlist_t * x);
-void * mdl_mem_alloc(module_t * mdl, size_t sz);
-void mdl_mem_free(module_t * mdl, void *p);
-void memory_init(uint size_mb);
-memlist_t *new_memlist(uint entries);
-void * mem_copy_map(memlist_t * s, void * p, memlist_t * d);
 
+void * mem_mdl_smalloc(size_t sz, const char * file, int line, module_t * mdl);
+void * mem_mdl_scalloc(size_t nmemb, size_t size, const char * file, int line,
+		       module_t * mdl);
+void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
+
+#define mem_mdl_malloc(self,sz)	mem_mdl_smalloc(sz, __FILE__, __LINE__, \
+						(module_t *) self)
+#define mem_mdl_calloc(self,nmemb,sz)	mem_mdl_scalloc(sz, __FILE__, \
+							__LINE__, \
+							(module_t *) self)
+#define mem_mdl_free(self,p)	mem_mdl_sfree(p, __FILE__, __LINE__, \
+					      (module_t *) self)
 
 /*
  * capture.c
  */
-void capture_mainloop(int fd);
-
+void capture_mainloop();
 
 /*
  * export.c
  */
-void export_mainloop(int fd);
-
+void export_mainloop();
 
 /*
  * supervisor.c
  */
-void supervisor_mainloop(int fd);
-pid_t start_child(procname_t who, int mtype, void (*mainloop)(int fd), int fd);
-int get_sp_fd(char *name);
-
+void supervisor_mainloop();
+pid_t start_child(procname_t who, int mtype, 
+	void (*mainloop)(int in_fd, int out_fd), int fd);
+void init_map(como_t * map); 
 
 /* 
  * logging.c 
@@ -94,7 +106,6 @@ void _epanic(const char * file, const int line, const char *fmt, ...);
 void _epanicx(const char * file, const int line, const char *fmt, ...);
 #define panicx(...) _epanicx(__FILE__, __LINE__, __VA_ARGS__)
 
-
 /* 
  * filter-syntax.c
  */
@@ -102,31 +113,36 @@ int parse_filter(char *, treenode_t **, char **);
 int evaluate(treenode_t *t, pkt_t *pkt);
 treenode_t *tree_copy(treenode_t *t);
 
-
 /*
  * util-socket.c
  */
-int create_socket(const char *name, char **arg);
+int create_socket(const char *path, char **arg);
+int destory_socket(const char *path);
 int del_fd(int i, fd_set * fds, int max_fd);
 int add_fd(int i, fd_set * fds, int max_fd);
-
 
 /*
  * util-io.c
  */
-int como_readn(int fd, char *buf, size_t len);
+int como_read(int fd, char *buf, size_t len);
 int como_writen(int fd, const char *buf, size_t len);
-
 
 /* 
  * util-misc.c
  */
-char *getprotoname(int proto);
-void *load_object(char *base_name, char *symbol);
-void *load_object_h(char *base_name, char *symbol, void **handle);
-void unload_object(void *handle);
+char * getprotoname(int proto);
+
+/* 
+ * util-process.c
+ */
 char * getprocname(procname_t);
 char * getprocfullname(procname_t);
+procname_t sibling(procname_t who);
+procname_t child(procname_t who, int id);
+procname_t buildtag(procname_t parent, procname_t who, int id);
+procname_t getprocclass(procname_t who);
+int getprocid(procname_t who);
+int isvalidproc(procname_t who);
 
 
 /*
@@ -136,19 +152,18 @@ char * getprocfullname(procname_t);
  * Instead use safe_malloc(), safe_calloc() and safe_realloc() which provide
  * wrappers to check the arguments and panic if necessary.
  */
-void *_smalloc(const char * file, const int line, size_t sz); 
-#define safe_malloc(...) _smalloc(__FILE__, __LINE__, __VA_ARGS__) 
-void *_scalloc(const char * file, const int line, int n, size_t sz); 
-#define safe_calloc(...) _scalloc(__FILE__, __LINE__, __VA_ARGS__) 
-void *_srealloc(const char * file, const int line, void * ptr, size_t sz); 
-#define safe_realloc(...) _srealloc(__FILE__, __LINE__, __VA_ARGS__) 
-char *_sstrdup(const char * file, const int line, const char * str); 
-#define safe_strdup(...) _sstrdup(__FILE__, __LINE__, __VA_ARGS__) 
-void _sfree(const char * file, const int line, void * ptr); 
-#define safe_free(...) _sfree(__FILE__, __LINE__, __VA_ARGS__) 
-void _sdup(const char * file, const int line, char ** dst, char * src); 
-#define safe_dup(...) _sdup(__FILE__, __LINE__, __VA_ARGS__) 
-
+void *_smalloc(size_t sz, const char * file, int line);
+#define safe_malloc(sz) _smalloc(sz, __FILE__, __LINE__)
+void *_scalloc(size_t n, size_t sz, const char * file, int line);
+#define safe_calloc(n, sz) _scalloc(n, sz, __FILE__, __LINE__)
+void *_srealloc(void * ptr, size_t sz, const char * file, const int line);
+#define safe_realloc(ptr, sz) _srealloc(ptr, sz, __FILE__, __LINE__)
+char *_sstrdup(const char * str, const char * file, const int line);
+#define safe_strdup(str) _sstrdup(str, __FILE__, __LINE__)
+void _sfree(void * ptr, const char * file, int line);
+#define safe_free(ptr) _sfree(ptr, __FILE__, __LINE__)
+void _sdup(char ** dst, char * src, const char * file, const int line);
+#define safe_dup(dst, src) _sdup(dst, src, __FILE__, __LINE__)
 
 /* 
  * util-timers.c
@@ -178,22 +193,6 @@ uint64_t get_min_tscsample(tsc_t *);
 #define get_min_tscsample(x)
 
 #endif
-
-
-/*
- * ipc.c
- */
-void ipc_init(void);
-void register_ipc_fd(int fd);
-void unregister_ipc_fd(int fd);
-int  sup_send_new_modules(void);
-void sup_send_module_status(void);
-void sup_send_ca_lock(void);
-void sup_send_ca_unlock(void);
-void recv_message(int fd, proc_callbacks_t *callbacks);
-int  sup_recv_message(int fd);
-void sup_wait_for_ack(int fd);
-void send_string(char *);
 
 /*
  * res-mgmt.c
@@ -241,10 +240,8 @@ void         test_metadesc      ();
 /*
  * pktmetaion.c
  */
-void          pktmeta_set            (pkt_t *pkt, const char *name,
-				     void *opt, uint16_t opt_len);
-void *        pktmeta_get            (pkt_t *pkt, const char *name,
-				     uint16_t *opt_len);
+void pktmeta_set(pkt_t *pkt, const char *name, void *opt, uint16_t opt_len);
+void * pktmeta_get(pkt_t *pkt, const char *name, uint16_t *opt_len);
 
 /*
  * headerinfo.c

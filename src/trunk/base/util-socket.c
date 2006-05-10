@@ -34,6 +34,7 @@
 #include <stdarg.h> 			/* va_start */
 #include <string.h>
 #include <errno.h>
+#include <err.h>
 #include <unistd.h>     
 #include <dlfcn.h>
 #include <sys/types.h>			/* inet_ntop */
@@ -90,15 +91,11 @@ create_socket(const char *path, char **arg)
 	/* locate first : or / */
 	for (port = host; *port && *port != '/' && *port != ':'; port++)
 	    ;
-	if (*port != ':') {
-	    logmsg(LOGWARN, "missing port in %s\n", path);
-error:
-	    free(host);
-	    return -1;
-	}
+	if (*port != ':') 
+	    errx(EXIT_FAILURE, "missing port in %s\n", path);
+
 	*port = '\0';
 	if (server && strcasecmp(host, "localhost") == 0) {
-	    logmsg(LOGWARN, "binding local port in %s\n", path);
 	    saddr.sin_addr.s_addr = INADDR_ANY;
 	} else if (!inet_aton(host, &saddr.sin_addr)) { /* not numeric */
 	    struct hostent *hp = gethostbyname(host) ;
@@ -108,15 +105,11 @@ error:
 	}
 
 	saddr.sin_port = htons(strtol(port+1, &local, 10));
-	if (local == port+1) {
-	    logmsg(LOGWARN, "missing port in %s\n", path);
-	    goto error;
-	}
+	if (local == port+1)
+	    errx(EXIT_FAILURE, "missing port in %s\n", path);
 	if (*local) {
-	    if (*local != '/') {
-		logmsg(LOGWARN, "bad local in %s\n", path);
-		goto error;
-	    }
+	    if (*local != '/') 
+		errx(EXIT_FAILURE, "bad local in %s\n", path);
 	    local++;
 	}
 	i = socket(AF_INET, SOCK_STREAM, 0);
@@ -144,7 +137,7 @@ error:
     if (server) {
 	r = bind(i, sa, l);
 	if (r < 0)
-	    panic("create_socket: cannot bind [%s] %d\n", path, r);
+	    err(EXIT_FAILURE, "create_socket: cannot bind [%s] %d\n", path, r);
 	listen(i, SOMAXCONN);
     } else { /* client mode */
 	int done, retries;
@@ -154,15 +147,24 @@ error:
 		done = 1;
 	}
 	if (!done)
-	    panic("create_socket: cannot connect [%s] %d\n", path, i);
+	    err(EXIT_FAILURE, "create_socket: cannot connect [%s] %d", path, i);
     }
-    logmsg(LOGDEBUG, "create_socket %s [%s] %d\n",
+    logmsg(LOGIPC, "create_socket %s [%s] %d\n",
 	server ? "SERVER":"CLIENT", path, i);
     if (buf)
 	free(buf);
     return i;
 }
 
+int
+destory_socket(const char *path)
+{
+    char *buf = NULL;
+    
+    asprintf(&buf, "%s/%s", map.workdir, path);
+	
+    return unlink(buf);
+}
 
 /*
  * -- add_fd
@@ -170,7 +172,7 @@ error:
  * add a file descriptor to the interesting range;
  * return maxfd value to be used in select().
  */ 
-__inline__ int
+int
 add_fd(int i, fd_set * fds, int max_fd)
 {
     if (i < 0) 
@@ -187,7 +189,7 @@ add_fd(int i, fd_set * fds, int max_fd)
  * delete a file descriptor to the interesting range;
  * return maxfd value to be used in select().
  */ 
-__inline__ int
+int
 del_fd(int i, fd_set * fds, int max_fd)
 {
     if (i < 0) 

@@ -49,11 +49,11 @@ each described by a 'mem_block_t'. 'size' contains
 the size of the user-portion (data[]) of the block, while
 'next' is used to build free lists of blocks, typically of the same size.
 
-Each list is reachable through a 'memlist_t' structure, which
+Each list is reachable through a 'memmap_t' structure, which
 normally contains a pointer to the head of the list, the size
 of each entry, and the number of entries in the list.
 
-A memory map is made of an array of such memlist_t's.
+A memory map is made of an array of such memmap_t's.
 Entry #0 is special and used as follows:
   size	is the number of entries in the array;
   count	is the index of the first free entry;
@@ -84,9 +84,9 @@ struct _mem_block {
 };
 
 /*
- * Entries of a memlist_t.
+ * Entries of a memmap_t.
  */
-struct _memlist {
+struct memmap_t {
     mem_block_t *next;
     uint size;			/* user data size */
     uint count;			/* elements in this list */
@@ -101,7 +101,7 @@ struct _memlist {
  */
 #define MAX_MEMLISTS 	2048
 struct _memstate { 
-    memlist_t map[MAX_MEMLISTS];    /* the free memory map */
+    memmap_t map[MAX_MEMLISTS];    /* the free memory map */
     char * low;			    /* min allowed shared addresses */
     char * high;		    /* max allowed shared addresses */
     int	usage; 			    /* used memory */
@@ -112,6 +112,11 @@ struct _memstate {
 extern struct _como map;
 struct _memstate * shared_mem; 
 
+static inline int
+is_in_shmem(void *x)
+{
+    return ((char *)x >= shared_mem->low && (char *)x < shared_mem->high);
+}
 
 /* 
  * -- checkptr
@@ -141,11 +146,12 @@ checkptr(mem_block_t * x)
  * Insert block x into the map m
  */
 static void
-mem_insert(memlist_t *m, mem_block_t *x)
+mem_insert(memmap_t *m, mem_block_t *x)
 {
     uint i;
 
-    checkptr(x); 
+    if (map.mem_type & COMO_SHARED_MEM) 
+	checkptr(x); 
 
     logmsg(V_LOGMEM, "mem_insert %p size %8d, map %p %2d/%8d\n",
 	x, x->size, m, first_free(m), map_size(m));
@@ -182,14 +188,14 @@ mem_insert(memlist_t *m, mem_block_t *x)
  * It returns the amount of memory recovered thru merging. 
  */
 static int
-mem_merge_maps(memlist_t *dst, memlist_t *m)
+mem_merge_maps(memmap_t *dst, memmap_t *m)
 {
     uint have, need;
     uint i, j;
     uint saved = 0;	/* memory recovered */
     uint orig_src = first_free(m);
 
-    CHECK_PTR(m); 
+    //CHECK_PTR(m); /* FIXME: won't work for heap allocated memmaps. */
     if (dst == NULL)
 	dst = shared_mem->map;
     need = first_free(m) - 1;		/* slots we need */
@@ -223,6 +229,9 @@ mem_merge_maps(memlist_t *dst, memlist_t *m)
 	for (x = m[i].next; x; ) {
 	    saved += x->size;
 	    y = x;
+	    /* FIXME: HACK!!! */
+	    if (x == x->next)
+		x->next = NULL;
 	    x = x->next;
 	    mem_insert(dst, y);
 	}
@@ -236,12 +245,13 @@ mem_merge_maps(memlist_t *dst, memlist_t *m)
     return saved;
 }
 
+#define new_mem(m, size)	_new_mem(m, size, __FILE__, __LINE__)
 
 /* 
- * -- new_mem()
+ * -- _new_mem()
  * 
  * this function allocates a new block of the memory from the 
- * free list. It looks into the lists (memlist_t) to find a block
+ * free list. It looks into the lists (memmap_t) to find a block
  * whose is size is equal to the requested size or the smallest 
  * block that would fit the size. In the case the size is not 
  * exactly the same it will split the block and insert the new
@@ -249,7 +259,7 @@ mem_merge_maps(memlist_t *dst, memlist_t *m)
  * 
  */
 static void *
-new_mem(memlist_t *m, uint size)
+_new_mem(memmap_t *m, uint size, const char * file, int line)
 {
     uint i, cand;
     mem_block_t *x;
@@ -281,9 +291,10 @@ new_mem(memlist_t *m, uint size)
 	i++;
     }
     if (cand == 0) {
-	logmsg(V_LOGMEM, "sorry out of memory for %d bytes!\n", size);
+	logmsg(V_LOGMEM, "sorry out of memory for %d bytes (%s:%d)!\n", size,
+	       file, line);
 	for (i = 1; i < first_free(m); i++)
-	    logmsg(0, "  . slot %2d size %8d count %3d p %p\n",
+	    logmsg(V_LOGMEM, "  . slot %2d size %8d count %3d p %p\n",
 		i, m[i].size, m[i].count, m[i].next);
 	return NULL;
     }
@@ -301,7 +312,7 @@ new_mem(memlist_t *m, uint size)
 	first_free(m)--;
 	m[cand] = m[first_free(m)];
     } else if (cand != 1) {	/* move to front. */
-	memlist_t y = m[cand];
+	memmap_t y = m[cand];
 	m[cand] = m[1];
 	m[1] = y;
     }
@@ -311,7 +322,7 @@ new_mem(memlist_t *m, uint size)
 
 	y->size = x->size - size - sizeof(mem_block_t);
 	y->_magic = MY_MAGIC;
-	x->size = size;
+	x->size = size; /* FIXME: padding? */
 	mem_insert(m, y);
     }
     if (m == shared_mem->map) {
@@ -325,15 +336,17 @@ new_mem(memlist_t *m, uint size)
     return x->data;
 }
 
+#define mfree_mem(m, p, size)	_mfree_mem(m, p, size, __FILE__, __LINE__)
+
 /*
- * -- mfree_mem
+ * -- _mfree_mem
  * 
  * Frees the block of memory p into pool m. If a non-zero size is 
  * specified, the size is also checked with the allocation.
  * 
  */
 static void
-mfree_mem(memlist_t * m, void * p, uint size)	
+_mfree_mem(memmap_t * m, void * p, uint size, const char * file, int line)	
 {
     mem_block_t * x;
 
@@ -344,7 +357,8 @@ mfree_mem(memlist_t * m, void * p, uint size)
     x = (mem_block_t *)p - 1;
     checkptr(x); 
     if (x->_magic != MY_MAGIC_IN_USE)
-	panic("block not in use, %p magic %p\n", x, x->_magic);
+	panic("block not in use, %p magic %p (%s:%d)\n", x, x->_magic,
+	      file, line);
     x->_magic = MY_MAGIC;
     if (size != 0 && size > x->size)
 	panicx("mfree_mem %p size %d real_size %d\n", p, size, x->size);
@@ -365,13 +379,8 @@ mfree_mem(memlist_t * m, void * p, uint size)
 void
 memory_init(uint chunk)
 {
-    static int done;
     mem_block_t *m;
 
-    if (done)
-	panic("*** can only do memory_init() once\n");
-    done = 1;
-    
     /*
      * we put the shared memory control structure at the beginning of the
      * chunk, followed by the memory block that contains the actual
@@ -399,22 +408,32 @@ memory_init(uint chunk)
 }
 
 
-memlist_t *
-new_memlist(uint entries)
+memmap_t *
+memmap_new(allocator_t *alc, uint entries)
 {
-    memlist_t *x; 
+    memmap_t *x; 
 
-    x = new_mem(shared_mem->map, sizeof(memlist_t)*(1+entries));
+    x = alc_malloc(alc, sizeof(memmap_t)*(1+entries));
     map_size(x) = 1+entries;
     first_free(x) = 1;
     overflow_list(x) = NULL;
     return x;
 }
 
+void
+memmap_destroy(memmap_t *ml)
+{
+    if (is_in_shmem(ml) == 0)
+	return; /* XXX temporary */
+	
+    mem_merge_maps(shared_mem->map, ml);
+    mfree_mem(shared_mem->map, ml, 0);
+}
+
 /* 
  * -- mem_copy_map 
  * 
- * this function browse the memlist_t src and re-allocates each 
+ * this function browse the memmap_t src and re-allocates each 
  * block in that list from the main memory map. it then copies the 
  * content of the src blocks as well. It also find the relative position
  * of the pointer ptr and returns the new relative position (in the copied 
@@ -422,7 +441,7 @@ new_memlist(uint entries)
  *
  */
 void * 
-mem_copy_map(memlist_t * src, void * ptr, memlist_t * dst) 
+mem_copy_map(memmap_t * src, void * ptr, memmap_t * dst) 
 {
     void * new_ptr = NULL;
     uint i; 
@@ -434,7 +453,7 @@ mem_copy_map(memlist_t * src, void * ptr, memlist_t * dst)
 
 	    /* 
 	     * allocate a block of the same size, copy this block 
-	     * and look for ptr. if the dst memlist is NULL it means 
+	     * and look for ptr. if the dst memmap is NULL it means 
 	     * we don't want to use shared memory. 
 	     */
 	    if (dst != NULL) { 
@@ -479,27 +498,36 @@ memory_peak()
     return shared_mem->peak;
 }
 
-__inline__ void * 
-mem_alloc(size_t sz)
+void *
+mem_smalloc(size_t sz, const char * file, int line)
 {
-    return new_mem(shared_mem->map, sz);
+    return _new_mem(shared_mem->map, sz, file, line);
+}
+
+void *
+mem_scalloc(size_t nmemb, size_t sz, const char * file, int line)
+{
+    return _new_mem(shared_mem->map, nmemb * sz, file, line);
+}
+
+void
+mem_sfree(void * p, const char * file, int line)
+{
+    return _mfree_mem(shared_mem->map, p, 0, file, line);
 }
 
 __inline__ void 
-mem_free(void * p) 
-{
-    return mfree_mem(shared_mem->map, p, 0);
-}
-
-__inline__ void 
-mem_flush(void * p, memlist_t * m) 
+mem_flush(void * p, memmap_t * m) 
 {
     return mfree_mem(m, p, 0);
 }
 
 __inline__ int 
-mem_free_map(memlist_t * x) 
+mem_free_map(memmap_t * x) 
 {
+    if (x ==  NULL)
+	return 0;
+    
     return mem_merge_maps(shared_mem->map, x);
 }
 
@@ -524,48 +552,47 @@ mem_free_map(memlist_t * x)
  * 
  */
 void * 
-mdl_mem_alloc(module_t * mdl, size_t sz)
+mem_mdl_smalloc(size_t sz, const char * file, int line, module_t * mdl)
 {
-    void * x; 
-
+    mem_block_t *m;
+    void *x;
+    
     /* check input parameters */
     assert(mdl != NULL);
-    assert(sz > 0); 
-
-    if (map.mem_type & COMO_SHARED_MEM) { 
-	x = new_mem(mdl->mem_map, sz); 
-	if (x == NULL) { 
-	    /* 
-	     * the module doesn't have enough memory to accomodate 
-	     * this new request. get some memory from the main map.
-	     * 
-	     * XXX here we can add some controls over the amount of 
-	     *     memory each module is using or to reclaim some of it.
-	     */
-	    x = new_mem(shared_mem->map, sz); 
-	    if (x == NULL) 
-		return NULL; 
-	} 
-
-	if (map.mem_type & COMO_PERSISTENT_MEM) { 
-	    /* 
-	     * keep record of this memory block in the master_map 
-	     * list of blocks. to do this we just free this block in 
-	     * the master_map.  
-	     */
-	    mem_block_t * m = (mem_block_t *)x - 1; 
-	    mem_insert(mdl->master_map, m); 
-	} 
-    } else {
-	mem_block_t * m;
-	m = safe_calloc(1, sz + sizeof(mem_block_t));
-	m->_magic = MY_MAGIC_IN_USE; 
-	m->size = sz; 
-	mem_insert(mdl->master_map, m); 
-	x = m->data; 
-    }
+    assert(sz > 0);
+    
+    if (map.mem_type & COMO_SHARED_MEM) {
+    	/* NOTE: this code doesn't use the mdl->mem_map to get free blocks */
+	x = _new_mem(shared_mem->map, sz, file, line);
+	if (x == NULL) return NULL;
 	
+	m = (mem_block_t *) x - 1;
+	/* TODO: we don't need a memmap for this, just a list of blocks will
+	 * suffice */
+	mem_insert(mdl->shared_map, m);
+    } else {
+	m = safe_calloc(1, sz + sizeof(mem_block_t));
+	m->_magic = MY_MAGIC_IN_USE;
+	m->size = sz;
+	/* TODO: we don't need a memmap for this, just a list of blocks will
+	 * suffice */
+	mem_insert(mdl->inprocess_map, m);
+	x = m->data;
+    }
+    
     return x; 
+}
+
+void *
+mem_mdl_scalloc(size_t nmemb, size_t size, const char * file, int line,
+		module_t * mdl)
+{
+    void *ptr;
+    
+    size *= nmemb;
+    ptr = mem_mdl_smalloc(size, file, line, mdl);
+    memset(ptr, 0, size);
+    return ptr;
 }
 
 /*
@@ -574,14 +601,50 @@ mdl_mem_alloc(module_t * mdl, size_t sz)
  * Free memory from a module. If the pointer is within the shared memory 
  * region, use mfree_mem otherwise use the free() function. 
  */
-void 
-mdl_mem_free(module_t * mdl, void *p)
+void
+mem_mdl_sfree(void *p, const char * file, int line, module_t * mdl)
 {
     /* check input parameters */
     assert(mdl != NULL);
 
-    if ((char*)p < shared_mem->low || (char*)p >= shared_mem->high)	
-        free(p);
+    if ((char *) p < shared_mem->low || (char *) p >= shared_mem->high)
+	free(p);
     else 
-        mfree_mem(mdl->flush_map, p, 0);
+	_mfree_mem(shared_mem->map, p, 0, file, line);
 }
+
+allocator_t *
+allocator_safe()
+{
+    static allocator_t alc = {
+	malloc: (alc_malloc_fn) _smalloc,
+	calloc: (alc_calloc_fn) _scalloc,
+	free: (alc_free_fn) _sfree,
+	data: NULL
+    };
+    
+    return &alc;
+}
+
+allocator_t *
+allocator_shared()
+{
+    static allocator_t alc = {
+	malloc: (alc_malloc_fn) mem_smalloc,
+	calloc: (alc_calloc_fn) mem_scalloc,
+	free: (alc_free_fn) mem_sfree,
+	data: NULL
+    };
+    
+    return &alc;
+}
+
+void
+allocator_init_module(module_t *mdl)
+{
+    mdl->alc.malloc = (alc_malloc_fn) mem_mdl_smalloc;
+    mdl->alc.calloc = (alc_calloc_fn) mem_mdl_scalloc;
+    mdl->alc.free = (alc_free_fn) mem_mdl_sfree;
+    mdl->alc.data = mdl;
+}
+

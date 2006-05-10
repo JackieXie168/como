@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id$
+ * $Id: tuple.c,v 1.27 2006/05/06 13:40:11 iannak1 Exp $
  */
 
 /*
@@ -55,8 +55,8 @@ FLOWDESC {
     uint64_t pkts;
 };
 
-#define STATEDESC   struct _tuple_state
-STATEDESC {
+#define CONFIGDESC   struct _tuple_config
+CONFIGDESC {
     /*
      * packet description and templates for the
      * replay() callback or to know if we can process
@@ -69,15 +69,15 @@ STATEDESC {
 static timestamp_t
 init(void * self, char *args[])
 {
-    STATEDESC * state;
+    CONFIGDESC * config;
     timestamp_t flush_ivl = TIME2TS(1,0);
     int i; 
     pkt_t * pkt; 
     metadesc_t *inmd, *outmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
-    state->compact = 0;
-    state->mask = ~0;
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config->compact = 0;
+    config->mask = ~0;
     
     /*
      * process input arguments
@@ -90,11 +90,11 @@ init(void * self, char *args[])
 	    flush_ivl = TIME2TS(atoi(x), 0);
 	}
 	if (strstr(args[i], "compact")) {
-	    state->compact = 1;
+	    config->compact = 1;
 	}
         if (strstr(args[i], "mask")) { 
 	    x = index(args[i], '=') + 1; 
-	    state->mask <<= atoi(x);
+	    config->mask <<= atoi(x);
 	}
     }
 
@@ -157,21 +157,8 @@ init(void * self, char *args[])
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
     
-    STATE(self) = state; 
+    CONFIG(self) = config; 
     return flush_ivl;
-}
-
-static int
-check(__unused void * self, pkt_t * pkt)
-{
-    /*
-     * if the stream contains per-flow information, 
-     * drop all packets after the first. 
-     */
-    if ((COMO(type) == COMOTYPE_NF) && !(NF(flags) & COMONF_FIRST)) 
-	return 0;
-
-    return 1; 
 }
 
 
@@ -243,7 +230,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
     if (COMO(type) == COMOTYPE_NF) {
 	x->sampling = H16(NF(sampling));
-	x->bytes += H64(NF(bytecount)); 
+	x->bytes += H32(NF(pktcount)) * COMO(len);
 	x->pkts += (uint64_t) H32(NF(pktcount));
     } else if (COMO(type) == COMOTYPE_SFLOW) {
     	x->sampling = (uint16_t) H32(SFLOW(sampling_rate));
@@ -346,7 +333,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt;
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     char src[20], dst[20];
     struct in_addr saddr, daddr;
     FLOWDESC *x; 
@@ -382,8 +369,8 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
     x = (FLOWDESC *) buf;
     ts = (time_t)ntohl(x->ts);
-    saddr.s_addr = N32(x->src_ip) & htonl(state->mask);
-    daddr.s_addr = N32(x->dst_ip) & htonl(state->mask);
+    saddr.s_addr = N32(x->src_ip) & htonl(config->mask);
+    daddr.s_addr = N32(x->dst_ip) & htonl(config->mask);
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 
@@ -407,11 +394,11 @@ print(void * self, char *buf, size_t *len, char * const args[])
 static int
 replay(void * self, char *buf, char *out, size_t * len, int *count)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC * x;
     size_t outlen;
     uint64_t nbytes, npkts; 
-    int pktsz, howmany;
+    int pktsz, howmany, paysz;
 
     if (buf == NULL) {
 	*len = 0;
@@ -428,11 +415,12 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
     nbytes = NTOHLL(x->bytes);
     npkts = NTOHLL(x->pkts);
     howmany = *count;
-
+    
     /* fill the output buffer */
-    outlen = 0; 
-    pktsz = sizeof(pkt_t) + sizeof(struct _como_iphdr) + 
-					sizeof(struct _como_udphdr); 
+    outlen = 0;
+    paysz = sizeof(struct _como_nf) + sizeof(struct _como_iphdr) +
+	    sizeof(struct _como_udphdr);
+    pktsz = sizeof(pkt_t) + paysz; 
     while (outlen + pktsz < *len && howmany < (int) npkts) { 
 	pkt_t * pkt;
 
@@ -442,7 +430,7 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
 	pkt->payload = (char *) pkt + sizeof(pkt_t);
 
 #ifdef BUILD_FOR_ARM
-
+#error "broken"
 	COMOX(ts, TIME2TS(ntohl(x->ts), 0)); 
 	COMOX(caplen, sizeof(struct _como_iphdr) +
                         sizeof(struct _como_udphdr));
@@ -458,7 +446,6 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
 
 	NFX(flags, outlen == 0? COMONF_FIRST : 0); 
 	NFX(sampling, x->sampling);
-	NFX(bytecount, x->bytes); 
 	NFX(pktcount, htonl((uint32_t) npkts));
 	
         IPX(proto, x->proto);
@@ -472,22 +459,40 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
 #else
 
 	COMO(ts) = TIME2TS(ntohl(x->ts), 0); 
-	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
+	COMO(caplen) = paysz;
 	COMO(type) = COMOTYPE_NF;
+	COMO(l2type) = LINKTYPE_NONE;
 	COMO(l3type) = ETHERTYPE_IP;
 	COMO(l3ofs) = sizeof(struct _como_nf); 
 	COMO(l4type) = x->proto; 
-	COMO(l4ofs) = sizeof(struct _como_nf) + sizeof(struct _como_iphdr);
+	COMO(l4ofs) = COMO(l3ofs) + sizeof(struct _como_iphdr);
+	COMO(l7ofs) = COMO(l4ofs) + sizeof(struct _como_udphdr);
 
-	COMO(len) = (uint32_t) nbytes/npkts; 
-	if (howmany == (int) npkts) 
-	    COMO(len) += (uint32_t) nbytes % npkts; 
+	COMO(len) = (uint32_t) nbytes/npkts;
 
-	NF(flags) = (outlen == 0)? COMONF_FIRST : 0; 
 	N16(NF(sampling)) = x->sampling;
-	N64(NF(bytecount)) = x->bytes;
-	N32(NF(pktcount)) = htonl((uint32_t) npkts);
+	if (config->compact) {
+	    if (howmany == (int) npkts) {
+		COMO(len) = (uint32_t) nbytes % npkts;
+	    } else {
+		if ((uint32_t) nbytes % npkts > 0) {
+		    /* we need two packets per flow */
+		    N32(NF(pktcount)) = htonl((uint32_t) npkts - 1);
+		    npkts = 2;
+		} else {
+		    /* just one packet per flow */
+		    N32(NF(pktcount)) = htonl((uint32_t) npkts);
+		    npkts = 1;
+		}
+	    }
+	} else {
+	    N32(NF(pktcount)) = 1;
+	    if (howmany == (int) npkts)
+		COMO(len) += (uint32_t) nbytes % npkts;
+	}
 
+	IP(version) = 0x4;
+	IP(ihl) = 0x5;
         IP(proto) = x->proto;
 	N16(IP(len)) = htons((uint16_t) COMO(len)); 
         IP(src_ip) = x->src_ip;
@@ -499,14 +504,11 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
 #endif
 
 	outlen += pktsz; 
-
-	if (state->compact) 	/* just one packet per flow */
-	    break;
     } 
 
     *len = outlen;
     *count = howmany;
-    return (state->compact? 0 : (npkts - howmany));
+    return (npkts - howmany);
 }
 
 
@@ -515,7 +517,7 @@ callbacks_t callbacks = {
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC), 
     init: init,
-    check: check,
+    check: NULL,
     hash: hash,
     match: match,
     update: update,

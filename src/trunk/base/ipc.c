@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005 Universitat Politecnica de Catalunya
+ * Copyright (c) 2006 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,635 +26,486 @@
  * $Id$
  */
 
+/*
+ * Inter process communications. 
+ *
+ * This set of functions enable communications between processes. 
+ * Each process initializes the IPC engine using the ipc_register() 
+ * call to register the handlers for all IPC messages of interest. 
+ * 
+ * Each message carries a type to identify the handler and an id 
+ * to identify the senders. Several types have been defined. 
+ * All communications are asynchronous. 
+ * 
+ * Several additional helper functions have been provided to allow 
+ * processes to send/receive complex data structures. 
+ * 
+ * Exception handling is managed by the individual processes
+ * in the handlers. 
+ */
+
 #include <string.h>     /* strlen */
+#include <errno.h>
+#include <unistd.h>
+#include <assert.h>
 #include <sys/time.h>   /* FD_SET */
 #include <sys/types.h>
-#include <unistd.h>
+#include <sys/select.h>
 
 #include "como.h"
+#include "ipc.h"
 
 extern struct _como map;
 
-enum msg_ids {
-    MSG_NEW_MODULES = 7,
-    MSG_MDL_STATUS,
-    MSG_STRING,
-    MSG_ACK,
-    MSG_CA_LOCK,
-    MSG_CA_UNLOCK
-};
+/*
+ * IPC messages exchanged between processes.
+ */
+typedef struct ipc_msg_t {
+    ipctype_t type;             /* message type */
+    procname_t sender;          /* sender's name */
+    int len;                    /* payload length */
+    char data[0];               /* payload */
+} ipc_msg_t;
 
-static int s_new_modules_sent = 0;
+/* 
+ * destinations. we keep track of their names 
+ * and fd so that ipc_send can operate by just 
+ * pointing to the process name. 
+ *
+ */
+typedef struct ipc_dest_t {
+    struct ipc_dest_t * next; 
+    procname_t name; 
+    int fd; 
+} ipc_dest_t;
+
+
+/* 
+ * IPC messages handlers. 
+ * if NULL, the message is ignored. 
+ */
+static ipc_handler_fn handlers[IPC_MAX] = {0}; 
+
+/* 
+ * IPC destinations. this is used to translate
+ * process names to socket.  
+ */
+static ipc_dest_t * ipc_dests = NULL; 
 
 /*
- * Macros to read and write strings and vars to a socket.
- *
- * The macros return 0 if ok, != 0 if error.
+ * -- ipc_write
+ * 
+ * keeps writing until complete.
  */
-#define write_var(fd, var) \
-    (como_writen(fd, (char *) &(var), sizeof(var)))
-
-#define read_var(fd, var) \
-    (como_readn(fd, (char *) &(var), sizeof(var)))
-
-__inline__ static int
-write_str(int fd, char *str)
+static ssize_t
+ipc_write(int fd, const void *buf, size_t count)
 {
-    int len; 
+    size_t n = 0;
 
-    if (str == NULL) { 
-	len = 0;
-	if (sizeof(len) != write_var(fd, len))
-	    return -1; /* err */
-	return 0;
+    while (n < count) {
+	ssize_t ret = write(fd, buf + n, count - n);
+
+	if (ret == -1)
+	    return -1;
+
+        n += ret;
+    }
+   
+    return (ssize_t) n; /* == count */
+}
+
+
+/* 
+ * -- ipc_listen 
+ * 
+ * create a socket, bind it to a unix socket whose 
+ * name depends on the process. then, register a handler 
+ * for IPC_SYNC messages and return the socket. 
+ * 
+ */
+int 
+ipc_listen(procname_t who)
+{
+    char * sname; 
+    int fd; 
+
+    asprintf(&sname, "S:%s.sock", getprocfullname(who)); 
+    fd = create_socket(sname, NULL); 
+    free(sname); 
+    return fd; 
+}
+
+/* 
+ * -- ipc_finish 
+ * 
+ * destroy the process accept socket if any and
+ * close any file descriptor used for IPC. Free the memory
+ * used to store known peers.
+ */
+void
+ipc_finish()
+{
+    char *sname;
+    ipc_dest_t * x;
+    
+    asprintf(&sname, "%s.sock", getprocfullname(map.whoami));
+    destory_socket(sname);
+    free(sname);
+    
+    while (ipc_dests) {
+	x = ipc_dests->next;
+	close(ipc_dests->fd);
+	free(ipc_dests);
+	ipc_dests = x;
+    }
+}
+
+/* 
+ * -- ipc_connect
+ * 
+ * connect to process by name. it creates the socket
+ * and sends an IPC_SYNC message to the destination. 
+ * it returns the socket. 
+ * 
+ */
+int 
+ipc_connect(procname_t dst) 
+{
+    ipc_dest_t * x;
+    char * sname; 
+
+    /* set socket name */
+    asprintf(&sname, "%s.sock", getprocfullname(dst)); 
+
+    x = safe_calloc(1, sizeof(ipc_dest_t)); 
+    x->name = dst; 
+    x->fd = create_socket(sname, NULL); 
+    free(sname); 
+
+    /* link to existing list of destinations */
+    x->next = ipc_dests; 
+    ipc_dests = x; 
+
+    /* send the SYNC message to the destination that 
+     * can populate its database of destinations 
+     */ 
+    if (ipc_send(dst, IPC_SYNC, NULL, 0) != IPC_OK) {
+	logmsg(LOGWARN, "Can't send IPC_SYNC from ipc_connect.\n");
+	ipc_dests = ipc_dests->next;
+	free(x);
+	return IPC_ERR;
     }
 
-    len = (int) strlen(str) + 1;
-    if (sizeof(len) != write_var(fd, len))
-        return -1; /* err */
-    if (len != 0)
-	if (como_writen(fd, str, len) != len)
-	    return -1; /* err */
-    return 0;      /* ok */
+    return x->fd; 
 }
 
-__inline__ static int
-read_str_(int fd, char **str)
-{
-    int len;
-    if (sizeof(len) != read_var(fd, len))
-        return -1; /* err */
-    if (len == 0) 
-	return 0; 
-    *str = safe_calloc(1, len);
-    if (como_readn(fd, *str, len) != len)
-        return -1; /* err */
-    return 0;      /* ok */
-}
 
-#define read_str(fd, str) read_str_(fd, &(str))
-
-/*
- * 'safe' communication macros. If any operation
- * fails, panic. They are used by all procs but su.
- */
-#define IPC_PANIC_REASON "Lost communication to supervisor"
-
-#define safe_read_var(fd, var)          \
-    do {                                \
-        if (sizeof(var) != read_var(fd, var))          \
-            panic(IPC_PANIC_REASON);    \
-    } while(0);
-
-#define safe_read_str(fd, str)          \
-    do {                                \
-        if (read_str(fd, str))          \
-            panic(IPC_PANIC_REASON);    \
-    } while(0);
-
-#define safe_write_str(fd, str)         \
-    do {                                \
-        if (write_str(fd, str))         \
-            panic(IPC_PANIC_REASON);    \
-    } while(0);
-
-#define safe_write_var(fd, var)         \
-    do {                                \
-        if (sizeof(var) != write_var(fd, var))         \
-            panic(IPC_PANIC_REASON);    \
-    } while(0);
-
-/*
- * Communication functions.
- *
- * This communication is between supervisor and other processes.
- * They are used to communicate about:
- *
- *  - changes in the states of modules
- *  - removal of modules
- *  - insertion of a new module
- *
- * In order to make code as readable as possible, the following function
- * naming policy has been used:
- *
- * Functions that are to be called from supervisor begin with sup_,
- * while functions that are to be called from other processes don't.
- * Functions to send messages contain the particle send_, while functions
- * to receive messages contain recv_.
- *
- *
- * Each message begins with a message id, which identifies the type
- * of message.  The main functions to receive messages are sup_recv_message
- * and recv_message. They read the message id and call the appropiate
- * function for that particular type of message.
- *
- * Summing up, we have:
- *
- * - Functions to register core processes' file descriptors
- *      register_ipc_fd(int fd)
- *      unregister_ipc_fd(int fd)
- *
- * - Functions to send messages
- *      sup_send_new_modules(void)
- *      sup_send_module_status(void)
- *      send_string(char *str)
- *      send_ack(void)
- *
- * - Functions to receive messages
- *      sup_recv_message(int fd)
- *      sup_wait_for_ack(int fd)
- *      recv_message(int fd, proc_callbacks_t *callbacks)
- *
- * - Functions to process incoming messages
- *      recv_new_modules(int fd, proc_callbacks_t *callbacks)
- *      recv_module_status(int fd, proc_callbacks_t *callbacks)
- *
- * Exception handling:
- *
- * If supervisor fails at sending or receiving a message, don't care.
- * When the other processes detect failure communicating to supervisor,
- * they will panic, and supervisor will notice about that. So, here
- * we try to keep this code simple and let supervisor handle process
- * crashes elsewhere.
- *
- */
-
-
-/*
- * Functions to register core processes' fds. These are the descriptors
- * that supervisor will be sending messages to.
- */
-static fd_set proc_fds;
-static int min_proc_fd, max_proc_fd;
-
-void
-ipc_init(void)
-{
-    FD_ZERO(&proc_fds);
-    max_proc_fd = 0;
-    min_proc_fd = 1024;
-}
-
-void
-register_ipc_fd(int fd)
-{
-    FD_SET(fd, &proc_fds);
-
-    if (fd > max_proc_fd)
-        max_proc_fd = fd + 1;
-    if (fd < min_proc_fd)
-        min_proc_fd = fd;
-
-    logmsg(LOGDEBUG, "ipc: registered fd %d\n", fd);
-}
-
-void
-unregister_ipc_fd(int fd)
-{
-   FD_CLR(fd, &proc_fds);
-   logmsg(LOGDEBUG, "ipc: unregistered fd %d\n", fd);
-}
-
-#define is_registered_fd(fd) FD_ISSET((fd), &proc_fds)
-
-
-/**
- * -- sup_send_new_modules
- *
- * Tell core processes to load new modules. The map.modules
- * array will be scanned, and modules whose status is MDL_LOADING
- * will be sent to core processes.
+/* 
+ * -- ipc_send
+ * 
+ * package a ipcmsg_t and send it to destination. 
+ * it returns 0 in case of success and 1 in case of failure.
  *
  */
 int
-sup_send_new_modules(void)
+ipc_send(procname_t dst, ipctype_t type, const void *data, size_t sz)
 {
-    char msg_id;
-    int idx, i;
+    ipc_dest_t * x; 
 
-    msg_id = MSG_NEW_MODULES;
+    /* find the socket for this destination */
+    for (x = ipc_dests; x && x->name != dst; x = x->next)
+	;
 
-    for (i = min_proc_fd; i < max_proc_fd; i++) {
-        if (! is_registered_fd(i))
-            continue;
-
-        logmsg(LOGDEBUG, "writing new modules to fd %d\n", i);
-        write_var(i, msg_id);
-
-        for(idx = 0; idx < map.module_count; idx++) {
-            module_t *mdl = &map.modules[idx];
-            int narg;
-
-            if (mdl->status != MDL_LOADING)
-                continue;
-
-            write_var(i, idx);
-            como_writen(i, (char *)mdl, sizeof(module_t));
-            write_str(i, mdl->name);
-            write_str(i, mdl->description);
-            write_str(i, mdl->filter_str);
-            write_str(i, mdl->output);
-            write_str(i, mdl->source);
-
-            narg = 0; /* count args */
-            if (mdl->args)
-                for (narg = 0; mdl->args[narg] != NULL; narg++);
-            write_var(i, narg);
-
-            if (mdl->args)
-                for (narg = 0; mdl->args[narg] != NULL; narg++)
-                    write_str(i, mdl->args[narg]);
-
-            logmsg(LOGDEBUG, "sent module '%s'\n", mdl->name);
-        }
-
-        idx = -1;
-        write_var(i, idx); /* end of message */
+    /* unknown destination */
+    if (x == NULL) {
+	if (dst != SUPERVISOR) { 
+	    /* 
+	     * if the destination is not SUPERVISOR we can try 
+	     * to write something in the logs. otherwise, there
+	     * is no way we can get to SUPERVISOR (we failed right here)
+	     * and therefore we have to fail silently. 
+	     */
+	    logmsg(LOGIPC, "unknown destination (%d)\n", dst); 
+	} 
+	return IPC_ERR; 
     }
-
-    logmsg(LOGDEBUG, "sent new modules to all procs\n");
     
-    s_new_modules_sent = 1;
+    return ipc_send_with_fd(x->fd, type, data, sz);
+}
+
+int
+ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz)
+{
+    ipc_msg_t *msg;
     
-    return 0;
-}
-
-/**
- * -- sup_send_module_status
- *
- * Tell core processes that modules' status are,
- * so that they can update their information
- * and react to status changes.
- *
- * This function is sychronous, and
- * will only return when all processes have received
- * the message and sent back MSG_ACK in response.
- *
- * This function does not send info
- * for modules whose status is MDL_LOADING.
- */
-void
-sup_send_module_status(void)
-{
-    char msg_id = MSG_MDL_STATUS;
-    int i, idx;
-
-    logmsg(LOGDEBUG, "Updating module status\n");
-
-    for (i = min_proc_fd; i < max_proc_fd; i++) {
-
-        if (! is_registered_fd(i))
-            continue;
-
-        if (sizeof(msg_id) != write_var(i, msg_id)) {
-            logmsg(LOGWARN, "Lost communication to fd %d\n", i);
-            unregister_ipc_fd(i);
-            continue;
-        }
-
-        if (sizeof(map.module_count) != write_var(i, map.module_count)) {
-            logmsg(LOGWARN, "Lost communication to fd %d\n", i);
-            unregister_ipc_fd(i);
-            continue;
-        }
-
-        for (idx = 0; idx < map.module_count; idx++) {
-
-            if (map.modules[idx].status == MDL_LOADING)
-                continue;
-
-            if (sizeof(idx) != write_var(i, idx)) {
-                logmsg(LOGWARN, "Lost communication to fd %d\n", i);
-                unregister_ipc_fd(i);
-                break;
-            }
-
-            if (sizeof(map.modules[idx].status) !=
-                    write_var(i, map.modules[idx].status)) {
-                logmsg(LOGWARN, "Lost communication to fd %d\n", i);
-                unregister_ipc_fd(i);
-                break;
-            }
-        }
-
-        idx = -1;
-        write_var(i, idx); /* end of message is -1 XXX XXX we have a counter too */
-    }
-
-    for (i = min_proc_fd; i < max_proc_fd; i++) {
-        if (! is_registered_fd(i))
-            continue;
-
-        sup_wait_for_ack(i);
-    }
-}
-
-/**
- * -- sup_send_ca_lock
- *
- * After using this call, the next message must be sent using
- * sup_send_ca_unlock.
- */
-void
-sup_send_ca_lock(void)
-{
-    char msg_id = MSG_CA_LOCK;
-    int i;
+    msg = alloca(sizeof(ipc_msg_t) + sz);
     
-    if (s_new_modules_sent == 0)
-	return;
-
-    logmsg(LOGDEBUG, "Sending lock message\n");
-
-    for (i = min_proc_fd; i < max_proc_fd; i++) {
-
-        if (! is_registered_fd(i))
-            continue;
-
-        if (sizeof(msg_id) != write_var(i, msg_id)) {
-            logmsg(LOGWARN, "Lost communication to fd %d\n", i);
-            unregister_ipc_fd(i);
-            continue;
-        }
-
+    msg->type = type;
+    msg->sender = map.whoami;
+    msg->len = sz;
+    
+    memcpy(msg->data, data, sz);
+    
+    if (ipc_write(fd, msg, sizeof(ipc_msg_t) + sz) == -1) {
+	return IPC_ERR;
     }
-
-    for (i = min_proc_fd; i < max_proc_fd; i++) {
-        if (! is_registered_fd(i))
-            continue;
-
-        sup_wait_for_ack(i);
-    }
-}
-
-/**
- * -- sup_send_ca_unlock
- */
-void
-sup_send_ca_unlock(void)
-{
-    char msg_id = MSG_CA_UNLOCK;
-    int i;
-
-    if (s_new_modules_sent == 0)
-	return;
-
-    logmsg(LOGDEBUG, "Sending unlock message\n");
-
-    for (i = min_proc_fd; i < max_proc_fd; i++) {
-
-        if (! is_registered_fd(i))
-            continue;
-
-        if (sizeof(msg_id) != write_var(i, msg_id)) {
-            logmsg(LOGWARN, "Lost communication to fd %d\n", i);
-            unregister_ipc_fd(i);
-            continue;
-        }
-
-    }
-}
-
-/**
- * -- send_string
- *
- * Send a string. This function is used by modules to send
- * logmsg's to supervisor, that will actually display them.
- * TODO We need to be sure that write() will not be locking to 
- * prevent a deadlock possibility.
- */
-void
-send_string(char *str)
-{
-    char msg_id = MSG_STRING;
-    /*
-     * cannot send a debug msg here, that would create
-     * an endless loop.
+    
+#if 0
+    /* 
+     * NOTE: this implementation doesn't copy memory however causes deadlock!
+     * It's better to not use it until the reason for the deadlock is found.
      */
-    safe_write_var(map.supervisor_fd, msg_id);
-    safe_write_str(map.supervisor_fd, str);
+    ipc_msg_t msg;
+
+    msg.type = type;
+    msg.sender = map.whoami;
+    msg.len = sz;
+
+    if (ipc_write(fd, &msg, sizeof(ipc_msg_t)) == -1) {
+	return IPC_ERR;
+    }
+    
+    if (sz > 0 && ipc_write(fd, data, sz) == -1) {
+	return IPC_ERR;
+    }
+
+#endif
+    return IPC_OK; 
 }
 
-/**
- * -- send_ack
- *
- * An ack message is used tell supervisor that a message
- * has been received and processed. This is useful when
- * supervisor needs to make sure a message has been received
- * by other processes.
+
+/* 
+ * -- ipc_send_blocking
+ * 
+ * package a ipcmsg_t and send it to destination. wait for 
+ * an acknowledgement from the destination. 
+ * it returns 0 in case of success and 1 in case of failure.
+ * 
  */
-void
-send_ack(void)
+int 
+ipc_send_blocking(procname_t dst, ipctype_t type, const void *data, size_t sz) 
 {
-    char msg_id = MSG_ACK;
-    logmsg(V_LOGDEBUG, "Send ack to supervisor\n");
-    safe_write_var(map.supervisor_fd, msg_id);
+    ipc_dest_t * x;
+    fd_set r;
+    int s;
+
+    /* first send the message */
+    if (ipc_send(dst, type, data, sz) != IPC_OK) 
+	return IPC_ERR; 
+
+    /* now wait for an IPC_ACK from the destination. 
+     * 
+     * XXX we don't have sequence numbers in messages so 
+     *     there is no way to tell if this ACK is related 
+     *     to the message sent. 
+     * 
+     */ 
+
+    /* find the socket for this destination */
+    for (x = ipc_dests; x && x->name != dst; x = x->next)
+	;
+
+    if (x == NULL) 
+	panicx("sending message %d to unknown destination", type); 
+
+    FD_ZERO(&r);
+    FD_SET(x->fd, &r);
+
+    s = -1;
+    while (s < 0) {
+        s = select(x->fd + 1, &r, NULL, NULL, NULL);
+        if (s < 0 && errno != EINTR)
+            panic("select");
+    }
+        
+    return ipc_handle(x->fd);
+}; 
+
+
+/* 
+ * -- ipc_handle 
+ * 
+ * reads one full message from fd and calls the appropriate
+ * handler as registered by the process. 
+ * 
+ */
+int 
+ipc_handle(int fd)
+{
+    ipc_dest_t * x; 
+    ipc_msg_t msg; 
+    char * buf = NULL; 
+    int r; 
+
+    /* read the message header first */
+    r = como_read(fd, (char *) &msg, sizeof(msg)); 
+    if (r != sizeof(msg)) { 
+	if (r == 0)
+	    return IPC_EOF;
+    	
+	/* find the name for this destination */
+	for (x = ipc_dests; x && x->fd != fd; x = x->next)
+	    ;
+
+	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
+	       x ? getprocfullname(x->name) : "UNKNOWN",
+	       strerror(errno));
+	return IPC_ERR; 
+    } 
+	    
+    /* read the data part now */ 
+    if (msg.len > 0) { 
+	/*
+	 * NOTE: the assumption is that msgs are small, so alloca is used in
+	 * place of safe_malloc. In future a possible generalization could be
+	 * to use a threshold to split between small and big msgs.
+	 */
+	//buf = safe_malloc(msg.len);
+	buf = alloca(msg.len);
+	como_read(fd, buf, msg.len); 
+    } 
+
+    /* 
+     * check if we know about this sender. otherwise 
+     * add it to the list of possible destinations. 
+     */ 
+    /* find the socket for this destination */
+    for (x = ipc_dests; x && x->name != msg.sender; x = x->next)
+	;
+
+    if (x == NULL) {
+	x = safe_calloc(1, sizeof(ipc_dest_t)); 
+	x->name = msg.sender; 
+	x->fd = fd;
+	x->next = ipc_dests; 
+	ipc_dests = x; 
+	logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
+	       getprocfullname(msg.sender), fd);
+    } else if (msg.type == IPC_SYNC) {
+	x->fd = fd;
+	logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
+	       getprocfullname(msg.sender), fd);
+    }
+
+    /* find the right handler if any */
+    if (handlers[msg.type] != NULL) 
+	handlers[msg.type](msg.sender, fd, buf, msg.len); 
+
+    //free(buf);
+    
+    return IPC_OK;
 }
 
-/**
- * -- sup_recv_message
- *
- * Function that handles messages received by supervisor.
- * Returns msg_id if correctly received a message.
- * Returns < 0 on error
- */
+/* 
+ * -- ipc_wait_reply_with_fd
+ * 
+ * wait for a reply from fd. returns the msg type in type and the msg in read into
+ * the area pointed by data for at most sz bytes. after the function exits sz contains
+ * the real message length.
+ * 
+ */ 
 int
-sup_recv_message(int fd)
+ipc_wait_reply_with_fd(int fd, ipctype_t *type, void *data, size_t *sz)
 {
-    char msg_id;
-
-    logmsg(V_LOGDEBUG, "Receive message from fd %d\n", fd);
-
-    if (sizeof(msg_id) != read_var(fd, msg_id))
-        return -1;
-
-    logmsg(V_LOGDEBUG, "Message type is %d\n", msg_id);
+    ipc_msg_t msg;
+    fd_set rs;
+    int r;
     
-    switch(msg_id) {
-        case MSG_ACK:
-            break;
-        case MSG_STRING:
-            {
-                char *str;
-                if (read_str(fd, str))
-                    return -1;
-                logmsg(LOGUI, "%s", str);
-                free(str);
-            }
-            break;
-        default:
-            return -1;
+    FD_ZERO(&rs);
+    FD_SET(fd, &rs);
+
+    r = -1;
+    while (r < 0) {
+        r = select(fd + 1, &rs, NULL, NULL, NULL);
+        if (r < 0 && errno != EINTR)
+            panic("select");
     }
-
-    logmsg(V_LOGDEBUG, "Message successfully handled\n");
-    return msg_id;
-}
-
-/**
- * -- sup_wait_for_ack
- *
- * Function that receives and processes messages, and
- * keeps looping until an ack is received.
- */
-void
-sup_wait_for_ack(int fd)
-{
-    int msg_id;
-
-    logmsg(V_LOGDEBUG, "Awaiting ack from fd %d\n", fd);
-    do {
-        msg_id = sup_recv_message(fd);
-        if (msg_id < 0) {
-            logmsg(V_LOGDEBUG, "sup_wait_for_ack fails");
-            return;
-        }
-    } while (msg_id != MSG_ACK);
-    logmsg(V_LOGDEBUG, "Ack from fd %d received\n", fd);
-}
-
-/**
- * -- recv_new_modules
- *
- * Called from recv_message by processes when supervisor
- * requests loading a new module.
- */
-static void
-recv_new_modules(int fd, proc_callbacks_t *callbacks)
-{
-    logmsg(LOGDEBUG, "Loading new modules\n");
-
-    for(;;) {
-        module_t *mdl;
-        int narg, arg, idx;
-
-        safe_read_var(fd, idx); /* index of the module */
-
-        if (idx == -1) /* end of message */
-            break;
-
-        /* read the module */
-        mdl = safe_calloc(1, sizeof(module_t));
-        safe_read_var(fd, *mdl);
-        safe_read_str(fd, mdl->name);
-        safe_read_str(fd, mdl->description);
-        safe_read_str(fd, mdl->filter_str);
-        safe_read_str(fd, mdl->output);
-        safe_read_str(fd, mdl->source);
-
-        read_var(fd, narg);
-        if (narg > 0) {
-            mdl->args = safe_calloc(narg + 1, sizeof(char *));
-            for (arg = 0; arg < narg; arg++)
-                read_str(fd, mdl->args[arg]);
-            mdl->args[arg] = NULL;
-        }
-
-        /* insert the module */
-        load_callbacks(mdl);
-        mdl = load_module(mdl, mdl->index);
-
-        /* initialize */
-        mdl->status = MDL_ACTIVE;
-        if (callbacks->module_init)
-            callbacks->module_init(mdl);
-
-        logmsg(LOGDEBUG, "module loaded: '%s'\n", mdl->name);
-    }
-}
-
-/**
- * -- recv_module_status
- *
- * Called by processes when supervisor asks to update
- * status of modules. Supervisor expects a confirmation,
- * send an ack when done.
- */
-static void
-recv_module_status(int fd, proc_callbacks_t *callbacks)
-{
-    module_t *mdl;
-    int idx, count;
-    uint new_status;
-
-    safe_read_var(fd, count);
-
-    for (;;) {
-        safe_read_var(fd, idx);
-        if (idx == -1) /* end of message */
-            break;
-
-        safe_read_var(fd, new_status);
-        mdl = &map.modules[idx];
-
-        if (mdl->status == new_status)
-            continue;
-
-        if (new_status == MDL_DISABLED) {
-            logmsg(LOGWARN, "disabling module %s\n", mdl->name);
-            /* XXX XXX active-- */
-            if (callbacks->module_disable != NULL)
-                callbacks->module_disable(mdl);
-        }
-
-        else if (new_status == MDL_ACTIVE) {
-            logmsg(LOGWARN, "enabling module %s\n", mdl->name);
-            if (callbacks->module_enable)
-                callbacks->module_enable(mdl);
-        }
-
-        else if (new_status == MDL_UNUSED) {
-            logmsg(LOGWARN, "removing module %s\n", mdl->name);
-            if (callbacks->module_remove)
-                callbacks->module_remove(mdl);
-            remove_module(mdl);
-        }
-
-        mdl->status = new_status;
-    }
-    send_ack();
-}
-
-/**
- * -- recv_message
- *
- * Receive a message from supervisor and do whatever needed.
- * If there is no message to read, locks on the fd until something
- * is received.
- */
-void
-recv_message(int fd, proc_callbacks_t *callbacks)
-{
-    char msg_id;
-
-    logmsg(V_LOGDEBUG, "message from supervisor\n");
-
-    safe_read_var(fd, msg_id);
     
-    logmsg(LOGDEBUG, "message from supervisor, type %d\n", msg_id);
+    /* read the message header first */
+    r = como_read(fd, (char *) &msg, sizeof(msg)); 
+    if (r != sizeof(msg)) {
+    	ipc_dest_t * x;
+    	
+	if (r == 0)
+	    return IPC_EOF;
+    	
+	/* find the name for this destination */
+	for (x = ipc_dests; x && x->fd != fd; x = x->next)
+	    ;
 
-    switch(msg_id) {
-        case MSG_NEW_MODULES:
-            recv_new_modules(fd, callbacks);
-            break;
-        case MSG_MDL_STATUS:
-            recv_module_status(fd, callbacks);
-            break;
-        case MSG_CA_LOCK:
-            /* All processes send back the ACK, but only CA will lock
-             * waiting for the next message */
-            if (map.whoami == CAPTURE) 
-                logmsg(V_LOGDEBUG, "CA locking\n");
-            send_ack();
-            if (map.whoami == CAPTURE) 
-                recv_message(fd, callbacks);
-            break;
-        case MSG_CA_UNLOCK:
-            if (map.whoami == CAPTURE) { 
-                logmsg(V_LOGDEBUG, "CA unlocking\n");
-            }
-            break;
-        default: /* should never be reached */
-            logmsg(LOGWARN, "an unknown message type was received from supervisor\n");
+	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
+	       x ? getprocfullname(x->name) : "UNKNOWN",
+	       strerror(errno));
+	return IPC_ERR; 
+    } 
+    
+    *type = msg.type;
+	    
+    /* read the data part now */ 
+    if (msg.len > 0) {
+	if (msg.len <= (ssize_t) *sz) {
+	    como_read(fd, data, msg.len);
+	} else {
+	    char *t;
+	    como_read(fd, data, *sz);
+	    t = alloca(msg.len - *sz);
+	    como_read(fd, t, msg.len - *sz);
+	}
+	*sz = msg.len;
     }
+    
+    return IPC_OK;
 }
- 
+
+/* 
+ * -- ipc_register
+ * 
+ * copy the information of the handle functions in the 
+ * global handlers variable. 
+ * 
+ */ 
+void 
+ipc_register(ipctype_t type, ipc_handler_fn fn)
+{
+    assert(type < IPC_MAX); 
+    handlers[type] = fn; 
+}
+
+
+/* 
+ * -- ipc_clear
+ * 
+ * clear all information we know about handlers. this is 
+ * used before starting to register new handlers (very useful
+ * after a fork). 
+ * 
+ * XXX note that we don't clear the list of known destination. 
+ *     we can still make use of those given that the we still 
+ *     have the file descriptors open. 
+ * 
+ */ 
+void 
+ipc_clear()
+{
+    bzero(handlers, sizeof(handlers)); 
+}
+
+
+/* 
+ * -- ipc_getfd
+ * 
+ * get the socket descriptor from a process name 
+ * 
+ */ 
+int 
+ipc_getfd(procname_t who)
+{
+    ipc_dest_t * x; 
+
+    /* find the socket for this destination */
+    for (x = ipc_dests; x && x->name != who; x = x->next)
+	;
+
+    return x ? x->fd : IPC_ERR; 
+}
+

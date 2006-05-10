@@ -70,13 +70,15 @@ struct _snifferinfo {
     timestamp_t last_ts; 	/* last packet timestamp */
     timestamp_t min_ts; 	/* min start time in the heap (root) */
     timestamp_t max_ts; 	/* max start time in the heap */
-    timestamp_t window; 	/* min diff between max_ts and min_ts */
+    timestamp_t window; 	/* lookahead window */
+    timestamp_t timescale; 	/* timestamp resolution */ 
     int fd; 			/* actual file descriptor used */
     struct ftio ftio;		/* flow-tools I/O data structure */
     char buf[BUFSIZE];		/* buffer used between sniffer-next calls */
     uint nbytes; 		/* bytes used in the buffer */
     uint16_t sampling; 		/* scaling pkts/bytes for sampled Netflow */
     uint16_t iface; 		/* interface of interest (SNMP index) */
+    uint32_t exporter; 		/* exporter address to be processed */
     int flags; 			/* options */
 }; 
 
@@ -96,9 +98,9 @@ struct _snifferinfo {
 struct _flowinfo { 
     pkt_t pkt;			/* next packet that will be generated */
     char payload[NF_PAYLOAD]; 	/* payload (NF + IP + TCP header) */
-    uint32_t length_last;	/* length of last packet */
     timestamp_t increment; 	/* timestamp increment at each packet */
-    timestamp_t end_ts;		/* timestamp of last packet */
+    uint pkts_left; 		/* packets to be generated */
+    uint bytes_left; 		/* bytes to be generated */ 
 };
 
 
@@ -106,20 +108,70 @@ struct _flowinfo {
  * this macro is used to convert a timestamp in netflow (given by the
  * sysuptime) into a timestamp_t 
  */
-static __inline__ timestamp_t 
+static inline timestamp_t 
 netflow2ts(struct fts3rec_v5 * f, uint32_t ms)
 {
-    int64_t curtime; 
-    int64_t uptime; 
-    int64_t mstime; 
+    timestamp_t curtime, uptime, mstime; 
 
-    curtime = (int64_t) TIME2TS(f->unix_secs, f->unix_nsecs/1000); 
-    uptime = (int64_t) TIME2TS(f->sysUpTime/1000, (f->sysUpTime%1000)*1000);  
-    mstime = (int64_t) TIME2TS(ms/1000, (ms%1000)*1000);
+    curtime = TIME2TS(f->unix_secs, f->unix_nsecs/1000); 
+    uptime = TIME2TS(f->sysUpTime/1000, (f->sysUpTime%1000)*1000);  
+    mstime = TIME2TS(ms/1000, (ms%1000)*1000);
  
-    return (timestamp_t) (curtime + mstime - uptime); 
+    return (curtime + mstime - uptime); 
 }
 
+
+/* 
+ * -- update_flowvalues
+ * 
+ * set the timestamp for the next packet. this function is called
+ * only when running in FLOWTOOLS_COMPACT mode for which we need to 
+ * split a flow in multiple pieces according to the value of 
+ * info->timescale (i.e. if the flow is 5 minute long but the timescale
+ * is just 60secs we will split it in 5 flows 60 second long and assume
+ * an equal number of packets and bytes in each flow).  
+ *
+ */
+static void
+update_flowvalues(pkt_t * pkt, struct _flowinfo * flow, timestamp_t timescale) 
+{
+    timestamp_t duration; 
+    timestamp_t length; 
+    uint pkts; 
+
+    length = timescale - COMO(ts) % timescale; 
+    length = MIN(length, flow->increment * (flow->pkts_left - 1));
+    pkts = flow->increment? (length / flow->increment + 1) : 1; 
+
+    
+    /*
+     * check if this is the last packet we generate to 
+     * make sure it contains all bytes left. 
+     * 
+     * if this is not possible because the number of bytes left is not 
+     * a multiple of the packet count we are forced to reduce the 
+     * pktcount in this packet (when in compact mode) or to increase 
+     * the packet length in packet mode. 
+     *  
+     */
+    if (flow->pkts_left == pkts) { 
+        if (flow->pkts_left * COMO(len) < flow->bytes_left) { 
+	    if (flow->pkts_left == 1) 
+		COMO(len) = flow->bytes_left; 
+	    else 
+	        pkts--; 
+	} else if (flow->pkts_left * COMO(len) > flow->bytes_left) { 
+	    panicx("incorrect flow - pkts: %d, len: %d, bytes: %d < %d", 
+		flow->pkts_left, COMO(len), flow->bytes_left, 
+		flow->pkts_left * COMO(len)); 
+	} 
+    } 
+
+    N32(NF(pktcount)) = htonl(pkts); 
+    duration = (pkts - 1) * flow->increment; 
+    N32(NF(duration)) = htonl(TS2SEC(duration) * 1000 + TS2MSEC(duration)); 
+}
+	
 
 /*
  * -- cookpkt
@@ -156,18 +208,16 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
     N32(NF(nexthop)) = htonl(f->nexthop);
     NF(engine_type) = f->engine_type;
     NF(engine_id) = f->engine_id;
-    NF(tcp_flags) = f->tcp_flags;
+    NF(tcp_flags) = f->tcp_flags;		/* OR of TCP flags */
     N16(NF(input)) = htons(f->input);
     N16(NF(output)) = htons(f->output);
-    NF(flags) = COMONF_FIRST;
     N16(NF(sampling)) = htons(sampling); 
-    N32(NF(pktcount)) = htonl(f->dPkts); 
-    N64(NF(bytecount)) = HTONLL((uint64_t) f->dOctets); 
-    N32(NF(duration)) = htonl(TS2SEC(flow->end_ts - COMO(ts)) * 1000 + 
-			      TS2MSEC(flow->end_ts - COMO(ts))); 
+    N32(NF(pktcount)) = htonl(1);  
+    N32(NF(duration)) = 0; 
 
     /* IP header */
-    IP(vhl) = 0x45; 
+    IP(version) = 4;	/* version 4 */
+    IP(ihl) = 5;	/* header len 20 bytes */
     IP(tos) = f->tos; 
     N16(IP(len)) = htons(f->dOctets / f->dPkts);
     IP(proto) = f->prot; 
@@ -180,6 +230,40 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
     N16(UDP(src_port)) = htons(f->srcport);
     N16(UDP(dst_port)) = htons(f->dstport);
 }
+
+
+/* 
+ * -- update_pkt
+ * 
+ * Update the pkt template in the flow record. If this flow
+ * has no more packets to send just free the _flowinfo data 
+ * structure. Otherwise, insert it back into the heap. 
+ * 
+ */ 
+static void
+update_pkt(struct _flowinfo * flow, struct _snifferinfo * info) 
+{
+    pkt_t * pkt = &flow->pkt; 
+
+    /* 
+     * update the flow counters and destroy this 
+     * flow if there are no packets left 
+     */
+    flow->pkts_left -= H32(NF(pktcount)); 
+    flow->bytes_left -= (H32(NF(pktcount)) * COMO(len)); 
+    if (flow->pkts_left == 0) {
+	assert(flow->bytes_left == 0); 
+	free(flow); 
+	return; 	/* we are done! */ 
+    } 
+
+    COMO(ts) += H32(NF(pktcount)) * flow->increment; 
+    COMO(len) = flow->bytes_left / flow->pkts_left; 
+    if (info->flags & FLOWTOOLS_COMPACT)
+	update_flowvalues(pkt, flow, info->timescale); 
+    
+    heap_insert(info->heap, flow); 
+} 
 
 
 /* 
@@ -280,14 +364,33 @@ flowtools_read(source_t * src)
      * of interest. if iface is 0, all flows are of interest. 
      */
     if (info->iface && (info->iface != fr->input && info->iface != fr->output))
-	return (netflow2ts(fr, fr->Last));
+	return netflow2ts(fr, fr->Last);
+
+    /* 
+     * filter out flows that do not cross the interface 
+     * of interest. if iface is 0, all flows are of interest. 
+     */
+    if (info->exporter && fr->exaddr != info->exporter) 
+	return netflow2ts(fr, fr->Last);
+
+    /* 
+     * check that the information in the flow record is valid 
+     */ 
+    if (fr->dPkts == 0 || fr->dOctets == 0) { 
+	logmsg(LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
+	    fr->dPkts, fr->dOctets); 
+	return netflow2ts(fr, fr->Last);
+    } 
 
     /* build a new flow record */
     flow = safe_calloc(1, sizeof(struct _flowinfo));
-    flow->end_ts = netflow2ts(fr, fr->Last);
+    flow->pkts_left = fr->dPkts; 
+    flow->bytes_left = fr->dOctets; 
+    flow->increment = netflow2ts(fr, fr->Last) - netflow2ts(fr, fr->First);
+    flow->increment /= flow->pkts_left; 
     cookpkt(fr, flow, info->sampling); 
-    flow->increment = (flow->end_ts - flow->pkt.ts) / fr->dPkts;
-    flow->length_last = fr->dOctets % fr->dPkts;
+    if (info->flags & FLOWTOOLS_COMPACT)
+	update_flowvalues(&flow->pkt, flow, info->timescale); 
 
     /* insert in the heap */
     heap_insert(info->heap, flow);
@@ -344,6 +447,20 @@ configsniffer(char * args, struct _snifferinfo * info)
 	info->window = TIME2TS(atoi(x + 1), 0);
     }
 
+    /*
+     * "timescale". 
+     * resolution for timestamps in packets. flows with longer durations
+     * are split with an equal number of packets in each "timescale"
+     * interval. 
+     */
+    wh = strstr(args, "timescale");
+    if (wh != NULL) {
+	char * x = index(wh, '=');      
+	if (x == NULL)
+	    logmsg(LOGWARN, "sniffer-flowtools: invalid argument %s\n", wh);
+	info->timescale = TIME2TS(atoi(x + 1), 0);
+    }
+
     /* 
      * "sampling". 
      * for sampled netflow we need to know the sampling rate applied 
@@ -387,6 +504,18 @@ configsniffer(char * args, struct _snifferinfo * info)
     wh = strstr(args, "compact");
     if (wh != NULL) 
 	info->flags |= FLOWTOOLS_COMPACT; 
+
+    /* 
+     * "exporter"
+     * select the NetFlow exporter we are listening to. 
+     */ 
+    wh = strstr(args, "exporter"); 
+    if (wh != NULL) {
+	char * x = index(wh, '=');
+	if (x == NULL)
+	    logmsg(LOGWARN, "sniffer-flowtools: invalid argument %s\n", wh);
+	info->exporter = ntohl(inet_addr(x + 1));
+    }
 }
 
 
@@ -471,10 +600,10 @@ sniffer_start(source_t * src)
     outmd = metadesc_define_sniffer_out(src, 0);
     //outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
     
-    outmd->ts_resolution = TIME2TS(120, 0);
+    outmd->ts_resolution = TIME2TS(info->timescale, 0);
     outmd->flags = META_PKT_LENS_ARE_AVERAGED;
     if (info->flags & FLOWTOOLS_COMPACT) 
-	outmd->flags |= META_PKTS_ARE_TUPLES;
+	outmd->flags |= META_PKTS_ARE_FLOWS;
     
     /* NOTE: templates defined from more generic to more restrictive */
     pkt = metadesc_tpl_add(outmd, "nf:none:~ip:none");
@@ -493,7 +622,6 @@ sniffer_start(source_t * src)
     N32(IP(dst_ip)) = 0xffffffff;
     N16(TCP(src_port)) = 0xffff;
     N16(TCP(dst_port)) = 0xffff;
-    TCP(flags) = 0xff;
     
     pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~udp");
     COMO(caplen) = sizeof(struct _como_iphdr) +
@@ -517,7 +645,7 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no) 
+sniffer_next(source_t * src, pkt_t * out, int max_no) 
 {
     struct _snifferinfo * info; 
     pkt_t * pkt; 
@@ -530,7 +658,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     info = (struct _snifferinfo *) src->ptr; 
     info->nbytes = 0; 
 
-    /* first check if the heap is empty, 
+    /* 
+     * first check if the heap is empty, 
      * if so we are done. 
      */
     if (heap_root(info->heap) == NULL && !(info->flags & FLOWTOOLS_STREAM)) {
@@ -599,28 +728,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	COMO(payload) = info->buf + info->nbytes; 
 	info->nbytes += COMO(caplen); 
 
-	/* 
-	 * check if this flow has more packets. If so, update the 
-	 * timestamp and insert it into the heap again. Otherwise, 
-	 * update the lenght of the packet and free this data 
-	 * structure 
-	 */
-	if (info->flags & FLOWTOOLS_COMPACT) {
-	    free(flow);
-	} else { 
-	    N64(NF(bytecount)) = 1; 
-	    N32(NF(pktcount)) = 1;  
-	    if (flow->pkt.ts >= flow->end_ts) { 
-		COMO(ts) = flow->end_ts; 
-		COMO(len) += flow->length_last; 
-		N16(IP(len)) = htons((uint16_t) COMO(len)); 
-		free(flow); 
-	    } else {  
-		flow->pkt.ts += flow->increment; 
-		NFP((&flow->pkt), flags) &= ~COMONF_FIRST;
-		heap_insert(info->heap, flow); 
-	    } 
-	} 
+	update_pkt(flow, info);
 
 	/* update the minimum timestamp from the root of the heap */
 	flow = heap_root(info->heap);
@@ -644,6 +752,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 
 /*
  * sniffer_stop
+ * 
+ * free the heap structure and all sniffer data structure. 
  */
 static void
 sniffer_stop(source_t * src)
@@ -655,7 +765,9 @@ sniffer_stop(source_t * src)
 
     heap_close(info->heap); 
     if (src->fd > 0) { 
-	// ftio_close(&info->ftio); 
+	// ftio_close(&info->ftio); 	// XXX flowtools fails if this has 
+					//     already been closed. let's 
+					//     skip it for now. 
 	close(src->fd); 
     } 
     free(src->ptr);

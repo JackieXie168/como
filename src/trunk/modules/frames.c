@@ -61,6 +61,9 @@ init(void * self, __unused char *args[])
     
     pkt = metadesc_tpl_add(inmd, "radio:802.11:none:none");
     
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(1, 0);
+    
     pkt = metadesc_tpl_add(inmd, "none:802.11:none:none");
     
     return TIME2TS(1, 0);

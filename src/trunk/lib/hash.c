@@ -185,7 +185,7 @@ struct hash_t {
 					 */
     hash_key_fn hashKeyFn;
     compare_hash_keys_fn compareKeysFn;
-    module_t *mdl;			/* Module owner of the hash table. */
+    allocator_t *alc;			/* Allocator of the hash table. */
 };
 
 /*
@@ -239,17 +239,13 @@ static void rebuild_table(hash_t * tablePtr);
  */
 
 hash_t *
-hash_new(module_t *mdl, int keyType, hash_key_fn hashKeyFn,
+hash_new(allocator_t *alc, int keyType, hash_key_fn hashKeyFn,
 	 compare_hash_keys_fn compareKeysFn)
 {
     hash_t *tablePtr;
     
-    if (mdl) {
-	tablePtr = mdl_mem_alloc(mdl, sizeof(hash_t));
-	memset(tablePtr, 0, sizeof(hash_t));
-    } else {
-	tablePtr = safe_calloc(1, sizeof(hash_t));
-    }
+    assert(alc != NULL);
+    tablePtr = alc_calloc(alc, 1, sizeof(hash_t));
 
 #if (SMALL_HASH_TABLE != 4)
 #error "SMALL_HASH_TABLE must be 4!"
@@ -264,7 +260,9 @@ hash_new(module_t *mdl, int keyType, hash_key_fn hashKeyFn,
     tablePtr->downShift = 28;
     tablePtr->mask = 3;
     tablePtr->keyType = keyType;
-    tablePtr->mdl = mdl;
+    tablePtr->alc = alc;
+    tablePtr->hashKeyFn = hashKeyFn;
+    tablePtr->compareKeysFn = compareKeysFn;
     
     if (keyType == HASHKEYS_STRING) {
 	if (hashKeyFn == NULL) {
@@ -305,7 +303,7 @@ hash_lookup_internal(hash_t *tablePtr, void *key)
 		continue;
 	    }
 	    if (compareKeysFn(key, hPtr->key) == 0) {
-		return hPtr->value;
+		return hPtr;
 	    }
 	}
     } else {
@@ -315,7 +313,7 @@ hash_lookup_internal(hash_t *tablePtr, void *key)
 		continue;
 	    }
 	    if (key == hPtr->key) {
-		return hPtr->value;
+		return hPtr;
 	    }
 	}
     }
@@ -454,12 +452,7 @@ hash_insert_internal(hash_t *tablePtr, void *key, void *value)
     /*
      * Entry not found.  Add a new one to the bucket.
      */
-    if (tablePtr->mdl) {
-	hPtr = mdl_mem_alloc(tablePtr->mdl, sizeof(hash_entry_t));
-	memset(hPtr, 0, sizeof(hash_entry_t));
-    } else {
-	hPtr = safe_calloc(1, sizeof(hash_entry_t));
-    }
+    hPtr = alc_calloc(tablePtr->alc, 1, sizeof(hash_entry_t));
     hPtr->key = key;
     hPtr->value = value;
     hPtr->tablePtr = tablePtr;
@@ -559,11 +552,7 @@ hash_remove_internal(hash_t *tablePtr, void *key)
     }
 
     tablePtr->numEntries--;
-    if (tablePtr->mdl) {
-	mdl_mem_free(tablePtr->mdl, entryPtr);
-    } else {
-    	free(entryPtr);
-    }
+    alc_free(tablePtr->alc, entryPtr);
     
     return 1;
 }
@@ -620,45 +609,24 @@ hash_destroy(hash_t *tablePtr)
     /*
      * Free up all the entries in the table.
      */
-    if (tablePtr->mdl) {
-	for (i = 0; i < tablePtr->numBuckets; i++) {
-	    hPtr = tablePtr->buckets[i];
-	    while (hPtr != NULL) {
-		nextPtr = hPtr->nextPtr;
-		/* TODO: free value */
-		mdl_mem_free(tablePtr->mdl, hPtr);
-		hPtr = nextPtr;
-	    }
+    for (i = 0; i < tablePtr->numBuckets; i++) {
+	hPtr = tablePtr->buckets[i];
+	while (hPtr != NULL) {
+	    nextPtr = hPtr->nextPtr;
+	    /* TODO: free value */
+	    alc_free(tablePtr->alc, hPtr);
+	    hPtr = nextPtr;
 	}
-	
-	/*
-	 * Free up the bucket array, if it was dynamically allocated.
-	 */
-	if (tablePtr->buckets != tablePtr->staticBuckets) {
-	    mdl_mem_free(tablePtr->mdl, tablePtr->buckets);
-	}
-
-	mdl_mem_free(tablePtr->mdl, tablePtr);
-    } else {
-	for (i = 0; i < tablePtr->numBuckets; i++) {
-	    hPtr = tablePtr->buckets[i];
-	    while (hPtr != NULL) {
-		nextPtr = hPtr->nextPtr;
-		/* TODO: free value */
-		free(hPtr);
-		hPtr = nextPtr;
-	    }
-	}
-	
-	/*
-	 * Free up the bucket array, if it was dynamically allocated.
-	 */
-	if (tablePtr->buckets != tablePtr->staticBuckets) {
-	    free(tablePtr->buckets);
-	}
-
-	free(tablePtr);
     }
+	
+    /*
+     * Free up the bucket array, if it was dynamically allocated.
+     */
+    if (tablePtr->buckets != tablePtr->staticBuckets) {
+	alc_free(tablePtr->alc, tablePtr->buckets);
+    }
+
+    alc_free(tablePtr->alc, tablePtr);
 }
 
 #if 0
@@ -881,15 +849,9 @@ rebuild_table(hash_t *tablePtr)
      */
 
     tablePtr->numBuckets *= 4;
-    if (tablePtr->mdl) {
-	tablePtr->buckets = mdl_mem_alloc(tablePtr->mdl, (tablePtr->numBuckets
-					  * sizeof(hash_entry_t *)));
-	memset(tablePtr->buckets, 0, (tablePtr->numBuckets *
-	       sizeof(hash_entry_t *)));
-    } else {
-	tablePtr->buckets = safe_calloc(tablePtr->numBuckets,
-					sizeof(hash_entry_t *));
-    }
+    tablePtr->buckets = alc_calloc(tablePtr->alc, tablePtr->numBuckets,
+				   sizeof(hash_entry_t *));
+    
     for (count = tablePtr->numBuckets, newChainPtr = tablePtr->buckets;
 	 count > 0; count--, newChainPtr++) {
 	*newChainPtr = NULL;
@@ -923,10 +885,6 @@ rebuild_table(hash_t *tablePtr)
      */
 
     if (oldBuckets != tablePtr->staticBuckets) {
-	if (tablePtr->mdl) {
-	    mdl_mem_free(tablePtr->mdl, oldBuckets);
-	} else {
-	    free(oldBuckets);
-	}
+	alc_free(tablePtr->alc, oldBuckets);
     }
 }

@@ -76,8 +76,8 @@ EFLOWDESC {
 #define ALERT_BYTES		0x1
 #define ALERT_PKTS		0x2
     
-#define STATEDESC   struct _anomaly_ewma_state
-STATEDESC {
+#define CONFIGDESC   struct _anomaly_ewma_config
+CONFIGDESC {
     int meas_ivl;     		/* measurement interval */
     double weight;		/* weigth for EWMA */
     double change_thresh;       /* volume change threshold */ 
@@ -90,39 +90,39 @@ STATEDESC {
 static timestamp_t 
 init(void * self, char *args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
-    bzero(state, sizeof(STATEDESC)); 
-    state->meas_ivl = 30;
-    state->weight = 0.9;
-    state->change_thresh = 3.0;
-    state->urlstr[0] = '#';
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    bzero(config, sizeof(CONFIGDESC)); 
+    config->meas_ivl = 30;
+    config->weight = 0.9;
+    config->change_thresh = 3.0;
+    config->urlstr[0] = '#';
 
     for (i = 0; args && args[i]; i++) {
 	if (strstr(args[i], "interval")) {
 	    char * val = index(args[i], '=') + 1;
-	    state->meas_ivl = atoi(val);
+	    config->meas_ivl = atoi(val);
         } else if (strstr(args[i], "weight")) {
 	    char * val = index(args[i], '=') + 1;
-	    state->weight = strtod(val, NULL); 
+	    config->weight = strtod(val, NULL); 
         } else if (strstr(args[i], "change_thresh")) {
 	    char * val = index(args[i], '=') + 1;
-	    state->change_thresh = strtod(val, NULL); 
+	    config->change_thresh = strtod(val, NULL); 
         } 
     }
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
 
-    STATE(self) = state; 
-    return TIME2TS(state->meas_ivl, 0);
+    CONFIG(self) = config; 
+    return TIME2TS(config->meas_ivl, 0);
 }
 
 static int
@@ -144,11 +144,11 @@ update(__unused void * self, pkt_t *pkt, void *rp, int isnew)
 static int
 export(void * self, void *erp, void *rp, int isnew)
 {
-    STATEDESC * state = STATE(self); 
+    CONFIGDESC * config = CONFIG(self); 
     EFLOWDESC *ex = EF(erp);
     FLOWDESC *x = F(rp);
-    uint64_t b = x->bytes / state->meas_ivl;
-    uint64_t p = x->pkts / state->meas_ivl;
+    uint64_t b = x->bytes / config->meas_ivl;
+    uint64_t p = x->pkts / config->meas_ivl;
 
     if (isnew) {
 	bzero(ex, sizeof(EFLOWDESC));
@@ -162,16 +162,16 @@ export(void * self, void *erp, void *rp, int isnew)
     ex->diff_bytes = (float) b / (float) ex->bytes; 
     ex->diff_pkts = (float) p / (float) ex->pkts; 
 
-    if (ex->diff_bytes > state->change_thresh)
+    if (ex->diff_bytes > config->change_thresh)
 	ex->alert |= ALERT_BYTES; 
-    if (ex->diff_pkts > state->change_thresh)
+    if (ex->diff_pkts > config->change_thresh)
 	ex->alert |= ALERT_PKTS; 
 
     /* update the moving average for the sum */
-    ex->bytes = (uint64_t) ((1.0 - state->weight) * (float) ex->bytes + 
-				state->weight * (float) b); 
-    ex->pkts = (uint64_t) ((1.0 - state->weight) * (float) ex->pkts + 
-				state->weight * (float) p); 
+    ex->bytes = (uint64_t) ((1.0 - config->weight) * (float) ex->bytes + 
+				config->weight * (float) b); 
+    ex->pkts = (uint64_t) ((1.0 - config->weight) * (float) ex->pkts + 
+				config->weight * (float) p); 
 
     /* reset the past alert flag if no alerts are raised */
     ex->past_alert &= ex->alert; 
@@ -247,7 +247,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 
 
 #define PRETTYHDR	"Date                     Port number   Type\n"
-#define PRETTYFMT	"%.24s %s %2u.2u\n"
+#define PRETTYFMT	"%.24s %s %2u.%2u\n"
 
 #define PLAINFMT	"%12ld %2 %2u.%2u\n"
 
@@ -296,7 +296,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
 {
-    STATEDESC * state = STATE(self); 
+    CONFIGDESC * config = CONFIG(self); 
     struct alert_record *x; 
     char typestr[20];
     time_t ts;
@@ -309,17 +309,17 @@ print(void * self, char *buf, size_t *len, char * const args[])
         int no_urlargs = 0;
 
 	/* by default, pretty print */
-	*len = sprintf(state->str, PRETTYHDR);  
-	state->fmt = PRETTYFMT; 
+	*len = sprintf(config->str, PRETTYHDR);  
+	config->fmt = PRETTYFMT; 
 
 	/* first call of print, process the arguments and return */
 	for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
-		state->fmt = PLAINFMT;
+		config->fmt = PLAINFMT;
 	    } else if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(state->str, HTMLHDR); 
-                state->fmt = HTMLFMT;
+                *len = sprintf(config->str, HTMLHDR); 
+                config->fmt = HTMLFMT;
             } else if (!strncmp(args[n], "url=", 4)) {
                 url = args[n] + 4;
             } else if (!strncmp(args[n], "urlargs=", 8)) {
@@ -331,33 +331,34 @@ print(void * self, char *buf, size_t *len, char * const args[])
         if (url != NULL) {
             int w, k;
 
-            w = sprintf(state->urlstr, "%s?", url);
+            w = sprintf(config->urlstr, "%s?", url);
             for (k = 0; k < no_urlargs; k++)
-                w += sprintf(state->urlstr + w, "%s&", urlargs[k]);
-	    w += sprintf(state->urlstr + w, "stime=%%u&etime=%%u"); 
+                w += sprintf(config->urlstr + w, "%s&", urlargs[k]);
+	    w += sprintf(config->urlstr + w, "stime=%%u&etime=%%u"); 
         }
 
-	return state->str; 
+	return config->str; 
     } 
 
     if (buf == NULL && args == NULL) {  
-	*len = state->alerts? 0 : 
-	    sprintf(state->str, 
+	*len = config->alerts? 0 : 
+	    sprintf(config->str, 
 		"No anomalies to report during this time interval\n"); 
-	if (state->fmt == HTMLFMT) { 
-	    if (state->alerts) 
-		*len += sprintf(state->str + *len, HTMLFOOTER_ALERTS); 
-	    *len += sprintf(state->str + *len, HTMLFOOTER);
+	if (config->fmt == HTMLFMT) { 
+	    if (config->alerts) 
+		*len += sprintf(config->str + *len, HTMLFOOTER_ALERTS); 
+	    *len += sprintf(config->str + *len, HTMLFOOTER);
 	} 
-	return state->str; 
+	config->alerts = 0;
+	return config->str; 
     } 
 	
     *len = 0; 
 
-    if (state->alerts == 0) { 
-	if (state->fmt == HTMLFMT) 
-	    *len = sprintf(state->str, HTMLHDR_ALERTS); 
-	state->alerts = 1;
+    if (config->alerts == 0) { 
+	if (config->fmt == HTMLFMT) 
+	    *len = sprintf(config->str, HTMLHDR_ALERTS); 
+	config->alerts = 1;
     } 
 
     x = (struct alert_record *) buf; 
@@ -368,25 +369,25 @@ print(void * self, char *buf, size_t *len, char * const args[])
     ch_dec = ntohs(x->change) & 0xff;
 
     /* print according to the requested format */
-    if (state->fmt == PRETTYFMT) {
-	*len += sprintf(state->str + *len, state->fmt, 
+    if (config->fmt == PRETTYFMT) {
+	*len += sprintf(config->str + *len, config->fmt, 
 			asctime(gmtime(&ts)), typestr, ch_int, ch_dec);
-    } else if (state->fmt == HTMLFMT) {
+    } else if (config->fmt == HTMLFMT) {
 	char timestr[20]; 
         char tmp[2048] = "#";
 
-        if (state->urlstr[0] != '#')
-            sprintf(tmp, state->urlstr, ts - 3600, ts + 3600);
+        if (config->urlstr[0] != '#')
+            sprintf(tmp, config->urlstr, ts - 3600, ts + 3600);
 
 	strftime(timestr, sizeof(timestr), "%b %d %T", gmtime(&ts)); 
-	*len += sprintf(state->str + *len, state->fmt, 
+	*len += sprintf(config->str + *len, config->fmt, 
 			tmp, timestr, typestr, ch_int, ch_dec); 
     } else {
-	*len += sprintf(state->str + *len, state->fmt, 
+	*len += sprintf(config->str + *len, config->fmt, 
 			(long int)ts, typestr, ch_int, ch_dec); 
     } 
 	
-    return state->str;
+    return config->str;
 }
 
 callbacks_t callbacks = {

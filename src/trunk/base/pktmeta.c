@@ -30,6 +30,7 @@
 #include <assert.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "hash.h"
 
 static hash_t *s_registered_types = NULL;
@@ -42,8 +43,8 @@ pktmeta_type_from_name(const char *name)
     void *o;
     
     if (s_registered_types == NULL) {
-	/* CHECKME: should go into shared mem? */
-	s_registered_types = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
+	s_registered_types = hash_new(allocator_shared(),
+				      HASHKEYS_STRING, NULL, NULL);
     }
     
     o = hash_lookup_string(s_registered_types, name);

@@ -150,13 +150,18 @@ updatel4(pkt_t * pkt)
 
     if (COMO(l3type) == ETHERTYPE_IP
 	&& COMO(caplen) > COMO(l3ofs) + sizeof(struct _como_iphdr)) {
-	COMO(l4ofs) += ((IP(vhl) & 0x0f) << 2);
+	COMO(l4ofs) += (IP(ihl) << 2);
 	COMO(l4type) = IP(proto);
     }
     /*
      * TODO: IPV6
      */
-    COMO(l7ofs) = COMO(l4ofs) + l4type_lookup_len(COMO(l4type));
+    COMO(l7ofs) = COMO(l4ofs);
+    if (COMO(l4type) == IPPROTO_TCP && TCP(hlen) != 0) {
+	COMO(l7ofs) += (TCP(hlen) << 2);
+    } else {
+	COMO(l7ofs) += l4type_lookup_len(COMO(l4type));
+    }
 }
 
 /*

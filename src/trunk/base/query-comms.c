@@ -244,8 +244,6 @@ query_parse(char *buf, timestamp_t now)
     nargs = 0;
 
     /* provide some default values */
-    asprintf(&q.filter_str, "all");
-    asprintf(&q.filter_cmp, "all");
     q.len = sizeof(q);
     q.start = TS2SEC(now) - 50;
     q.end = TS2SEC(now) + 20;
@@ -300,10 +298,10 @@ query_parse(char *buf, timestamp_t now)
 	    char * s = strchr(p1, '=');
 	    asprintf(&q.module, "%s", s + 1); 
 	} else if (strstr(p1, "filter=") == p1) {
-        char * s = strchr(p1, '=');
-        q.filter_str = strdup(s + 1);
-        parse_filter(s + 1, NULL, &(q.filter_cmp));
-    } else if (strstr(p1, "start=") == p1) {
+	    char * s = strchr(p1, '=');
+	    q.filter_str = strdup(s + 1);
+	    parse_filter(s + 1, NULL, &(q.filter_cmp));
+	} else if (strstr(p1, "start=") == p1) {
 	    q.start = atoi(p1+6);
 	} else if (strstr(p1, "end=") == p1) {
 	    q.end = atoi(p1+4);

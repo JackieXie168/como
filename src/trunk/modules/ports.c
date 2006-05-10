@@ -47,22 +47,22 @@ FLOWDESC {
     uint64_t pkts[65536];		/* pkts per port number */
 };
 
-#define STATEDESC   struct _ports_state
-STATEDESC {
+#define CONFIGDESC   struct _ports_config
+CONFIGDESC {
     uint32_t meas_ivl;		/* interval (secs) */
 };
 
 static timestamp_t
 init(void * self, char *args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     int i;
     char *len;
     pkt_t *pkt;
     metadesc_t *inmd;
     
-    state = mdl_mem_alloc(self, sizeof(STATEDESC));
-    state->meas_ivl = 1;
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC));
+    config->meas_ivl = 1;
     
     /* 
      * process input arguments 
@@ -70,13 +70,13 @@ init(void * self, char *args[])
     for (i = 0; args && args[i]; i++) { 
 	if (strstr(args[i], "interval")) {
 	    len = index(args[i], '=') + 1; 
-	    state->meas_ivl = atoi(len); 
+	    config->meas_ivl = atoi(len); 
 	} 
     }
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:~tcp");
     N16(TCP(src_port)) = 0xffff;
@@ -86,19 +86,19 @@ init(void * self, char *args[])
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
 
-    STATE(self) = state; 
-    return TIME2TS(state->meas_ivl, 0); 
+    CONFIG(self) = config; 
+    return TIME2TS(config->meas_ivl, 0); 
 }
 
 static int
 update(void * self, pkt_t *pkt, void *rp, int isnew)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC *x = F(rp);
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC)); 
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % state->meas_ivl);
+	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % config->meas_ivl);
     }
 
     if (isTCP) {

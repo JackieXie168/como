@@ -57,23 +57,10 @@
 #define FILE_NAMELEN    16 /* filenames are 16 decimal digits */
 #define FILE_NAMEFMT    "%s/%016llx" /* format used to print */
 
-typedef enum {
-   S_ERROR, 
-   S_NODATA, 
-   S_ACK, 
-   S_OPEN, 
-   S_CLOSE, 
-   S_REGION, 
-   S_SEEK, 
-   S_INFORM
-} msgtype_t; 
-
-
 /*
  * Message exchanged between STORAGE and its clients.
  */
 typedef struct {
-    msgtype_t type;
     int id; 
     int arg;			/* seek method, open mode, error code */ 
     off_t ofs;			/* requested offset */
@@ -102,7 +89,7 @@ typedef enum {
 /* 
  * Function prototypes 
  */
-void storage_mainloop(int fd);
+void storage_mainloop();
 int csopen(const char * name, int mode, off_t size, int sd);
 off_t csgetofs(int fd);
 void *csmap(int fd, off_t ofs, ssize_t * sz);
@@ -244,8 +231,6 @@ struct _csbytestream {
  * process is described by this data structure.
  */
 struct _cs_state {
-    fd_set valid_fds;           /* socket maps */
-    int max_fd;                 /* max fd */
     csbytestream_t *bs;         /* the list of bytestreams */
     csregion_t *reg_freelist;   /* region free list */
     int client_count;           /* how many in use */

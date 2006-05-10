@@ -1,7 +1,7 @@
 .\"
-.\" $Id
+.\" $Id$
 .\"
-.Dd February 20, 2004
+.Dd May 5, 2006
 .Dt COMO 1
 .Os
 .Sh NAME
@@ -9,15 +9,15 @@
 .Nd COntinuous MOnitoring program
 .Sh SYNOPSIS
 .Nm
-.Op Fl c Ar config_file
+.Op Fl c Ar config-file
 .Op Fl D Ar basedir
 .Op Fl L Ar libdir
-.Op Fl m Ar mem-size
-.Op Fl M Ar module
 .Op Fl p Ar query-port
-.Op Fl s Ar sniffer:device
+.Op Fl m Ar mem-size
 .Op Fl v Ar logflags
-.Op Fl x Ar debug_options
+.Op Fl s Ar sniffer:device:"args"
+.Op Ar module:"args"
+.Op Ar filter
 .Sh DESCRIPTION
 .Nm
 is a software that implements capture, processing and storage
@@ -29,10 +29,12 @@ The configuration parameters for a CoMo instance can be set from
 the command line and/or one or more configuration files.
 Command line options and configuration files are processed in the order they
 are specified, and later definition override earlier ones.
+If a module is given CoMo will execute in in-line mode: that means that the
+data produced by that module will be printed on the standard ouput instead of
+being saved to disk. The filter parameter applies only if a module is given.
 If no configuration file is supplied from the
-command line, then the program behaves as if
-.Fl c Ar como.conf
-had been specified as the first option.
+command line and CoMo is not running in in-line mode, then the program will
+look for a default configuration file in $PREFIX/etc/como/como.conf.
 .Pp
 The following command line options are available.
 Unless other specified, multiple instances override each other,
@@ -45,19 +47,16 @@ If specified multiple times, all the files will be loaded in sequence.
 The data directory.
 .It Fl L Ar libdir
 The directory containing library modules.
-.It Fl m Ar mem-size
-The memory size, in megabytes, used for the capture process.
-.It Fl M Ar module
-The parameters of the module to be loaded.
-Multiple modules can be loaded with multiple
-.Fl M
-options, but names must be unique.
 .It Fl p Ar query-port
 The port where CoMo listens for HTTP requests, default 44444
-.It Fl s Ar sniffer:device
+.It Fl m Ar mem-size
+The memory size, in megabytes, used for the capture process.
+.It Fl s Ar sniffer:device:"args"
 The source of traffic. Can be any of the following devices types,
 followed by a colon-separated argument specifying the relevant
-parameter, e.g. a device name, or file, or URL:
+parameter, e.g. a device name, or file, or URL; optionally followed by
+another colon-separated argument containg as a single string the source
+optional arguments:
 .Bd -literal -offset indent
 bpf:device           # argument is the network device
 libpcap:device       # device name
@@ -68,14 +67,18 @@ dump:URL             # remote CoMo via http
 .Ed
 .It Fl v Ar logflags
 A comma-separated list of flags including
-.Ar ca,qu,me,st,qd,su,warn,debug
+.Ar ca,qu,me,st,qd,su,warn
 each optionally prefixed by
 .Ar v-
 to indicate the verbose version of the message,
 and also by a + or - to enable or disable the specific
 class of messages.
-.It Fl x Ar debug_options
-Strings with debugging options, for the programmer only.
+.It Ar module:"args"
+A valid module name to be run in in-line mode with the optional parameters
+specified by a colon-separated argument.
+.It Ar filter
+A filter to be applied to the received packets before processing with the
+in-line module.
 .El
 .Sh CONFIGURATION FILE
 The above parameters (and more) can also be set through a
@@ -95,19 +98,19 @@ A sample configuration file is shown below:
 # This is a sample configuration file for como
 #
 
-memsize	63	# same as -m
-query-port     44444   # same as -p
-basedir  "data"   # same as -D
-libdir   "modules"   # same as -L
-sniffer "bpf"           "xl0"  # same as -s
+memsize	   64               # same as -m
+query-port 44444            # same as -p
+basedir "data"              # same as -D
+libdir  "modules"           # same as -L
+sniffer "bpf" "xl0"         # same as -s
 
-filter		"myfilter.so" # to specify a precompiled filter
+filter "ip"                 # a global filter
 
 module "example"
   source      "example.so"  # module shared object 
   output      "example"     # output file
   description "Example of module configuration"
-  filter      "proto(TCP)"  # packets of interest (default: ALL)
+  filter      "tcp"         # packets of interest (default: ALL)
   filesize    1000000       # max output file size (default: 128MB)
   blocksize   1024          # max record size on file (default: 1024)
   hashsize    1             # hash table size (default: 1)

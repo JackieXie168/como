@@ -55,7 +55,7 @@ extern struct _como map;
  *
  */
 void *
-_smalloc(const char * file, const int line, size_t sz)
+_smalloc(size_t sz, const char * file, int line)
 {
     void * v;
 
@@ -81,14 +81,14 @@ _smalloc(const char * file, const int line, size_t sz)
  *
  */
 void *
-_scalloc(const char * file, const int line, int n, size_t sz)
+_scalloc(size_t n, size_t sz, const char * file, int line)
 {
     void * v;
 
-    v = calloc((unsigned int) n, sz);
+    v = calloc(n, sz);
     if (v == NULL) {
-	fprintf(stderr, "[%2s]  **** PANIC: calloc n:%d sz:%u (%s:%d)\n", 
-	    getprocname(map.whoami), n, sz, file, line);
+	fprintf(stderr, "[%2s]  **** PANIC: calloc n:%u sz:%u (%s:%d): %s\n", 
+	    getprocname(map.whoami), n, sz, file, line, strerror(errno));
 	abort();
     }
 
@@ -107,7 +107,7 @@ _scalloc(const char * file, const int line, int n, size_t sz)
  *   
  */ 
 void *
-_srealloc(const char * file, const int line, void * ptr, size_t sz)
+_srealloc(void * ptr, size_t sz, const char * file, const int line)
 {
     void * v;
         
@@ -133,9 +133,12 @@ _srealloc(const char * file, const int line, void * ptr, size_t sz)
  *
  */
 char *
-_sstrdup(const char * file, const int line, const char * str)
+_sstrdup(const char * str, const char * file, const int line)
 {
     char * v; 
+
+    if (str == NULL) 
+	return NULL; 
 
     v = strdup(str); 
     if (v == NULL) {
@@ -158,7 +161,7 @@ _sstrdup(const char * file, const int line, const char * str)
  * 
  */
 void 
-_sfree(const char * file, const int line, void * ptr)
+_sfree(void * ptr, const char * file, int line)
 { 
     if (ptr == NULL) { 
 	logmsg(LOGWARN, "freeing NULL pointer (%s:%d)\n", file, line); 
@@ -171,16 +174,16 @@ _sfree(const char * file, const int line, void * ptr)
 /*
  * -- _sdup 
  * 
- * Not to be called directly, but through safe_strdup()
+ * Not to be called directly, but through safe_sdup()
  *
  * Makes a malloc'ed copy of src into *dst, 
  * freeing the previous one if any
  */
 void
-_sdup(const char * file, const int line, char **dst, char *src)
+_sdup(char **dst, char *src, const char * file, const int line)
 {
     if (*dst)
         free(*dst);
-    *dst = _sstrdup(file, line, src);
+    *dst = _sstrdup(src, file, line);
 }
 

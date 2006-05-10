@@ -382,5 +382,5 @@ callbacks_t callbacks = {
     print: print,
     replay: NULL,
     formats: "pretty",
-    statesize: 0
+    configsize: 0
 };

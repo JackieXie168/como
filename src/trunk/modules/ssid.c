@@ -56,21 +56,21 @@ FLOWDESC {
     uint8_t     padding[3]; 
 };
 
-#define STATEDESC   struct _ssid_state
-STATEDESC {
+#define CONFIGDESC   struct _ssid_config
+CONFIGDESC {
     int meas_ivl;     /* measurement interval */
 };
 
 static timestamp_t
 init(void * self, char *args[])
 {
-    STATEDESC *state;
+    CONFIGDESC *config;
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
 
-    state = mdl_mem_alloc(self, sizeof(STATEDESC)); 
-    state->meas_ivl = 1;
+    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config->meas_ivl = 1;
 
     /* 
      * process input arguments 
@@ -78,20 +78,23 @@ init(void * self, char *args[])
     for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "interval")) {
             char * val = index(args[i], '=') + 1;
-            state->meas_ivl = atoi(val);
+            config->meas_ivl = atoi(val);
         }
     }
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(state->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "radio:802.11:none:none");
     
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
+    
     pkt = metadesc_tpl_add(inmd, "none:802.11:none:none");
     
-    STATE(self) = state; 
-    return TIME2TS(state->meas_ivl, 0);
+    CONFIG(self) = config; 
+    return TIME2TS(config->meas_ivl, 0);
 }
 
 
@@ -126,11 +129,11 @@ match(__unused void * self, pkt_t * pkt, void * fh)
 static int
 update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
-    STATEDESC * state = STATE(self);
+    CONFIGDESC * config = CONFIG(self);
     FLOWDESC *x = F(fh); 
 
     if (isnew) {
-	x->ts = COMO(ts) - COMO(ts) % TIME2TS(state->meas_ivl, 0);
+	x->ts = COMO(ts) - COMO(ts) % TIME2TS(config->meas_ivl, 0);
 	x->channel = -1; 
 	x->signal = x->noise = 0;
         x->samples = 0; 
