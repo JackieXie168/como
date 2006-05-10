@@ -58,13 +58,19 @@ img {
 
 .topcontent{
     width:100%;
-    vertical-align:top
+    vertical-align:top;
 }
 
 .leftcontent{
     width:60%;
-    vertical-align:top
+    vertical-align:top;
     padding:10px;
+}
+
+.centercontent{
+    width:100%;
+    vertical-align:top;
+    text-align : center;
 }
 
 .rightcontent{

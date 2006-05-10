@@ -48,6 +48,8 @@
     /* get the node hostname and port number */
     if (isset($_GET['comonode'])) {
       $comonode = $_GET['comonode'];
+      $comonode_array = split (";;", $comonode);
+      $comonode = $comonode_array[0];
     } else {
       print "{$_SERVER['SCRIPT_FILENAME']}";
       print " requires the comonode=host:port arg passed to it";
@@ -73,7 +75,7 @@
 	</div>
 <?php
 	include("include/footer.php.inc");
-	exit;
+#	exit;
     }
 ?>
 

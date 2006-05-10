@@ -115,7 +115,7 @@
 	</div>
 	<?php
 	    include("include/footer.php.inc");
-	exit;
+#	exit;
         }
         /*  get the groups */
 	$dadir = $NODEDB;

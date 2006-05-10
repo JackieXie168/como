@@ -18,7 +18,7 @@ while 1:
     if line=="":
        break
     l = line.split()
-    if tsm==0:
+    if tsm==0: 
         tsm = float(l[0])
 
     lip = l[4]
@@ -31,7 +31,7 @@ while 1:
     ldport = '_'+l[3]
 
     if not daily.has_key(lip):
-        daily[lip] = {}
+	daily[lip] = {}
 
     f  = (str(proto), lsport, ldport, ldstip)
     daily[lip][f] = 1
