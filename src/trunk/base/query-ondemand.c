@@ -142,7 +142,8 @@ qd_ipc_record(__unused procname_t sender, __unused int fd,
 {
     int ret; 
 
-    ret = como_writen(client_fd, (char *) buf, len);
+    /* NOTE: len includes \0 */
+    ret = como_writen(client_fd, (char *) buf, len - 1);
     if (ret < 0)
 	panic("sending data to the client");
 }
