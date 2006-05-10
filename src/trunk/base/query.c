@@ -426,6 +426,9 @@ validate_query(qreq_t * req, int node_id)
     for (idx = 0; idx <= map.module_last; idx++) {
         req->mdl = &map.modules[idx];
 
+	if (req->mdl->status != MDL_ACTIVE)
+	    continue;
+
 	if (node_id != req->mdl->node) 
 	    continue; 
 
@@ -523,6 +526,8 @@ validate_query(qreq_t * req, int node_id)
 	 */
         for (idx = 0; idx <= map.module_last; idx++) {
             req->src = &map.modules[idx];
+	    if (req->src->status != MDL_ACTIVE)
+		continue;
 	    if (node_id != req->src->node) 
 		continue; 
             if (!strcmp(req->source, req->src->name))
@@ -598,7 +603,7 @@ query(int client_fd, int node_id)
     ssize_t len;
     int mode, ret;
     char * httpstr;
-
+    char *null_args[] = {NULL};
 
     /* 
      * every new process has to set its name, specify the type of memory
@@ -634,13 +639,13 @@ query(int client_fd, int node_id)
         "query (%d bytes); node: %d mdl: %s filter: %s\n",  
         ntohs(req->len), node_id, req->module, req->filter_str); 
     if (req->filter_str) 
-	logmsg(0, "    filter: %s\n", req->filter_str);
-    logmsg(0, "    from %d to %d\n", req->start, req->end); 
+	logmsg(V_LOGQUERY, "    filter: %s\n", req->filter_str);
+    logmsg(V_LOGQUERY, "    from %d to %d\n", req->start, req->end); 
     if (req->args != NULL) { 
 	int n; 
 
         for (n = 0; req->args[n]; n++) 
-	    logmsg(0, "    args: %s\n", req->args[n]); 
+	    logmsg(V_LOGQUERY, "    args: %s\n", req->args[n]); 
     } 
 
     if (req->format == Q_STATUS) { 
@@ -684,44 +689,24 @@ query(int client_fd, int node_id)
     httpstr = NULL;
     switch (req->format) {
     case Q_OTHER:
-        asprintf(&httpstr, "HTTP/1.0 200 OK\nContent-Type: text/plain\n\n");
-	/* pass thru */
+        httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n";
+	break;
 
     case Q_HTML:
-        if (httpstr == NULL)
-	    asprintf(&httpstr, "HTTP/1.0 200 OK\nContent-Type: text/html\n\n");
+	httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n";
+	break;
 
+    case Q_COMO:
+	//httpstr = "HTTP/1.0 200 OK\r\nContent-Type: application/octet-stream\r\n\r\n";
+	break;
+    }
+    
+    if (httpstr != NULL) {
 	/*
 	 * produce a response header
 	 */
 	if (como_writen(client_fd, httpstr, 0) < 0) 
 	    panic("sending data to the client");  
-	free(httpstr);
-
-	/* first print callback. we need to make sure that req->args != NULL. 
-	 * if this is not the case we just make something up
-	 */
-	if (req->args == NULL) {
-	    req->args = safe_calloc(1, sizeof(char **)); 
-	    req->args[0] = NULL;
-	} 
-	printrecord(req->mdl, NULL, req->args, client_fd);
-	break;
-	
-    case Q_COMO: 
-#if 0
-FIXME
-	/*
-	 * transmit the output stream description
-	 */
-	ret = como_writen(client_fd, (char*) req->src->callbacks.outdesc, 
-			  sizeof(pktdesc_t)); 
-	if (ret < 0)
-	    panic("could not send pktdesc");
-#endif
-	/* allocate the output buffer */
-	output = safe_calloc(1, DEFAULT_REPLAY_BUFSIZE);
-        break;
     }
 
     /* 
@@ -733,7 +718,34 @@ FIXME
     if (req->source) {
 	query_ondemand(client_fd, req, node_id); 
 	assert_not_reached();
-    } 
+    }
+
+    switch (req->format) {
+    case Q_OTHER:
+    case Q_HTML:
+	/* first print callback. we need to make sure that req->args != NULL. 
+	 * if this is not the case we just make something up
+	 */
+	if (req->args == NULL) {
+	    req->args = null_args;
+	}
+	printrecord(req->mdl, NULL, req->args, client_fd);
+	break;
+    case Q_COMO:
+#if 0
+FIXME
+        /*
+         * transmit the output stream description
+         */
+        ret = como_writen(client_fd, (char*) req->src->callbacks.outdesc,
+                          sizeof(pktdesc_t));
+        if (ret < 0)
+            panic("could not send pktdesc");
+#endif
+        /* allocate the output buffer */
+        output = safe_calloc(1, DEFAULT_REPLAY_BUFSIZE);
+	break;
+    }
 
     req->src = req->mdl; 	/* the source is the same as the module */
     

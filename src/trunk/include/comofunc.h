@@ -50,8 +50,10 @@ void add_sniffer(como_t * m, char *want, char *device, char *args);
  */
 int activate_module(module_t * mdl, char * libdir);
 int check_module(como_t * m, module_t *mdl);
-module_t * new_module(como_t * m, char *name, int node);
-module_t * copy_module(como_t * m, module_t * src, int node);
+module_t * new_module(como_t * m, char *name, int node, int idx);
+module_t * copy_module(como_t * m, module_t * src, int node, int idx,
+		       char ** extra_args);
+void clean_module(module_t *mdl);
 void remove_module(como_t * m, module_t *mdl);
 char * pack_module(module_t * mdl, int * len);
 int unpack_module(char * x, size_t len, module_t * mdl);

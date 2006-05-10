@@ -606,25 +606,30 @@ setup_sniffers(source_t * src, fd_set * fds, int *max_fd, struct timeval *tout)
  * 
  */ 
 static void
-ca_ipc_module_add(procname_t sender, __unused int fd, void * buf, size_t len)
+ca_ipc_module_add(procname_t sender, __unused int fd, void * pack, size_t sz)
 {
-    module_t * mdl; 
+    module_t tmp;
+    module_t * mdl;
 
     /* only the parent process should send this message */
-    assert(sender == map.parent); 
-    
-    /* get a new module entry in the map */ 
-    mdl = new_module(&map, "tmp", -1); 
+    assert(sender == map.parent);
 
-    if (unpack_module(buf, len, mdl)) { 
-	logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n"); 
-	return; 
-    } 
+    /* unpack the received module info */
+    if (unpack_module(pack, sz, &tmp)) {
+        logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n");
+        return;
+    }
 
-    if (activate_module(mdl, map.libdir)) { 
-	logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
-	return; 
-    } 
+    /* find an empty slot in the modules array */
+    mdl = copy_module(&map, &tmp, tmp.node, tmp.index, NULL);
+
+    /* free memory from the tmp module */
+    clean_module(&tmp);
+
+    if (activate_module(mdl, map.libdir)) {
+        logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
+        return;
+    }
 
     /*
      * browse the list of sniffers to make sure that this module

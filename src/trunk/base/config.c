@@ -504,7 +504,7 @@ do_config(struct _como * m, int argc, char *argv[])
         break;
 
     case TOK_MODULE:
-	mdl = new_module(m, argv[1], 0);
+	mdl = new_module(m, argv[1], (m->running == INLINE? -1 : 0), -1);
         scope = CTX_MODULE; 		/* change scope */
         break;
         
@@ -1184,7 +1184,7 @@ configure(struct _como * m, int argc, char ** argv)
 		break; 	/* master node. nothing to do */
 
 	    /* create a new module and copy it from  new module */
-	    mdl = copy_module(m, orig, node->id);
+	    mdl = copy_module(m, orig, node->id, -1, NULL);
 	    
 	    /* append node id to module's output file */
 	    asprintf(&nm, "%s-%d", mdl->output, mdl->node); 

@@ -202,44 +202,46 @@ check_module(como_t * m, module_t *mdl)
  *
  */
 module_t *
-new_module(como_t * m, char *name, int node)
+new_module(como_t * m, char *name, int node, int idx)
 {
     module_t * mdl; 
-    int i, idx; 
+    int i; 
 
-    /* check if this module name already exists (for the same node */
-    i = -1;
-    for (idx = 0; idx < m->module_max; idx++) { 
-	mdl = &m->modules[idx]; 
+    assert (idx < m->module_max); 
 
-	/* if the entry is unused store it */
-	if (mdl->status == MDL_UNUSED) { 
-	    if (i == -1) 
-		i = idx; 
-	    if (idx > m->module_last) 
-		break; 
+    /* check if this module exists already */
+    for (i = 0; i <= m->module_last; i++) { 
+	mdl = &m->modules[i]; 
+
+	if (mdl->status == MDL_UNUSED) 
 	    continue; 
-	} 
 
-	/* check the name */
-        if (!strcmp(mdl->name, name) && mdl->node == node) {
+	if (!strcmp(mdl->name, name) && mdl->node == node)
 	    panicx("module name '%s' (node %d) already present\n", name, node);
-	    return mdl;
-        }
-    }
+    } 
 
-    if (i == -1) 
-	panicx("too many modules (%d), cannot create %s", m->module_max, name);
-
+    /* find an available slot unless the user request one */
+    if (idx == -1) { 
+	for (i = 0; i < m->module_max; i++) { 
+	    if (m->modules[i].status == MDL_UNUSED) { 
+		idx = i; 
+		break; 
+	    } 
+	} 
+	if (idx == -1)
+	    panicx("too many modules (%d), cannot create %s", 
+		m->module_max, name);
+    } 
+	
     m->module_used++;
-    if (i > m->module_last) 
-	m->module_last = i; 
+    if (idx > m->module_last) 
+	m->module_last = idx; 
 
     /* allocate new module */
-    mdl = &m->modules[i]; 
+    mdl = &m->modules[idx]; 
     bzero(mdl, sizeof(module_t));
     mdl->name = strdup(name);
-    mdl->index = i;
+    mdl->index = idx;
     mdl->node = node;
     mdl->description = NULL; 
     mdl->status = MDL_LOADING; 
@@ -267,28 +269,47 @@ new_module(como_t * m, char *name, int node)
  *
  */
 module_t *
-copy_module(como_t * m, module_t * src, int node) 
+copy_module(como_t * m, module_t * src, int node, int idx, char **extra_args) 
 {
     module_t * mdl; 
+    char * nm; 
+    int assigned; 
 
-    mdl = new_module(m, src->name, node); 
+    mdl = new_module(m, src->name, node, idx); 
+    nm = mdl->name; 
+    assigned = mdl->index; 
+    *mdl = *src; 		/* XXX maybe there is a better way */
+    mdl->node = node;
+    mdl->index = assigned; 
+    mdl->name = nm; 
     mdl->description = safe_strdup(src->description);
     mdl->filter_str = safe_strdup(src->filter_str);
     mdl->output = safe_strdup(src->output);
     mdl->source = safe_strdup(src->source);
-
+    mdl->ca_hashtable = NULL;
+    mdl->ex_hashtable = NULL;
+ 
     mdl->args = NULL; 
-    if (src->args) { 
-	int i, j; 
+    if (src->args || extra_args) {
+	int i = 0, i2 = 0, j; 
 
-	for (i = 0; src->args[i]; i++) 
-	    ; 
+	if (src->args)
+	    for (; src->args[i]; i++)
+		; 
 
-	mdl->args = safe_calloc(i + 1, sizeof(char *)); 
+	if (extra_args)
+	    for (; extra_args[i2]; i2++)
+		;
 
-	for (j = 0; j < i; j++)  
+	mdl->args = safe_calloc(i + i2 + 1, sizeof(char *)); 
+
+	for (j = 0; j < i; j++)
 	    mdl->args[j] = safe_strdup(src->args[j]); 
-	mdl->args[i] = NULL;
+
+	for (j = 0; j < i2; j++)
+	    mdl->args[i + j] = safe_strdup(extra_args[j]); 
+
+	mdl->args[i + i2] = NULL;
     } 
 
     return mdl; 
@@ -296,22 +317,21 @@ copy_module(como_t * m, module_t * src, int node)
 
 
 /*
- * -- remove_module
+ * -- clean_module
  *
- * free all memory allocated for this module, and 
- * unload the shared object and inform all processes 
- * of this decision. 
- * 
+ * free all process memory allocated internally to
+ * a module.
+ *
  */
 void
-remove_module(como_t * m, module_t *mdl)
+clean_module(module_t * mdl)
 {
     char *arg;
     int i;
 
     free(mdl->name);
-    if (mdl->description != NULL) 
-	free(mdl->description);
+    if (mdl->description != NULL)
+        free(mdl->description);
     free(mdl->output);
     free(mdl->source);
 
@@ -325,16 +345,38 @@ remove_module(como_t * m, module_t *mdl)
         }
         free(mdl->args);
     }
+
+}
+
+         
+/*
+ * -- remove_module 
+ *
+ * free all memory allocated for this module, and
+ * unload the shared object and inform all processes
+ * of this decision.
+ *
+ */
+void
+remove_module(como_t * m, module_t *mdl)
+{
+    /* free in process memory */
+    clean_module(mdl);
+
+    /* unlink the shared library */ 
     if (mdl->cb_handle) {
-	dlclose(mdl->cb_handle);
+        dlclose(mdl->cb_handle);
     }
 
-    bzero(mdl, sizeof(module_t)); 
+    /* zero out all the rest and mark the module as free */
+    bzero(mdl, sizeof(module_t));
     mdl->status = MDL_UNUSED;
-
-    /* update module counter values */  
+    
+    /* update the map */ 
     m->module_used--; 
     if (mdl == &m->modules[m->module_last]) { 
+	int i; 
+
 	/* 
 	 * this was the last module. find out who is 
 	 * the new last module. 
@@ -346,13 +388,11 @@ remove_module(como_t * m, module_t *mdl)
 	m->module_last = i; 
     }
     
-    /* FIXME TODO -- only SUPERVISOR should free this memory */
-    /*
-    mem_free_map(mdl->shared_map);
-    
-    mem_free_map(mdl->inprocess_map);
-    memlist_destroy(mdl->inprocess_map);
-    */
+    /* XXX we don't free the shared memory. this should be done 
+     *     in another function (destroy_module). remove_module 
+     *     is just in charge of cleaning all structures in process 
+     *     memory.	 
+     */
 }
 
 
@@ -427,8 +467,12 @@ pack_module(module_t * mdl, int * len)
     wh = add_string(&x->output, mdl->output, wh, buf); 
     wh = add_string(&x->source, mdl->source, wh, buf); 
 
+    /* remove the callbacks */
+    bzero(&x->callbacks, sizeof(x->callbacks));
+    x->cb_handle = NULL;
+
     x->args = NULL; 
-    if (mdl->args) {
+    if (mdl->args && mdl->args[0]) {
 	char * p; 
 
 	x->args = (char **) wh; 

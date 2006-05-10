@@ -171,7 +171,7 @@ su_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
 {
     int i; 
     
-    if (sender == QUERY || sender == STORAGE)
+    if (getprocclass(sender) == QUERY || getprocclass(sender) == STORAGE)
 	return;
 
     /* 
@@ -378,7 +378,7 @@ apply_map_changes(struct _como * x)
             continue;
 
 	/* add this module to the main map */
-        mdl = copy_module(&map, &x->modules[j], x->modules[j].node); 
+        mdl = copy_module(&map, &x->modules[j], x->modules[j].node, -1, NULL);
 	if (activate_module(mdl, map.libdir)) {
 	    remove_module(&map, mdl);
 	    continue;
