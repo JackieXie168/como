@@ -41,7 +41,8 @@ SRCS_como := \
 	util-process.c \
 	query.c \
 	query-comms.c \
-	query-ondemand.c
+	query-ondemand.c \
+	status.c 
 
 SRCS_como += \
 	$(BASEDIR)/lib/heap.c \

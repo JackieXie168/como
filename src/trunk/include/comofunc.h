@@ -67,17 +67,15 @@ uint memory_usage();
 uint memory_peak();
 
 void * mem_mdl_smalloc(size_t sz, const char * file, int line, module_t * mdl);
-void * mem_mdl_scalloc(size_t nmemb, size_t size, const char * file, int line,
-		       module_t * mdl);
+void * mem_mdl_scalloc(size_t n, size_t sz, const char *, int, module_t * mdl);
 void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
 
-#define mem_mdl_malloc(self,sz)	mem_mdl_smalloc(sz, __FILE__, __LINE__, \
-						(module_t *) self)
-#define mem_mdl_calloc(self,nmemb,sz)	mem_mdl_scalloc(sz, __FILE__, \
-							__LINE__, \
-							(module_t *) self)
-#define mem_mdl_free(self,p)	mem_mdl_sfree(p, __FILE__, __LINE__, \
-					      (module_t *) self)
+#define mem_mdl_malloc(self,sz)			\
+	mem_mdl_smalloc(sz, __FILE__, __LINE__, (module_t *) self)
+#define mem_mdl_calloc(self,nmemb,sz)		\
+	mem_mdl_scalloc(sz, __FILE__, __LINE__, (module_t *) self)
+#define mem_mdl_free(self,p)			\
+	mem_mdl_sfree(p, __FILE__, __LINE__, (module_t *) self)
 
 /*
  * capture.c
@@ -93,8 +91,7 @@ void export_mainloop();
  * supervisor.c
  */
 void supervisor_mainloop();
-pid_t start_child(procname_t who, int mtype, 
-	void (*mainloop)(int in_fd, int out_fd), int fd);
+pid_t start_child(procname_t w, int m, void (*ml)(int in, int out), int fd);
 void init_map(como_t * map); 
 
 /* 
