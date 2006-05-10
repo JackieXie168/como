@@ -50,8 +50,6 @@ extern como_t map;
  * convert tags to human readable strings. 
  */ 
 
-typedef procname_t 	uint32_t; 
-
 /* 
  * aliases for process class names 
  */ 
