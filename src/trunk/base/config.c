@@ -820,7 +820,7 @@ parse_cfgline(struct _como * m, const char *line)
 
 	str = do_config(m, argc, argv); 
 	if (str != NULL) 
-	    logmsg(LOGWARN, "%s (line: %d): %s\n", linenum, str); 
+	    logmsg(LOGWARN, "%s (line: %d): %s\n", line, linenum, str); 
 	free(argv);
     }
 }
