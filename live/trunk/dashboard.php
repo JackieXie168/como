@@ -14,7 +14,6 @@
     $includebanner=1;
     include("include/header.php.inc");
     $includebanner=0;	/* we have one banner, avoid that others include it */
-
     /*  get the node hostname and port number */
     if (isset($_GET['comonode'])) {
 	$comonode = $_GET['comonode'];
@@ -27,9 +26,10 @@
     
 
     require_once ("comolive.conf");
+
     require_once ("class/node.class.php");
     include("include/getinputvars.php.inc");
-    $node = new Node($comonode, $TIMEPERIOD, $TIMEBOUND);
+    $node = new Node($comonode, $G);
     /*  If cannot connect to node, fail with error  */
     if ($node -> status == "FAIL") {
         print "<center>An attempt to query $node->comonode has failed.<br>";
@@ -43,7 +43,7 @@
     */
     $input_vars = init_env($node);
     $module = $input_vars['module'];
-    $fiter = $input_vars['filter'];
+    $filter = $input_vars['filter'];
     $etime = $input_vars['etime'];
     $stime = $input_vars['stime'];
     $format = $input_vars['format'];
@@ -150,7 +150,7 @@ function initializeMenu(menuId, triggerId, module) {
 
 
           $sec_array = $node -> GetConfigModules 
-                                ($comonode, $NODEDB, "secondary");
+                                ($comonode, "secondary");
           $interval=$etime-$stime;
           for ($i=1;$i<count($sec_array);$i++) {
 	      /*  Hard code module specific options here  */

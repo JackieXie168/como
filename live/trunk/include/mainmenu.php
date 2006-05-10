@@ -1,5 +1,4 @@
-<?php
-?>
+<!--  $Id:$  -->
 <script type="text/javascript">
 var xmlHttp;
 
@@ -17,7 +16,7 @@ function startRequest(val) {
     createXMLHttpRequest();
     xmlHttp.onreadystatechange = handleStateChange;
     xmlHttp.open("GET", "include/submenu.php?sub="+ val + 
-                 "&webroot=<?=$WEBROOT?>", true);
+                 "&webroot=<?=$G['WEBROOT']?>", true);
     xmlHttp.send(null);
 }
 

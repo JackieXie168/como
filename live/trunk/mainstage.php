@@ -1,10 +1,11 @@
 <!--  $Id$  -->
 <?
-    require_once("comolive.conf");
-    require_once("class/node.class.php");
-    include ("class/query.class.php");
-    include ("include/getinputvars.php.inc");
-
+    require_once ("comolive.conf");
+    if (!(isset($G)))
+        $G = init_global();
+    require_once ("class/node.class.php");
+    require_once ("class/query.class.php");
+    require_once ("include/getinputvars.php.inc");
     /*  get the node hostname and port number */
     if (isset($_GET['comonode'])) {
 	$comonode = $_GET['comonode'];
@@ -15,26 +16,20 @@
         else
 	    $isDist = 0;
     } else {
-	print "sysinfo.php requires the comonode=host:port arg passed to it";
+	print "{$_SERVER['SCRIPT_FILENAME']}";
+	print " requires the comonode=host:port arg passed to it";
 	exit;
-    }
-    if (isset($_GET['module'])) {
-	$module = $_GET['module'];
-    } else {
-	$module = "traffic"; 
-    }
-    
 
+    }
     /*  Check if this is a distributed query
     *  Eventually this will be a como module, however, we will hard
     *  code it to get an idea of our future direction
     */
     if ($isDist) {
-print "isdist<br>";
         $numnodes = count($comonode_array);
         $val_data = array ();
         for ($i=0;$i<count($comonode_array);$i++) {
-	    $node = new Node($comonode_array[$i], $TIMEPERIOD, $TIMEBOUND);
+	    $node = new Node($comonode_array[$i], $G);
 	    $input_vars = init_env($node);
 	    $module = $input_vars['module'];
 	    $fiter = $input_vars['filter'];
@@ -44,7 +39,7 @@ print "isdist<br>";
 	    $http_query_string = $input_vars['http_query_string'];
 
 	    $http_query_string = "&filter=" . $node -> modinfo[$module]['filter'] . "&comonode=" . $comonode_array[$i] . "&module=" . $module;
-	    $query = new Query($stime, $etime, $RESULTS, $GNUPLOT, $CONVERT, $RESOLUTION);
+	    $query = new Query($stime, $etime, $G);
 	    $query_string = $query->get_query_string($module, $format, $http_query_string);
 	    $data = $query->do_query ($node->comonode, $query_string);
 	    $filename = $query->plot_query($data[1], $node->comonode, $module);
@@ -100,7 +95,7 @@ print "isdist<br>";
         
     } else {
         /*  Normal single node query  */
-	$node = new Node($comonode, $TIMEPERIOD, $TIMEBOUND);
+	$node = new Node($comonode, $G);
 	$input_vars = init_env($node);
 	$module = $input_vars['module'];
 	$fiter = $input_vars['filter'];
@@ -110,7 +105,7 @@ print "isdist<br>";
 	$http_query_string = $input_vars['http_query_string'];
 
 	$http_query_string = $http_query_string . "&filter=" . $node -> modinfo[$module]['filter'];
-	$query = new Query($stime, $etime, $RESULTS, $GNUPLOT, $CONVERT, $RESOLUTION);
+	$query = new Query($stime, $etime, $G);
 	$query_string = $query->get_query_string($module, $format, $http_query_string);
 	$data = $query->do_query ($node->comonode, $query_string);
     }
@@ -179,7 +174,7 @@ print "isdist<br>";
 
             /*  Use the config file to decide how many modules to show  */
             #$allmods = array_keys($node->loadedmodule); 
-            $allmods = $node -> GetConfigModules ($comonode, $NODEDB, "main");
+            $allmods = $node -> GetConfigModules ($comonode, "main");
             
             for ($i = 1; $i < count($allmods); $i++) {
                 if (($i % $NUMLINKS == 0) && ($i != 0))
@@ -212,7 +207,7 @@ print "isdist<br>";
           /*  This is where we print the image  */
         $fullname = $query->getFullfilename($module) . ".jpg";
 	if (file_exists("$fullname")) {
-	    if ($USEFLASH == false || $module == "ports"){
+	    if ($G['USEFLASH'] == false || $module == "ports"){
 		print "<img src=$filename.jpg>";
 	    } else {
 		print "<!-- Using flash here -->";
