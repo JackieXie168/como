@@ -4,9 +4,13 @@
  *  This file will require the comonode=host:port arg passed to it  
  *  <!-- $Id$  -->
  */
-    require_once("comolive.conf");
+    require_once ("comolive.conf");
+    if (!(isset($G))) {
+        $G = init_global();
+    }
+    $dadir = $G['NODEDB'];
     /*  Don't allow entrace without customization priviledge  */
-    if (!$ALLOWCUSTOMIZE) {
+    if (!($G['ALLOWCUSTOMIZE'])) {
         header("Location: index.php");
         exit;
     }
@@ -48,25 +52,25 @@
         /*  Create the default file  */
         if ($groupselect == "default") {
             $groupselect = "default.lst";
-            if (!file_exists("$NODEDB/$groupselect")) {
-		$fh = fopen ("$NODEDB/$groupselect", "w");
+            if (!file_exists("$dadir/$groupselect")) {
+		$fh = fopen ("$dadir/$groupselect", "w");
 		$towrite = "CoMo Nodes\n";
 		fwrite ($fh, $towrite);
 		fclose($fh);
             }
         }
-	$tmp = file ("$NODEDB/$groupselect");
+	$tmp = file ("$dadir/$groupselect");
 	$numlines = count($tmp);
         if ($numlines == 1) {
-	    $fh = fopen("$NODEDB/$groupselect", "a");
+	    $fh = fopen("$dadir/$groupselect", "a");
 	    $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;\n";
 	    if (fwrite ($fh, $tofile) === FALSE){
-		print "$NODEDB/$groupselect not writable";
+		print "$dadir/$groupselect not writable";
 		exit;
 	    }
 	    fclose($fh);
         }
-	$fh = fopen("$NODEDB/$groupselect", "a");
+	$fh = fopen("$dadir/$groupselect", "a");
 
         $tofile = $nodename . ";;" ;
         $tofile = $tofile . $comonode . ";;" ;
@@ -83,14 +87,14 @@
     }
     if ($method == "Add Group"){
 	$groupfname = ereg_replace (" ", "_", $groupname);
-        if (!file_exists("$NODEDB/$groupfname")) {
-	    if ($fh = fopen ("$NODEDB/$groupfname.lst", "w")) {
+        if (!file_exists("$dadir/$groupfname")) {
+	    if ($fh = fopen ("$dadir/$groupfname.lst", "w")) {
 		$towrite = "$groupname\n";
 		fwrite ($fh, $towrite);
 		header ("Location: nodeview.php?comonode=$comonode");
 		exit;
 	    } else {
-		print "Unable to open file $NODEDB/$group for writing";
+		print "Unable to open file $dadir/$group for writing";
 	    }
 	}
     }
@@ -100,7 +104,7 @@
 	include("include/header.php.inc");
 	include ("class/node.class.php");
         /*  Query the CoMo node  */
-        $node = new Node($comonode,$TIMEPERIOD, $TIMEBOUND);
+        $node = new Node($comonode,$G);
         if ($node->status == "FAIL"){
         /*
 	 * query failed. write error message and exit
@@ -118,14 +122,13 @@
 #	exit;
         }
         /*  get the groups */
-	$dadir = $NODEDB;
 	$handle=opendir("$dadir");
 	$allgroups=array();
         $x=0;
 	while (false!==($filez= readdir($handle))) {
 	   if ($filez!= "." && $filez!= ".." && ereg (".*\.lst$", $filez)) {
-               if (file_exists("$NODEDB/$filez")) {
-		   $desc = file ("$NODEDB/$filez");
+               if (file_exists("$dadir/$filez")) {
+		   $desc = file ("$dadir/$filez");
 		   $allgroups[$x][0] = $filez;
 		   $allgroups[$x][1] = $desc[0];
                    $x++;

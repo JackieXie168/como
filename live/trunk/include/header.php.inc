@@ -28,7 +28,7 @@
 <?php
     /* comolive.conf is the global configuration file  */
     if (file_exists("comolive.conf")) {
-	include("comolive.conf");
+	require_once ("comolive.conf");
         $G = init_global ();
     } else {
         print "Please create a comolive.conf file";

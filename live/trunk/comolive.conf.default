@@ -60,7 +60,7 @@ function init_global() {
     if (stristr($browser, "msie")) {  
 	$GLOBAL['USEFLASH'] = true; 
     } else { 
-	$GLOBAL['USEFLASH'] = true; 
+	$GLOBAL['USEFLASH'] = false; 
     }
 
     /* Customize your logo here */
