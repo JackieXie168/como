@@ -77,4 +77,12 @@ $ALLOWCUSTOMIZE = 1;
 $WEBROOT = dirname($_SERVER['SCRIPT_NAME']);
 $ABSROOT = dirname($_SERVER['SCRIPT_FILENAME']);
 
+/*  Use BlincView  */
+$USEBLINCVIEW = 1;
+$BLINCVIEWCMD = "./contrib/blinc/blincview_dst.py";
+/*  If you use BlincView, you will need to
+ *  install DOT (http://graphviz.org) and python
+ */
+$DOT="/usr/local/bin/dot";
+$PYTHON="/usr/bin/python";
 ?>
