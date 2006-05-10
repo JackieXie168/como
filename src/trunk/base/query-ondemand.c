@@ -272,7 +272,7 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 
     /* now start a new EXPORT process */ 
     tag = child(EXPORT, fd); 
-    start_ondemand_child(tag, COMO_SHARED_MEM, export_mainloop, -1); 
+    start_ondemand_child(tag, COMO_PRIVATE_MEM, export_mainloop, -1); 
     
     /* get ready for the mainloop */
     FD_ZERO(&valid_fds);
