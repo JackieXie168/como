@@ -121,6 +121,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
     char * base;                /* current position in input buffer */
     int npkts;                  /* processed pkts */
     int rd;
+    timestamp_t first_seen;
 
     assert(src->ptr != NULL); 
 
@@ -152,6 +153,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
         if (left < p->caplen + sizeof(pkt_t)) 
             break;
 
+	if (npkts > 0) {
+	    if (p->ts - first_seen > TIME2TS(1,0)) {
+		/* Never returns more than 1sec of traffic */
+		break;
+	    }
+	} else {
+	    first_seen = p->ts;
+	}
+	
 	/* ok, copy the packet header */
 	/* XXX we assume to receive packet in the same endianness 
 	 *     we are running in. we need to make the replay() callback
