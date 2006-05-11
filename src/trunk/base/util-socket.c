@@ -75,6 +75,7 @@ create_socket(const char *path, char **arg)
     int i, r, l;
     char *buf = NULL;
     int server = 0;
+    int http = 1;
 
     if (strcasestr(path, "s:") == path) {
 	server = 1;
@@ -125,6 +126,7 @@ create_socket(const char *path, char **arg)
     } else {
 	/* unix domain */
 	i = socket(AF_UNIX, SOCK_STREAM, 0);
+	http = 0;
 	if (path[0] != '/' && path[0] != '.')
 	    asprintf(&buf, "%s/%s", map.workdir, path);
 	path = buf;
@@ -135,9 +137,20 @@ create_socket(const char *path, char **arg)
 	l = sizeof(sun);
     }
     if (server) {
+try_rebind:
 	r = bind(i, sa, l);
-	if (r < 0)
+	if (r < 0) {
+	    if (http == 0) {
+	    	/*
+	    	 * try to unlink path before giving up. maybe the previous
+	    	 * process has died without cleaning up the socket file
+	    	 */
+	    	 unlink(path);
+	    	 http = 1; /* trick to exit if bind fails again */
+	    	 goto try_rebind;
+	    }
 	    err(EXIT_FAILURE, "create_socket: cannot bind [%s] %d\n", path, r);
+	}
 	listen(i, SOMAXCONN);
     } else { /* client mode */
 	int done, retries;
