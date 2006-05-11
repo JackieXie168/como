@@ -170,7 +170,7 @@ try_rebind:
 }
 
 int
-destory_socket(const char *path)
+destroy_socket(const char *path)
 {
     char *buf = NULL;
     

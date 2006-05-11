@@ -116,7 +116,7 @@ treenode_t *tree_copy(treenode_t *t);
  * util-socket.c
  */
 int create_socket(const char *path, char **arg);
-int destory_socket(const char *path);
+int destroy_socket(const char *path);
 int del_fd(int i, fd_set * fds, int max_fd);
 int add_fd(int i, fd_set * fds, int max_fd);
 
