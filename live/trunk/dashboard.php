@@ -149,8 +149,7 @@ function initializeMenu(menuId, triggerId, module) {
 	   */
 
 
-          $sec_array = $node -> GetConfigModules 
-                                ($comonode, "secondary");
+          $sec_array = $node -> GetConfigModules ($comonode, "secondary");
           $interval=$etime-$stime;
           for ($i=1;$i<count($sec_array);$i++) {
 	      /*  Hard code module specific options here  */
@@ -170,8 +169,11 @@ function initializeMenu(menuId, triggerId, module) {
 		$modargs = $modargs . "urlargs=interval=$interval&";
 		$modargs = $modargs . "urlargs=module=tuple&";
 		$modargs = $modargs . "urlargs=source=tuple&";
-		$modargs = $modargs . "urlargs=format=plain&";
-		$modargs = $modargs . "urlargs=extra=blincview&";
+                if ($G['USEBLINCVIEW']) {
+		    $modargs = $modargs . "urlargs=format=plain&";
+		    $modargs = $modargs . "urlargs=extra=blincview&";
+                } else
+		    $modargs = $modargs . "urlargs=format=html&";
 	      }
 	      if ($sec_array[$i] == "topports"){
 		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
