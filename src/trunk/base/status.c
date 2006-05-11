@@ -27,6 +27,7 @@
  */
 
 #include <unistd.h>
+#include <time.h>
 
 #include "como.h"
 #include "comopriv.h"
@@ -81,13 +82,13 @@ send_status(int client_fd, int node_id)
     start = TS2SEC(map.stats->first_ts); 
     timedata = gmtime(&start); 
     strftime(datebuf, sizeof(datebuf), "%a %B %e %T %Z %Y", timedata); 
-    len += sprintf(buf + len, "Start: %u | %s\n", start, datebuf); 
+    len += sprintf(buf + len, "Start: %u | %s\n", (unsigned) start, datebuf); 
 		
     /* print the last timestamp */
     last = TS2SEC(map.stats->ts); 
     timedata = gmtime(&last); 
     strftime(datebuf, sizeof(datebuf), "%a %B %e %T %Z %Y", timedata); 
-    len += sprintf(buf + len, "Current: %u | %s\n", last, datebuf); 
+    len += sprintf(buf + len, "Current: %u | %s\n", (unsigned) last, datebuf); 
 		
     /* print the duration */
     secs = last - start; 
