@@ -291,7 +291,7 @@ _new_mem(memmap_t *m, uint size, const char * file, int line)
 	i++;
     }
     if (cand == 0) {
-	logmsg(V_LOGMEM, "sorry out of memory for %d bytes (%s:%d)!\n", size,
+	logmsg(LOGWARN, "sorry out of memory for %d bytes (%s:%d)!\n", size,
 	       file, line);
 	for (i = 1; i < first_free(m); i++)
 	    logmsg(V_LOGMEM, "  . slot %2d size %8d count %3d p %p\n",
@@ -414,6 +414,8 @@ memmap_new(allocator_t *alc, uint entries)
     memmap_t *x; 
 
     x = alc_malloc(alc, sizeof(memmap_t)*(1+entries));
+    if (x == NULL)
+	return NULL;
     map_size(x) = 1+entries;
     first_free(x) = 1;
     overflow_list(x) = NULL;
@@ -499,19 +501,19 @@ memory_peak()
 }
 
 void *
-mem_smalloc(size_t sz, const char * file, int line)
+_mem_malloc(size_t sz, const char * file, int line)
 {
     return _new_mem(shared_mem->map, sz, file, line);
 }
 
 void *
-mem_scalloc(size_t nmemb, size_t sz, const char * file, int line)
+_mem_calloc(size_t nmemb, size_t sz, const char * file, int line)
 {
     return _new_mem(shared_mem->map, nmemb * sz, file, line);
 }
 
 void
-mem_sfree(void * p, const char * file, int line)
+_mem_free(void * p, const char * file, int line)
 {
     return _mfree_mem(shared_mem->map, p, 0, file, line);
 }
@@ -630,9 +632,9 @@ allocator_t *
 allocator_shared()
 {
     static allocator_t alc = {
-	malloc: (alc_malloc_fn) mem_smalloc,
-	calloc: (alc_calloc_fn) mem_scalloc,
-	free: (alc_free_fn) mem_sfree,
+	malloc: (alc_malloc_fn) _mem_malloc,
+	calloc: (alc_calloc_fn) _mem_calloc,
+	free: (alc_free_fn) _mem_free,
 	data: NULL
     };
     

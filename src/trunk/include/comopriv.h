@@ -67,14 +67,13 @@ void       memory_init(uint chunk);
 memmap_t * memmap_new(allocator_t *alc, uint entries, memmap_policy_t pol);
 void       memmap_destroy(memmap_t *ml);
 
-void *     mem_smalloc(size_t sz, const char * file, int line);
-void *     mem_scalloc(size_t nmemb, size_t sz, const char * file, int line);
-void       mem_sfree(void * p, const char * file, int line);
-void       mem_sreturn(memmap_t *m, void * p, const char * file, int line);
+/* never call those function directly, use the macros below */
+void *     _mem_malloc(size_t sz, const char * file, int line);
+void *     _mem_calloc(size_t nmemb, size_t sz, const char * file, int line);
+void       _mem_free(void * p, const char * file, int line);
 
-#define mem_malloc(sz)		mem_smalloc(sz, __FILE__, __LINE__)
-#define mem_calloc(nmemb,sz)	mem_scalloc(nmemb, sz, __FILE__, __LINE__)
-#define mem_free(p)		mem_sfree(p, __FILE__, __LINE__)
-#define mem_return(m,p)		mem_sreturn(m, p, __FILE__, __LINE__)
+#define mem_malloc(sz)		_mem_malloc(sz, __FILE__, __LINE__)
+#define mem_calloc(nmemb,sz)	_mem_calloc(nmemb, sz, __FILE__, __LINE__)
+#define mem_free(p)		_mem_free(p, __FILE__, __LINE__)
 
 #endif /*COMOPRIV_H_*/
