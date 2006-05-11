@@ -149,7 +149,7 @@ ipc_finish()
     ipc_dest_t * x;
     
     asprintf(&sname, "%s.sock", getprocfullname(map.whoami));
-    destory_socket(sname);
+    destroy_socket(sname);
     free(sname);
     
     while (ipc_dests) {
