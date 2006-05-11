@@ -203,6 +203,9 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 	if (map.modules[idx].status == MDL_ACTIVE)
 	    map.modules[idx].status = MDL_DISABLED;
 
+    /* initialize the shared memory */
+    memory_init(16);		/* XXX 16MB fixed memory size... check this! */
+    
     /* 
      * copy the module we want to run,
      * activate it and initialize it 
@@ -246,9 +249,6 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* create the entry in the map */
     add_sniffer(&map, "como", sniffstr, NULL); 
 
-    /* initialize the shared memory */
-    memory_init(16);		/* XXX fixed memory size... check this! */
-    
     map.stats = mem_calloc(1, sizeof(stats_t)); 
     map.stats->mdl_stats = mem_calloc(map.module_max, sizeof(mdl_stats_t));
     gettimeofday(&map.stats->start, NULL); 
