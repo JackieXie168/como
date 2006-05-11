@@ -209,6 +209,9 @@ query_ondemand(int fd, qreq_t * req, int node_id)
      * NOTE: use the query arguments as extra module arguments
      */
     map.inline_mdl = copy_module(&map, req->mdl, -1, -1, req->args); 
+    if (req->filter_str) {
+	map.inline_mdl->filter_str = safe_strdup(req->filter_str);
+    }
  
     if (activate_module(map.inline_mdl, map.libdir))
 	panicx("cannot activate %s", map.inline_mdl->name); 
