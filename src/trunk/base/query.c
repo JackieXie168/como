@@ -35,6 +35,7 @@
 #include <sys/socket.h> /* socket, bind, listen, accept */
 #include <netinet/in.h> /* struct sockaddr_in */
 #include <string.h>     /* bzero */
+#include <err.h>
 #include <errno.h>      /* errno */
 
 #include "como.h"
@@ -197,7 +198,7 @@ printrecord(module_t * mdl, char * ptr, char * args[], int client)
 	default:
 	    ret = como_writen(client, out, len);
 	    if (ret < 0)
-		panic("sending data to the client");
+		err(EXIT_FAILURE, "sending data to the client");
 	}
     }
 }
@@ -246,7 +247,7 @@ replayrecord(module_t * mdl, char * ptr, int client)
 
 	ret = como_writen(client, out, len);
 	if (ret < 0)
-	    panic("sending data to the client");
+	    err(EXIT_FAILURE, "sending data to the client");
     } while (left > 0);
 }
 
@@ -546,7 +547,7 @@ query(int client_fd, int node_id)
     httpstr = validate_query(req, node_id);
     if (httpstr != NULL) { 
 	if (como_writen(client_fd, httpstr, 0) < 0) 
-	    panic("sending data to the client [%d]", client_fd); 
+	    err(EXIT_FAILURE, "sending data to the client [%d]", client_fd); 
         close(client_fd);
         close(supervisor_fd);
 	return;
@@ -575,7 +576,7 @@ query(int client_fd, int node_id)
 	 * produce a response header
 	 */
 	if (como_writen(client_fd, httpstr, 0) < 0) 
-	    panic("sending data to the client");  
+	    err(EXIT_FAILURE, "sending data to the client");  
     }
 
     /* 
@@ -697,7 +698,7 @@ FIXME
 	    /* send the data to the query client */
 	    ret = como_writen(client_fd, ptr, len);
 	    if (ret < 0) 
-		panic("sending data to the client"); 
+		err(EXIT_FAILURE, "sending data to the client"); 
 	    break;
 		
 	case Q_OTHER: 
