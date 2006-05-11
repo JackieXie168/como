@@ -50,7 +50,7 @@ class Node {
             /*  Cache the status query so we don't have to query CoMo  */
 #            $this -> isCached($comonode);
 
-	    $query = file_get_contents("http://$comonode/?status");
+	    $query = file("http://$comonode/?status");
 
 	} else {
             $query = FALSE;
@@ -60,40 +60,38 @@ class Node {
 	} else {
             $this->status="OK";
 	    /* parse the node information */
-	    $tok = strtok($query, ":\n");
-	    while ($tok !== FALSE) {
-		if ($tok === "Name")
-		    $this->nodename = strtok(":\n");
-		else if ($tok === "Location")
-		    $this->nodeplace = strtok(":\n");
-		else if ($tok === "Comment")
-		    $this->comment = strtok(":\n");
-		else if ($tok === "Speed")
-		    $this->linkspeed = strtok(":\n");
-		else if ($tok === "Version")
-		    $this->version = strtok(":\n");
-		else if ($tok === "Build date")
-		    $this->builddate = strtok(":\n");
-		else if ($tok === "Current")
-		    $this->curtime = ((int) strtok(":\n"));
-		else if ($tok === "Start")
-		    $this->start = ((int) strtok(":\n"));
-		else if ($tok === "Module"){
-		    $module = trim(strtok(":\n\t"));
-		    strtok(":\n\t");
-		    $filter = trim(strtok(":\n\t"));
-                    /*  Replace spaces with %20  */ 
-                    #$str = str_replace (" ", "%20", $filter);
-                    $str = urlencode($filter);
-                    $this->modinfo[$module]['filter'] = $str;
-		    strtok(":\n\t");
-		    $str = trim(strtok(":\n\t"));
-                    $this->modinfo[$module]['formats'] = $str;
-		    strtok(":\n\t");
-		    $str = trim(strtok(":\n\t"));
-                    $this->modinfo[$module]['stime'] = $str;
-		}
-		$tok = strtok(":\n");
+	    for ($i=0;$i<count($query);$i++) {
+              if ($query[$i] != "\n") {
+		$lines = explode(" ", $query[$i],2);
+		$args = explode("|", $lines[1]);
+                $val = trim ($lines[0]); 
+                switch ($val) {
+                    case "Node:":
+                        list ($this->nodename, $this->nodeplace, 
+                              $this->linkspeed) = $args;
+		    break;
+		    case "Start:":
+			$this->start = $args[0];
+		    break;
+		    case "Current:":
+			$this->curtime = $args[0];
+		    break;
+                    case "Module:":
+                        $str = urlencode(trim($args[1]));
+                        $module = trim($args[0]);
+                        $this->modinfo[$module]['filter'] = $str;
+                        $this->modinfo[$module]['stime'] = trim($args[2]);
+                        $this->modinfo[$module]['formats'] = trim($args[3]);
+		    break;
+                    case "--":
+			$version = explode("(built:", $args[0]);
+			$this->version = trim($version[0]);
+                        /*  Can't get rid of damn rt para  */
+                        $test = split (")", $version[1]);
+			$this->builddate = trim($test[0]);
+		    break;
+                }
+	      }
 	    } 
 
             /*

@@ -67,7 +67,7 @@
     if (($extra == "blincview") && ($G['USEBLINCVIEW'])) {
 	$filename = $comonode . 
 		     "_" . $extra . "_" . $stime . "_" .
-		     $etime . "_" . $daip . ".blinc";
+		     $etime . "_" . $daip . ".blinc.dat";
     } else {
 	$filename=$comonode . "_" . $module . "_" . $stime . "_" .
 		  $etime . "_" . $daip . "_" . $format;
@@ -115,12 +115,16 @@
 			 "_" . $extra . "_" . $stime . "_" .
 			 $etime . "_" . $daip . ".blinc";
 	    $absblincfile = $BRESULTS . "/" . $blincfile;
-	    $fp = fopen ("$absblincfile.dat", "w");
-	    fwrite ($fp, $data[1]);
-	    fclose ($fp);
-            $BLINCVIEWCMD = $G['BLINCVIEWCMD'];
-            $DOT = $G['DOT'];
-	    system("$BLINCVIEWCMD $DOT $absblincfile < $absblincfile.dat", $return);
+            /*  Is there a blinc png file?  */
+	    if ((!(file_exists("$absblincfile.png"))) || (!($G['USECACHE']))) {
+		$fp = fopen ("$absblincfile.dat", "w");
+		fwrite ($fp, $data[1]);
+		fclose ($fp);
+		$BLINCVIEWCMD = $G['BLINCVIEWCMD'];
+		$DOT = $G['DOT'];
+		system("$BLINCVIEWCMD $DOT $absblincfile < $absblincfile.dat", $return);
+		system("rm -f $absblincfile");
+            }
 #		system("CONVERT $absblincfile.png1 $absblincfile.png", $return);
 
 	    /*  This will take there request uri information and 
