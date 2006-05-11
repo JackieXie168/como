@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: query.c 452 2006-05-10 14:07:06Z m_canini $
+ * $Id$
  */
 
 #include <unistd.h>
