@@ -806,6 +806,7 @@ export_mainloop(__unused int in_fd, int parent_fd)
 	    case IPC_ERR:
 		/* an error. close the socket */
 		logmsg(LOGWARN, "error on IPC handle from %d\n", i);
+		exit(EXIT_FAILURE);
 	    case IPC_EOF:
 		close(i);
 		max_fd = del_fd(i, &rx, max_fd);
