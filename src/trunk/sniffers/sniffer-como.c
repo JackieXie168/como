@@ -127,8 +127,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 
     info = (struct _snifferinfo *) src->ptr; 
 
-    if (info->nbytes > 0) 
+    if (info->nbytes > 0) {
+	/*
+	 * NOTE: this assertion is here to catch the undesired situation in
+	 * which the input stream is wrong and this sniffer continues to
+	 * attempt to read packets.
+	 */
+	assert(info->buf != info->base);
 	memmove(info->buf, info->base, info->nbytes); 
+    }
 
     /* read CoMo packets from stream */
     rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes);
