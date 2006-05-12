@@ -26,9 +26,14 @@
  * $Id: util-process.c,v 1.2 2006/05/07 22:46:19 iannak1 Exp $
  *
  */
-
+#include <sys/wait.h>	/* wait3() */
+#include <err.h>	/* errx */
+#include <errno.h>      /* errno */
+#include <assert.h>
 
 #include "como.h"
+#include "comopriv.h"
+#include "ipc.h"
 
 /* global state */
 extern como_t map; 
@@ -200,5 +205,134 @@ isvalidproc(procname_t who)
 {
     procname_t x = (GETPROCCHILD(who) << 16); 
     return (x >= SUPERVISOR && x <= QUERY); 
+}
+
+
+/*
+ * -- start_child 
+ * 
+ * fork a child with the given function and process name.
+ * If 'procname' is NULL then don't fork, as this is the supervisor.
+ * The last argument is an optional fd to be passed to the program.
+ */
+pid_t
+start_child(procname_t who, int mem_type, 
+	    mainloop_fn mainloop, int in_fd,
+	    child_info_t *children, int children_count)
+{
+    pid_t pid;
+    int i;
+
+    /* find a slot for the child */
+    for (i = 0; i < children_count; i++)
+	if (!isvalidproc(children[i].who))
+	    break;
+    if (i == children_count) 
+	errx(EXIT_FAILURE, 
+	     "--- cannot create child %s, no more slots\n", 
+	     getprocfullname(who));
+
+    children[i].who = who;
+
+    /* ok, fork a regular process and return pid to the caller. */
+    pid = fork();
+    if (pid == 0) {	/* child */
+	char *buf;
+	int out_fd, idx;
+	
+	signal(SIGHUP, SIG_IGN);        /* ignore SIGHUP */
+
+	/* XXX TODO: close unneeded sockets */
+	// fclose(stdout); // XXX
+	// fclose(stderr); // XXX
+
+	/*
+	 * every new process has to set its name, specify the type of memory 
+	 * the modules will be able to allocate and use, and change the 
+	 * process name accordingly.  
+	 */
+	map.parent = map.whoami;
+	map.whoami = who;
+	map.mem_type = mem_type;
+
+	/*
+	 * remove all modules in the map (it will
+	 * receive the proper information from SUPERVISOR)
+	 *
+	 * XXX this is not that great but no other workaround comes
+	 *     to mind. the problem is when an IPC_MODULE_ADD message
+	 *     comes we don't want to waste time figuring out if we
+	 *     already have that module somewhere or not. And those
+	 *     messages may come when we are doing something important,
+	 *     while this is done at the very beginning.
+	 *
+	 */
+	for (idx = 0; idx < map.module_max; idx++)
+	    if (map.modules[idx].status != MDL_UNUSED) 
+		remove_module(&map, &map.modules[idx]);
+	assert(map.module_used == 0); 
+	assert(map.module_last == -1);
+
+	/* connect to SUPERVISOR */
+        out_fd = ipc_connect(map.parent);
+        assert(out_fd > 0);
+
+	asprintf(&buf, "%s", getprocfullname(who));
+	setproctitle(buf);
+	free(buf);
+
+	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
+	       getprocfullname(who), getpid()); 
+
+	mainloop(in_fd, out_fd);
+	exit(0);
+    }
+    children[i].who = who;
+    children[i].pid = pid;
+    
+    return pid;
+}
+
+
+/* 
+ * -- handle_children
+ * 
+ * Waits for children that have terminate and reports on the 
+ * exit status. 
+ */
+void
+handle_children(child_info_t *children, int children_count)
+{
+    int j;
+    procname_t who = 0;
+    pid_t pid;
+    int statbuf;
+
+    pid = wait3(&statbuf, WNOHANG, NULL);
+    if (pid <= 0)
+	return;
+    for (j = 0; j < children_count; j++) {
+	if (children[j].pid == pid) {
+	    who = children[j].who;
+	    break;
+	}
+    }
+
+//    assert(j < children_count);
+    if (j == children_count)
+	return;
+
+    if (WIFEXITED(statbuf)) 
+	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (status: %d)\n",
+	    pid, getprocfullname(who), WEXITSTATUS(statbuf)); 
+    else if (WIFSIGNALED(statbuf)) 
+	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (signal: %d)\n",
+	    pid, getprocfullname(who), WTERMSIG(statbuf));
+    else 
+	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (unknown!!)\n", 
+	    pid, getprocfullname(who)); 
+	    
+    children[j].pid = -1;
+    children[j].who = 0;
 }
 

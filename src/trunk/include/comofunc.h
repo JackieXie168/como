@@ -91,8 +91,6 @@ void export_mainloop();
  * supervisor.c
  */
 void supervisor_mainloop();
-pid_t start_child(procname_t w, int m, void (*ml)(int in, int out), int fd);
-void init_map(como_t * map); 
 
 /* 
  * logging.c 
