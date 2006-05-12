@@ -262,7 +262,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 		flush_state(mdl, exp_tables);
 	}
 	if (!mdl->ca_hashtable) {
-	    mdl->shared_map = memmap_new(allocator_shared(), 32,
+	    mdl->shared_map = memmap_new(allocator_shared(), 64,
 					 POLICY_HOLD_IN_USE_BLOCKS);
 	    mdl->ca_hashtable = create_table(mdl, pkt->ts);
 	    if (!mdl->ca_hashtable) {

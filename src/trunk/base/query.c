@@ -244,6 +244,8 @@ replayrecord(module_t * mdl, char * ptr, int client)
 	left = mdl->callbacks.replay(mdl, ptr, out, &len, &count);
 	if (left < 0)
 	    panicx("%s.replay returns error", mdl->name);
+	if (len == 0) 
+	    return;
 
 	ret = como_writen(client, out, len);
 	if (ret < 0)
@@ -546,7 +548,7 @@ query(int client_fd, int node_id)
      */
     httpstr = validate_query(req, node_id);
     if (httpstr != NULL) { 
-	if (como_writen(client_fd, httpstr, 0) < 0) 
+	if (como_writen(client_fd, httpstr, strlen(httpstr)) < 0) 
 	    err(EXIT_FAILURE, "sending data to the client [%d]", client_fd); 
         close(client_fd);
         close(supervisor_fd);
@@ -567,7 +569,8 @@ query(int client_fd, int node_id)
 	break;
 
     case Q_COMO:
-	//httpstr = "HTTP/1.0 200 OK\r\nContent-Type: application/octet-stream\r\n\r\n";
+	// httpstr = "HTTP/1.0 200 OK\r\n"
+	//	  "Content-Type: application/octet-stream\r\n\r\n";
 	break;
     }
     
@@ -575,7 +578,7 @@ query(int client_fd, int node_id)
 	/*
 	 * produce a response header
 	 */
-	if (como_writen(client_fd, httpstr, 0) < 0) 
+	if (como_writen(client_fd, httpstr, strlen(httpstr)) < 0) 
 	    err(EXIT_FAILURE, "sending data to the client");  
     }
 

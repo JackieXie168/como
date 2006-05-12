@@ -41,7 +41,7 @@
 
 #define CS_MAXCLIENTS   	500            	/* max no. of clients/files */
 #define CS_OPTIMALSIZE		(1024*1024)	/* size for mmap() */
-#define CS_DEFAULT_TIMEOUT	TIME2TS(60,0)	/* readers' timeout */
+#define CS_DEFAULT_TIMEOUT	TIME2TS(3600,0)	/* readers' timeout */
 
 /*
  * Modes for opening a bytestream.

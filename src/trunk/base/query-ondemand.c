@@ -119,8 +119,8 @@ qd_ipc_done(__unused procname_t sender, __unused int fd,
 static void
 defchld(__unused int si_code)
 {
-    handle_children(qd_children, QD_CHILDREN_COUNT);
-    exit(EXIT_FAILURE);
+    if (handle_children(qd_children, QD_CHILDREN_COUNT))
+	exit(EXIT_FAILURE);
 }
 
 

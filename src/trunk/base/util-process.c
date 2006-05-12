@@ -26,10 +26,12 @@
  * $Id: util-process.c,v 1.2 2006/05/07 22:46:19 iannak1 Exp $
  *
  */
-#include <sys/wait.h>	/* wait3() */
 #include <err.h>	/* errx */
 #include <errno.h>      /* errno */
 #include <assert.h>
+#include <unistd.h> 	/* fork */
+#include <sys/types.h>  /* fork */
+#include <sys/wait.h>	/* wait3() */
 
 #include "como.h"
 #include "comopriv.h"
@@ -298,9 +300,10 @@ start_child(procname_t who, int mem_type,
  * -- handle_children
  * 
  * Waits for children that have terminate and reports on the 
- * exit status. 
+ * exit status with logmsg and returning 1 if the process didn't
+ * terminate with an EXIT_SUCCESS and 0 otherwise. 
  */
-void
+int
 handle_children(child_info_t *children, int children_count)
 {
     int j;
@@ -309,8 +312,14 @@ handle_children(child_info_t *children, int children_count)
     int statbuf;
 
     pid = wait3(&statbuf, WNOHANG, NULL);
-    if (pid <= 0)
-	return;
+    if (pid <= 0) {
+	/* why was this function called?
+         * XXX we can probably remove this 
+         */ 
+	logmsg(LOGWARN, "handle children called but no one died...");
+	return 0;
+    } 
+
     for (j = 0; j < children_count; j++) {
 	if (children[j].pid == pid) {
 	    who = children[j].who;
@@ -320,19 +329,36 @@ handle_children(child_info_t *children, int children_count)
 
 //    assert(j < children_count);
     if (j == children_count)
-	return;
+	return 0;
 
-    if (WIFEXITED(statbuf)) 
-	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (status: %d)\n",
-	    pid, getprocfullname(who), WEXITSTATUS(statbuf)); 
-    else if (WIFSIGNALED(statbuf)) 
-	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (signal: %d)\n",
-	    pid, getprocfullname(who), WTERMSIG(statbuf));
-    else 
-	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (unknown!!)\n", 
-	    pid, getprocfullname(who)); 
-	    
     children[j].pid = -1;
     children[j].who = 0;
+
+    if (WIFEXITED(statbuf)) {
+	if (WEXITSTATUS(statbuf) == EXIT_SUCCESS) { 
+	    logmsg(V_LOGWARN, 
+		   "%s (pid %d) completed successfully\n", 
+		   getprocfullname(who), pid); 
+	    return 0; 
+	} else { 
+	    logmsg(LOGWARN, 
+		   "WARNING!! %s (pid %d) terminated (status: %d)\n",
+	           pid, getprocfullname(who), WEXITSTATUS(statbuf)); 
+	    return 1; 
+	} 
+    } 
+
+    if (WIFSIGNALED(statbuf)) {
+	logmsg(LOGWARN, 
+	       "WARNING!! %s (pid %d) terminated (signal: %d)\n",
+	       pid, getprocfullname(who), WTERMSIG(statbuf));
+	return 1; 
+    } 
+
+    /* this would really be weird if it happened... */
+    logmsg(LOGWARN, 
+           "WEIRD WARNING!! %s (pid %d) terminated but nobody knows why!?!?\n",
+	   pid, getprocfullname(who)); 
+    return 1; 
 }
 

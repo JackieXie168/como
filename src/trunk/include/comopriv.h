@@ -54,10 +54,10 @@ typedef struct child_info_t {
     pid_t pid;
 } child_info_t;
 
-pid_t start_child     (procname_t who, int mem_type, 
-		       mainloop_fn mainloop, int in_fd,
-		       child_info_t *children, int children_count);
-void  handle_children (child_info_t *children, int children_count);
+pid_t start_child (procname_t who, int mem_type, 
+		   mainloop_fn mainloop, int in_fd,
+		   child_info_t *children, int children_count);
+int handle_children (child_info_t *children, int children_count);
 
 /*
  * supervisor.c
