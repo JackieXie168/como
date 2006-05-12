@@ -30,6 +30,7 @@
 #include <unistd.h>		/* fork */
 #include <string.h>
 #include <assert.h>
+#include <signal.h>
 
 #include "como.h"
 #include "comopriv.h"
@@ -41,67 +42,8 @@
 extern struct _como map;
 static int client_fd;
 
-
-/* 
- * -- start_ondemand_child
- * 
- * starts children of the query-ondemand process. 
- * this is used to start a special copy of CAPTURE and EXPORT. 
- *
- */
-static void 
-start_ondemand_child(procname_t who, int mem_type,
-        void (*mainloop)(int out_fd, int in_fd), int fd)
-{
-    pid_t pid;
- 
-    /* ok, fork a regular process and return pid to the caller. */
-    pid = fork();
-    if (pid == 0) {     /* child */
-        char *buf;
-        int out_fd;
-	int idx; 
-
-        /* XXX TODO: close unneeded sockets */
-        // fclose(stdout); // XXX
-        // fclose(stderr); // XXX
-
-        /*
-         * every new process has to set its name, specify the type of memory
-         * the modules will be able to allocate and use, and change the
-         * process name accordingly.
-         */
-	map.parent = map.whoami; 
-        map.whoami = who;
-        map.mem_type = mem_type;
-
-	/* 
-	 * remove all modules. we will receive them with the 
-	 * proper IPC_MODULE_ADD message. 
-	 */
-        for (idx = 0; idx < map.module_max; idx++)
-            if (map.modules[idx].status != MDL_UNUSED)
-                remove_module(&map, &map.modules[idx]);
-        assert(map.module_used == 0);
-        assert(map.module_last == -1);
-
-	
-        /* connect to the parent */
-        out_fd = ipc_connect(map.parent);
-        assert(out_fd > 0);
-
-        asprintf(&buf, "%s", getprocfullname(who));
-        setproctitle(buf);
-        free(buf);
-
-        logmsg(V_LOGWARN, "starting process %-20s pid %d\n",
-               getprocfullname(who), getpid());
-
-        mainloop(fd, out_fd);
-        exit(EXIT_SUCCESS);
-    }
-}
-
+#define QD_CHILDREN_COUNT	2 /* only CA and EX */
+static child_info_t qd_children[QD_CHILDREN_COUNT];
 
 /*
  * -- qd_ipc_sync()
@@ -168,6 +110,20 @@ qd_ipc_done(__unused procname_t sender, __unused int fd,
 }
 
 
+/*
+ * -- defchld
+ * 
+ * handle dead children
+ * 
+ */
+static void
+defchld(__unused int si_code)
+{
+    handle_children(qd_children, QD_CHILDREN_COUNT);
+    exit(EXIT_FAILURE);
+}
+
+
 /* 
  * -- query_ondemand
  * 
@@ -188,6 +144,9 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     procname_t tag; 
     fd_set valid_fds;
     int max_fd, capture_fd;
+    
+    /* catch some signals */
+    signal(SIGCHLD, defchld);		/* catch SIGCHLD (defunct children) */
 
     /* 
      * the first thing to do is adapt the map to our needs. 
@@ -272,11 +231,13 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* now start a new CAPTURE process */ 
     tag = child(CAPTURE, fd); 
     capture_fd = ipc_listen(tag); 
-    start_ondemand_child(tag, COMO_SHARED_MEM, capture_mainloop, capture_fd); 
+    start_child(tag, COMO_SHARED_MEM, capture_mainloop, capture_fd,
+		qd_children, SU_CHILDREN_COUNT);
 
     /* now start a new EXPORT process */ 
     tag = child(EXPORT, fd); 
-    start_ondemand_child(tag, COMO_PRIVATE_MEM, export_mainloop, -1); 
+    start_child(tag, COMO_PRIVATE_MEM, export_mainloop, -1,
+		qd_children, SU_CHILDREN_COUNT);
     
     /* get ready for the mainloop */
     FD_ZERO(&valid_fds);

@@ -124,13 +124,16 @@ main(int argc, char *argv[])
      */
 
     /* start the STORAGE process */
-    pid = start_child(STORAGE, COMO_PRIVATE_MEM, storage_mainloop, storage_fd);
+    pid = start_child(STORAGE, COMO_PRIVATE_MEM, storage_mainloop, storage_fd,
+		      su_children, SU_CHILDREN_COUNT);
 
     /* start the EXPORT process */
-    pid = start_child(EXPORT, COMO_PRIVATE_MEM, export_mainloop, -1); 
+    pid = start_child(EXPORT, COMO_PRIVATE_MEM, export_mainloop, -1,
+		      su_children, SU_CHILDREN_COUNT);
 
     /* start the CAPTURE process */
-    pid = start_child(CAPTURE, COMO_SHARED_MEM, capture_mainloop, capture_fd); 
+    pid = start_child(CAPTURE, COMO_SHARED_MEM, capture_mainloop, capture_fd,
+		      su_children, SU_CHILDREN_COUNT);
 
     /* move to the SUPERVISOR process (we don't fork here) */
     map.whoami = SUPERVISOR; 

@@ -45,95 +45,7 @@
 /* global state */
 extern struct _como map;
 
-struct _child_info_t {
-    procname_t who;
-    pid_t pid;
-};
-
-static struct _child_info_t my_children[10]; 
-
-
-/*
- * -- start_child 
- * 
- * fork a child with the given function and process name.
- * If 'procname' is NULL then don't fork, as this is the supervisor.
- * The last argument is an optional fd to be passed to the program.
- */
-pid_t
-start_child(procname_t who, int mem_type, 
-	void (*mainloop)(int out_fd, int in_fd), int fd)
-{
-    pid_t pid;
-    u_int i;
-
-    /* find a slot for the child */
-    for (i = 0; i < sizeof(my_children); i++)
-	if (!isvalidproc(my_children[i].who))
-	    break;
-    if (i == sizeof(my_children)) 
-	errx(EXIT_FAILURE, 
-	     "--- cannot create child %s, no more slots\n", 
-	     getprocfullname(who));
-
-    my_children[i].who = who;
-
-    /* ok, fork a regular process and return pid to the caller. */
-    pid = fork();
-    if (pid == 0) {	/* child */
-	char *buf;
-	int out_fd, idx;
-
-	/* XXX TODO: close unneeded sockets */
-	// fclose(stdout); // XXX
-	// fclose(stderr); // XXX
-
-	/*
-	 * every new process has to set its name, specify the type of memory 
-	 * the modules will be able to allocate and use, and change the 
-	 * process name accordingly.  
-	 */
-	map.parent = map.whoami;
-	map.whoami = who;
-	map.mem_type = mem_type;
-
-	/*
-	 * remove all modules in the map (it will
-	 * receive the proper information from SUPERVISOR)
-	 *
-	 * XXX this is not that great but no other workaround comes
-	 *     to mind. the problem is when an IPC_MODULE_ADD message
-	 *     comes we don't want to waste time figuring out if we
-	 *     already have that module somewhere or not. And those
-	 *     messages may come when we are doing something important,
-	 *     while this is done at the very beginning.
-	 *
-	 */
-	for (idx = 0; idx < map.module_max; idx++)
-	    if (map.modules[idx].status != MDL_UNUSED) 
-		remove_module(&map, &map.modules[idx]);
-	assert(map.module_used == 0); 
-	assert(map.module_last == -1);
-
-	/* connect to SUPERVISOR */
-        out_fd = ipc_connect(map.parent);
-        assert(out_fd > 0);
-
-	asprintf(&buf, "%s", getprocfullname(who));
-	setproctitle(buf);
-	free(buf);
-
-	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
-	       getprocfullname(who), getpid()); 
-
-	mainloop(fd, out_fd);
-	exit(0);
-    }
-    my_children[i].who = who;
-    my_children[i].pid = pid;
-    
-    return pid;
-}
+child_info_t su_children[SU_CHILDREN_COUNT];
 
 
 /*
@@ -236,43 +148,6 @@ su_ipc_done(__unused procname_t sender, __unused int fd,
 }
 
 
-/* 
- * -- handle_children
- * 
- * Waits for children that have terminate and reports on the 
- * exit status. 
- */
-static void
-handle_children(void)
-{
-    u_int j;
-    procname_t who = 0;
-    pid_t pid;
-    int statbuf; 
-
-    pid = wait3(&statbuf, WNOHANG, NULL);
-    if (pid <= 0)
-	return;
-    for (j = 0; j < sizeof(my_children); j++) {
-	if (my_children[j].pid == pid) {
-	    who = my_children[j].who;
-	    break;
-	}
-    }
-
-    if (j == sizeof(my_children))
-	return; 
-
-    if (WIFEXITED(statbuf)) 
-	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (status: %d)\n",
-	    pid, getprocfullname(who), WEXITSTATUS(statbuf)); 
-    else if (WIFSIGNALED(statbuf)) 
-	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (signal: %d)\n",
-	    pid, getprocfullname(who), WTERMSIG(statbuf));
-    else 
-	logmsg(LOGWARN, "WARNING!! process %d (%s) terminated (unknown!!)\n", 
-	    pid, getprocfullname(who)); 
-}
 
 
 /*
@@ -419,13 +294,25 @@ apply_map_changes(struct _como * x)
  *
  */
 static void
-reconfigure()
+reconfigure(__unused int si_code)
 {
     struct _como tmp_map;
 
     init_map(&tmp_map);
     configure(&tmp_map, map.ac, map.av);
     apply_map_changes(&tmp_map);
+}
+
+/*
+ * -- defchld
+ * 
+ * handle dead children
+ * 
+ */
+static void
+defchld(__unused int si_code)
+{
+    handle_children(su_children, SU_CHILDREN_COUNT);
 }
 
 
@@ -447,12 +334,13 @@ supervisor_mainloop(int accept_fd)
     /* catch some signals */
     signal(SIGINT, exit);               /* catch SIGINT to clean up */
     signal(SIGHUP, reconfigure);        /* catch SIGHUP to update config */
+    signal(SIGCHLD, defchld);		/* catch SIGCHLD (defunct children) */
 
     /* register a handler for exit */
     atexit(cleanup);
 
-    /* init my children array */
-    bzero(my_children, sizeof(my_children)); 
+    /* init su children array */
+    bzero(su_children, sizeof(su_children)); 
 
     /* register handlers for IPC */
     ipc_clear();
@@ -608,7 +496,7 @@ supervisor_mainloop(int accept_fd)
 	   	 */
 		pid = fork(); 	
 		if (pid < 0) 
-		    logmsg(LOGWARN, "fork query-ondemand: %s\n",
+		    logmsg(LOGWARN, "fork query: %s\n",
 				strerror(errno));
 
 		if (pid == 0) {	/* here is the child... */
@@ -637,8 +525,6 @@ supervisor_mainloop(int accept_fd)
   next_one:
 	    n_ready--;
 	}
-
-	handle_children(); /* handle dead children etc */
 	schedule(); /* resource management */
     }
 }
