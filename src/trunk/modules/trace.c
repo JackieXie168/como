@@ -227,7 +227,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
     pkt_t * pkt; 
 
     if (len < sizeof(pkt_t)) {
-        ts = 0;
+        *ts = 0;
         return 0;
     }
 
@@ -581,8 +581,11 @@ replay(__unused void * self, char *buf, char *out, size_t * len, int *count)
     pkt_t * pkt; 
     size_t need; 
 
-    if (buf == NULL)		/* this module does not buffer any records */
-	return 0; 
+    if (buf == NULL) {
+	/* this module does not buffer any records */
+	*len = 0;
+	return 0;
+    }
 
     pkt = (pkt_t *) buf; 
     need = ntohl(COMO(caplen)) + sizeof(pkt_t);
@@ -605,6 +608,7 @@ replay(__unused void * self, char *buf, char *out, size_t * len, int *count)
     COMOX(l2ofs, ntohs(COMO(l2ofs))); 
     COMOX(l3ofs, ntohs(COMO(l3ofs))); 
     COMOX(l4ofs, ntohs(COMO(l4ofs))); 
+    COMOX(l7ofs, ntohs(COMO(l7ofs))); 
 #else
     COMO(ts) = NTOHLL(COMO(ts)); 
     COMO(len) = ntohl(COMO(len)); 
@@ -617,6 +621,7 @@ replay(__unused void * self, char *buf, char *out, size_t * len, int *count)
     COMO(l2ofs) = ntohs(COMO(l2ofs)); 
     COMO(l3ofs) = ntohs(COMO(l3ofs)); 
     COMO(l4ofs) = ntohs(COMO(l4ofs)); 
+    COMO(l7ofs) = ntohs(COMO(l7ofs)); 
 #endif
 
     COMO(payload) = out + sizeof(pkt_t);
