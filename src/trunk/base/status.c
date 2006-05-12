@@ -26,6 +26,7 @@
  * $Id$
  */
 
+#include <string.h>
 #include <unistd.h>
 #include <time.h>
 
@@ -51,6 +52,7 @@ send_status(int client_fd, int node_id)
 {
     char buf[2048]; 
     char datebuf[30];
+    char * httpstr;
     module_t * mdl;
     node_t * node;
     time_t start, last; 
@@ -66,8 +68,8 @@ send_status(int client_fd, int node_id)
 	panicx("cannot find virtual node %d", node_id); 
 
     /* send HTTP header */
-    ret = como_writen(client_fd, 
-	    "HTTP/1.0 200 OK\nContent-Type: text/plain\n\n", 0);
+    httpstr = "HTTP/1.0 200 OK\nContent-Type: text/plain\n\n";
+    ret = como_writen(client_fd, httpstr, strlen(httpstr)); 
     if (ret < 0) 
 	panic("sending data to the client");  
 
