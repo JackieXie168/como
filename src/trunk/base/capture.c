@@ -430,6 +430,13 @@ filter(pkt_t * pkt, int n_packets, int n_out, module_t * modules)
 	outs[i] = which + n_packets * i;
 
     for (i = 0; i < n_packets; i++, pkt++) {
+	if (pkt->ts == 0) {
+	    logmsg(LOGCAPTURE, "pkt no. %d has NULL timestamp\n", i);
+	    for (j = 0; j < n_out; j++) {
+		outs[j][i] = 0;
+	    }
+	    continue;
+	}
 	if (pkt->ts >= max_ts) {
 	    max_ts = pkt->ts;
 	} else {
