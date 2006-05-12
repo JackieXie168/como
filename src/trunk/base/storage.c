@@ -1505,7 +1505,7 @@ scheduler(timestamp_t elapsed)
 
 	    free(cl);
 
-	    logmsg(LOGSTORAGE, 
+	    logmsg(V_LOGWARN, 
 		"client timeout. file %s, clients %d, total %d\n", 	
 		bs->name, bs->client_count, cs_state.client_count); 
 	} 

@@ -79,7 +79,7 @@ sniffer_start(source_t * src)
     
     /* send the query string followed by "\n\n" */
     asprintf(&msg, "GET %s HTTP/1.0\n\n", local);
-    ret = como_writen(sd, msg, 0);
+    ret = como_writen(sd, msg, strlen(msg));
     free(msg);
     if (ret < 0) {
         logmsg(LOGWARN, "sniffer-como: write error: %s\n", strerror(errno));

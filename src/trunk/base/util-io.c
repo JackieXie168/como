@@ -64,16 +64,13 @@ como_read(int fd, char *buf, size_t nbytes)
 }
 
 /*
- * keeps writing until complete. If nbytes = 0, we assume it is
- * a string and do a strlen here.
+ * keeps writing until complete.
  */
 int
 como_writen(int fd, const char *buf, size_t nbytes)
 {
     size_t n = 0;
 
-    if (nbytes == 0)
-	nbytes = strlen(buf);
     while (n < nbytes) {
 	int ret = write(fd, buf + n, nbytes - n);
 

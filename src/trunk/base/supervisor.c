@@ -165,7 +165,8 @@ cleanup()
     char *cmd;
  
     if (map.whoami != SUPERVISOR) {
-        logmsg(V_LOGWARN, "terminating normally\n");
+        logmsg(V_LOGWARN, "%s terminating normally\n", 
+		getprocfullname(map.whoami));
         return;
     }
     logmsg(LOGUI, "\n\n\n--- about to exit... remove work directory %s\n",
