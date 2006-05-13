@@ -45,7 +45,7 @@
 
 /* sniffer specific information */
 struct _snifferinfo { 
-    void * bottom; 	   	/* pointer to bottom of stream buffer */
+    uint8_t * bottom; 	   	/* pointer to bottom of stream buffer */
 };
 
 
@@ -122,7 +122,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 {
     struct _snifferinfo * info; /* sniffer information */
     pkt_t *pkt;                 /* CoMo record structure */
-    char *top;           	/* pointer to top of stream buffer */
+    uint8_t *top;           	/* pointer to top of stream buffer */
     char *base;                 /* current position in stream */
     int npkts;			/* number of pkts processed */
 
@@ -134,10 +134,10 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
         return -1; /* errno is set */
 
     /* check if we read something */
-    if (top == (char *) info->bottom)
+    if (top == info->bottom)
         return 0;
 
-    base = info->bottom; 
+    base = (char *) info->bottom; 
     for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
 	dag_record_t *rec;          /* DAG record structure */ 
 	int len;                    /* total record length */
@@ -147,11 +147,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
         rec = (dag_record_t *) base;
 
         /* check if there is one record */
-	if (top - base < dag_record_size)
+	if ((int) top - (int) base < dag_record_size)
 	    break; 
 
         /* check if entire record is available */
-        if (ntohs(rec->rlen) > top - base) 
+        if (ntohs(rec->rlen) > (int) top - (int) base) 
             break;
     
         /*
@@ -210,7 +210,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
         base += len; 
     }
 
-    info->bottom = base; 
+    info->bottom = (uint8_t *) base; 
     return npkts;
 }
 
