@@ -49,17 +49,17 @@ FLOWDESC {
 
 #define CONFIGDESC   struct _topdest_config
 CONFIGDESC {
-    uint32_t meas_ivl;  	    /* interval (secs) */
-    int topn;                       /* number of top destinations */
-    uint32_t mask;                  /* prefix mask */
-    uint32_t last_export; 
+    int topn;			/* number of top destinations */
+    uint32_t mask;		/* prefix mask */
+    uint32_t meas_ivl;		/* interval (secs) */
+    uint32_t align;		/* from when to count before exporting */
+    uint32_t last_export;	/* last export time */
 };
 
 static timestamp_t
 init(void * self, char *args[])
 {
     CONFIGDESC *config;
-    char *len;
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
@@ -69,20 +69,23 @@ init(void * self, char *args[])
     config->topn = 20;
     config->mask = 0xffffffff;
     config->last_export = 0;
+    config->align = 0; 
     
     /* 
      * process input arguments 
      */
     for (i = 0; args && args[i]; i++) { 
+	char * wh;
+
+	wh = index(args[i], '=') + 1; 
 	if (!strncmp(args[i], "interval", 8)) {
-	    len = index(args[i], '=') + 1; 
-	    config->meas_ivl = atoi(len); 
+	    config->meas_ivl = atoi(wh); 
 	} else if (!strncmp(args[i], "topn", 4)) {
-	    len = index(args[i], '=') + 1;
-	    config->topn = atoi(len);
+	    config->topn = atoi(wh);
 	} else if (!strncmp(args[i], "mask", 4)) {
-	    len = index(args[i], '=') + 1;
-	    config->mask <<= atoi(len); 
+	    config->mask <<= atoi(wh); 
+	} else if (!strncmp(args[i], "align-to", 8)) {
+	    config->align = atoi(wh); 
 	}
     }
     
@@ -189,12 +192,11 @@ action(void * self, void *efh, timestamp_t current_time, int count)
 	 * check if it is time to export the table. 
 	 * if not stop. 
 	 */
-        uint32_t now = TS2SEC(current_time);
-	uint32_t ivl = now - now % config->meas_ivl; 
-	if (ivl - config->last_export < config->meas_ivl) 
+        uint32_t now = TS2SEC(current_time) - config->align;
+	if (now - config->last_export < config->meas_ivl) 
 	    return ACT_STOP;		/* too early */
 
-	config->last_export = ivl; 
+	config->last_export = now; 
 	return ACT_GO; 		/* dump the records */
     }
 

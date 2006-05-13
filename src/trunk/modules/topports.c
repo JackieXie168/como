@@ -36,47 +36,59 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <assert.h>
 #include "module.h"
 
 #define FLOWDESC	struct _topports
+#define EFLOWDESC	struct _topports
 
 FLOWDESC {
     uint32_t ts;			/* timestamp of first packet */
-    uint64_t bytes[65536];		/* bytes per port number */
-    uint64_t pkts[65536];		/* pkts per port number */
+    uint16_t maxtcpport;		/* max TCP port used */
+    uint16_t maxudpport;		/* max UDP port used */
+    uint64_t tcpbytes[65536];		/* TCP bytes per port number */
+    uint32_t tcppkts[65536];		/* TCP pkts per port number */
+    uint64_t udpbytes[65536];		/* UDP bytes per port number */
+    uint32_t udppkts[65536];		/* UDP pkts per port number */
 };
 
 #define CONFIGDESC   struct _topports_config
 CONFIGDESC {
+    uint16_t topn;    		/* number of top ports */
     uint32_t meas_ivl;		/* interval (secs) */
-    int topn;    		/* number of top ports */
+    uint32_t align;             /* from when to count before exporting */
+    uint32_t last_export;       /* last export time */
 };
+
 
 static timestamp_t
 init(void * self, char *args[])
 {
     CONFIGDESC *config;
-    char *len;
-    int i;
-    pkt_t *pkt;
     metadesc_t *inmd;
+    pkt_t *pkt;
+    int i;
     
     config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
     config->meas_ivl = 1;
     config->topn = 20;
+    config->last_export = 0;
+    config->align = 0;
 
     /* 
      * process input arguments 
      */
     for (i = 0; args && args[i]; i++) { 
-	if (strstr(args[i], "interval")) {
-	    len = index(args[i], '=') + 1; 
-	    config->meas_ivl = atoi(len); 
-	} 
-	if (strstr(args[i], "topn")) {
-	    len = index(args[i], '=') + 1;
-	    config->topn = atoi(len);
-	}
+	char * wh; 
+
+        wh = index(args[i], '=') + 1;
+        if (!strncmp(args[i], "interval", 8)) {
+            config->meas_ivl = atoi(wh);
+        } else if (!strncmp(args[i], "topn", 4)) {
+            config->topn = atoi(wh);
+        } else if (!strncmp(args[i], "align-to", 8)) {
+            config->align = atoi(wh);
+        }
     }
     
     /* setup indesc */
@@ -118,86 +130,185 @@ update(void * self, pkt_t *pkt, void *rp, int isnew)
     } 
 
     if (isTCP) {
-	x->bytes[H16(TCP(src_port))] += newbytes; 
-	x->bytes[H16(TCP(dst_port))] += newbytes; 
-	x->pkts[H16(TCP(src_port))] += newpkts;
-	x->pkts[H16(TCP(dst_port))] += newpkts; 
-    } else { 
-	x->bytes[H16(UDP(src_port))] += newbytes; 
-	x->bytes[H16(UDP(dst_port))] += newbytes;
-	x->pkts[H16(UDP(src_port))] += newpkts; 
-	x->pkts[H16(UDP(dst_port))] += newpkts; 
+	uint sport = H16(TCP(src_port)); 
+	uint dport = H16(TCP(dst_port)); 
+
+	x->tcpbytes[sport] += newbytes; 
+	x->tcpbytes[dport] += newbytes; 
+	x->tcppkts[sport] += newpkts;
+	x->tcppkts[dport] += newpkts; 
+
+	if (sport > x->maxtcpport)
+	    x->maxtcpport = sport; 
+	if (dport > x->maxtcpport)
+	    x->maxtcpport = dport; 
+    } else if (isUDP) { 
+	uint sport = H16(UDP(src_port)); 
+	uint dport = H16(UDP(dst_port)); 
+
+	x->udpbytes[sport] += newbytes; 
+	x->udpbytes[dport] += newbytes; 
+	x->udppkts[sport] += newpkts;
+	x->udppkts[dport] += newpkts; 
+
+	if (sport > x->maxudpport)
+	    x->maxudpport = sport; 
+	if (dport > x->maxudpport)
+	    x->maxudpport = dport; 
     } 
 
     return 0;
 }
 
 
-struct topports {
-    uint32_t ts;		/* timestamp of first packet */
-    uint32_t port; 		/* port number */
-    uint64_t bytes; 		/* bytes/port number */
-    uint64_t pkts;		/* pkts/port number */
-};
+static int
+export(__unused void * self, void *efh, void *fh, int isnew)
+{
+    FLOWDESC *x = F(fh);
+    EFLOWDESC *ex = EF(efh);
+    int i;
 
+    if (isnew) {
+	bcopy(x, ex, sizeof(EFLOWDESC)); 
+	return 0;
+    } 
+
+    for (i = 0; i < 65536; i++) { 
+	ex->tcpbytes[i] += x->tcpbytes[i];
+	ex->tcppkts[i] += x->tcppkts[i];
+	ex->udpbytes[i] += x->udpbytes[i];
+	ex->udppkts[i] += x->udppkts[i];
+    } 
+
+    if (x->maxtcpport > ex->maxtcpport)
+	ex->maxtcpport = x->maxtcpport; 
+    if (x->maxudpport > ex->maxudpport)
+	ex->maxudpport = x->maxudpport; 
+    return 0;
+}
+
+
+static int
+action(void * self, void *efh, timestamp_t current_time, __unused int count)
+{
+    CONFIGDESC * config = CONFIG(self);
+
+    if (efh == NULL) {
+        /*
+         * this is the action for the entire table.
+         * check if it is time to export the table.
+         * if not stop.
+         */
+        uint32_t now = TS2SEC(current_time) - config->align;
+        if (now - config->last_export < config->meas_ivl)
+            return ACT_STOP;            /* too early */
+
+        config->last_export = now;
+        return ACT_GO;          /* dump the records */
+    }
+
+    return ACT_STORE|ACT_DISCARD; 
+}
+
+
+struct topports {
+    uint32_t ts; 		/* timestamp */
+    uint8_t  proto;		/* protocol */
+    uint8_t  reserved;		/* padding */
+    uint16_t port; 		/* port number */
+    uint64_t bytes; 		/* bytes/port number */
+    uint32_t pkts;		/* pkts/port number */
+};
 
 static ssize_t
 store(void * self, void *rp, char *buf)
 {
     CONFIGDESC * config = CONFIG(self);
-    FLOWDESC *x = F(rp);
-    int top_ports[65536 + 1];		/* we need one more than max port */
+    EFLOWDESC *x = EF(rp);
+    struct topports * tp; 
     int i, j;
     
-    /* go thru the array of bytes to find the topn port 
-     * numbers. store them in the top_ports array. 
+    /* allocate the array with the results */
+    tp = mem_mdl_malloc(self, sizeof(struct topports) * (config->topn + 1)); 
+    bzero(tp, sizeof(struct topports) * (config->topn + 1)); 
+
+    /* 
+     * go thru the array of bytes to find the topn port 
+     * numbers. store them in the tp array. first process the 
+     * TCP ports, then the UDP ports 
+     *
      */
-    bzero(top_ports, sizeof(top_ports));
-    for (i = 0; i < 65536; i++) { 
-	if (x->bytes[i] == 0)
+    for (i = 0; i <= x->maxtcpport; i++) { 
+	if (x->tcpbytes[i] == 0) 
 	    continue;
 
 	for (j = config->topn - 1; j >= 0; j--) {
-	    if (x->bytes[i] < x->bytes[top_ports[j]])
+	    if (x->tcpbytes[i] < tp[j].bytes)
 		break;
 
-	    top_ports[j + 1] = top_ports[j];
-	    top_ports[j] = i;
+	    tp[j + 1] = tp[j]; 
+	    tp[j].proto = IPPROTO_TCP;
+	    tp[j].port = i;
+	    tp[j].bytes = x->tcpbytes[i];
+	    tp[j].pkts = x->tcppkts[i];
 	}
     }
 
-    /* 
-     * save the first top N entries 
+    /* now run thru the UDP ports */
+    for (i = 0; i <= x->maxudpport; i++) { 
+	if (x->udpbytes[i] == 0)
+	    continue;
+
+	for (j = config->topn - 1; j >= 0; j--) {
+	    if (x->udpbytes[i] < tp[j].bytes)
+		break;
+
+	    tp[j + 1] = tp[j]; 
+	    tp[j].proto = IPPROTO_UDP;
+	    tp[j].port = i;
+	    tp[j].bytes = x->udpbytes[i];
+	    tp[j].pkts = x->udppkts[i];
+	}
+    }
+
+    /*
+     * save the entries with a header that contains the timestamp 
+     * and the number of entries we are saving. 
      */
-    for (i = 0; i < config->topn && x->bytes[top_ports[i]] > 0; i++) { 
+    for (i = 0; i < config->topn && tp[i].pkts != 0; i++) { 
 	PUTH32(buf, x->ts);
-	PUTH32(buf, top_ports[i]); 
-	PUTH64(buf, x->bytes[top_ports[i]]);
-	PUTH64(buf, x->pkts[top_ports[i]]);
+	PUTH8(buf, tp[i].proto); 
+	PUTH8(buf, tp[i].reserved); 	/* padding */
+	PUTH16(buf, tp[i].port); 
+	PUTH64(buf, tp[i].bytes); 
+	PUTH32(buf, tp[i].pkts); 
     } 
 
-    return i * sizeof(struct topports);
+    return (i * sizeof(struct topports)); 
 }
 
 static size_t
 load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
 {
+    time_t timestamp; 
+
     if (len < sizeof(struct topports)) {
         ts = 0;
         return 0; 
     }
 
-    *ts = TIME2TS(ntohl(((struct topports *)buf)->ts), 0);
-    return sizeof(struct topports);
+    GETH32(buf, &timestamp)
+    *ts = TIME2TS(timestamp, 0);
+    return sizeof(struct topports); 
 }
 
 
 #define PRETTYHDR	\
     "Date                     Port  Bytes       Packets   \n"
 
-#define PRETTYFMT 	"%.24s %5u %10llu %10llu\n"
+#define PRETTYFMT 	"%.24s %5u/%s %10llu %8u\n"
 
-#define PLAINFMT	"%12u %5u %10llu %10llu\n"
+#define PLAINFMT	"%u %u %s %llu %u\n"
 
 #define HTMLHDR                                                 \
     "<html>\n"                                                  \
@@ -232,7 +343,7 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
     "</table>\n"						\
     "</body></html>\n"						
 
-#define HTMLFMT		"<tr><td>%5u</td><td>%.2f</td></tr>\n"
+#define HTMLFMT		"<tr><td>%5u/%s</td><td>%.2f</td></tr>\n"
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -240,7 +351,10 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static char s[2048];
     static char * fmt; 
     CONFIGDESC * config = CONFIG(self);
-    struct topports *x; 
+    uint8_t proto, res; 
+    uint16_t port; 
+    uint64_t bytes; 
+    uint32_t pkts; 
     time_t ts;
 
     if (buf == NULL && args != NULL) { 
@@ -272,27 +386,31 @@ print(void * self, char *buf, size_t *len, char * const args[])
   	return s; 
     } 
 
-    x = (struct topports *) buf;
-    ts = (time_t) ntohl(x->ts);
+    GETH32(buf, &ts); 
+    GETH8(buf, &proto); 
+    GETH8(buf, &res); 
+    GETH16(buf, &port); 
+    GETH64(buf, &bytes); 
+    GETH32(buf, &pkts); 
+
+    /* read each field of the record */
     if (fmt == PRETTYFMT) { 
-	*len = sprintf(s, fmt, asctime(localtime(&ts)), ntohl(x->port),
-		   NTOHLL(x->bytes), NTOHLL(x->pkts));
+	*len = sprintf(s, fmt, asctime(localtime(&ts)), 
+		   port, getprotoname(proto), bytes, pkts); 
     } else if (fmt == HTMLFMT) { 
-	float mbps = (float) NTOHLL(x->bytes) * 8 / (float) config->meas_ivl;
+	float mbps = (float) bytes * 8 / (float) config->meas_ivl;
 	mbps /= 1000000;
-	*len = sprintf(s, fmt, ntohl(x->port), mbps); 
-    } else { 
-	*len = sprintf(s, fmt, ts, ntohl(x->port), 
-		   NTOHLL(x->bytes), NTOHLL(x->pkts));
-    } 
+	*len = sprintf(s, fmt, port, getprotoname(proto), mbps); 
+    } else 
+	*len = sprintf(s, fmt, ts, port, getprotoname(proto), bytes, pkts); 
 	
     return s;
-};
+}
 
 
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
-    ex_recordsize: 0, 
+    ex_recordsize: sizeof(EFLOWDESC), 
     st_recordsize: sizeof(FLOWDESC),
     init: init,
     check: NULL,
@@ -300,9 +418,9 @@ callbacks_t callbacks = {
     match: NULL,
     update: update,
     ematch: NULL,
-    export: NULL,
+    export: export,
     compare: NULL,
-    action: NULL,
+    action: action,
     store: store,
     load: load,
     print: print,

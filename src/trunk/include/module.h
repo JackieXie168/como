@@ -129,6 +129,61 @@
     x = ((char *)x) + 8; 	\
 }
 
+
+/*
+ * Macros to read values from a buf and convert them from network 
+ * to host byte order. They advance the buffer pointer of the proper 
+ * amount as well. This macros are supposed to be used by the 
+ * print()/replay()/load() callbacks
+ */
+#define GETH8(x, val) {         	\
+    memcpy(val, x, 1); 		  	\
+    x = ((char *)x) + 1; 		\
+}
+
+#define GETH16(x, val) { 		\
+    memcpy(val, x, 2);		   	\
+    *val = ntohs(*val);			\
+    x = ((char *)x) + 2; 		\
+}
+
+#define GETH32(x, val) { 		\
+    memcpy(val, x, 4); 		  	\
+    *val = ntohl(*val);			\
+    x = ((char *)x) + 4; 		\
+}
+
+#define GETH64(x, val) { 		\
+    memcpy(val, x, 8); 		  	\
+    *val = NTOHLL(*val);		\
+    x = ((char *)x) + 8; 		\
+}
+
+
+/*
+ * Macros to read values from a buf and keep them in network byte order. 
+ * They advance the buffer pointer of the proper amount as well. 
+ * This macros are supposed to be used by the print()/replay()/load() 
+ * callbacks.
+ */
+#define GETN8(x, val) 		GETH8(x, val)
+ 
+#define GETN16(x, val) {                \
+    memcpy(val, x, 2);                  \
+    x = ((char *)x) + 2;                \
+}
+
+#define GETN32(x, val) {                \
+    memcpy(val, x, 4);                  \
+    x = ((char *)x) + 4;                \
+}
+
+#define GETN64(x, val) {                \
+    memcpy(val, x, 8);                  \
+    x = ((char *)x) + 8;                \
+}
+
+
 #ifndef MAX
 #define MAX(a,b) 	(((a) > (b))? (a) : (b))
 #endif
