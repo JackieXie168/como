@@ -53,6 +53,7 @@
 #define BUFSIZE 	(1024*1024) 
 struct _snifferinfo { 
     char buf[BUFSIZE];          /* temporary packet buffer */
+    char *base;			/* pointer to first valid byte in buffer */
     int nbytes; 	        /* valid bytes in buffer */
 };
 
@@ -107,9 +108,14 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
     char * base; 	 	/* current position in input buffer */
     int npkts;                  /* processed pkts */
     int rd;
+    timestamp_t first_seen;
 
     info = (struct _snifferinfo *) src->ptr; 
 
+    if (info->nbytes > 0) {
+	memmove(info->buf, info->base, info->nbytes);
+    }
+    
     /* read ERF records from fd */
     rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes); 
     if (rd < 0) 
@@ -142,6 +148,14 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 * ok, data is good now, copy the packet over 
 	 */
 	COMO(ts) = rec->ts;
+	if (npkts > 0) {
+	    if (COMO(ts) - first_seen > TIME2TS(1,0)) {
+		/* Never returns more than 1sec of traffic */
+		break;
+	    }
+	} else {
+	    first_seen = COMO(ts);
+	}
 	COMO(len) = (uint32_t) ntohs(rec->wlen);
 	COMO(type) = COMOTYPE_LINK;
 
@@ -190,16 +204,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
         /* increment the number of processed packets */
 	base += len; 
     }
-
-    /* if we have zero packets to give and we reached the 
-     * end of file, then return -1 to indicate that there 
-     * are no more packets. 
-     */
-    if (npkts == 0 && rd == 0) 
-	return -1; 
-
-    info->nbytes -= (base - info->buf); 
-    bcopy(base, info->buf, info->nbytes); 
+    info->nbytes -= (base - info->buf);
+    info->base = base;
     return npkts;
 }
 
