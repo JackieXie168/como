@@ -253,8 +253,10 @@ new_module(como_t * m, char *name, int node, int idx)
     mdl->priority = 5;
     mdl->filter_str = strdup("all");
     mdl->filter_tree = NULL;
-    mdl->output = strdup(mdl->name);
+    mdl->output = strdup(mdl->name); /* TODO: canonized name */
     asprintf(&mdl->source, "%s.so", mdl->name);
+    
+    mdl->running = RUNNING_NORMAL;
 
     return mdl;
 }

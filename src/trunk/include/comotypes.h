@@ -75,7 +75,12 @@ typedef enum {
     MDL_INCOMPATIBLE,			/* not compatible with sniffer */
     MDL_ACTIVE, 			/* active and processing packets */
     MDL_DISABLED            		/* disabled or turned off */
-} status_t;				
+} status_t;
+
+typedef enum {
+    RUNNING_NORMAL,			/* running normally in CAPTURE */
+    RUNNING_ON_DEMAND			/* running in query on demand */
+} running_t;				
 
 typedef void * (*alc_malloc_fn) (size_t size,
 				 const char * file, int line,
@@ -351,6 +356,7 @@ struct _module {
     void * cb_handle;           /* handle of module's dynamic libraries */
 
     status_t status; 		/* current module status */
+    running_t running;		/* running mode */
     size_t memusage; 		/* current memory usage */
 
     ctable_t *ca_hashtable;  	/* capture hash table */

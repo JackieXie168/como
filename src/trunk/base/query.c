@@ -358,6 +358,21 @@ validate_query(qreq_t * req, int node_id)
      *     during the interval of interest.
      */
     if (!req->source) { 
+	if (req->mdl->running == RUNNING_ON_DEMAND) {
+	    /*
+	     * module is running on-demand: it needs a source
+	     */
+	    logmsg(LOGWARN,
+		   "module on-demand %s can't be queried without a source\n",
+		   req->mdl->name);
+	    
+	    sprintf(httpstr, "HTTP/1.0 405 Method Not Allowed\n"
+		    "Content-Type: text/plain\n\n"
+		    "Module \"%s\" is running on-demand. A source is required "
+		    "to run it.\n", req->mdl->name);
+	    return httpstr;
+	}
+	
 	if (req->filter_str != NULL) { 
 	    char * running_filter; 
 
@@ -494,8 +509,8 @@ query(int client_fd, int node_id)
 
     if (map.debug) {
 	if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-	    logmsg(V_LOGWARN, "waiting 10s for the debugger to attach\n");
-	    sleep(10);
+	    logmsg(V_LOGWARN, "waiting 20s for the debugger to attach\n");
+	    sleep(20);
 	    logmsg(V_LOGWARN, "wakeup, ready to work\n");
 	}
     }
