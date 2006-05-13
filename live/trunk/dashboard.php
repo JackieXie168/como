@@ -162,6 +162,7 @@ function initializeMenu(menuId, triggerId, module) {
 		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
 		$modargs = $modargs . "source=tuple&";
 		$modargs = $modargs . "interval=$interval&";
+                $modargs = $modargs . "align-to=$stime&";
 		$modargs = $modargs . "topn=5&";
 		$modargs = $modargs . "url=generic_query.php&";
 		$modargs = $modargs . "urlargs=stime=$stime&";
@@ -178,6 +179,7 @@ function initializeMenu(menuId, triggerId, module) {
 	      if ($sec_array[$i] == "topports"){
 		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
 		$modargs = $modargs . "topn=5&";
+                $modargs = $modargs . "align-to=$stime&";
 		$modargs = $modargs . "source=tuple&";
 		$modargs = $modargs . "interval=$interval&";
 	      }
