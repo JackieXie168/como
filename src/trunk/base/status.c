@@ -69,7 +69,7 @@ send_status(int client_fd, int node_id)
 	panicx("cannot find virtual node %d", node_id); 
 
     /* send HTTP header */
-    httpstr = "HTTP/1.0 200 OK\nContent-Type: text/plain\n\n";
+    httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n";
     ret = como_writen(client_fd, httpstr, strlen(httpstr)); 
     if (ret < 0) 
 	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);

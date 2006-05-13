@@ -55,6 +55,13 @@
 /* global state */
 extern struct _como map;
 
+#define HTTP_RESPONSE_404 \
+"HTTP/1.0 404 Not Found\r\n" \
+"Content-Type: text/plain\r\n\r\n"
+
+#define HTTP_RESPONSE_405 \
+"HTTP/1.0 405 Method Not Allowed\r\n" \
+"Content-Type: text/plain\r\n\r\n"
 
 /* 
  * -- findfile
@@ -274,9 +281,8 @@ validate_query(qreq_t * req, int node_id)
          * no module defined. return warning message and exit
          */
         logmsg(LOGWARN, "query module not defined\n");
-	sprintf(httpstr, "HTTP/1.0 405 Method Not Allowed\n"
-                         "Content-Type: text/plain\n\n"
-                         "Module name is missing\n"); 
+	sprintf(httpstr, HTTP_RESPONSE_405
+		"Module name is missing\n"); 
         return httpstr;
     }
 
@@ -288,9 +294,8 @@ validate_query(qreq_t * req, int node_id)
                "query start time (%d) after end time (%d)\n", 
                req->start, req->end);
          
-	sprintf(httpstr, "HTTP/1.0 405 Method Not Allowed\n"
-		         "Content-Type: text/plain\n\n"
-                         "Query start time after end time\n");
+	sprintf(httpstr, HTTP_RESPONSE_405
+		"Query start time after end time\n");
         return httpstr;
     }
 
@@ -314,9 +319,7 @@ validate_query(qreq_t * req, int node_id)
 	 * the module is not present in the configuration file 
 	 */
 	logmsg(LOGWARN, "module %s not found\n", req->module);
-	sprintf(httpstr, 
-		"HTTP/1.0 404 Not Found\n"
-	 	"Content-Type: text/plain\n\n"
+	sprintf(httpstr, HTTP_RESPONSE_404
                 "Module %s not found in the current configuration\n", 
 		req->module);
 	return httpstr;
@@ -328,9 +331,7 @@ validate_query(qreq_t * req, int node_id)
 	 * the module exists but does not support printing records. 
 	 */
 	logmsg(LOGWARN, "module \"%s\" does not have print()\n", req->module);
-	sprintf(httpstr, 
-		"HTTP/1.0 405 Method Not Allowed\n"
-	 	"Content-Type: text/plain\n\n"
+	sprintf(httpstr, HTTP_RESPONSE_405
                 "Module \"%s\" does not have print() callback\n", 
 		req->module);
 	return httpstr;
@@ -366,8 +367,7 @@ validate_query(qreq_t * req, int node_id)
 		   "module on-demand %s can't be queried without a source\n",
 		   req->mdl->name);
 	    
-	    sprintf(httpstr, "HTTP/1.0 405 Method Not Allowed\n"
-		    "Content-Type: text/plain\n\n"
+	    sprintf(httpstr, HTTP_RESPONSE_405
 		    "Module \"%s\" is running on-demand. A source is required "
 		    "to run it.\n", req->mdl->name);
 	    return httpstr;
@@ -391,9 +391,7 @@ validate_query(qreq_t * req, int node_id)
 		logmsg(LOGWARN, 
 		       "module %s found but it is not using filter (%s)\n",
 		       req->module, req->filter_str); 
-		sprintf(httpstr, 
-			"HTTP/1.0 404 Not Found\n"
-			"Content-Type: text/plain\n\n"
+		sprintf(httpstr, HTTP_RESPONSE_404
 			"Module %s found but it is not using filter \"%s\"\n", 
 			req->module, req->filter_str);
 		free(running_filter);
@@ -426,9 +424,7 @@ validate_query(qreq_t * req, int node_id)
              * return an error message to the client and finish
              */
             logmsg(LOGWARN, "source module not found (%s)\n", req->source);
-	    sprintf(httpstr, 
-		    "HTTP/1.0 404 Not Found\n"
-		    "Content-Type: text/plain\n\n"
+	    sprintf(httpstr, HTTP_RESPONSE_404
 		    "Source module \"%s\" not found\n", 
 		    req->source); 
             return httpstr;
@@ -443,9 +439,7 @@ validate_query(qreq_t * req, int node_id)
 	     */
             logmsg(LOGWARN, "source module \"%s\" does not support replay()\n",
 		   req->source);
-	    sprintf(httpstr, 
-		    "HTTP/1.0 404 Not Found\n"
-		    "Content-Type: text/plain\n\n"
+	    sprintf(httpstr, HTTP_RESPONSE_405
 		    "Source module \"%s\" does not support replay()\n", 
 		    req->source); 
             return httpstr;
