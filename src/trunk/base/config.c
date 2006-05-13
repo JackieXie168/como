@@ -69,6 +69,7 @@ enum tokens {
     TOK_ARGS,
     TOK_ARGSFILE,
     TOK_PRIORITY,
+    TOK_RUNNING,
     TOK_NAME,   
     TOK_LOCATION,
     TOK_TYPE,
@@ -135,6 +136,7 @@ keyword_t keywords[] = {
     { "args",        TOK_ARGS,        2, CTX_MODULE },
     { "args-file",   TOK_ARGSFILE,    2, CTX_MODULE },
     { "priority",    TOK_PRIORITY,    1, CTX_MODULE },
+    { "running",     TOK_RUNNING,     2, CTX_MODULE },
     { "name",        TOK_NAME,        2, CTX_GLOBAL },
     { "location",    TOK_LOCATION,    2, CTX_GLOBAL|CTX_VIRTUAL },
     { "type",        TOK_TYPE,        2, CTX_GLOBAL|CTX_VIRTUAL },
@@ -440,7 +442,8 @@ do_config(struct _como * m, int argc, char *argv[])
 	    if (m->running == INLINE) 
 		m->inline_mdl = mdl;
 
-	    logmsg(LOGUI, "... module %s [%d][%d] ", 
+	    logmsg(LOGUI, "... module%s %s [%d][%d] ", 
+		   (mdl->running == RUNNING_ON_DEMAND) ? " on-demand" : "",
 		   mdl->name, mdl->node, mdl->priority); 
 	    logmsg(LOGUI, " filter %s; out %s (%uMB)\n", 
 		   mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
@@ -602,6 +605,11 @@ do_config(struct _como * m, int argc, char *argv[])
     
     case TOK_PRIORITY: 
         mdl->priority = atoi(argv[1]);
+	break; 
+
+    case TOK_RUNNING: 
+        mdl->running = (strcmp(argv[1], "on-demand") == 0) ?
+		       RUNNING_ON_DEMAND : RUNNING_NORMAL;
 	break; 
 
     case TOK_NAME: 

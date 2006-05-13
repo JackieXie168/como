@@ -29,6 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <err.h>
 
 #include "como.h"
 #include "comopriv.h"
@@ -71,7 +72,7 @@ send_status(int client_fd, int node_id)
     httpstr = "HTTP/1.0 200 OK\nContent-Type: text/plain\n\n";
     ret = como_writen(client_fd, httpstr, strlen(httpstr)); 
     if (ret < 0) 
-	panic("sending data to the client");  
+	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
     /* send name, location, version, build date, speed and data source 
      * all information that is static and present in the map 
@@ -107,7 +108,7 @@ send_status(int client_fd, int node_id)
     /* send the results */
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
-	panic("sending status to the client");   
+	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
     /* 
      * if this is the master node (i.e. node 0) and there 
@@ -129,7 +130,8 @@ send_status(int client_fd, int node_id)
 
 	    ret = como_writen(client_fd, buf, len);
 	    if (ret < 0)
-		panic("sending status to the client");
+		err(EXIT_FAILURE, "sending status to the client [%d]",
+		    client_fd);
 	} 
     } 
 
@@ -141,10 +143,10 @@ send_status(int client_fd, int node_id)
 
     /* send list of loaded modules */
     for (idx = 0; idx <= map.module_last; idx++) { 
-	int file_fd; 
+	int file_fd = -1; 
 	off_t ofs; 
 	size_t rlen, sz;
-	timestamp_t ts; 
+	timestamp_t ts = 0;
 	char * ptr;
 
 	mdl = &map.modules[idx]; 
@@ -155,34 +157,36 @@ send_status(int client_fd, int node_id)
 	if (mdl->node != node_id)
 	    continue; 
 
-	/* we now look at the very first record for this module 
-    	 * to get an idea on how far in the past a query could go. 
- 	 */
-	file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0, storage_fd);
-	if (file_fd < 0)
-	    panic("opening file %s", mdl->output);
-
-	/* get start offset */
-	ofs = csgetofs(file_fd);
-	
-	/* read first record */
-	ts = 0;
-	rlen = mdl->callbacks.st_recordsize;
-	ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
-	if (ptr && rlen > 0) {
-	    /* we got something, give the record to load() */
-	    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
+	if (mdl->running != RUNNING_ON_DEMAND) {
+	    /* we now look at the very first record for this module 
+    	     * to get an idea on how far in the past a query could go. 
+ 	     */
+	    file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0, storage_fd);
+	    if (file_fd >= 0) {
+		/* get start offset */
+		ofs = csgetofs(file_fd);
+		
+		/* read first record */
+		rlen = mdl->callbacks.st_recordsize;
+		ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
+		if (ptr && rlen > 0) {
+		    /* we got something, give the record to load() */
+		    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
+		}
+	    }
 	}
-
-	len = sprintf(buf, 
-		"Module: %-15s | %s | %u | %s\n", 
-		mdl->name, mdl->filter_str, TS2SEC(ts), mdl->callbacks.formats);
+	    
+	len = sprintf(buf, "Module: %-15s | %s | %u | %s\n",
+		      mdl->name, mdl->filter_str, TS2SEC(ts),
+		      mdl->callbacks.formats);
 
 	ret = como_writen(client_fd, buf, len);
 	if (ret < 0)
-	    panic("sending status to the client");
+	    err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
-	csclose(file_fd, 0);
+	if (file_fd >= 0) {
+	    csclose(file_fd, 0);
+	}
     } 
 
 
@@ -212,7 +216,7 @@ send_status(int client_fd, int node_id)
 
     ret = como_writen(client_fd, buf, len);
     if (ret < 0)
-	panic("sending status to the client");
+	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
     close(storage_fd);
 }

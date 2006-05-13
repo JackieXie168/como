@@ -94,7 +94,8 @@ su_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
         char * pack;
         int sz;
 
-	if (map.modules[i].status != MDL_ACTIVE) 
+	if (map.modules[i].status != MDL_ACTIVE ||
+	    map.modules[i].running == RUNNING_ON_DEMAND)
 	    continue; 
 
         /* prepare the module for transmission */
@@ -217,21 +218,24 @@ apply_map_changes(struct _como * x)
         }
     
         if (!found) {
-	    int active = (map.modules[i].status == MDL_ACTIVE); 
-
             remove_module(&map, &map.modules[i]);
+            
+            if (map.modules[i].running != RUNNING_ON_DEMAND) {
+		/* inform the other processes */
+		ipc_send(CAPTURE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
+		ipc_send(EXPORT, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
+		ipc_send(STORAGE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
+            }
 
-	    /* inform the other processes */
-	    ipc_send(CAPTURE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
-	    ipc_send(EXPORT, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
-	    ipc_send(STORAGE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
-
-	    if (active) { 
+	    if (map.modules[i].status == MDL_ACTIVE) { 
 		map.stats->modules_active--; 
-
+	    }
+	    
+	    if (map.modules[i].indesc || map.modules[i].outdesc) {
 		/* free metadesc information. to do this 
 		 * we need to freeze CAPTURE for a while 
 		 */ 
+		/* CHECKME: shouldn't this code be executed in any case? */
 		ipc_send_blocking(CAPTURE, IPC_FREEZE, NULL, 0);
 	        metadesc_list_free(map.modules[i].indesc);
 		metadesc_list_free(map.modules[i].outdesc);
@@ -271,14 +275,16 @@ apply_map_changes(struct _como * x)
 	    remove_module(&map, mdl);
 	    continue;
 	} 
-		
-	/* prepare the module for transmission */
-        pack = pack_module(mdl, &sz);
+	
+	if (mdl->running != RUNNING_ON_DEMAND) {
+	    /* prepare the module for transmission */
+	    pack = pack_module(mdl, &sz);
 
-	/* inform the other processes */
-   	ipc_send(CAPTURE, IPC_MODULE_ADD, pack, sz); 
-   	ipc_send(EXPORT, IPC_MODULE_ADD, pack, sz); 
-   	ipc_send(STORAGE, IPC_MODULE_ADD, pack, sz); 
+	    /* inform the other processes */
+	    ipc_send(CAPTURE, IPC_MODULE_ADD, pack, sz); 
+	    ipc_send(EXPORT, IPC_MODULE_ADD, pack, sz); 
+	    ipc_send(STORAGE, IPC_MODULE_ADD, pack, sz); 
+	}
 
 	free(pack);
 	map.stats->modules_active++; 
