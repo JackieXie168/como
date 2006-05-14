@@ -1,0 +1,43 @@
+The CoMo (Continuous Monitoring) project.
+
+We aim to design the fundamental building block of a network monitoring 
+infrastructure that allows researchers and network operators to process 
+and share network data across multiple sites. 
+CoMo supports i) arbitrary traffic queries that run continuously on the 
+live data streams, and ii) retrospective queries that analyze past traffic 
+data to enable network forensics.
+
+Data streams may have different formats (e.g., packet sequences, flow 
+summaries, etc.) and originate from different platforms (e.g, passive 
+link monitors, routers, wireless access points, etc.). CoMo can operate 
+in the presence of different devices and data sources and provide a 
+unified data interface to queries. Multiple CoMo systems will also cooperate 
+to rapidly disseminate queries throughout the network of monitors, allowing 
+operators to "drill down" to relevant data locations in the network.
+
+Contributors: 
+ . Jordi Alcantara
+ . Diego Amores Lopez
+ . Pere Barlet Ros
+ . Marco Canini
+ . Michael Dales
+ . Richard Gass
+ . Euan Harris
+ . Tristan Henderson 
+ . Theodore Hong
+ . Gianluca Iannaccone
+ . Josep Sanjuas
+ . Kevin McGrath
+ . Richard Mortier
+ . Luigi Rizzo
+ . Steven Smith
+ . Davide Vercelli
+ 
+Copyright (c) 2004-2006 Intel Corporation
+All rights reserved.
+
+NOTES:
+. This product includes software developed by the Computer Systems
+  Engineering Group at Lawrence Berkeley Laboratory.
+
+$Id$
