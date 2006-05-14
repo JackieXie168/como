@@ -261,13 +261,19 @@ typedef char * (print_fn)(void * self, char * buf, size_t * len,
 /**
  * replay_fn() - given a data buffer (ptr), returns a reconstructed packet 
  * trace in the output buffer (out). The output buffer is allocated by the 
- * caller. 
+ * caller. The left variable tells the the module how many packets are left
+ * to be genereted (i.e. the value returned by previous call with the 
+ * same record).  
+ *
  * Returns the number of packet left to send, -1 on error. 
- * out_buf_len is also updated to indicate the valid bytes in out. 
+ * out_len is also updated to indicate the valid bytes in out and count
+ * is update to record the total number of packets generated so far from 
+ * the record pointed by ptr.  
+ * 
  * Not mandatory.
  */
 typedef int (replay_fn)(void * self, char *ptr, char *out, 
-			size_t * out_buf_len, int *count);
+			size_t * out_len, int left);
 
 /*
  * This structure contains the callbacks for a classifier.
