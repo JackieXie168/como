@@ -87,7 +87,6 @@ struct _como {
     int mem_type;		/* defines how to allocate memory */
 #define COMO_PRIVATE_MEM 	0x01
 #define COMO_SHARED_MEM 	0x02
-#define COMO_PERSISTENT_MEM 	0x04
 
     node_t * node;		/* node information */
     int node_count;		/* no. of nodes */

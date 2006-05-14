@@ -57,7 +57,6 @@ typedef struct _export_array    earray_t;       /* export record array */
 
 typedef struct _tsc		tsc_t; 		/* timers (using TSC) */
 typedef struct _statistics	stats_t; 	/* statistic counters */
-typedef struct _mdl_statistics	mdl_stats_t; 	/* statistic counters */
 
 typedef struct _como_metadesc	metadesc_t;
 typedef struct _como_metatpl	metatpl_t;
@@ -478,20 +477,6 @@ struct _tsc {
 };
 
 
-/* 
- * statistic counters 
- */
-struct _mdl_statistics {
-    size_t mem_usage_shmem;     /* shared memory, only capture writes here */
-    size_t mem_usage_shmem_f;   /* shmem freed by export, periodically flushed
-                                 * into mem_usage_sh by capture. This is to
-                                 * avoid the need of semaphores.
-                                 */
-    size_t mem_usage_export;    /* memory used by modules in export */
-
-    /* in future, also store cpu usage, .. */
-};
-
 struct _statistics { 
     struct timeval start; 	/* CoMo start time (with gettimeofday)*/
 
@@ -521,13 +506,8 @@ struct _statistics {
     tsc_t * ex_store_timer;	/* export store table */
     tsc_t * ex_export_timer;	/* export export()/store() callbacks */
     tsc_t * ex_mapping_timer;	/* export export()/store() callbacks */
-    
-    mdl_stats_t *mdl_stats;     /* per-module stats */
 };
 
-#define MDL_STATS(mdl) \
-    (& map.stats->mdl_stats[(mdl)->index])
-    
 typedef enum {
     META_PKT_LENS_ARE_AVERAGED = 0x1,
     META_HAS_FULL_PKTS = 0x2,
