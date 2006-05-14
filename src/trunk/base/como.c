@@ -111,7 +111,6 @@ main(int argc, char *argv[])
      * do not need to be 100% reliable. 
      */
     map.stats = mem_calloc(1, sizeof(stats_t)); 
-    map.stats->mdl_stats = mem_calloc(map.module_max, sizeof(mdl_stats_t));
     gettimeofday(&map.stats->start, NULL); 
     map.stats->first_ts = ~0;
 
@@ -141,7 +140,7 @@ main(int argc, char *argv[])
 
     /* move to the SUPERVISOR process (we don't fork here) */
     map.whoami = SUPERVISOR; 
-    map.mem_type = COMO_SHARED_MEM|COMO_PERSISTENT_MEM; 
+    map.mem_type = COMO_SHARED_MEM; 
     supervisor_mainloop(supervisor_fd);
     return EXIT_SUCCESS; 
 }

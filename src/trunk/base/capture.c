@@ -83,53 +83,6 @@ cleanup()
 }
 
 
-/*
- * -- match_desc
- * 
- * This function checks if the packet stream output by a source (sniffer or
- * module via dump interface) is compatible with the input requirements of
- * a module; it does so by checking the values of their pktdesc_t, in
- * particular matching the bitmask part.
- */
-#if 0
-static int
-match_desc(pktdesc_t * req, pktdesc_t * bid)
-{
-    char *a, *b;
-    size_t i;
-
-    /* if req or bid are NULL they always match 
-     * XXX this assumption could go away once we introduce meta-packet 
-     *     fields (e.g., anonymized addresses, etc.)
-     */
-    if (!req || !bid)
-	return 1;
-
-    /* compare time granularity */
-    if (req->ts < bid->ts)
-	return 0;
-
-    /* check if we are capturing enough bytes per packet */
-    if (req->caplen > bid->caplen)
-	return 0;
-
-    a = (char *) req;
-    b = (char *) bid;
-
-    i = sizeof(req->ts) + sizeof(req->caplen);
-    while (i < sizeof(pktdesc_t)) {
-	if (a[i] & ~b[i])
-	    return 0;
-	i++;
-    }
-
-    return 1;
-}
-#endif
-
-#define SHMEM_USAGE(mdl) \
-    map.stats->mdl_stats[(mdl)->index].mem_usage_shmem
-
 /* 
  * -- create_table 
  * 
@@ -146,7 +99,6 @@ create_table(module_t * mdl, timestamp_t ts)
     if (ct == NULL)
 	return NULL;
 
-    SHMEM_USAGE(mdl) += len;
     ct->bytes += len;
 
     ct->size = mdl->ca_hashsize;
@@ -349,7 +301,6 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 		    continue;	/* XXX no memory, we keep going. 
 				 *     need better solution! */
 
-		SHMEM_USAGE(mdl) += record_size;
 		mdl->ca_hashtable->bytes += record_size;
 
 		x->hash = hash;
@@ -383,7 +334,6 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	    cand = alc_malloc(&(mdl->alc), record_size); 
 	    if (cand == NULL)
 		continue;
-	    SHMEM_USAGE(mdl) += record_size;
 	    mdl->ca_hashtable->bytes += record_size;
 
 	    cand->hash = hash;
