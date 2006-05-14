@@ -1,0 +1,448 @@
+$Id$
+
+-------------------------------------
+---- CoMo v1.0 (TBD) 
+--
+
+. Implemented sFlow sniffer
+
+  Sniffer to support sFlow format (see RFC 3176). It supports receiving
+  directly the raw data from the switches. It introduces a new L2 type 
+  (COMOTYPE_SFLOW). 
+
+. Major rewrite of IPC code
+ 
+  Rewritten inter-process communication code. It is now used for all 
+  communications between SUPERVISOR, CAPTURE, EXPORT and STORAGE including 
+  tables flushed, I/O block writes/reads. 
+
+. Major rewrite of the packet stream meta descriptions
+ 
+  Rewritten the way modules and sniffers describe the packet streams 
+  they are capable of generating. The new code allows for simpler 
+  specification of the templates as well as easier and more efficient 
+  matching of the templates. 
+
+. Memory management for modules
+
+  Modules can now allocate memory as well in the shared spaced (i.e. 
+  that can be available to all callbacks). 
+
+. Support for multiple exporters in sniffer-flowtools
+
+  It is now possible to receive and process a NetFlow stream (via flowtools)
+  that contains flow records coming from multiple routers. An option 
+  in the sniffer-flowtools allows to pick which exporter the modules should
+  be looking at ("exporter=a.b.c.d").
+
+. Virtual Nodes
+
+. Hash library
+
+  A generic hash table implementation has been added. It has already been
+  integrated into the core and its genericity allows for its usage also by
+  modules.
+
+. Major rewrite of inline mode
+
+  The new inline mode can be invoked by using the command: 
+
+      "como [options] module-name[:module-args] [filter]"
+
+  This mode of operations forces como to run one single module and 
+  output all the module records to standard output as if a query with 
+  argument "format=pretty" were run. 
+
+. Changes in the callbacks data structure
+
+. Rewrite of wireless support 
+
+  The wireless support has undergone a major rewrite in order to acquire
+  support for more chipsets coming with different radio information.
+  A tiny layer of software maps between the different radio header to the
+  CoMo preferred radio structure. The L2 type COMOTYPE_RADIO is used to
+  denote the presence of such structure in captured packets.
+  The sniffer-prism2 has been replaced with the more generic sniffer-radio,
+  that supports on Linux the PrismII and Atheros chipsets interfaced with
+  orinoco, hostap and madwifi drivers. The chipset is automatically put in
+  monitor mode by sniffer-radio. Eventually this sniffer is able to support any
+  chipset for which the Linux driver implements the monitor mode ioctl.
+  The sniffer-pcap can read traces of 802.11 packets with or without radio
+  information.
+
+.  
+
+
+
+-------------------------------------
+---- CoMo v0.5 (Dec 16th, 2005)
+--
+
+. Implemented WINPCAP sniffer
+
+  Sniffer to support winpcap library. This sniffer is modelled on top of 
+  the sniffer-libpcap. NOTE: the file sniffer-wpcap.c comes with a Microsoft
+  Research Shared Source License instead of the BSD license used in the rest
+  of the CoMo release.
+
+. Porting to MS Windows (w/Cygwin)
+
+  Ported (and tested) to Microsoft Windows under Cygwin environment. CoMo now
+  suports live traffic collection on MS systems using the winpcap library. 
+
+. Inline mode
+
+  It is now possible to run an instance of CoMo inline, i.e., it processes
+  a trace file or a live stream running one single module that outputs its
+  result directly to stdout. In inline mode CoMo provides the exact same 
+  features than the standard running mode. The objective is to present a 
+  first user interface that is very similar to tools like tcpdump, flow-tools, 
+  etc. For example, one can do 'como -I -M trace -s libpcap:eth0' to receive
+  an output that is very similar to 'tcpdump -i eth0'.
+
+. Reorganization of include files
+
+  Small reorganization of include files. Modules just need to include 
+  "module.h" and the packet headers are now split between linklayer (including
+  netflow), ipv4, ipv6 and wlan. 
+
+. Code ported and tested on gcc 2.9.5 to gcc 4.0.1
+
+  The code has been tested to compile correctly on any used version of 
+  the gcc compiler from 2.9.5 to 4.0.1. This required some minor changes
+  in the module callbacks data structure. 
+
+. Filter syntax
+
+  The syntax of the per-module packet filter has been modified and 
+  enriched. It now uses flex and bison to parse the string and supports
+  semantically equivalent filters that are syntaxically different. 
+  The new filters can have the form: "tcp and not src 10.0.0.1/24". 
+
+. Modified mechanism to load modules
+
+  Modules are now loaded by SUPERVISOR after all other processes (i.e., 
+  CAPTURE, EXPORT, STORAGE) have been created. This allows for loading 
+  modules on the fly without having to stop any of the processes.  
+
+. New module: topports.c
+ 
+  This module fings the top source/destination ports (in terms of bytes) 
+  observed during a measurement interval. It supports html output format. 
+
+. New module: ports.c
+
+  This module counts the number of packets that use a certain 
+  port number (source or destination) and returns the aggregate 
+  value per measurement interval. It can also produce a scatter
+  plot where each dot has coordinates (x,y) where x is the least 
+  significant byte of the port number, y is the most significant byte.
+  It support gnuplot output format. 
+
+. New module: netflow-anon.c 
+
+  This module processes information from a COMOTYPE_NF stream and prints 
+  out a set of fields chosen at query time. The source and destination 
+  addresses are anonymized by zero-ing out the least significant bits of 
+  the address using the network mask (i.e., a.b.c.d/24 becomes a.b.c.0/24). 
+
+. New module: interarrival.c 
+
+  This module classifies packets into 5-tuple flows and reports on the 
+  timestamp of each packet observed during a measurement interval for that 
+  flow. This way it is possible to compute the interarrival times of 
+  packets within a single flow. 
+
+. New module: list.c 
+ 
+  This modyle reports on the APs observed by the wireless card and outputs
+  the AP MAC address, SSID, SNR and other 802.11 specific information. 
+
+. New module: frames.c 
+
+  This module countes the number of 802.11 frames and breaks them down 
+  in management, control and data frames. It supports gnuplot format. 
+
+. New module: anomaly-ewma.c 
+
+  This module detects anomalies in the number of bytes or packets observed 
+  using an exponential wiegthed moving average to predict the number of 
+  bytes or packets the monitor should observe each interval. If the actual 
+  number differs by a configurable threshold the module raises an alert. 
+  This module supports html output format. 
+
+. New module: active-flows.c
+
+  This module computes the number of active flows in each measurement 
+  interval. An active flow is defined as a 5-tuple flow for which the 
+  monitor observed at least one packet. This module supports gnuplot output
+  format. 
+
+. Completed support for ARM-based platforms 
+
+  Fixed all alignment issues with ARM based platforms replacing all 
+  macros that were dealing with packet fields when the packet was not 
+  aligned to the double word (32 bit). 
+
+. PCAP sniffer supports big/little endian machines
+
+  sniffer-pcap.c now deals correctly with trace files stored on a big/little
+  endian machine and then processed by a little/big endian machine. This 
+  is a necessity given any trace collected using a MAC and processed on 
+  another system. 
+
+. HTML format in several modules
+ 
+  Several modules support HTML output (via format=html query). The modules
+  that now support this are topdest.c, topports.c, tuple.c and anomaly-ewma.c. 
+  This support required to change the query-ondemand.c to send the correct 
+  header back. 
+
+. IEEE 802.11 support
+
+  Implemented support for 802.11 frames and network cards in monitor mode. 
+  The support includes a large number of macros to directly access 802.11
+  information in management, control and data frames. It handles variable 
+  length headers and presents an interface to the module developer that 
+  makes it easy to implement new modules dealing with 802.11 networks. 
+
+. Re-using data from running modules
+
+  Modules can now reuse data processed by other modules that implement
+  the replay() callback. This is entirely done in the QUERY process that
+  basically emulates the CAPTURE/EXPORT processes. It can be triggered by
+  using the source option in the HTTP query as follows
+
+  http://<host>/?module=counter&time=-1m:0&filter=src 10.0.0.1&source=tuple
+
+  This query will read the output of the tuple module in the last minute 
+  and use the counter module to count all bytes and packets sent by source 
+  IP address 10.0.0.1.
+
+. Configuration file
+
+  CoMo monitors changes to the configuration file and implements them 
+  without any need to restart. For now, the only supported changes are 
+  the addition or removal of modules. 
+
+. Embronyal Resource Management
+
+  A rather simple mechanism for resource management is now included in 
+  the code. It can be turned on setting the DO_RESOURCE_MANAGEMENT flag
+  in the configuration file. 
+
+. Resolution for gnuplot files in several modules
+
+  The counter, protocol, application modules accept a new parameter 
+  in the query ("granularity") to specify the resolution of the results.
+  This can be done to reduce the data transfer when the query covers a 
+  large period of time. 
+
+. HTTP queries include "time" flag
+
+  Implemented alternative way to define the time window of a query. It 
+  is possible now to define a time window as follows "time=@103000:+50s"
+  that means "start at 10.30 current day for 50 seconds" or "time=-30s:+50s" 
+  that means "start 30s before query receive time and end 50s after query
+  receive time". 
+
+. NetFlow information in the packets 
+ 
+  New packet type (COMOTYPE_NF) that indicates packets preceded by routing
+  information (e.g., AS number, prefix length, etc.) as derived by processing
+  NetFlow records. This packet type is generated by sniffer-flowtools. 
+
+. Implemented sniffer-prism2
+
+  New sniffer to handle Prism2 chipsets (802.11 cards) in monitor mode. 
+  Together with the sniffer a new include file "stdwlan.h" contains several
+  macros to process IEEE 802.11 frames. Under Linux it requires Wireless 
+  Extensions to be already installed on the system. The code has not been 
+  tested with Atheros cards yet. The COMOTYPE_PRISM is now defined to 
+  indicate packets preceded by a Prism header (with radio information). 
+
+. TSC timer support
+  
+  Added support for timing and profiling the source code. A simple API 
+  to access the CPU's timestamp counter is provided. 
+
+. Small directory reorg
+  
+  Directories have been reorganized with a new directory src/sniffers 
+  that contains all sniffers currently implemented. The util.c files
+  has also been split in several util-*.c files for the different types
+  of helper functions. 
+
+
+--------------------------------
+---- CoMo v0.4 (Jun 20th, 2005)
+--
+
+. Packet data structure (pkt_t)
+
+  The new pkt_t data structure now contains a pointer to the 
+  full packet payload and a set of pointers to reach layer3 and 
+  layer4 headers. This allows for variable lenght headers at 
+  layer 2 and 3.
+
+. Sniffers
+
+  The code of all sniffers has been simplified thanks to the new
+  pkt_t data structure. We have removed the need of a memory copy 
+  in the DAG and SK98 sniffers as well as in all sniffers that read 
+  a trace from file. 
+
+  We now support multiple instances of any sniffers although CAPTURE
+  does not attempt to reorder packets from multiple sniffers if they
+  are not time-ordered, i.e. if multiple sniffers are defined packets 
+  can have non-monotonically increasing timestamps. 
+
+. Stargate
+
+  Added configuration variable to compile the code for the Stargate
+  platform (see platformx.sourceforge.net). It needs arm-linux-gcc 3.2.2. 
+  Porting to the Stargate required to link libpcap.so dynamically. 
+
+. Adaptive polling time 
+
+  All sniffers that do not support select() can now change the polling 
+  interval to deal with burst of packets or when waiting for new data.
+
+. Support for link layer protocols
+
+  New link layer protocols fully support: VLAN tags, ISL. IEEE 802.11 
+  is understood but the support is still very basic. We have defined 
+  COMOTYPE_XXX constants to specify the Layer2 protocol, e.g. COMOTYPE_ETH, 
+  COMOTYPE_VLAN, etc.
+
+. Sniffer flow-tools 
+
+  This sniffer now allows: i) to scale the number of packets and bytes according
+  to the sampling rate; ii) to filter flow records depending on the router 
+  output interface; iii) deal with new flowtools file received from the 
+  collector. 
+
+. Status information 
+
+  It is possible to define some status information (node name, location, etc)
+  in the configuration file. This information is accessed with 
+  http://localhost:44444/?status
+
+. Behavior of print() callback 
+
+  The print callback is now called by query-ondemand() once before the records
+  are processed and once after all records are processed. This allows 
+  the modules to add an header and footer to the output stream.
+
+. Modules
+
+  Counter, Utilization, Application now support gnuplot scripts using the 
+  new print() callback behavior. The scripts only work with gnuplot v4 that
+  supports receiving data from standard input and require some additional 
+  processing. To receive a postscript image out of the counter module one
+  can do: 
+
+    fetch -o - "http://localhost:44444/?module=counter&format=gnuplot" |   \
+    awk '{v[i++] = $0; print $0;} /^e/ {for (j=1;j<i;j++) print v[j];}' |   \
+    gnuplot > tmp.eps
+ 
+
+--------------------------------
+---- CoMo v0.3 (May 30th, 2005)
+--
+
+. Sniffers 
+
+  Consistent use of pkt_t in the sniffers implemented so far. 
+  Added a new flag (SNIFF_FILE) to indicate that the sniffer is
+  operating from a trace file. This allows CAPTURE to slow down (i.e., 
+  stop reading packets) when the memory is scarce. 
+
+. Implemented sniffer-flowtools
+
+  CoMo can now read a directory that contains flow-tools files. 
+  The sniffer supports only NetFlow v5 and regenerates a packet stream
+  that "resembles" the original stream. 
+
+. HTTP-like query interface 
+
+  This allows to query a como machine from any browser with something 
+  like: http://<hostname>:44444?module=counter&format=gnuplot&start...
+  We also use the HTTP error codes to send error messages or other 
+  information. 
+
+. Full packet capture 
+
+  CAPTURE deals with sniffers that provide full packet payloads. 
+
+. Snort module 
+
+  Understand Snort rules' syntax and runs them on the packet stream 
+  within CoMo. 
+
+. Implemented sniffer-sk98
+
+  Support Syskonnect cards. It runs only under Linux and requires a 
+  dedicated driver that can be found at 
+  http://www.cl.cam.ac.uk/Research/SRG/netos/nprobe/downloads/sk98lin.tar.bz2
+
+. Module data re-use
+
+  A new callback (replay()) is now defined that allows a module to generate
+  a packet stream from its own data base.
+
+. Implemented sniffer-como
+
+  A CoMo system can now receive a packet stream from another CoMo system. 
+  The sniffer goes through the usual query interface and requests one 
+  module to generate a packet stream from its own database. 
+
+. Command line interface
+
+  It is possible to run CoMo from the command link in the absence of a 
+  configuration file. 
+
+. Support for Cisco HDLC and Cisco ISL
+
+  CoMo can monitor links using Cisco HDLC and Cisco ISL (ISL is only 
+  supported for Endace DAG cards and the information is discarded). 
+  
+. Improved user interface
+
+  The use interface now prints the amount of shared memory used, the 
+  number of packets processed and the active modules. 
+
+. Removed query process. 
+
+  SUPERVISOR is now in charge of receiving queries and to fork a 
+  query-ondemand process for each incoming query. 
+
+. Configurable CAPTURE flush intervals
+
+  Each module can now configure the min-flush and max-flush intervals 
+  that indicate how often (or how rarely) CAPTURE should flush the module
+  state and send it to EXPORT. 
+
+  CAPTURE will choose any value between min-flush and max-flush according 
+  to its needs (right now just memory).
+
+. Speeding up STORAGE operations
+
+  Reduced the amount of coordination between storage-client and storage-server
+  to speed up disk access. Storage-server is not informed of read operations 
+  that do not require a new mmap operation. The minimum size of an mmap is 
+  also defined within storage and has no relationship with the block size 
+  required by the client process. 
+  
+. Cleaned up modules' code
+
+  The FLOWDESC now contains only information that the module can modify. 
+  The rec_t structure used to link it to the hash tables is not visible 
+  anymore. 
+
+. Modified behavior of print() to allow writing header and footer
+
+  The print() callback gets called once before the records and after the
+  all records are processed. This allows a module to add a header or a 
+  footer to the print out. Useful to embed data in other scripts (e.g., 
+  gnuplot, html, etc.). 

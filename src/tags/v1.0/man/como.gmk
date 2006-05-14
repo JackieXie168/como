@@ -1,0 +1,9 @@
+BASEDIR = ..
+
+MANS = como.1
+
+install-como.1:
+	@echo "install(como.1)"
+	@$(INSTALL) -m 0644 como.1 $(INST_MANDIR)/como.1
+
+include ../como.gmk	# the top level makefile defs
