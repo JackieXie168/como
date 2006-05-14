@@ -203,7 +203,8 @@ function initializeMenu(menuId, triggerId, module) {
 	      }
 
               /*  This is here the iframes is printed out  */
-              print "<form target=_blank";
+              #print "<form target=frame$i ";
+              print "<form target=frame$i ";
 	      print "action=generic_query.php?comonode=$comonode&";
 	      print "module={$sec_array[$i]}&format=html&";
 	      print "stime=$stime&etime=$etime&";
@@ -218,14 +219,14 @@ function initializeMenu(menuId, triggerId, module) {
               print "edit</a>";
               print "<div id=$sec_array[$i]Menuedit class=menu>";
               print "Show ";
-              print "<input type=textbox size=1>";
+              print "<input type=textbox size=1 name=$sec_array[$i]Update>";
               print " $sec_array[$i] items ";
               print "<input type=submit value=Save>";
               print "</div>";
               /*  This section is the content  */
               print "<div id=$sec_array[$i]Menu class=menu>";
 	      print "\n\n<iframe width=100% frameborder=0 ";
-	      print "id=frame$i name=frame1";
+	      print "name=frame$i ";
 	      print "src=generic_query.php?comonode=$comonode&";
 	      print "module={$sec_array[$i]}&format=html&";
 	      print "stime=$stime&etime=$etime&";

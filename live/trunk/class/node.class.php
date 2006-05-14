@@ -154,6 +154,13 @@ class Node {
 
         return ($returnstatus);
     }
+    
+    function removeFile ($filename) {
+        $absroot = $this -> G['ABSROOT'];
+        $results = trim ($this->G['RESULTS'], "./");
+	$dafilename = "$absroot/$results/$filename";
+	system ("rm -f $dafilename");
+    }
 
     function PrintDebug() {
 	print "<br>DEBUGING INFO<BR>";
