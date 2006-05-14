@@ -13,11 +13,11 @@ if (isset ($_GET['webroot']))
 <?
     if ($sub == "system") {
 	print "    <li><a href=$webroot>CoMo System List</a></li>";
-	print "    <li>DDI(Distributed Data Inference)</li>";
+#	print "    <li>DDI(Distributed Data Inference)</li>";
     }
     if ($sub == "application") {
-	print "    <li>Blinc View </li>";
-	print "    <li>DDI(Distributed Data Inference)</li>";
+#	print "    <li>Blinc View </li>";
+#	print "    <li>DDI(Distributed Data Inference)</li>";
     }
     if ($sub == "help") {
 	print "    <li><a href=http://como.intel-research.net/people.php>";

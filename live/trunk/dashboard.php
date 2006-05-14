@@ -67,11 +67,29 @@
     <!--
 window.onload = function() {
     initializeMenu("alertMenu", "alertTrig", "alert");
+    initializeConfigMenu("alertMenuedit", "alertTrigedit", "alertedit");
     initializeMenu("topdestMenu", "topdestTrig", "topdest");
+    initializeConfigMenu("topdestMenuedit", "topdestTrigedit", "topdestedit");
     initializeMenu("topportsMenu", "topportsTrig", "topports");
+    initializeConfigMenu("topportsMenuedit", "topportsTrigedit", "topportsedit");
 }
     if (!document.getElementById)
 	document.getElementById = function() { return null; }
+
+function initializeConfigMenu(menuId, triggerId, module) {
+    var menu = document.getElementById(menuId);
+    var trigger = document.getElementById(triggerId);
+    menu.style.display = "none"; 
+
+    trigger.onclick = function() {
+        var display = menu.style.display;
+        if (display == "block")
+	    menu.style.display = "none";
+        else
+	    menu.style.display = "block";
+     
+    }
+}
 
 function initializeMenu(menuId, triggerId, module) {
     var menu = document.getElementById(menuId);
@@ -183,12 +201,31 @@ function initializeMenu(menuId, triggerId, module) {
 		$modargs = $modargs . "source=tuple&";
 		$modargs = $modargs . "interval=$interval&";
 	      }
+
+              /*  This is here the iframes is printed out  */
+              print "<form target=_blank";
+	      print "action=generic_query.php?comonode=$comonode&";
+	      print "module={$sec_array[$i]}&format=html&";
+	      print "stime=$stime&etime=$etime&";
+	      print "$modargs";
+	      print "urlargs=comonode=$comonode& ";
+              print "method=POST>";
               print "<div class=menubar>";
 	      print "<a href=# id=$sec_array[$i]Trig class=trig>";
               print "$sec_array[$i]</a>";
-
+              /*  This section is for the edit dropdown  */
+	      print "<a href=# id=$sec_array[$i]Trigedit class=trig>";
+              print "edit</a>";
+              print "<div id=$sec_array[$i]Menuedit class=menu>";
+              print "Show ";
+              print "<input type=textbox size=1>";
+              print " $sec_array[$i] items ";
+              print "<input type=submit value=Save>";
+              print "</div>";
+              /*  This section is the content  */
               print "<div id=$sec_array[$i]Menu class=menu>";
-	      print "<iframe width=100% frameborder=0 ";
+	      print "\n\n<iframe width=100% frameborder=0 ";
+	      print "id=frame$i name=frame1";
 	      print "src=generic_query.php?comonode=$comonode&";
 	      print "module={$sec_array[$i]}&format=html&";
 	      print "stime=$stime&etime=$etime&";
@@ -196,9 +233,10 @@ function initializeMenu(menuId, triggerId, module) {
 	      print "urlargs=comonode=$comonode&";
 #	      print "urlargs=module=$module&";
 	      print "urlargs=filter={$node->modinfo[$sec_array[$i]]['filter']}>";
-	      print "</iframe>";
+	      print "</iframe>\n\n";
               print "</div>";
               print "</div>\n";
+              print "</form>";
 	  }
       ?>
     </td>
