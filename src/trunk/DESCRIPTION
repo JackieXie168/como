@@ -1,19 +1,14 @@
 The CoMo (Continuous Monitoring) project.
 
-We aim to design the fundamental building block of a network monitoring 
-infrastructure that allows researchers and network operators to process 
-and share network data across multiple sites. 
-CoMo supports i) arbitrary traffic queries that run continuously on the 
-live data streams, and ii) retrospective queries that analyze past traffic 
-data to enable network forensics.
-
-Data streams may have different formats (e.g., packet sequences, flow 
-summaries, etc.) and originate from different platforms (e.g, passive 
-link monitors, routers, wireless access points, etc.). CoMo can operate 
-in the presence of different devices and data sources and provide a 
-unified data interface to queries. Multiple CoMo systems will also cooperate 
-to rapidly disseminate queries throughout the network of monitors, allowing 
-operators to "drill down" to relevant data locations in the network.
+CoMo is a passive monitoring system that supports arbitrary real time
+traffic queries or retrospective queries on stored traffic traces.
+Data streams may have different formats (e.g., packet/flow sequences,
+etc.) and originate from different platforms (e.g, packet sniffers,
+routers, wireless APs, ...). CoMo can operate in the presence of different
+devices and data sources and provide a unified data interface to queries.
+Multiple CoMo systems will also cooperate to rapidly disseminate queries
+throughout the network of monitors, allowing operators to "drill down"
+to relevant data locations in the network.
 
 Contributors: 
  . Jordi Alcantara
