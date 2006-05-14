@@ -18,6 +18,20 @@
         exit;
     }
 
+    /*  These vars will catch the updates from the edit menus  */
+    if (isset($_POST['alertUpdate']))
+        $alertUpdate = $_POST['alertUpdate'];
+    else
+        $alertUpdate = "";
+    if (isset($_POST['topdestUpdate']))
+        $topdestUpdate = $_POST['topdestUpdate'];
+    else
+        $topdestUpdate = "";
+    if (isset($_POST['topportsUpdate']))
+        $topportsUpdate = $_POST['topportsUpdate'];
+    else
+        $topportsUpdate = "";
+
     /*  Get any extras in the url;  Currently to grab blinc stuff  */
     if (isset($_GET['extra']))
         $extra = $_GET['extra'];
@@ -71,6 +85,19 @@
     } else {
 	$filename=$comonode . "_" . $module . "_" . $stime . "_" .
 		  $etime . "_" . $daip . "_" . $format;
+    }
+
+    /*  Catch if topdest, topports, or alerts have new value  */
+    if (($topdestUpdate != "") || ($topportsUpdate != "")) {
+	if ($topdestUpdate != "") 
+	    $newval = $topdestUpdate;
+	if ($topportsUpdate != "")
+	    $newval = $topportsUpdate;
+        /*  Delete the cached file if necessary  */
+        if ($G['USECACHE']) 
+            $node -> removeFile ($filename);
+
+	$http_query_string = ereg_replace ("topn=[0-9]*", "topn=$newval", $http_query_string);
     }
 
     /*  File caching check  */
