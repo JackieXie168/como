@@ -1,8 +1,14 @@
 $Id$
 
 -------------------------------------
----- CoMo v1.0 (TBD) 
+---- CoMo v1.0 (May 14th, 2006) 
 --
+
+. New License
+ 
+  This new release carries a new BSD license. For more details look 
+  into the LICENSE file. The new license is also available at: 
+  http://www.opensource.org/licenses/bsd-license.php
 
 . Implemented sFlow sniffer
 
@@ -37,6 +43,11 @@ $Id$
 
 . Virtual Nodes
 
+  Added support for virtual nodes that process a portion of the incoming 
+  packet stream (e.g., a single VLAN or one interface of a router) with the
+  same modules used for the main node. Virtual nodes can be queried 
+  independently of the master node.  
+
 . Hash library
 
   A generic hash table implementation has been added. It has already been
@@ -55,6 +66,10 @@ $Id$
 
 . Changes in the callbacks data structure
 
+  Added a new callback flush() to reinitialize the state after CAPTURE 
+  has sent it to EXPORT. This is a first change of a series of long-term
+  changes to the module callbacks. 
+
 . Rewrite of wireless support 
 
   The wireless support has undergone a major rewrite in order to acquire
@@ -70,8 +85,19 @@ $Id$
   The sniffer-pcap can read traces of 802.11 packets with or without radio
   information.
 
-.  
+. Major rewrite of query-ondemand
 
+  On demand queries (i.e. those queries that require a module to act as 
+  a source of data for another module) now create a new running copy of 
+  the CAPTURE/EXPORT pair running in inline mode with a source of data 
+  the sniffer-como. This rewrite allows for a much simpler debugging of 
+  the on-demand queries as well as to let this system follow the same 
+  evolution of the rest of the core processes. 
+
+. New module: dhcp.c
+  
+  This module parses the BOOTP/DHCP messages and maintains the list of 
+  IP addresses allocated to each MAC address. 
 
 
 -------------------------------------
