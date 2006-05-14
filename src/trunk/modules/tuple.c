@@ -1,29 +1,33 @@
 /*
- * Copyright (c) 2004 Intel Corporation
+ * Copyright (c) 2004-2006, Intel Corporation
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
+ * Redistribution and use in source and binary forms, with or
+ * without modification, are permitted provided that the following
+ * conditions are met:
  *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
+ * * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in
+ *   the documentation and/or other materials provided with the distribution.
+ * * Neither the name of Intel Corporation nor the names of its contributors
+ *   may be used to endorse or promote products derived from this software
+ *   without specific prior written permission.
  *
- * $Id: tuple.c,v 1.27 2006/05/06 13:40:11 iannak1 Exp $
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * $Id: capture.c 500 2006-05-14 15:28:48Z iannak1 $
  */
 
 /*
@@ -43,7 +47,8 @@
 #define FLOWDESC    struct _tuple_stat
 
 FLOWDESC {
-    uint32_t ts; 
+    timestamp_t start_ts; 
+    timestamp_t last_ts; 
     n32_t src_ip;
     n32_t dst_ip;
     n16_t src_port;
@@ -88,11 +93,9 @@ init(void * self, char *args[])
 	if (strstr(args[i], "interval")) {
 	    x = index(args[i], '=') + 1; 
 	    flush_ivl = TIME2TS(atoi(x), 0);
-	}
-	if (strstr(args[i], "compact")) {
+	} else if (strstr(args[i], "compact")) {
 	    config->compact = 1;
-	}
-        if (strstr(args[i], "mask")) { 
+	} else if (strstr(args[i], "mask")) { 
 	    x = index(args[i], '=') + 1; 
 	    config->mask <<= atoi(x);
 	}
@@ -135,13 +138,13 @@ init(void * self, char *args[])
     outmd->ts_resolution = flush_ivl;
     outmd->flags = META_PKT_LENS_ARE_AVERAGED;
     
-    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:none");
+    pkt = metadesc_tpl_add(outmd, "none:none:~ip:none");
     IP(proto) = 0xff;
     N16(IP(len)) = 0xff;
     N32(IP(src_ip)) = 0xffffffff;
     N32(IP(dst_ip)) = 0xffffffff;
     
-    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~tcp");
+    pkt = metadesc_tpl_add(outmd, "none:none:~ip:~tcp");
     IP(proto) = 0xff;
     N16(IP(len)) = 0xff;
     N32(IP(src_ip)) = 0xffffffff;
@@ -149,7 +152,7 @@ init(void * self, char *args[])
     N16(TCP(src_port)) = 0xffff;
     N16(TCP(dst_port)) = 0xffff;
     
-    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~udp");
+    pkt = metadesc_tpl_add(outmd, "none:none:~ip:~udp");
     IP(proto) = 0xff;
     N16(IP(len)) = 0xff;
     N32(IP(src_ip)) = 0xffffffff;
@@ -167,10 +170,10 @@ hash(__unused void * self, pkt_t *pkt)
 {
     uint sport, dport; 
 
-    if (IP(proto) == IPPROTO_TCP) { 
+    if (isTCP) { 
 	sport = N16(TCP(src_port)); 
 	dport = N16(TCP(dst_port)); 
-    } else if (IP(proto) == IPPROTO_UDP) { 
+    } else if (isUDP) { 
 	sport = N16(UDP(src_port)); 
 	dport = N16(UDP(dst_port)); 
     } else { 
@@ -186,10 +189,10 @@ match(__unused void * self, pkt_t *pkt, void *fh)
     FLOWDESC *x = F(fh);
     uint sport, dport; 
     
-    if (IP(proto) == IPPROTO_TCP) {
+    if (isTCP) { 
         sport = N16(TCP(src_port));
         dport = N16(TCP(dst_port));
-    } else if (IP(proto) == IPPROTO_UDP) {
+    } else if (isUDP) { 
         sport = N16(UDP(src_port));
         dport = N16(UDP(dst_port));
     } else {
@@ -210,17 +213,17 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
     FLOWDESC *x = F(fh);
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts); 
+	x->start_ts = pkt->ts; 
 	x->bytes = 0;
 	x->pkts = 0;
         x->proto = IP(proto);
         x->src_ip = IP(src_ip);
         x->dst_ip = IP(dst_ip);
 
-	if (IP(proto) == IPPROTO_TCP) {
+	if (isTCP) { 
 	    x->src_port = TCP(src_port); 
 	    x->dst_port = TCP(dst_port); 
-	} else if (IP(proto) == IPPROTO_UDP) {
+	} else if (isUDP) { 
 	    x->src_port = UDP(src_port); 
 	    x->dst_port = UDP(dst_port); 
 	} else {
@@ -228,7 +231,10 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 	}
     }
 
+    x->last_ts = pkt->ts;
     if (COMO(type) == COMOTYPE_NF) {
+	x->last_ts += 
+		TIME2TS(H32(NF(duration)) / 1000, H32(NF(duration)) % 1000);
 	x->sampling = H16(NF(sampling));
 	x->bytes += H32(NF(pktcount)) * COMO(len);
 	x->pkts += (uint64_t) H32(NF(pktcount));
@@ -250,7 +256,8 @@ store(__unused void * self, void *efh, char *buf)
 {
     FLOWDESC *x = F(efh);
     
-    PUTH32(buf, x->ts);
+    PUTH64(buf, x->start_ts);
+    PUTH64(buf, x->last_ts);
     PUTN32(buf, N32(x->src_ip));
     PUTN32(buf, N32(x->dst_ip));
     PUTN16(buf, N16(x->src_port));
@@ -272,18 +279,19 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
         return 0;
     }
 
-    *ts = TIME2TS(ntohl(((FLOWDESC *)buf)->ts), 0);
+    *ts = NTOHLL(((FLOWDESC *)buf)->start_ts);
     return sizeof(FLOWDESC);
 }
 
-#define PLAINFMT       "%10u %3d %15s %5u %15s %5u %8llu %8llu\n"
+#define PLAINFMT       "%10u.%06d %3d.%06d %3d %15s %5u %15s %5u %8llu %8llu\n"
 
 #define PRETTYHDR       					\
-    "Date                     "					\
+    "Start                    "					\
+    "Duration  "						\
     "Proto Source IP:Port      Destination IP:Port   " 		\
     "Bytes    Packets\n"
 
-#define PRETTYFMT       "%.24s %s %15s %5u %15s %5u %8llu %8llu\n"
+#define PRETTYFMT       "%s.%06d %3d.%06d %5s %15s %5u %15s %5u %8llu %8llu\n"
 
 #define HTMLHDR                                                 \
     "<html>\n"                                                  \
@@ -312,6 +320,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
     "<table class=netview>\n"                                   \
     "  <tr class=nvtitle>\n"					\
     "    <td>Start Time</td>\n"               			\
+    "    <td>Duration</td>\n"               			\
     "    <td>Protocol</td>\n"                 			\
     "    <td>Source IP:Port</td>\n"                 		\
     "    <td>Destination IP:Port</td>\n"                 	\
@@ -324,7 +333,8 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
     "</body></html>\n"
 
 #define HTMLFMT                                                 \
-    "<tr><td>%.24s</td><td>%s</td><td>%15s:%u</td><td>%15s:%u</td>" \
+    "<tr><td>%s.%06d</td><td>%d.%06d</td><td>%s</td>"		\
+    "<td>%15s:%u</td><td>%15s:%u</td>" 				\
     "<td>%llu</td><td>%llu</td></tr>\n"
 
 
@@ -334,10 +344,12 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static char s[2048];
     static char * fmt;
     CONFIGDESC * config = CONFIG(self);
-    char src[20], dst[20];
+    char src[20], dst[20]; 
     struct in_addr saddr, daddr;
     FLOWDESC *x; 
-    time_t ts;
+    timestamp_t start_ts, last_ts;
+    uint start_sec, start_usec; 
+    uint duration_sec, duration_usec; 
 
 
     if (buf == NULL && args != NULL) { 
@@ -368,41 +380,59 @@ print(void * self, char *buf, size_t *len, char * const args[])
     } 
 
     x = (FLOWDESC *) buf;
-    ts = (time_t)ntohl(x->ts);
+    start_ts = NTOHLL(x->start_ts);
+    last_ts = NTOHLL(x->last_ts); 
+
+    start_sec = TS2SEC(NTOHLL(x->start_ts));
+    start_usec = TS2USEC(NTOHLL(x->start_ts));
+    duration_sec = TS2SEC(last_ts - start_ts); 
+    duration_usec = TS2USEC(last_ts - start_ts); 
+
+    /* get IP addresses */
     saddr.s_addr = N32(x->src_ip) & htonl(config->mask);
     daddr.s_addr = N32(x->dst_ip) & htonl(config->mask);
     sprintf(src, "%s", inet_ntoa(saddr));
     sprintf(dst, "%s", inet_ntoa(daddr)); 
 
     if (fmt == PLAINFMT) {
-	*len = sprintf(s, fmt, ts, x->proto, 
+	*len = sprintf(s, fmt, start_sec, start_usec, 
+		    duration_sec, duration_usec, x->proto, 
 		    src, (uint) H16(x->src_port), 
 		    dst, (uint) H16(x->dst_port), 
-		    NTOHLL(x->bytes), 
-		    NTOHLL(x->pkts));
+		    NTOHLL(x->bytes) * ntohs(x->sampling), 
+		    NTOHLL(x->pkts) * ntohs(x->sampling));
     } else { 
+	char datestr[30]; 
+        struct tm * timeptr; 
+
+	timeptr = gmtime((time_t *) &start_sec); 
+	strftime(datestr, sizeof(datestr), "%D %T", timeptr);
+
 	*len = sprintf(s, fmt, 
-		    asctime(localtime(&ts)), getprotoname(x->proto), 
+		    datestr, start_usec, duration_sec, duration_usec, 
+		    getprotoname(x->proto), 
 		    src, (uint) H16(x->src_port), 
 		    dst, (uint) H16(x->dst_port), 
-		    NTOHLL(x->bytes), NTOHLL(x->pkts));
+		    NTOHLL(x->bytes) * ntohs(x->sampling), 
+		    NTOHLL(x->pkts) * ntohs(x->sampling));
     } 
     return s;
 };
 
 
 static int
-replay(void * self, char *buf, char *out, size_t * len, int *count)
+replay(void * self, char *buf, char *out, size_t * len, int pleft)
 {
     CONFIGDESC * config = CONFIG(self);
     FLOWDESC * x;
+    timestamp_t pkt_ts, inter_ts; 
+    uint32_t pkt_duration;
     size_t outlen;
     uint64_t nbytes, npkts; 
-    int pktsz, howmany, paysz;
+    int pktsz, paysz;
 
     if (buf == NULL) {
 	*len = 0;
-	*count = 0;
 	return 0; 		/* nothing to do */
     } 
 
@@ -414,51 +444,45 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
     x = (FLOWDESC *) buf; 
     nbytes = NTOHLL(x->bytes);
     npkts = NTOHLL(x->pkts);
-    howmany = *count;
+
+    /* initialize packet left count */
+    if (pleft == 0) 
+	pleft = npkts;
     
     /* fill the output buffer */
     outlen = 0;
     paysz = sizeof(struct _como_nf) + sizeof(struct _como_iphdr) +
 	    sizeof(struct _como_udphdr);
     pktsz = sizeof(pkt_t) + paysz; 
-    while (outlen + pktsz < *len && howmany < (int) npkts) { 
+    while (outlen + pktsz < *len && pleft > 0) {
 	pkt_t * pkt;
-
-	howmany++;
+	uint32_t plen;
+ 	int pcount; 
 
 	pkt = (pkt_t *) (out + outlen); 
 	pkt->payload = (char *) pkt + sizeof(pkt_t);
 
 #ifdef BUILD_FOR_ARM
-#error "broken"
-	COMOX(ts, TIME2TS(ntohl(x->ts), 0)); 
-	COMOX(caplen, sizeof(struct _como_iphdr) +
-                        sizeof(struct _como_udphdr));
+	COMOX(caplen, paysz);
 	COMOX(type, COMOTYPE_NF);
+	COMOX(l2type, LINKTYPE_NONE);
 	COMOX(l3type, ETHERTYPE_IP);
 	COMOX(l3ofs, sizeof(struct _como_nf)); 
 	COMOX(l4type, x->proto); 
-	COMOX(l4ofs, sizeof(struct _como_nf) + sizeof(struct _como_iphdr));
+	COMOX(l4ofs, COMO(l3ofs) + sizeof(struct _como_iphdr));
+	COMOX(l7ofs, COMO(l4ofs) + sizeof(struct _como_udphdr));
 
-	COMOX(len, (uint32_t) nbytes/npkts); 
-	if (howmany == (int) npkts) 
-	    COMOX(len, COMO(len) + ((uint32_t) nbytes % npkts)); 
-
-	NFX(flags, outlen == 0? COMONF_FIRST : 0); 
 	NFX(sampling, x->sampling);
-	NFX(pktcount, htonl((uint32_t) npkts));
-	
+	IPX(version, 0x4);
+	IPX(ihl, 0x5);
         IPX(proto, x->proto);
 	IPX(len, htons((uint16_t) COMO(len))); 
         IPX(src_ip, x->src_ip);
         IPX(dst_ip, x->dst_ip);
-
-        UDPX(src_port, x->src_port);
-        UDPX(dst_port, x->dst_port);
         
+        UDP(src_port, x->src_port);
+        UDP(dst_port, x->dst_port);
 #else
-
-	COMO(ts) = TIME2TS(ntohl(x->ts), 0); 
 	COMO(caplen) = paysz;
 	COMO(type) = COMOTYPE_NF;
 	COMO(l2type) = LINKTYPE_NONE;
@@ -468,28 +492,7 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
 	COMO(l4ofs) = COMO(l3ofs) + sizeof(struct _como_iphdr);
 	COMO(l7ofs) = COMO(l4ofs) + sizeof(struct _como_udphdr);
 
-	COMO(len) = (uint32_t) nbytes/npkts;
-
 	N16(NF(sampling)) = x->sampling;
-	if (config->compact) {
-	    if (howmany == (int) npkts) {
-		COMO(len) = (uint32_t) nbytes % npkts;
-	    } else {
-		if ((uint32_t) nbytes % npkts > 0) {
-		    /* we need two packets per flow */
-		    N32(NF(pktcount)) = htonl((uint32_t) npkts - 1);
-		    npkts = 2;
-		} else {
-		    /* just one packet per flow */
-		    N32(NF(pktcount)) = htonl((uint32_t) npkts);
-		    npkts = 1;
-		}
-	    }
-	} else {
-	    N32(NF(pktcount)) = htonl(1);
-	    if (howmany == (int) npkts)
-		COMO(len) += (uint32_t) nbytes % npkts;
-	}
 
 	IP(version) = 0x4;
 	IP(ihl) = 0x5;
@@ -500,15 +503,52 @@ replay(void * self, char *buf, char *out, size_t * len, int *count)
 
         UDP(src_port) = x->src_port;
         UDP(dst_port) = x->dst_port;
-
 #endif
 
+	pcount = 1; 
+	plen = nbytes / npkts; 
+	if (pleft == 1) 
+	     plen += nbytes % npkts; 
+
+	if (config->compact && pleft != 1) {
+ 	    /* 
+	     * in compact mode we need to make sure we generate a number 
+	     * of packets with the correct size taking into account that 
+	     * the first packet will always weigh more (i.e. NF(pktcount)). 
+	     * therefore we need n packets with size bytes/pkts and 1 last 
+ 	     * packet with size "bytes/pkts + bytes%pkts" to carry the 
+	     * leftovers.
+	     * 
+	     */
+	    pcount = pleft; 
+	    if (nbytes % npkts != 0) 
+		pcount--; 
+	}
+
+	inter_ts = NTOHLL(x->last_ts) - NTOHLL(x->start_ts); 
+	inter_ts /= (uint64_t) npkts;
+	pkt_ts = NTOHLL(x->start_ts) + (npkts - pleft - 1) * inter_ts; 
+	pkt_duration = TS2SEC(inter_ts * (pcount - 1)) * 1000 + 
+		       TS2MSEC(inter_ts * (pcount - 1)); 
+
+#ifdef BUILD_FOR_ARM
+	COMOX(ts, pkt_ts);
+	COMOX(len, plen);
+	NFX(pktcount, htonl(pcount));
+	NFX(duration, htonl(pduration));
+#else
+	COMO(ts) = pkt_ts;
+	COMO(len) = plen; 
+	N32(NF(pktcount)) = htonl(pcount);
+	N32(NF(duration)) = htonl(pkt_duration);
+#endif
+
+	pleft -= pcount;
 	outlen += pktsz; 
     } 
 
     *len = outlen;
-    *count = howmany;
-    return (npkts - howmany);
+    return pleft; 
 }
 
 

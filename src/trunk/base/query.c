@@ -227,7 +227,7 @@ replayrecord(module_t * mdl, char * ptr, int client)
 {
     char out[DEFAULT_REPLAY_BUFSIZE]; 
     size_t len; 
-    int left, count; 
+    int left; 
     int ret; 
 
     /*
@@ -249,10 +249,10 @@ replayrecord(module_t * mdl, char * ptr, int client)
      *     in any case there is no definitive solution so we
      *     will have always to deal with this loop here.
      */
-    count = 0;
+    left = 0;
     do {
 	len = DEFAULT_REPLAY_BUFSIZE;
-	left = mdl->callbacks.replay(mdl, ptr, out, &len, &count);
+	left = mdl->callbacks.replay(mdl, ptr, out, &len, left);
 	if (left < 0)
 	    panicx("%s.replay returns error", mdl->name);
 	if (len == 0) 

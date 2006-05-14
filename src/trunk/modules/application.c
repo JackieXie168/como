@@ -1,30 +1,35 @@
 /*
- * Copyright (c) 2004 Intel Corporation
+ * Copyright (c) 2004-2006, Intel Corporation
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
+ * Redistribution and use in source and binary forms, with or
+ * without modification, are permitted provided that the following
+ * conditions are met:
  *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
+ * * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in
+ *   the documentation and/or other materials provided with the distribution.
+ * * Neither the name of Intel Corporation nor the names of its contributors
+ *   may be used to endorse or promote products derived from this software
+ *   without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * $Id$
  */
+
 
 /*
  * Application module
@@ -528,56 +533,6 @@ print(void * self, char *buf, size_t *len, char * const args[])
     return s;
 }
 
-static int
-replay(void * self, char *buf, char *out, size_t * len, int *count)
-{
-    static int npkts = 0; 
-    CONFIGDESC * config = CONFIG(self);
-    pkt_t * pkt; 
-    size_t out_len; 
-    size_t plen; 
-    
-    pkt = (pkt_t *) config->template; 
-    plen = COMO(caplen) + sizeof(pkt_t);
-
-    if (*len < plen) 
-        return -1;
-    
-    /* 
-     * if there are no pending packets, this must be a new record. 
-     * build the template accordingly. 
-     */
-    if (npkts == 0) { 
-	app_t * app = (app_t *) buf;
-	timestamp_t ts; 
-	int nbytes; 
-	int i; 
-	struct _como_iphdr *iph = (struct _como_iphdr *)(COMO(payload) +
-							 COMO(l3ofs));
-	nbytes = 0; 
-	for (i = 0; i < APPLICATIONS; i++) { 
-	    npkts += ntohl(app->pkts[i]); 
-	    nbytes += NTOHLL(app->bytes[i]); 
-	} 
-	if (npkts > 0)
-            N16(iph->len) = htons((uint16_t) (nbytes / npkts));
-	ts = TIME2TS(ntohl(app->ts), 0);
-	COMO(ts) = ts;
-        *count = npkts;
-    }
-    
-    for (out_len = 0; out_len < *len && npkts > 0; npkts--) { 
-	COMO(payload) = out + out_len + sizeof(pkt_t);
-	bcopy(config->template, out + out_len, sizeof(pkt_t) + COMO(caplen));
-	out_len += sizeof(pkt_t) + COMO(caplen);
-    } 
-    
-    *len = out_len; 
-    *count -= npkts;
-    return npkts; 
-}
-
-
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
@@ -594,6 +549,6 @@ callbacks_t callbacks = {
     store: store,
     load: load,
     print: print,
-    replay: replay,
+    replay: NULL,
     formats: "plain pretty gnuplot gnuplot-relative",
 };

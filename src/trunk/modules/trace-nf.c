@@ -1,27 +1,31 @@
 /*
- * Copyright (c) 2004 Intel Corporation
+ * Copyright (c) 2004-2006, Intel Corporation
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
+ * Redistribution and use in source and binary forms, with or
+ * without modification, are permitted provided that the following
+ * conditions are met:
  *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
+ * * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in
+ *   the documentation and/or other materials provided with the distribution.
+ * * Neither the name of Intel Corporation nor the names of its contributors
+ *   may be used to endorse or promote products derived from this software
+ *   without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * $Id$
  */
@@ -344,119 +348,6 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 };
 
 
-static int
-replay(void * self, char *buf, char *out, size_t * len, int *count)
-{
-    CONFIGDESC * config = CONFIG(self);
-    FLOWDESC * x;
-    size_t outlen;
-    uint64_t nbytes, npkts; 
-    int pktsz, howmany;
-
-    if (buf == NULL) {
-	*len = 0;
-	*count = 0;
-	return 0; 		/* nothing to do */
-    } 
-
-    /* 
-     * generate packets as long as we have space in the output 
-     * buffer. the packets will all be equal with the same timestamps
-     * and a packet length equal to the average packet lengths. 
-     */
-    x = (FLOWDESC *) buf; 
-    nbytes = NTOHLL(x->bytes);
-    npkts = NTOHLL(x->pkts);
-    howmany = *count;
-
-    /* fill the output buffer */
-    outlen = 0; 
-    pktsz = sizeof(pkt_t) + sizeof(struct _como_iphdr) + 
-					sizeof(struct _como_udphdr); 
-    while (outlen + pktsz < *len && howmany < (int) npkts) { 
-	pkt_t * pkt;
-
-	howmany++;
-
-	pkt = (pkt_t *) (out + outlen); 
-	pkt->payload = (char *) pkt + sizeof(pkt_t);
-
-#ifdef BUILD_FOR_ARM
-
-	COMOX(ts, TIME2TS(ntohl(x->ts), 0)); 
-	COMOX(caplen, sizeof(struct _como_iphdr) +
-                        sizeof(struct _como_udphdr));
-	COMOX(type, COMOTYPE_NF);
-	COMOX(l3type, ETHERTYPE_IP);
-	COMOX(l3ofs, sizeof(struct _como_nf)); 
-	COMOX(l4type, x->proto); 
-	COMOX(l4ofs, sizeof(struct _como_nf) + sizeof(struct _como_iphdr));
-
-	COMOX(len, (uint32_t) nbytes/npkts); 
-	if (howmany == (int) npkts) 
-	    COMOX(len, COMO(len) + ((uint32_t) nbytes % npkts)); 
-
-	NFX(flags, outlen == 0? COMONF_FIRST : 0); 
-        NFX(src_as, x->src_as)
-        NFX(dst_as, x->dst_as)
-        NFX(input, x->input)
-        NFX(output, x->output)
-	NFX(sampling, x->sampling);
-	NFX(pktcount, htonl((uint32_t) npkts));
-	NFX(duration, x->duration);
-	
-        IPX(proto, x->proto);
-	IPX(len, htons((uint16_t) COMO(len))); 
-        IPX(src_ip, x->src_ip);
-        IPX(dst_ip, x->dst_ip);
-
-        UDPX(src_port, x->src_port);
-        UDPX(dst_port, x->dst_port);
-        
-#else
-
-	COMO(ts) = NTOHLL(x->start_ts); 
-	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_udphdr);
-	COMO(type) = COMOTYPE_NF;
-	COMO(l3type) = ETHERTYPE_IP;
-	COMO(l3ofs) = sizeof(struct _como_nf); 
-	COMO(l4type) = x->proto; 
-	COMO(l4ofs) = sizeof(struct _como_nf) + sizeof(struct _como_iphdr);
-
-	COMO(len) = (uint32_t) nbytes/npkts; 
-	if (howmany == (int) npkts) 
-	    COMO(len) += (uint32_t) nbytes % npkts; 
-
-        NF(src_as) = x->src_as;
-        NF(dst_as) = x->dst_as;
-        NF(input) = x->input;
-        NF(output) = x->output;
-	NF(sampling) = x->sampling;
-	N32(NF(pktcount)) = htonl((uint32_t) npkts);
-	NF(duration) = x->duration;
-
-        IP(proto) = x->proto;
-	N16(IP(len)) = htons((uint16_t) COMO(len)); 
-        IP(src_ip) = x->src_ip;
-        IP(dst_ip) = x->dst_ip;
-
-        UDP(src_port) = x->src_port;
-        UDP(dst_port) = x->dst_port;
-
-#endif
-
-	outlen += pktsz; 
-
-	if (config->compact) 	/* just one packet per flow */
-	    break;
-    } 
-
-    *len = outlen;
-    *count = howmany;
-    return (config->compact? 0 : (npkts - howmany));
-}
-
-
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
@@ -473,6 +364,6 @@ callbacks_t callbacks = {
     store: store,
     load: load,
     print: print,
-    replay: replay,
+    replay: NULL,
     formats: "plain pretty html"
 };
