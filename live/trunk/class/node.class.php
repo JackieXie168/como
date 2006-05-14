@@ -29,11 +29,13 @@ class Node {
     var $timeperiod;
     var $timebound;
     /*  Some Globals  */
+    var $G;
     var $NODEDB;
 
     /*  Constructor  */
     function Node($comonode, $G) {
         $this->NODEDB = $G['NODEDB'];
+        $this->G = $G;
 
 	$timeperiod = $G['TIMEPERIOD'];
 	$timebound = $G['TIMEBOUND'];
@@ -48,7 +50,7 @@ class Node {
 	    $this -> timebound = $timebound;
 
             /*  Cache the status query so we don't have to query CoMo  */
-#            $this -> isCached($comonode);
+            $this -> statusExists($comonode);
 
 	    $query = file("http://$comonode/?status");
 
@@ -75,6 +77,9 @@ class Node {
 		    break;
 		    case "Current:":
 			$this->curtime = $args[0];
+		    break;
+		    case "Comment:":
+			$this->comment= $args[0];
 		    break;
                     case "Module:":
                         $str = urlencode(trim($args[1]));
@@ -120,11 +125,35 @@ class Node {
             $this->etime = $etime;
 	}
     }
-#    function isCached ($comonode, $RESULTS) {
-#        print "comonode is $comonode";
-        
-        
-#    }
+    function statusExists ($comonode) {
+        $statuslife = "600";
+        $absroot = $this -> G['ABSROOT'];
+        $results = trim ($this->G['RESULTS'], "./");
+        $timenow = time();
+        /*  Get the current status file  */
+        $dh = opendir ("$absroot/$results");
+	$needlefile = $comonode . "_status_";
+	while (false!==($filez= readdir($dh))) {
+	    if ($filez!= "." && $filez!= ".." 
+                && strstr ($filez, "$needlefile")) {
+		$statusfile = $filez;
+	    }
+	}
+        if (isset($statusfile)) {
+	    $tmpvar = split ("_", $statusfile);
+	    $curstatustime = $tmpvar[2];
+	    if (($timenow - $curstatustime) > $statuslife) {
+		$returnstatus = 0;
+                $statusfilename = "$absroot/$results/$statusfile";
+                system ("rm -f $statusfilename");
+	    } else {
+		$returnstatus = 1;
+	    }
+        } else 
+	    $returnstatus = 0;
+
+        return ($returnstatus);
+    }
 
     function PrintDebug() {
 	print "<br>DEBUGING INFO<BR>";

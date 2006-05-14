@@ -73,7 +73,9 @@ function handleStateChange() {
 <div id=menubar>
     <ul>
       <li><a href=# onclick="startRequest('system');">System</a></li>
+<!--
       <li><a href=# onclick="startRequest('application');">Applications</a></li>
+-->
       <li><a href=# onclick="startRequest('help');">Help</a></li>
     </ul>
     <div id="results"></div>
