@@ -234,7 +234,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
     x->last_ts = pkt->ts;
     if (COMO(type) == COMOTYPE_NF) {
 	x->last_ts += 
-		TIME2TS(H32(NF(duration)) / 1000, H32(NF(duration)) % 1000);
+	    TIME2TS(H32(NF(duration)) / 1000, (H32(NF(duration))%1000)*1000);
 	x->sampling = H16(NF(sampling));
 	x->bytes += H32(NF(pktcount)) * COMO(len);
 	x->pkts += (uint64_t) H32(NF(pktcount));
@@ -383,8 +383,8 @@ print(void * self, char *buf, size_t *len, char * const args[])
     start_ts = NTOHLL(x->start_ts);
     last_ts = NTOHLL(x->last_ts); 
 
-    start_sec = TS2SEC(NTOHLL(x->start_ts));
-    start_usec = TS2USEC(NTOHLL(x->start_ts));
+    start_sec = TS2SEC(start_ts); 
+    start_usec = TS2USEC(x->start_ts);
     duration_sec = TS2SEC(last_ts - start_ts); 
     duration_usec = TS2USEC(last_ts - start_ts); 
 
@@ -406,7 +406,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
         struct tm * timeptr; 
 
 	timeptr = gmtime((time_t *) &start_sec); 
-	strftime(datestr, sizeof(datestr), "%D %T", timeptr);
+	strftime(datestr, sizeof(datestr), "%b %e %Y %T", timeptr);
 
 	*len = sprintf(s, fmt, 
 		    datestr, start_usec, duration_sec, duration_usec, 
@@ -527,7 +527,7 @@ replay(void * self, char *buf, char *out, size_t * len, int pleft)
 
 	inter_ts = NTOHLL(x->last_ts) - NTOHLL(x->start_ts); 
 	inter_ts /= (uint64_t) npkts;
-	pkt_ts = NTOHLL(x->start_ts) + (npkts - pleft - 1) * inter_ts; 
+	pkt_ts = NTOHLL(x->start_ts) + (npkts - pleft) * inter_ts; 
 	pkt_duration = TS2SEC(inter_ts * (pcount - 1)) * 1000 + 
 		       TS2MSEC(inter_ts * (pcount - 1)); 
 
@@ -550,7 +550,6 @@ replay(void * self, char *buf, char *out, size_t * len, int pleft)
     *len = outlen;
     return pleft; 
 }
-
 
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
