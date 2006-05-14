@@ -213,7 +213,6 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     add_sniffer(&map, "como", sniffstr, NULL); 
 
     map.stats = mem_calloc(1, sizeof(stats_t)); 
-    map.stats->mdl_stats = mem_calloc(map.module_max, sizeof(mdl_stats_t));
     gettimeofday(&map.stats->start, NULL); 
     map.stats->first_ts = ~0;
 

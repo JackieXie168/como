@@ -82,19 +82,12 @@ create_record(module_t * mdl, uint32_t hash)
 
 	len = sizeof(earray_t) + et->records * 2 * sizeof(rec_t *);
 	ea = safe_realloc(ea, len); 
-
-        map.stats->mdl_stats[mdl->index].mem_usage_export += 
-            len - ea->size;
-
 	ea->size = et->records * 2; 
-
 	mdl->ex_array = ea;
     } 
 
     /* allocate the new record */
     rp = safe_calloc(1, mdl->callbacks.ex_recordsize + sizeof(rec_t));
-    map.stats->mdl_stats[mdl->index].mem_usage_export += 
-        mdl->callbacks.ex_recordsize + sizeof(rec_t);
     ea->record[et->records] = rp;
     et->records++;
     if (et->bucket[hash] == NULL) 
@@ -289,7 +282,6 @@ static void
 process_table(ctable_t * ct, module_t * mdl)
 {
     int (*record_fn)(module_t *, rec_t *);
-    int record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
     
     /*
      * call export() if available, otherwise just store() and
@@ -334,9 +326,6 @@ process_table(ctable_t * ct, module_t * mdl)
 
 		/* store or export this record */
                 record_fn(mdl, rec);
-
-                /* update the memory counters */
-                MDL_STATS(mdl)->mem_usage_shmem_f += record_size;
 
 		rec = p;		/* move to the next one */
 	    }
@@ -388,9 +377,6 @@ destroy_record(int i, module_t * mdl)
     ea->record[i] = ea->record[ea->first_full];
     ea->record[ea->first_full] = NULL;
     ea->first_full++;
-	
-    map.stats->mdl_stats[mdl->index].mem_usage_export -= 
-        mdl->callbacks.ex_recordsize + sizeof(rec_t);
     free(rp);
 }
 
@@ -525,10 +511,6 @@ ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
     mdl->ex_array = safe_calloc(1, len);
     mdl->ex_array->size = mdl->ex_hashsize;
 
-    map.stats->mdl_stats[mdl->index].mem_usage_export +=
-        sizeof(etable_t) + sizeof(earray_t) +
-        2 * mdl->ex_hashsize * sizeof(void *);
-
     /*
      * open output file unless we are running in inline mode 
      */
@@ -566,7 +548,6 @@ ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
     etable_t * et; 
     earray_t * ea;
     uint32_t i, rec_size;
-    mdl_stats_t *stats;
     int idx;
 
     /* only the parent process should send this message */
@@ -576,13 +557,11 @@ ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
     mdl = &map.modules[idx];
     et = mdl->ex_hashtable;
     ea = mdl->ex_array;
-    stats = &map.stats->mdl_stats[mdl->index];
     rec_size = sizeof(rec_t) + mdl->callbacks.ex_recordsize;
  
     /*
      * drop export hash table
      */
-    stats->mem_usage_export -= sizeof(etable_t) + et->size * sizeof(void *);
     free(et);
     mdl->ex_hashtable = NULL;
 
@@ -592,7 +571,6 @@ ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
     for (i = 0; i < ea->size; i++) {
         if (ea->record[i]) {
             free(ea->record[i]);
-            stats->mem_usage_export -= rec_size;
             ea->record[i] = NULL;
         }
     }
@@ -600,12 +578,9 @@ ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
     /*
      * drop export array
      */
-    stats->mem_usage_export -= sizeof(earray_t) + ea->size * sizeof(void *);
     free(ea);
     mdl->ex_array = NULL;
-
     csclose(mdl->file, mdl->offset);
-    
     remove_module(&map, mdl);
 }
 
