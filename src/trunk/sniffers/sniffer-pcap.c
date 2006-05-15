@@ -155,6 +155,11 @@ sniffer_start(source_t * src)
 	type = COMOTYPE_LINK;
 	l2type = LINKTYPE_ETH;
 	break;
+    case DLT_C_HDLC: 
+	logmsg(LOGSNIFFER, "datalink HDLC (%d)\n", pf.linktype); 
+	type = COMOTYPE_LINK;
+	l2type = LINKTYPE_HDLC;
+	break;
     case DLT_IEEE802_11: 
 	logmsg(LOGSNIFFER, "datalink 802.11 (%d)\n", pf.linktype); 
 	type = COMOTYPE_LINK;
