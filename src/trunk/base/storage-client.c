@@ -393,7 +393,7 @@ csmap(int fd, off_t ofs, ssize_t * sz)
     /* 
      * check if we already have mmapped the requested region. 
      */
-    if (ofs >= cf->offset && ofs + *sz <= cf->offset + cf->size) { 
+    if (ofs > cf->offset && ofs + *sz <= cf->offset + cf->size) { 
         logmsg(V_LOGSTORAGE, 
 	    "ofs %lld sz %d silently approved (%lld:%d)\n", 
             ofs, *sz, cf->offset, cf->size); 
