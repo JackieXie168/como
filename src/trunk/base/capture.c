@@ -970,14 +970,11 @@ capture_mainloop(int accept_fd, int supervisor_fd)
 	    
 	    if (i == supervisor_fd || FD_ISSET(i, &export_fds)) {
 		int ipcr = ipc_handle(i);
-		switch (ipcr) {
-		case IPC_ERR:
+		if (ipcr != IPC_OK) {
 		    /* an error. close the socket */
-		    logmsg(LOGWARN, "error on IPC handle from %d\n", i);
-		case IPC_EOF:
-		    close(i);
-		    del_fd(i, &valid_fds, max_fd);
-		    break;
+		    logmsg(LOGWARN, "error on IPC handle from %d (%d)\n", i,
+			   ipcr);
+		    exit(EXIT_FAILURE);
 		}
 		
 		n_ready--;
