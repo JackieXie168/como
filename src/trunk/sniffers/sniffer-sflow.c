@@ -101,7 +101,7 @@ typedef struct _SFTag {
  */
 /* #define SNIFFER_SFLOW_DEBUG */
 #ifdef SNIFFER_SFLOW_DEBUG
-#define sf_log(format...)	logmsg(LOGDEBUG, format)
+#define sf_log(format...)	logmsg(LOGWARN, format)
 #else
 #define sf_log(format...)
 #endif
@@ -594,7 +594,8 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no)
+sniffer_next(source_t * src, pkt_t * out, int max_no,
+	     timestamp_t max_ivl)
 {
 /*
  * CHECKME: To be sure no packet loss happens max_no should be >= 2350.
@@ -631,6 +632,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
     assert(src != NULL);
     assert(src->ptr != NULL);
     assert(out != NULL);
+    
+    max_ivl = 0; /* just to avoid warning on unused max_ivl */
 
     sf_log("sflow next\n");
 

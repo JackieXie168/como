@@ -649,7 +649,7 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no) 
+sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl) 
 {
     struct _snifferinfo * info; 
     pkt_t * pkt; 
@@ -742,11 +742,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no)
 
 	npkts++;
 
-	/* if we have processed more than one second worth of
+	/* if we have processed more than max_ivl worth of
 	 * packets stop and return to CAPTURE so that it can 
  	 * process EXPORT messages, etc. 
 	 */
-	if (COMO(ts) - info->last_ts > TIME2TS(1,0))
+	if (COMO(ts) - info->last_ts > max_ivl)
 	    break; 
     }
 

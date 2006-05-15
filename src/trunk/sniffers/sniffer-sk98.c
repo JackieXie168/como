@@ -269,7 +269,8 @@ return_token(struct sk98_map_area_header * m, unsigned token)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no)
+sniffer_next(source_t * src, pkt_t *out, int max_no,
+	     __unused timestamp_t max_ivl)
 {
     static int max_pending;
     static unsigned last_drop;

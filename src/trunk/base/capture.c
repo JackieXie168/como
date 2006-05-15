@@ -63,6 +63,8 @@ extern struct _sniffer *__sniffers[];
 
 static int wait_for_modules = 2;
 
+static timestamp_t s_min_flush_ivl = TIME2TS(1, 0);
+
 /*
  * -- cleanup
  * 
@@ -644,6 +646,10 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void * pack, size_t sz)
 
     /* Parse the filter string from the configuration file */
     parse_filter(mdl->filter_str, &(mdl->filter_tree), NULL);
+    
+    if (s_min_flush_ivl > mdl->flush_ivl) {
+	s_min_flush_ivl = mdl->flush_ivl;
+    }
 }
 
 
@@ -992,7 +998,8 @@ capture_mainloop(int accept_fd, int supervisor_fd)
 		continue;	/* nothing to read here. */
 
 	    start_tsctimer(map.stats->ca_sniff_timer);
-	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER);
+	    count = src->cb->sniffer_next(src, pkts, PKT_BUFFER,
+					  s_min_flush_ivl);
 	    end_tsctimer(map.stats->ca_sniff_timer);
 
 	    if (count == 0)
