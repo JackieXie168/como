@@ -121,11 +121,11 @@ SRCS_como += $(x)
 x=$(EXTRAS:%=$(EXTRADIR)/%)
 SRCS_como += $(x)
 
-capture.o:	build-sniffer-list
+capture.o:	sniffer-list.h
 
 TEMPORARY += sniffer-list.h
 
-build-sniffer-list:
+sniffer-list.h: como.gmk
 	@( \
 	echo "/* generated file, do not edit */" ;		\
 	for i in $(SNIFFERS); do  				\

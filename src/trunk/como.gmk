@@ -159,6 +159,8 @@ clean:
 
 .c.o:
 	$(CC) $(CFLAGS) $(CFLAGS_$(PROG)) -c $(<) -o $(@)
+	@$(CC) -MM -MG -P -w $(CFLAGS) $(CFLAGS_$(PROG)) -c $(<) \
+	> $(@:%.o=%.d)
 
 # Default rules to build flex and bison parsers 
 # (for the Snort module and the filters)
@@ -184,7 +186,7 @@ $(eval OBJS_$(PROG) := $(SRCS_$(PROG):.c=.o))
 #.c.o:
 #	echo "$(CC) $(CFLAGS) $(CFLAGS_$(PROG)) -c $(^) -o $(@)"
 
-$(foreach o,$(OBJS_$(PROG)),$(eval $(o) : $(DEPS_$(PROG))))
+$(foreach o,$(OBJS_$(PROG)),$(eval $(o) : $(o:%.o=%.d) $(DEPS_$(PROG))))
 
 $(foreach o,$(OBJS_$(PROG)),$(eval $(PROG) : $o))
 $(PROG):
@@ -212,10 +214,17 @@ $(eval OBJS_$(MODULE) := $(SRCS_$(MODULE):.c=.o))
 $(foreach o,$(OBJS_$(MODULE)),$(eval $(o) : $(DEPS_$(MODULE))))
 
 $(foreach o,$(OBJS_$(MODULE)),$(eval $(MODULE) : $o))
-$(MODULE): $(addsuffix .c,$(basename $(MODULE))) 
+
+$(addsuffix .d,$(basename $(MODULE))): $(addsuffix .c,$(basename $(MODULE)))
+	@$$(CC) -MM -MG -P -w $$(CFLAGS) -c \
+	$(addsuffix .c,$(basename $(MODULE))) \
+	> $(addsuffix .d,$(basename $(MODULE)))
+
+$(MODULE): $(addsuffix .d,$(basename $(MODULE)))
 	@echo "building module $(MODULE)"
-	$$(CC) $$(CFLAGS) -shared -Wl,-x -o $$(@) $$(^) \
-		$$(LIBOPTS) $$(LIBS_$(MODULE):%=-l%)
+	$$(CC) $$(CFLAGS) -shared -Wl,-x -o $$(@) \
+	$(addsuffix .c,$(basename $(MODULE))) \
+	$$(LIBOPTS) $$(LIBS_$(MODULE):%=-l%)
 
 install-$(MODULE):
 	@echo "install($(MODULE))"
