@@ -723,6 +723,9 @@ export_mainloop(__unused int in_fd, int parent_fd)
     max_fd = -1; 
     FD_ZERO(&rx);
 
+    /* register handlers for signals */ 
+    signal(SIGPIPE, exit); 
+    signal(SIGINT, exit);
     /* ignore SIGHUP */
     signal(SIGHUP, SIG_IGN); 
 

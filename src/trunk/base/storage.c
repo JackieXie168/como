@@ -1552,6 +1552,9 @@ storage_mainloop(int accept_fd, int supervisor_fd)
     max_fd = 0; 
     FD_ZERO(&valid_fds); 
 
+    /* register handlers for signals */ 
+    signal(SIGPIPE, exit); 
+    signal(SIGINT, exit);
     /* ignore SIGHUP */ 
     signal(SIGHUP, SIG_IGN); 
     

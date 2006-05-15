@@ -317,10 +317,6 @@ handle_children(child_info_t *children, int children_count)
 
     pid = wait3(&statbuf, WNOHANG, NULL);
     if (pid <= 0) {
-	/* why was this function called?
-         * XXX we can probably remove this 
-         */ 
-	logmsg(LOGWARN, "handle children called but no one died...");
 	return 0;
     } 
 
