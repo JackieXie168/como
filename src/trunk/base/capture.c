@@ -739,7 +739,9 @@ ca_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 	
 	/* ok, move freed memory into the main memory */
 	memmap_destroy(exp->shared_map);
-
+	
+	map.stats->table_queue--;
+	
 	/* NOTE: *exp was allocated inside exp->shared_map so memmap_destroy
 	 * will deallocate that too. That's why we use exp_next.
 	 */
