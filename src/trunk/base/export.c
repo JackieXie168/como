@@ -786,14 +786,10 @@ export_mainloop(__unused int in_fd, int parent_fd)
 		continue;
 	    
 	    ipcr = ipc_handle(i);
-	    switch (ipcr) {
-	    case IPC_ERR:
+	    if (ipcr != IPC_OK) {
 		/* an error. close the socket */
-		logmsg(LOGWARN, "error on IPC handle from %d\n", i);
+		logmsg(LOGWARN, "error on IPC handle from %d (%d)\n", i, ipcr);
 		exit(EXIT_FAILURE);
-	    case IPC_EOF:
-		close(i);
-		max_fd = del_fd(i, &rx, max_fd);
 	    }
 	    
 	    n_ready--;

@@ -35,6 +35,7 @@
 #include <string.h>
 #include <assert.h>
 #include <signal.h>
+#include <err.h>
 
 #include "como.h"
 #include "comopriv.h"
@@ -91,7 +92,7 @@ qd_ipc_record(__unused procname_t sender, __unused int fd,
     /* NOTE: len includes \0 */
     ret = como_writen(client_fd, (char *) buf, len - 1);
     if (ret < 0)
-	panic("sending data to the client");
+	errx(EXIT_FAILURE, "sending data to the client");
 }
 
 
@@ -103,7 +104,7 @@ qd_ipc_record(__unused procname_t sender, __unused int fd,
  *
  */
 static void
-qd_ipc_done(__unused procname_t sender, __unused int fd,
+qd_ipc_done(procname_t sender, __unused int fd,
         __unused void * b, __unused size_t l)
 {
     assert(map.running == INLINE);
@@ -245,6 +246,7 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* get ready for the mainloop */
     FD_ZERO(&valid_fds);
     max_fd = 0;
+    max_fd = add_fd(client_fd, &valid_fds, max_fd);
     max_fd = add_fd(ondemand_fd, &valid_fds, max_fd);
 
     for (;;) {
@@ -253,6 +255,16 @@ query_ondemand(int fd, qreq_t * req, int node_id)
    
         r = valid_fds;
         n_ready = select(max_fd, &r, NULL, NULL, NULL);
+        /* first check if the client is still there */
+	if (FD_ISSET(client_fd, &r)) {
+	    char t;
+	    int ret;
+	    ret = read(client_fd, &t, 1);
+	    if (ret <= 0) {
+		/* client is gone */
+		errx(EXIT_FAILURE, "client is gone");
+	    }
+	}
         for (i = 0; n_ready > 0 && i < max_fd; i++) {
             int ipcr; 
 
