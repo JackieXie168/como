@@ -145,7 +145,9 @@ mkinstalldirs:
 clean:
 	rm -rf $(PROGS) $(MODULES) $(OTHER) $(TEMPORARY) *.core *.pid core.* \
 		$(foreach PG, $(PROGS), $(OBJS_$(PG))) \
-                $(foreach MO, $(MODULES), $(OBJS_$(MO)))
+                $(foreach MO, $(MODULES), $(OBJS_$(MO))) \
+                $(foreach PG, $(PROGS), $(DDEPS_$(PG))) \
+                $(foreach MO, $(MODULES), $(DDEPS_$(MO)))
 
 # The suffixes we care about:
 .SUFFIXES:	.c .o .so .po .y .l
@@ -183,10 +185,14 @@ define compilation
 
 $(eval OBJS_$(PROG) := $(SRCS_$(PROG):.c=.o))
 
+$(eval DDEPS_$(PROG) := $(SRCS_$(PROG):.c=.d))
+
+DDEPS += $(DDEPS_$(PROG))
+
 #.c.o:
 #	echo "$(CC) $(CFLAGS) $(CFLAGS_$(PROG)) -c $(^) -o $(@)"
 
-$(foreach o,$(OBJS_$(PROG)),$(eval $(o) : $(o:%.o=%.d) $(DEPS_$(PROG))))
+$(foreach o,$(OBJS_$(PROG)),$(eval $(o) : $(DEPS_$(PROG))))
 
 $(foreach o,$(OBJS_$(PROG)),$(eval $(PROG) : $o))
 $(PROG):
@@ -211,20 +217,23 @@ define module_compilation
 
 $(eval OBJS_$(MODULE) := $(SRCS_$(MODULE):.c=.o))
 
+$(eval DDEPS_$(MODULE) := $(addsuffix .d,$(basename $(MODULE))) \
+			  $(SRCS_$(MODULE):.c=.d))
+
+DDEPS += $(DDEPS_$(MODULE))
+
 $(foreach o,$(OBJS_$(MODULE)),$(eval $(o) : $(DEPS_$(MODULE))))
 
 $(foreach o,$(OBJS_$(MODULE)),$(eval $(MODULE) : $o))
 
-$(addsuffix .d,$(basename $(MODULE))): $(addsuffix .c,$(basename $(MODULE)))
-	@$$(CC) -MM -MG -P -w $$(CFLAGS) -c \
-	$(addsuffix .c,$(basename $(MODULE))) \
-	> $(addsuffix .d,$(basename $(MODULE)))
-
-$(MODULE): $(addsuffix .d,$(basename $(MODULE)))
+$(MODULE): $(addsuffix .c,$(basename $(MODULE)))
 	@echo "building module $(MODULE)"
 	$$(CC) $$(CFLAGS) -shared -Wl,-x -o $$(@) \
 	$(addsuffix .c,$(basename $(MODULE))) \
 	$$(LIBOPTS) $$(LIBS_$(MODULE):%=-l%)
+	@$$(CC) -MM -MG -P -w $$(CFLAGS) -c \
+	$(addsuffix .c,$(basename $(MODULE))) \
+	> $(addsuffix .d,$(basename $(MODULE)))
 
 install-$(MODULE):
 	@echo "install($(MODULE))"
@@ -236,5 +245,9 @@ $(foreach PROG,$(PROGS),$(eval $(compilation)))
 
 # This template rule is instantiated as needed for each module
 $(foreach MODULE,$(MODULES),$(eval $(module_compilation)))
+
+ifneq ($(strip $(DDEPS)),)
+-include $(DDEPS)
+endif
 
 ### end of file ###
