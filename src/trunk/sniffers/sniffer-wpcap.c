@@ -150,7 +150,8 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t *src, pkt_t *out, int max_no) 
+sniffer_next(source_t *src, pkt_t *out, int max_no,
+	     __unused timestamp_t max_ivl) 
 {
     struct _snifferinfo * info; 
     struct pcap_pkthdr *header;

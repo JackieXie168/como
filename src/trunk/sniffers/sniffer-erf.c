@@ -106,7 +106,7 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no)
+sniffer_next(source_t * src, pkt_t *out, int max_no, timestamp_t max_ivl)
 {
     struct _snifferinfo * info; /* sniffer specific information */
     pkt_t *pkt;                 /* packet records */
@@ -154,7 +154,7 @@ sniffer_next(source_t * src, pkt_t *out, int max_no)
 	 */
 	COMO(ts) = rec->ts;
 	if (npkts > 0) {
-	    if (COMO(ts) - first_seen > TIME2TS(1,0)) {
+	    if (COMO(ts) - first_seen > max_ivl) {
 		/* Never returns more than 1sec of traffic */
 		break;
 	    }
