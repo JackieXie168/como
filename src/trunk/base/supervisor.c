@@ -255,7 +255,6 @@ apply_map_changes(struct _como * x)
      */
     for (j = 0; j <= x->module_last; j++) {
         module_t * mdl;
-	char * pack;
 	int sz; 
 
         if (x->modules[j].status == MDL_UNUSED)
@@ -282,15 +281,16 @@ apply_map_changes(struct _como * x)
 	
 	if (mdl->running != RUNNING_ON_DEMAND) {
 	    /* prepare the module for transmission */
-	    pack = pack_module(mdl, &sz);
+	    char *pack = pack_module(mdl, &sz);
 
 	    /* inform the other processes */
 	    ipc_send(CAPTURE, IPC_MODULE_ADD, pack, sz); 
 	    ipc_send(EXPORT, IPC_MODULE_ADD, pack, sz); 
 	    ipc_send(STORAGE, IPC_MODULE_ADD, pack, sz); 
+	    
+	    free(pack);
 	}
 
-	free(pack);
 	map.stats->modules_active++; 
     }
 }
