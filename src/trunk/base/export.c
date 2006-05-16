@@ -184,7 +184,7 @@ export_record(module_t * mdl, rec_t * rp)
 static int
 call_store(module_t * mdl, rec_t *rp)
 {
-    char *dst;
+    char *dst = NULL;
     int ret, done = 0;
     
     ssize_t bsize = mdl->callbacks.st_recordsize; 

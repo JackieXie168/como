@@ -423,11 +423,9 @@ process_batch(pkt_t * pkts, unsigned count)
 {
     int *which;
     int idx;
-    tailq_t exp_tables;
+    tailq_t exp_tables = {NULL, NULL};
     expiredmap_t *first_exp_table;
     
-    TQ_HEAD(&exp_tables) = NULL;
-
     /*
      * Select which classifiers need to see which packets The filter()
      * function (see comments in file base/template) returns a
@@ -815,7 +813,7 @@ capture_mainloop(int accept_fd, int supervisor_fd)
 {
     pkt_t pkts[PKT_BUFFER];	/* packet buffer */
     int active_sniffers;	/* how many sniffers are left ? */
-    struct timeval tout;
+    struct timeval tout= {0, 0};
     source_t *src;
     fd_set valid_fds, export_fds;
     int i;
@@ -917,9 +915,8 @@ capture_mainloop(int accept_fd, int supervisor_fd)
 	 * no more packets will be received. 
 	 */
 	if (active_sniffers == 0 && wait_for_modules == 0) {
-	    tailq_t exp_tables;
+	    tailq_t exp_tables = {NULL, NULL};
 
-	    TQ_HEAD(&exp_tables) = NULL;
 	    for (idx = 0; idx <= map.module_last; idx++) {
 		module_t *mdl = &map.modules[idx];
 		ctable_t *ct = mdl->ca_hashtable;
