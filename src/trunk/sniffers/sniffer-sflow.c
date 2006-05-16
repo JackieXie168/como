@@ -685,7 +685,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 
     for (t = 0, npkts = 0, pkt = out;
 	 t < dg.hdr.num_records && npkts < max_no; t++) {
-	uint32_t num_elements;
+	uint32_t num_elements = 0;
 
 	if (sflow_datagram_next_tag(&dg, &tag) != SF_OK)
 	    break;
