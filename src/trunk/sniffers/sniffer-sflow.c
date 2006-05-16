@@ -288,7 +288,7 @@ sflow_read_flow_sample_ethernet(SFTag * tag, SFLFlow_sample_element * el)
 
 #ifdef SNIFFER_SFLOW_DEBUG
     {
-	char *p;
+	unsigned char *p;
 
 	p = el->flowType.ethernet.src_mac;
 	sf_log("ethernet_src %02x%02x%02x%02x%02x%02x\n", p[0], p[1],
