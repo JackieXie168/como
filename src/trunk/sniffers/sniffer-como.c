@@ -125,7 +125,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     char * base;                /* current position in input buffer */
     int npkts;                  /* processed pkts */
     int rd;
-    timestamp_t first_seen;
+    timestamp_t first_seen = 0;
 
     assert(src->ptr != NULL); 
 

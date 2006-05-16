@@ -615,7 +615,7 @@ sniffer_start(source_t * src)
     pcap_fileno_fn sp_fileno;
     pcap_noblock_fn sp_noblock;
     pcap_datalink_fn sp_link;
-    pcap_close_fn sp_close;
+    pcap_close_fn sp_close = NULL;
     char *mon_name = MONITOR_NAME_DEFAULT;
     monitor_t *mon;
     metadesc_t *outmd;
