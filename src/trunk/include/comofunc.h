@@ -99,13 +99,23 @@ void supervisor_mainloop();
 /* 
  * logging.c 
  */
-void logmsg(int flags, const char *fmt, ...);
-void rlimit_logmsg(unsigned interval, int flags, const char *fmt, ...);
-char * loglevel_name(int flags); 
-void _epanic(const char * file, const int line, const char *fmt, ...);
-#define panic(...) _epanic(__FILE__, __LINE__, __VA_ARGS__)
-void _epanicx(const char * file, const int line, const char *fmt, ...);
-#define panicx(...) _epanicx(__FILE__, __LINE__, __VA_ARGS__)
+typedef struct logmsg_t {
+    struct timeval tv;
+    int flags;
+    char msg[0];
+} logmsg_t;
+
+char * loglevel_name (int flags); 
+void   displaymsg    (FILE *f, procname_t sender, logmsg_t *lmsg);
+
+/* don't call these directly, use the macros below */
+void _logmsg  (const char * file, int line, int flags, const char *fmt, ...);
+void _epanic  (const char * file, int line, const char *fmt, ...);
+void _epanicx (const char * file, int line, const char *fmt, ...);
+
+#define logmsg(flags,fmt...)	_logmsg(__FILE__, __LINE__, flags, fmt)
+#define panic(fmt...)		_epanic(__FILE__, __LINE__, fmt)
+#define panicx(fmt...)		_epanicx(__FILE__, __LINE__, fmt)
 
 /* 
  * filter-syntax.c

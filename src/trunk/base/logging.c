@@ -74,50 +74,127 @@ loglevel_name(int flags)
 }
 
 
-static void
-_logmsg(int flags, const char *fmt, va_list ap)
+void
+displaymsg(FILE *f, procname_t sender, logmsg_t *lmsg)
 {
-    static int printit;	/* one copy per process */
-    char *buf;
-    struct timeval tv;
-
-    if (flags)
-        printit = (map.logflags & flags);
-    if (!printit)
-        return;
-    gettimeofday(&tv, NULL);
-    if (flags != LOGUI) {
-	char *fmt1;
-	asprintf(&fmt1, "[%5ld.%06ld %2s] %s",
-		 tv.tv_sec %86400, tv.tv_usec, getprocname(map.whoami), fmt);
-	vasprintf(&buf, fmt1, ap);
-	free(fmt1);
-    } else {
-	vasprintf(&buf, fmt, ap);
+    if (lmsg->flags != LOGUI) {
+    	fprintf(f, "[%5ld.%06ld %2s] ",
+		lmsg->tv.tv_sec % 86400, lmsg->tv.tv_usec,
+		getprocname(sender));
     }
-
-    if (map.whoami != SUPERVISOR) 
-        ipc_send(SUPERVISOR, IPC_ECHO, buf, strlen(buf) + 1); 
-    else 
-	fprintf(stdout, "%s", buf);
-    free(buf);
+    fprintf(f, "%s", lmsg->msg);
 }
 
 
 /** 
- * -- logmsg
+ * -- _logmsg
  * 
  * Prints a message to stdout or sends it to the 
  * SUPERVISOR depending on the running loglevel.
  *
  */ 
 void
-logmsg(int flags, const char *fmt, ...)
+_logmsg(const char * file, int line, int flags, const char *fmt, ...)
 {
     va_list ap;
+    static int printit;	/* one copy per process */
+    int len;
+#define STATIC_BUF_LEN 128
+    static char static_buf[STATIC_BUF_LEN];
+    static logmsg_t *lmsg = (logmsg_t *) static_buf;
+    static int buf_len = STATIC_BUF_LEN - sizeof(logmsg_t);
+    
+    /* last msg variables */
+    static char static_last[STATIC_BUF_LEN];
+    static logmsg_t *last_lmsg = (logmsg_t *) static_last;
+    static const char *last_file;
+    static int last_line;
+    static int seen_count;
+
+    if (flags)
+        printit = (map.logflags & flags);
+    if (!printit)
+        return;
+    
+    gettimeofday(&lmsg->tv, NULL);
+    lmsg->flags = flags;
     
     va_start(ap, fmt);
-    _logmsg(flags, fmt, ap);
+    
+    /* format the message */
+    len = 1 + vsnprintf(lmsg->msg, buf_len, fmt, ap);
+    
+    /* manage the message buffer */
+    if (len > buf_len) {
+    	if (buf_len * 2 > len) {
+	    buf_len *= 2;
+    	} else {
+	    buf_len = buf_len + len + (buf_len / 4);
+	    if (buf_len % 4) {
+		buf_len += 4 - buf_len % 4;
+	    }
+    	}
+	if (lmsg != (logmsg_t *) static_buf) {
+	    lmsg = safe_realloc(lmsg, buf_len + sizeof(logmsg_t));
+	    last_lmsg = safe_realloc(last_lmsg, buf_len + sizeof(logmsg_t));
+	} else {
+	    lmsg = safe_malloc(buf_len + sizeof(logmsg_t));
+	    memcpy(lmsg, static_buf, sizeof(logmsg_t));
+	    last_lmsg = safe_malloc(buf_len + sizeof(logmsg_t));
+	    memcpy(last_lmsg, static_last, sizeof(logmsg_t));
+	    strcpy(last_lmsg->msg, ((logmsg_t *) static_last)->msg);
+	}
+	/* CHECKME: need va_end, va_start? */
+	len = 1 + vsnprintf(lmsg->msg, buf_len, fmt, ap);
+    }
+    
+    /* detect already printed messages */
+    if (last_line == line && last_file == file) {
+	if (strcmp(last_lmsg->msg, lmsg->msg) == 0) {
+	    seen_count++;
+	    va_end(ap);
+	    return;
+	}
+    }
+    
+    if (seen_count > 0) {
+	logmsg_t *seen_msg;
+	int seen_len;
+	int last_len;
+	/* notify of previoulsy repeated message */
+	last_len = strlen(last_lmsg->msg);
+	seen_len = sizeof(logmsg_t) + last_len + 64;
+	seen_msg = alloca(seen_len);
+	seen_msg->tv = last_lmsg->tv;
+	seen_msg->flags = last_lmsg->flags;
+	strncpy(seen_msg->msg, last_lmsg->msg, last_len);
+	if (*(seen_msg->msg + last_len - 1) != '\n') {
+	    /* add a trailing \n to last msg if there's none */
+	    *(seen_msg->msg + last_len) = '\n';
+	    last_len++;
+	}
+	last_len += snprintf(seen_msg->msg + last_len, 64,
+			     "    -- Last message repeated %d time%s.\n",
+			     seen_count, (seen_count > 1) ? "s" : "");
+	if (map.whoami != SUPERVISOR) 
+	    ipc_send(SUPERVISOR, IPC_ECHO, seen_msg,
+		     sizeof(logmsg_t) + last_len + 1); 
+	else 
+	    displaymsg(stdout, map.whoami, seen_msg);
+	seen_count = 0;
+    }
+    
+    /* save the message */
+    memcpy(last_lmsg, lmsg, sizeof(logmsg_t));
+    last_line = line;
+    last_file = file;
+    strncpy(last_lmsg->msg, lmsg->msg, len);
+    
+    
+    if (map.whoami != SUPERVISOR) 
+        ipc_send(SUPERVISOR, IPC_ECHO, lmsg, sizeof(logmsg_t) + len);
+    else 
+	displaymsg(stdout, map.whoami, lmsg);
     va_end(ap);
 }
 
@@ -131,7 +208,7 @@ logmsg(int flags, const char *fmt, ...)
  *
  */
 void
-_epanic(const char * file, const int line, const char *fmt, ...)
+_epanic(const char * file, int line, const char *fmt, ...)
 {           
     char *fmt1, *buf;
     va_list ap;
@@ -157,7 +234,7 @@ _epanic(const char * file, const int line, const char *fmt, ...)
  *
  */
 void
-_epanicx(const char * file, const int line, const char *fmt, ...)
+_epanicx(const char * file, int line, const char *fmt, ...)
 {
     char *fmt1, *buf;
     va_list ap;
@@ -171,77 +248,6 @@ _epanicx(const char * file, const int line, const char *fmt, ...)
     free(fmt1);
     free(buf);
     abort();
-}
-
-
-#define RLIMIT_HASH_ENTRIES 16
-
-struct rlimit_hash_entry {
-    struct rlimit_hash_entry *next;
-    const char *fmt;
-    struct timeval last_printed;
-};
-
-static struct rlimit_hash_entry *
-rlimit_hash[RLIMIT_HASH_ENTRIES];
-
-static struct rlimit_hash_entry *
-get_rlimit_hash_entry(const char *fmt)
-{
-    unsigned long x;
-    struct rlimit_hash_entry *e, **pprev;
-
-    x = (unsigned long)fmt;
-    while (x > RLIMIT_HASH_ENTRIES)
-	x = (x / RLIMIT_HASH_ENTRIES) ^ (x % RLIMIT_HASH_ENTRIES);
-    pprev = &rlimit_hash[x];
-    e = *pprev;
-    while (e && e->fmt != fmt) {
-	pprev = &e->next;
-	e = *pprev;
-    }
-    if (e)
-	return e;
-    e = calloc(sizeof(*e), 1);
-    if (e == NULL)
-	return NULL;
-    e->fmt = fmt;
-    *pprev = e;
-    return e;
-}
-
-/* Rate limited log messages.  If this is called more than once every
-   <interval> ms for a given fmt, drop the messages. */
-void
-rlimit_logmsg(unsigned interval, int flags, const char *fmt, ...)
-{
-    struct rlimit_hash_entry *e;
-    static struct rlimit_hash_entry fallback_e = {NULL, NULL, {0,0}};
-    struct timeval now, delta;
-    va_list ap;
-
-    /* Force interval to be less than a day to avoid overflows. */
-    assert(interval < 86400000);
-    e = get_rlimit_hash_entry(fmt);
-    if (e == NULL) {
-	e = &fallback_e;
-	fmt = "DISCARDING MESSAGES DUE TO LACK OF MEMORY\n";
-	flags = LOGWARN;
-	interval = 1000;
-    }
-    gettimeofday(&now, NULL);
-    delta.tv_sec = now.tv_sec - e->last_printed.tv_sec;
-    delta.tv_usec = now.tv_usec - e->last_printed.tv_usec - interval * 1000;
-    while (delta.tv_usec < 0) {
-	delta.tv_usec += 1000000;
-	delta.tv_sec--;
-    }
-    if (delta.tv_sec >= 0) {
-	e->last_printed = now;
-	va_start(ap, fmt);
-	_logmsg(flags, fmt, ap);
-	va_end(ap);
-    }
 }
 
 /* end of file */
