@@ -301,9 +301,11 @@ sniffer_next(source_t * src, pkt_t *out, int max_no,
 	pending += SK98_RING_SIZE;
     if (pending > max_pending)
 	max_pending = pending;
+/*
     rlimit_logmsg(1000, LOGSNIFFER,
 		  "Current ring fullness %d, max %d, drop %d.\n",
 		  pending, max_pending, info->m->drop_counter);
+*/
     for (; npkts < max_no; npkts++, pkt++) { 
 	uint ind;
 	uint token;
