@@ -1331,7 +1331,7 @@ handle_inform(__unused procname_t sender, __unused int fd, csmsg_t * in,
     reg_size = cl->region->reg_size;
 
     /* overwriting and gaps are not allowed */
-    assert(in->ofs >= bs_offset && in->ofs < bs_offset + reg_size); 
+    assert(in->ofs >= bs_offset && in->ofs <= bs_offset + reg_size); 
 
     /*  
      * valid request. commit the writes done so far. this way we 
