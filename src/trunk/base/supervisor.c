@@ -63,12 +63,13 @@ child_info_t su_children[SU_CHILDREN_COUNT];
  * 
  */
 static void 
-su_ipc_echo(__unused procname_t sender, __unused int fd, void * buf, 
+su_ipc_echo(procname_t sender, __unused int fd, void * buf, 
 	    __unused size_t len) 
 {
-    logmsg(LOGUI, "%s", buf); 
+    logmsg_t *lmsg = (logmsg_t *) buf;
+    displaymsg(stdout, sender, lmsg);
     if (map.logfile != NULL) 
-	fprintf(map.logfile, "%s", (char *) buf);
+	displaymsg(map.logfile, sender, lmsg);
 }
 
 
