@@ -66,7 +66,14 @@ INST_MANDIR?=$(DESTDIR)$(PREFIX)/share/man/man1
 DEFAULT_CFGFILE?=$(PREFIX)/etc/como/como.conf
 
 # #define's used to build this version of the code.
+SVNREV := $(shell cd $(BASEDIR) && ./comover-helper.sh)
+
+ifeq ($(strip $(SVNREV)),)
 COMOVER = 1.1-current
+else
+COMOVER = 1.1-current-$(SVNREV)
+endif
+
 DEFS +=	-DCOMO_VERSION=\"$(COMOVER)\" \
 	-DDEFAULT_LIBDIR=\"$(INST_LIBDIR)\" \
 	-DDEFAULT_BASEDIR=\"$(INST_DATADIR)\" \
@@ -126,6 +133,10 @@ modules_so=$(x:.c=.so)
 INSTALLS = $(addprefix install-,$(PROGS)) \
 	   $(addprefix install-,$(MODULES)) \
 	   $(addprefix install-,$(MANS))
+
+svnversion:
+	echo $(BASEDIR)
+	echo $(SVNREV)
 
 all:	$(PROGS) $(MODULES) $(OTHER)
 
