@@ -1006,6 +1006,8 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 	    break;
 
         case 'v':   /* verbose */
+	    if (m->logflags == -1)
+		m->logflags = 0;
             m->logflags = set_flags(m->logflags, optarg);
             break;
 
@@ -1121,6 +1123,8 @@ configure(struct _como * m, int argc, char ** argv)
     }
     
     m->running = cli_args.running;
+    if (cli_args.logflags != -1)
+	m->logflags = cli_args.logflags;
 
     /*
      * build list of config files
@@ -1143,8 +1147,6 @@ configure(struct _como * m, int argc, char ** argv)
 	m->node->query_port = cli_args.query_port;
     if (cli_args.mem_size != 0)
 	m->mem_size = cli_args.mem_size;
-    if (cli_args.logflags != -1)
-	m->logflags = cli_args.logflags;
     m->debug = cli_args.debug;
     
     if (m->running == INLINE) {
