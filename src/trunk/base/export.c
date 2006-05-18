@@ -624,7 +624,7 @@ ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 
 	/* process export table, storing/discarding records */
 	start_tsctimer(map.stats->ex_store_timer);
-	store_records(mdl, exp->ct->ts);
+	store_records(mdl, exp->ct->ivl + mdl->flush_ivl);
 	end_tsctimer(map.stats->ex_store_timer);
     }
 
