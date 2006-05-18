@@ -138,7 +138,8 @@ export(__unused void * self, void *efh, void *fh, int isnew)
 }
 
 static int
-action(void * self, void * fh, timestamp_t t, __unused int count)
+action(void * self, void * fh, __unused timestamp_t ivl,
+       timestamp_t t, __unused int count)
 {
     EFLOWDESC * ex = EF(fh);
     CONFIGDESC * config = CONFIG(self);
@@ -261,9 +262,10 @@ print(void * self, char *buf, size_t *len, char * const args[])
     values.bytes /= granularity; 
     values.hi_watermark *= (config->meas_ivl / config->wmark_ivl); 
 
-    if (fmt == PRETTYFMT) { 
+    if (fmt == PRETTYFMT) {
+	time_t t = (time_t) values.ts;
 	*len = sprintf(s, fmt, 
-                       (char *) asctime(localtime((time_t *) &values.ts)), 
+                       (char *) asctime(localtime(&t)), 
 		       values.bytes, values.hi_watermark); 
     } else if (fmt == GNUPLOTFMT) { 
 	*len = sprintf(s, fmt, values.ts, 

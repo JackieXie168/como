@@ -404,8 +404,9 @@ print(void * self, char *buf, size_t *len, char * const args[])
     } else { 
 	char datestr[30]; 
         struct tm * timeptr; 
+        time_t t = (time_t) start_sec;
 
-	timeptr = gmtime((time_t *) &start_sec); 
+	timeptr = gmtime(&t); 
 	strftime(datestr, sizeof(datestr), "%b %e %Y %T", timeptr);
 
 	*len = sprintf(s, fmt, 

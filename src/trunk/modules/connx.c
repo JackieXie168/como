@@ -242,7 +242,8 @@ compare(const void *efh1, const void *efh2)
 }
 
 static int
-action(void * self, void *efh, timestamp_t current_time, __unused int count)
+action(void * self, void *efh,  __unused timestamp_t ivl,
+       timestamp_t current_time, __unused int count)
 {
     EFLOWDESC *ex = EF(efh);
     CONFIGDESC * config = CONFIG(self);

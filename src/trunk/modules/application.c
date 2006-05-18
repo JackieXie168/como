@@ -470,7 +470,8 @@ print(void * self, char *buf, size_t *len, char * const args[])
     }
 
     if (fmt == PRETTYFMT) { 
-	*len = sprintf(s, fmt, asctime(localtime((time_t *)&values.ts))); 
+	time_t t = (time_t) values.ts;
+	*len = sprintf(s, fmt, asctime(localtime(&t))); 
 	for (i = 0; i < APPLICATIONS; i++) 
 	    *len += sprintf(s + *len, "%8llu %8u ", 
 			    values.bytes[i], values.pkts[i]);

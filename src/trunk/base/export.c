@@ -397,7 +397,7 @@ destroy_record(int i, module_t * mdl)
  *
  */ 
 static void
-store_records(module_t * mdl, timestamp_t ts) 
+store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts) 
 {
     etable_t * et = mdl->ex_hashtable; 
     earray_t * ea = mdl->ex_array;
@@ -410,7 +410,7 @@ store_records(module_t * mdl, timestamp_t ts)
     /* check the global action to be done on the 
      * export records at this time. 
      */
-    what = mdl->callbacks.action(mdl, NULL, ts, 0); 
+    what = mdl->callbacks.action(mdl, NULL, ivl, ts, 0); 
     assert( (what | ACT_MASK) == ACT_MASK );
     if (what & ACT_STOP) 
 	return; 
@@ -428,7 +428,7 @@ store_records(module_t * mdl, timestamp_t ts)
         if (ea->record[i] == NULL) 
             panicx("EXPORT array should be compact!");
 
-	what = mdl->callbacks.action(mdl, ea->record[i], ts, i);
+	what = mdl->callbacks.action(mdl, ea->record[i], ivl, ts, i);
 	/* only bits in the mask are valid */
 	logmsg(V_LOGEXPORT, "action %d returns 0x%x (%s%s%s%s)\n",
 		i, what,
@@ -617,14 +617,18 @@ ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 	if (mdl->status != MDL_ACTIVE)
 	    continue;
 	
-	/* process capture table and update export table */
-	start_tsctimer(map.stats->ex_table_timer);
-	process_table(exp->ct, mdl);
-	end_tsctimer(map.stats->ex_table_timer);
+	if (exp->ct->records) {
+	    /* process capture table and update export table */
+	    start_tsctimer(map.stats->ex_table_timer);
+	    process_table(exp->ct, mdl);
+	    end_tsctimer(map.stats->ex_table_timer);
+	} else {
+	    assert(exp->ct->flexible);
+	}
 
 	/* process export table, storing/discarding records */
 	start_tsctimer(map.stats->ex_store_timer);
-	store_records(mdl, exp->ct->ivl + mdl->flush_ivl);
+	store_records(mdl, exp->ct->ivl, exp->ct->ts);
 	end_tsctimer(map.stats->ex_store_timer);
     }
 
@@ -677,7 +681,7 @@ ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
      * try to store all records we have before reporting to be 
      * done. 
      */
-    store_records(map.inline_mdl, ~0);
+    store_records(map.inline_mdl, ~0, ~0);
 
     /* print the footer since running inline (asserted before) */
     printrecord(map.inline_mdl, NULL, NULL, -1);
@@ -753,8 +757,8 @@ export_mainloop(__unused int in_fd, int parent_fd)
      */
     if (map.debug) {
         if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-            logmsg(V_LOGWARN, "waiting 30s for the debugger to attach\n");
-            sleep(30);
+            logmsg(V_LOGWARN, "waiting 20s for the debugger to attach\n");
+            sleep(20);
             logmsg(V_LOGWARN, "wakeup, ready to work\n");
         }
     }

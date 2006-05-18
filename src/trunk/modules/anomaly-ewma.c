@@ -184,8 +184,8 @@ export(void * self, void *erp, void *rp, int isnew)
 }
     
 static int
-action(__unused void * self, void * rp, __unused timestamp_t t, 
-       __unused int count)
+action(__unused void * self, void * rp,  __unused timestamp_t ivl,
+       __unused timestamp_t t, __unused int count)
 {
     EFLOWDESC *ex = EF(rp);
 

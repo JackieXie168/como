@@ -67,12 +67,12 @@ typedef struct _como_allocator  allocator_t;
 
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
-typedef enum { 
+typedef enum runmodes_t { 
     NORMAL = 0, 
     INLINE = 1
 } runmodes_t;
 
-typedef enum {
+typedef enum status_t {
     MDL_UNUSED,				/* module unused, free entry */
     MDL_LOADING,            		/* module is being loaded */
     MDL_INCOMPATIBLE,			/* not compatible with sniffer */
@@ -80,10 +80,11 @@ typedef enum {
     MDL_DISABLED            		/* disabled or turned off */
 } status_t;
 
-typedef enum {
+typedef enum running_t {
     RUNNING_NORMAL,			/* running normally in CAPTURE */
     RUNNING_ON_DEMAND			/* running in query on demand */
-} running_t;				
+} running_t;
+
 
 typedef void * (*alc_malloc_fn) (size_t size,
 				 const char * file, int line,
@@ -201,8 +202,8 @@ typedef int (compare_fn)(const void *, const void *);
 
 /**
  * action_fn() called by export to determine if a record can be discarded.
- * Returns a bitmap on what to do with the record given the current time t
- * and the number, count, of calls on this table.
+ * Returns a bitmap on what to do with the record given the beginning of the
+ * interval i, the current time t and the number, count of calls on this table.
  *	ACT_DISCARD	discard the record after this step;
  *	ACT_STORE	store the record;
  *	ACT_STOP	stop the scanning after this record
@@ -215,7 +216,8 @@ typedef int (compare_fn)(const void *, const void *);
  * Not mandatory; if defined, an export_fn() should be defined too.
  * 
  */
-typedef int (action_fn)(void * self, void * fh, timestamp_t t, int count);
+typedef int (action_fn)(void * self, void * fh, timestamp_t i,
+			timestamp_t t, int count);
 #define	ACT_DISCARD	0x0400
 #define	ACT_STORE	0x4000
 #define	ACT_STORE_BATCH	0x8000
@@ -275,6 +277,11 @@ typedef char * (print_fn)(void * self, char * buf, size_t * len,
 typedef int (replay_fn)(void * self, char *ptr, char *out, 
 			size_t * out_len, int left);
 
+typedef struct capabilities_t {
+    uint32_t has_flexible_flush:1;
+    uint32_t _res:31;
+} capabilities_t;
+
 /*
  * This structure contains the callbacks for a classifier.
  * Each classifier which is implemented as a shared
@@ -285,6 +292,8 @@ struct _callbacks {
     size_t ca_recordsize; 
     size_t ex_recordsize; 
     size_t st_recordsize;
+    
+    capabilities_t capabilities;
     
     /* callbacks called by the supervisor process */
     init_fn     * init;
@@ -330,6 +339,7 @@ struct _callbacks {
 typedef int *(filter_fn)(void *pkt_buf, int n_packets, int n_outputs,
         module_t *modules);
 
+
 /*
  * "Module" data structure. It needs a set of configuration parameters
  * (e.g., weigth, base output directory, etc.), some runtime information
@@ -371,7 +381,6 @@ struct _module {
     ctable_t *ca_hashtable;  	/* capture hash table */
     uint ca_hashsize;    	/* capture hash table size (by config) */
     timestamp_t flush_ivl;	/* capture flush interval */
-    int ca_pkts_count;		/* capture processed pkts count */
 
     etable_t *ex_hashtable;  	/* export hash table */
     uint ex_hashsize; 	   	/* export hash table size (by config) */
@@ -430,6 +439,9 @@ struct _expiredmap {
  * new ones in the chain.
  */
 struct _capture_table {
+    timestamp_t ts;             /* end of the flush interval or
+				   time of last seen packet in the interval if
+				   the table is flushed before */
     timestamp_t ivl;            /* first insertion (flush_ivl aligned) */
     uint32_t size;		/* size of hash table */
     uint32_t records;		/* no. active records */
@@ -437,6 +449,8 @@ struct _capture_table {
     uint32_t live_buckets;	/* no. active buckets */
     uint32_t filled_records;    /* no. records filled */
     uint32_t bytes;             /* size of table and contents in memory */
+    int flexible;		/* set to one if the table is created after a
+				   flexible flush occurred in the interal */
     rec_t *bucket[0];           /* pointers to records -- actual hash table */
 };
 
@@ -513,7 +527,7 @@ struct _statistics {
     tsc_t * ex_mapping_timer;	/* export export()/store() callbacks */
 };
 
-typedef enum {
+typedef enum meta_flags_t {
     META_PKT_LENS_ARE_AVERAGED = 0x1,
     META_HAS_FULL_PKTS = 0x2,
     META_PKTS_ARE_FLOWS = 0x4
@@ -538,7 +552,7 @@ struct _como_metadesc {
     pktmeta_type_t *pktmeta_types;
 };
 
-typedef enum {
+typedef enum layer_t {
     LCOMO = 1,
     L2 = 2,
     L3 = 3,
@@ -558,7 +572,7 @@ struct _como_headerinfo {
  * Support for tailq handling.
  * Used for the expired tables.
  */
-typedef struct {
+typedef struct tailq_t {
     void * __head;
     void * __tail;
 } tailq_t;
