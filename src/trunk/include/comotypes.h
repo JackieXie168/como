@@ -430,7 +430,6 @@ struct _expiredmap {
  * new ones in the chain.
  */
 struct _capture_table {
-    timestamp_t ts;             /* last observed packet */ 
     timestamp_t ivl;            /* first insertion (flush_ivl aligned) */
     uint32_t size;		/* size of hash table */
     uint32_t records;		/* no. active records */
