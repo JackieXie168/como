@@ -193,7 +193,8 @@ export(__unused void * self, void *efh, void *fh, int isnew)
 
 
 static int
-action(void * self, void *efh, timestamp_t current_time, __unused int count)
+action(void * self, void *efh,  __unused timestamp_t ivl,
+       timestamp_t current_time, __unused int count)
 {
     CONFIGDESC * config = CONFIG(self);
 
@@ -203,12 +204,17 @@ action(void * self, void *efh, timestamp_t current_time, __unused int count)
          * check if it is time to export the table.
          * if not stop.
          */
-        uint32_t now = TS2SEC(current_time) - config->align;
-        if (now - config->last_export < config->meas_ivl)
-            return ACT_STOP;            /* too early */
+        uint32_t now;
+        
+        if (config->last_export == 0)
+	    config->last_export = TS2SEC(ivl);
+        
+        now = TS2SEC(current_time) - config->align;
+	if (now - config->last_export < config->meas_ivl) 
+	    return ACT_STOP;		/* too early */
 
-        config->last_export = now;
-        return ACT_GO;          /* dump the records */
+	config->last_export = now; 
+	return ACT_GO; 		/* dump the records */
     }
 
     return ACT_STORE|ACT_DISCARD; 

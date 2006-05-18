@@ -153,8 +153,11 @@ ematch(__unused void * self, void *efh, void *fh)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
+//    CONFIGDESC * config = CONFIG(self);
 
     return (x->dst_ip == ex->dst_ip);
+/*    return (x->dst_ip == ex->dst_ip &&
+	    x->ts < ex->ts + config->meas_ivl);*/
 }
 
 static int
@@ -182,13 +185,18 @@ compare(const void *efh1, const void *efh2)
     EFLOWDESC *ex1 = CMPEF(efh1);
     EFLOWDESC *ex2 = CMPEF(efh2);
 
-    return ((ex1->bytes > ex2->bytes)? -1 : 1);
+//    if (ex1->ts == ex2->ts)
+	return ((ex1->bytes > ex2->bytes)? -1 : 1);
+
+//    return ((ex1->ts < ex2->ts)? -1 : 1);
 }
 
 static int
-action(void * self, void *efh, timestamp_t current_time, int count)
+action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
+       int count)
 {
     CONFIGDESC * config = CONFIG(self);
+    EFLOWDESC *ex = EF(efh);
 
     if (efh == NULL) { 
 	/* 
@@ -196,13 +204,21 @@ action(void * self, void *efh, timestamp_t current_time, int count)
 	 * check if it is time to export the table. 
 	 * if not stop. 
 	 */
-        uint32_t now = TS2SEC(current_time) - config->align;
+        uint32_t now;
+        
+        if (config->last_export == 0)
+	    config->last_export = TS2SEC(ivl);
+        
+        now = TS2SEC(current_time) - config->align;
 	if (now - config->last_export < config->meas_ivl) 
 	    return ACT_STOP;		/* too early */
 
 	config->last_export = now; 
 	return ACT_GO; 		/* dump the records */
     }
+    
+    if (TS2SEC(current_time) < ex->ts + config->meas_ivl)
+	return ACT_GO; /* skip this record */
 
     return (count < config->topn)? ACT_STORE|ACT_DISCARD : ACT_DISCARD; 
 }
@@ -360,6 +376,7 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
+    capabilities: {has_flexible_flush: 1},
     init: init,
     check: NULL,
     hash: hash,

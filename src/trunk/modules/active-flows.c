@@ -201,7 +201,7 @@ export(void * self, __unused void *efh, __unused void *fh, int isnew)
 }
 
 static int
-action(__unused void * self, void *efh, 
+action(__unused void * self, void *efh, __unused timestamp_t ivl,
        __unused timestamp_t current_time, int count)
 {
     if (efh == NULL) 

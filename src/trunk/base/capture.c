@@ -91,7 +91,7 @@ cleanup()
  * allocates and initializes a hash table
  */
 static ctable_t *
-create_table(module_t * mdl, timestamp_t ts)
+create_table(module_t * mdl, timestamp_t ivl)
 {
     ctable_t *ct;
     size_t len;
@@ -107,13 +107,14 @@ create_table(module_t * mdl, timestamp_t ts)
     ct->first_full = ct->size;	/* all records are empty */
     ct->records = 0;
     ct->live_buckets = 0;
+    ct->flexible = 0;
 
     /*
      * save the timestamp indicating with flush interval this 
      * table belongs to. this information will be useful for 
      * EXPORT when it processes the flushed tables. 
      */
-    ct->ivl = ts - (ts % mdl->flush_ivl);
+    ct->ivl = ivl;
     return ct;
 }
 
@@ -140,11 +141,13 @@ flush_state(module_t * mdl, tailq_t *exp_tables)
     /* check if the table is there and if it is non-empty */
     ct = mdl->ca_hashtable;
     assert(ct != NULL);
-    assert(ct->records > 0);
+    assert(ct->records > 0 || ct->flexible == 1);
 
     logmsg(V_LOGCAPTURE,
-	   "flush_tables %p(%s) buckets %d records %d live %d\n", ct,
-	   mdl->name, ct->size, ct->records, ct->live_buckets);
+	   "flush_tables %p(%s) buckets %d records %d live %d\n"
+	   "ivl %llu ts %llu\n",
+	   ct, mdl->name, ct->size, ct->records, ct->live_buckets,
+	   ct->ivl, ct->ts);
 
     /* update the hash table size for next time if it is underutilized 
      * or overfull. 
@@ -214,13 +217,32 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	if (mdl->ca_hashtable) {
 	    ctable_t *ct = mdl->ca_hashtable;
 
-	    if (pkt->ts >= ct->ivl + mdl->flush_ivl && ct->records)
-		flush_state(mdl, exp_tables);
+	    if (pkt->ts >= ct->ivl + mdl->flush_ivl) {
+		if (ct->records || ct->flexible) {
+		    /*
+		     * even if the table doesn't contain any record, if
+		     * the flexible flag is set it will be flushed to guarantee
+		     * that export can call store_records for the previously
+		     * seen tables belonging to the same interval.
+		     */
+		    ct->ts = ct->ivl + mdl->flush_ivl;
+		    flush_state(mdl, exp_tables);
+		} else {
+		    /* 
+		     * the table that would have been flushed if it contained
+		     * some record must be updated to refer to the right
+		     * ivl value.
+		     */
+		    ct->ivl = pkt->ts - (pkt->ts % mdl->flush_ivl);
+		}
+	    }
 	}
 	if (!mdl->ca_hashtable) {
+	    timestamp_t ivl;
+	    ivl = pkt->ts - (pkt->ts % mdl->flush_ivl);
 	    mdl->shared_map = memmap_new(allocator_shared(), 64,
 					 POLICY_HOLD_IN_USE_BLOCKS);
-	    mdl->ca_hashtable = create_table(mdl, pkt->ts);
+	    mdl->ca_hashtable = create_table(mdl, ivl);
 	    if (!mdl->ca_hashtable) {
 		/* XXX no memory, we keep going. 
 		 *     need better solution! */
@@ -232,6 +254,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 		mdl->fstate = mdl->callbacks.flush(mdl);
 	    }
 	}
+	mdl->ca_hashtable->ts = pkt->ts;
 
 	if (which[i] == 0)
 	    continue;		/* no interest in this packet */
@@ -468,6 +491,37 @@ process_batch(pkt_t * pkts, unsigned count)
 	capture_pkt(mdl, pkts, count, which, &exp_tables);
 	end_tsctimer(map.stats->ca_module_timer);
 	which += count;		/* next module, new list of packets */
+    }
+    
+    if (memory_usage() >= FREEZE_THRESHOLD(map.mem_size)) {
+	for (idx = 0; idx <= map.module_last; idx++) {
+	    module_t *mdl = &map.modules[idx];
+	    timestamp_t ivl;
+
+	    if (mdl->status != MDL_ACTIVE) {
+		continue;
+	    }
+
+	    if (mdl->callbacks.capabilities.has_flexible_flush == 0 ||
+		mdl->ca_hashtable == NULL ||
+		mdl->ca_hashtable->records == 0) {
+		continue;
+	    }
+	    
+	    ivl = mdl->ca_hashtable->ivl;
+	    flush_state(mdl, &exp_tables);
+	    logmsg(LOGCAPTURE, "flexible flush occurred.\n");
+	    /* reset capture table */
+	    mdl->shared_map = memmap_new(allocator_shared(), 64,
+					 POLICY_HOLD_IN_USE_BLOCKS);
+	    mdl->ca_hashtable = create_table(mdl, ivl);
+	    if (mdl->ca_hashtable == NULL)
+		continue;
+	    mdl->ca_hashtable->flexible = 1;
+	    if (mdl->callbacks.flush != NULL) {
+		mdl->fstate = mdl->callbacks.flush(mdl);
+	    }
+	}
     }
 
     /*
