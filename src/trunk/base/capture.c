@@ -107,7 +107,6 @@ create_table(module_t * mdl, timestamp_t ts)
     ct->first_full = ct->size;	/* all records are empty */
     ct->records = 0;
     ct->live_buckets = 0;
-    ct->ts = ts;
 
     /*
      * save the timestamp indicating with flush interval this 
@@ -215,8 +214,7 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	if (mdl->ca_hashtable) {
 	    ctable_t *ct = mdl->ca_hashtable;
 
-	    ct->ts = pkt->ts;
-	    if (ct->ts >= ct->ivl + mdl->flush_ivl && ct->records)
+	    if (pkt->ts >= ct->ivl + mdl->flush_ivl && ct->records)
 		flush_state(mdl, exp_tables);
 	}
 	if (!mdl->ca_hashtable) {
