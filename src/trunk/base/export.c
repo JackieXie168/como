@@ -249,7 +249,7 @@ call_store(module_t * mdl, rec_t *rp)
 		sz = mdl->callbacks.load(mdl, p, ret, &ts);
 		
 		/* print this record */
-		printrecord(mdl, p, NULL, -1);
+		module_db_record_print(mdl, p, NULL, -1);
 		
 		/* move to next */
 		p += sz;
@@ -527,7 +527,7 @@ ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
 	/* setup the print format (make sure we 
 	 * don't send a NULL args pointer down)
 	 */
-	printrecord(mdl, NULL, p, -1);
+	module_db_record_print(mdl, NULL, p, -1);
     } 
 }
  
@@ -684,7 +684,7 @@ ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
     store_records(map.inline_mdl, ~0, ~0);
 
     /* print the footer since running inline (asserted before) */
-    printrecord(map.inline_mdl, NULL, NULL, -1);
+    module_db_record_print(map.inline_mdl, NULL, NULL, -1);
     
     ipc_send(map.parent, IPC_DONE, NULL, 0); 
 }

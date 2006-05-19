@@ -104,5 +104,14 @@ void       _mem_free(void * p, const char * file, int line);
  * modules.c
  */
 module_t * module_lookup_with_name_and_node(const char *name, int node);
+off_t      module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start);
+void *     module_db_record_get(int fd, off_t * ofs, module_t * mdl,
+				ssize_t *len, timestamp_t *ts);
+int        module_db_record_print(module_t * mdl, char * ptr, char **args,
+				  int client_fd);
+int        module_db_record_replay(module_t * mdl, char * ptr, int client_fd);
+
+#define	GR_LOSTSYNC	((void *) module_db_record_get)
+
 
 #endif /*COMOPRIV_H_*/

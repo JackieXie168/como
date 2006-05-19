@@ -39,6 +39,8 @@
 
 #include "como.h"
 #include "comopriv.h"
+#include "storage.h"
+#include "ipc.h"
 
 /* global state */
 extern struct _como map;
@@ -648,5 +650,220 @@ module_lookup_with_name_and_node(const char *name, int node)
 	    return mdl;
     }
     return NULL;
+}
+
+
+/* 
+ * -- module_db_seek_by_ts
+ * 
+ * This function looks into the first record of each file until it 
+ * find the one with the closest start time to the requested one. 
+ * We do a linear search (instead of a faster binary search) because
+ * right now csseek only supports CS_SEEK_FILE_PREV and CS_SEEK_FILE_NEXT. 
+ * The function returns the offset of the file to be read or -1 in case
+ * of error.
+ */
+off_t
+module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
+{
+    ssize_t len; 
+    load_fn * ld; 
+    off_t ofs; 
+    int found;
+
+    ld = mdl->callbacks.load; 
+    len = mdl->callbacks.st_recordsize; 
+    ofs = csgetofs(fd);
+    found = 0;
+    while (!found) { 
+	timestamp_t ts;
+	char * ptr; 
+
+	/* read the first record */
+	ptr = csmap(fd, ofs, &len); 
+	if (ptr == NULL) 
+	    return -1;
+
+	/* give the record to load() */
+	ld(mdl, ptr, len, &ts); 
+
+	if (ts < start) {
+	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
+	} else {
+	    /* found. go one file back; */
+	    ofs = csseek(fd, CS_SEEK_FILE_PREV);
+	    found = 1;
+	} 
+
+	/* 
+	 * if the seek failed it means we are
+	 * at the first or last file. return the 
+	 * offset of this file and be done. 
+	 */
+	if (ofs == -1) {
+	    ofs = csgetofs(fd);
+	    found = 1;
+	}
+    }
+
+    return ofs;
+}
+
+
+/**
+ * -- module_db_record_get
+ *
+ * This function reads a chunk from the file (as defined in the config file 
+ * with the blocksize keyword). It then passes it to the load() callback to 
+ * get the timestamp and the actual record length. 
+ * 
+ * Return values:
+ *  - on success, returns a pointer to the record, its length and timestamp. 
+ *   (with length > 0)
+ *  - on 'end of bytestream', returns NULL and errno is set to ENODATA
+ *  - on 'error' (e.g. csmap failure), returns NULL and errno is set
+ *    accordingly
+ *  - on 'lost sync' (bogus data at the end of a file), returns
+ *    a non-null (but invalid!) pointer GR_LOSTSYNC and ts = 0
+ *
+ */
+void *
+module_db_record_get(int fd, off_t * ofs, module_t * mdl, ssize_t *len,
+		     timestamp_t *ts)
+{
+    ssize_t sz; 
+    char * ptr; 
+
+    /* 
+     * mmap len bytes starting from last ofs. 
+     * 
+     * len bytes are supposed to guarantee to contain
+     * at least one record to make sure the load() doesn't
+     * fail (note that only load knows the record length). 
+     * 
+     */ 
+    ptr = csmap(fd, *ofs, len); 
+    if (ptr == NULL) 
+	return NULL;
+
+    /* give the record to load() */
+    sz = mdl->callbacks.load(mdl, ptr, *len, ts); 
+    *ofs += sz; 
+
+    /*
+     * check if we have lost sync (indicated by a zero timestamp, i.e. 
+     * the load() callback couldn't read the record, or by a load() callback
+     * that asks for more bytes -- shouldn't be doing this given the 
+     * assumption that we always read one full record. 
+     * 
+     * The only escape seems to be to seek to the beginning of the next 
+     * file in the bytestream. 
+     */
+    if (*ts == 0 || sz > *len)
+	ptr = GR_LOSTSYNC;
+
+    *len = sz; 
+    return ptr;
+}
+
+/**
+ * -- module_db_record_print
+ * 
+ * Calls the print() callback and sends all data to the client.
+ * Returns 0 on success and -1 on failure. After failure errno is set to
+ * ENODATA if the print() callback failed or to other values if the failure
+ * happens while sending the data to the client.
+ */
+int
+module_db_record_print(module_t * mdl, char * ptr, char **args, int client_fd)
+{
+    char * out; 
+    size_t len; 
+    int ret; 
+#if 0
+    FIXME: DEBUG only
+    {
+	int i;
+	for (i = 0; args != NULL && args[i] != NULL; i++)
+	    logmsg(V_LOGQUERY, "print arg #%d: %s\n", i, args[i]);
+    }
+#endif
+    out = mdl->callbacks.print(mdl, ptr, &len, args);
+    if (out == NULL) {
+	errno = ENODATA;
+    	return -1;
+    }
+    
+    if (len > 0) {
+	switch (client_fd) {
+	case -1:
+	    ipc_send(map.parent, IPC_RECORD, out, strlen(out) + 1);
+	    break;
+	default:
+	    ret = como_writen(client_fd, out, len);
+	    if (ret < 0)
+		return -1;
+	}
+    }
+    return 0;
+}
+
+
+/**
+ * -- module_db_record_replay
+ * 
+ * Replays a record generating a sequence of packets that are 
+ * sent to the client.
+ * Returns 0 on success and -1 on failure. After failure errno is set to
+ * ENODATA if the replay() callback failed or to other values if the failure
+ * happens while sending the data to the client.
+ * 
+ */
+int
+module_db_record_replay(module_t * mdl, char * ptr, int client_fd)
+{
+    char out[DEFAULT_REPLAY_BUFSIZE]; 
+    size_t len; 
+    int left; 
+    int ret; 
+
+    /*
+     * one record may generate a large sequence of packets.
+     * the replay() callback tells us how many packets are
+     * left. we don't move to the next record until we are
+     * done with this one.
+     *
+     * XXX there is no solution to this but the burden could
+     *     stay with the module (in a similar way to
+     *     sniffer-flowtools that has the same problem). this
+     *     would require a method to allow modules to allocate
+     *     memory. we need that for many other reasons too.
+     *
+     *     another approach that would solve the problem in
+     *     certain cases is to add a metapacket field that
+     *     indicates that a packet is a collection of packets.
+     *
+     *     in any case there is no definitive solution so we
+     *     will have always to deal with this loop here.
+     */
+    left = 0;
+    do {
+	len = DEFAULT_REPLAY_BUFSIZE;
+	left = mdl->callbacks.replay(mdl, ptr, out, &len, left);
+	if (left < 0) {
+	    errno = ENODATA;
+	    return -1;
+	}
+	if (len == 0) 
+	    return 0;
+	if (len == DEFAULT_REPLAY_BUFSIZE) {
+	    logmsg(LOGWARN, "module \"%s\" has filled the replay buffer",
+		   mdl->name);
+	}
+	ret = como_writen(client_fd, out, len);
+	if (ret < 0)
+	    return -1;
+    } while (left > 0);
+    return 0;
 }
 
