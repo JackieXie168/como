@@ -75,11 +75,8 @@ typedef struct _query_req qreq_t;
 /* 
  * prototypes 
  */
-void query(int, int);
+void query(int client_fd, int node_id);
 qreq_t * qryrecv(int, timestamp_t); 
-void replay_source(module_t * mdl, module_t * src, char * ptr, int client_fd); 
-void init_ondemand_module(qreq_t * req); 
-void printrecord(module_t * mdl, char * ptr, char * args[], int client);
 void query_ondemand(int client, qreq_t * req, int node_id); 
 void send_status(int client_fd, int node_id); 
 

@@ -67,203 +67,6 @@ extern struct _como map;
 "HTTP/1.0 405 Method Not Allowed\r\n" \
 "Content-Type: text/plain\r\n\r\n"
 
-/* 
- * -- findfile
- * 
- * This function looks into the first record of each file until it 
- * find the one with the closest start time to the requested one. 
- * We do a linear search (instead of a faster binary search) because
- * right now csseek only supports CS_SEEK_FILE_PREV and CS_SEEK_FILE_NEXT. 
- * The function returns the offset of the file to be read or -1 in case
- * of error.
- */
-static off_t 
-findfile(int fd, qreq_t * req)
-{
-    ssize_t len; 
-    load_fn * ld; 
-    off_t ofs; 
-    int found;
-
-    ld = req->src->callbacks.load; 
-    len = req->src->callbacks.st_recordsize; 
-    ofs = csgetofs(fd);
-    found = 0;
-    while (!found) { 
-	timestamp_t ts;
-	char * ptr; 
-
-	/* read the first record */
-	ptr = csmap(fd, ofs, &len); 
-	if (ptr == NULL) 
-	    return -1;
-
-	/* give the record to load() */
-	ld(req->src, ptr, len, &ts); 
-
-	if (TS2SEC(ts) < req->start) {
-	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
-	} else {
-	    /* found. go one file back; */
-	    ofs = csseek(fd, CS_SEEK_FILE_PREV);
-	    found = 1;
-	} 
-
-	/* 
-	 * if the seek failed it means we are
-	 * at the first or last file. return the 
-	 * offset of this file and be done. 
-	 */
-	if (ofs == -1) {
-	    ofs = csgetofs(fd);
-	    found = 1;
-	}
-    }
-
-    return ofs;
-}
-
-
-/*
- * -- getrecord
- *
- * This function reads a chunk from the file (as defined in the config file 
- * with the blocksize keyword). It then passes it to the load() callback to 
- * get the timestamp and the actual record length. 
- * 
- * Return values:
- *  - on success, returns a pointer to the record, its length and timestamp. 
- *   (with length > 0)
- *  - on 'end of bytestream', returns NULL and len=0
- *  - on 'error' (e.g. csmap failure), returns NULL and len != 0
- *  - on 'lost sync' (bogus data at the end of a file), returns
- *    a non-null (but invalid!) pointer GR_LOSTSYNC and ts = 0
- *
- */
-#define	GR_LOSTSYNC	((void *)getrecord)
-static void *
-getrecord(int fd, off_t * ofs, module_t * mdl, ssize_t *len, timestamp_t *ts)
-{
-    ssize_t sz; 
-    char * ptr; 
-
-    /* 
-     * mmap len bytes starting from last ofs. 
-     * 
-     * len bytes are supposed to guarantee to contain
-     * at least one record to make sure the load() doesn't
-     * fail (note that only load knows the record length). 
-     * 
-     */ 
-    ptr = csmap(fd, *ofs, len); 
-    if (ptr == NULL) 
-	return NULL;
-
-    /* give the record to load() */
-    sz = mdl->callbacks.load(mdl, ptr, *len, ts); 
-    *ofs += sz; 
-
-    /*
-     * check if we have lost sync (indicated by a zero timestamp, i.e. 
-     * the load() callback couldn't read the record, or by a load() callback
-     * that asks for more bytes -- shouldn't be doing this given the 
-     * assumption that we always read one full record. 
-     * 
-     * The only escape seems to be to seek to the beginning of the next 
-     * file in the bytestream. 
-     */
-    if (*ts == 0 || sz > *len)
-	ptr = GR_LOSTSYNC;
-
-    *len = sz; 
-    return ptr;
-}
-
-
-
-/* 
- * -- printrecord
- * 
- * calls the print() callback and sends all data to the client_fd
- *
- */
-void 
-printrecord(module_t * mdl, char * ptr, char * args[], int client)  
-{
-    char * out; 
-    size_t len; 
-    int i, ret; 
-
-    for (i = 0; args != NULL && args[i] != NULL; i++) 
-	logmsg(V_LOGQUERY, "print arg #%d: %s\n", i, args[i]); 
-
-    out = mdl->callbacks.print(mdl, ptr, &len, args);
-    if (out == NULL) 
-        panicx("module %s failed to print\n", mdl->name); 
-
-    if (len > 0) {
-	switch (client) {
-	case -1:
-	    ipc_send(map.parent, IPC_RECORD, out, strlen(out) + 1);
-	    break;
-	default:
-	    ret = como_writen(client, out, len);
-	    if (ret < 0)
-		err(EXIT_FAILURE, "sending data to the client");
-	}
-    }
-}
-
-
-/* 
- * -- replayrecord
- * 
- * replays a record generating a sequence of packets that are 
- * sent to the client. 
- * 
- */
-static void 
-replayrecord(module_t * mdl, char * ptr, int client) 
-{
-    char out[DEFAULT_REPLAY_BUFSIZE]; 
-    size_t len; 
-    int left; 
-    int ret; 
-
-    /*
-     * one record may generate a large sequence of packets.
-     * the replay() callback tells us how many packets are
-     * left. we don't move to the next record until we are
-     * done with this one.
-     *
-     * XXX there is no solution to this but the burden could
-     *     stay with the module (in a similar way to
-     *     sniffer-flowtools that has the same problem). this
-     *     would require a method to allow modules to allocate
-     *     memory. we need that for many other reasons too.
-     *
-     *     another approach that would solve the problem in
-     *     certain cases is to add a metapacket field that
-     *     indicates that a packet is a collection of packets.
-     *
-     *     in any case there is no definitive solution so we
-     *     will have always to deal with this loop here.
-     */
-    left = 0;
-    do {
-	len = DEFAULT_REPLAY_BUFSIZE;
-	left = mdl->callbacks.replay(mdl, ptr, out, &len, left);
-	if (left < 0)
-	    panicx("%s.replay returns error", mdl->name);
-	if (len == 0) 
-	    return;
-
-	ret = como_writen(client, out, len);
-	if (ret < 0)
-	    err(EXIT_FAILURE, "sending data to the client");
-    } while (left > 0);
-}
-
 
 /* 
  * -- validate_query
@@ -431,6 +234,27 @@ validate_query(qreq_t * req, int node_id)
 }
 
 
+inline static void
+handle_print_fail(module_t *mdl)
+{
+    if (errno == ENODATA) {
+	panicx("module \"%s\" failed to print\n", mdl->name);
+    } else {
+	err(EXIT_FAILURE, "sending data to the client");
+    }
+}
+
+
+inline static void
+handle_replay_fail(module_t *mdl)
+{
+    if (errno == ENODATA) {
+	panicx("module \"%s\" failed to print\n", mdl->name);
+    } else {
+	err(EXIT_FAILURE, "sending data to the client");
+    }
+}
+
 
 /*
  * -- query
@@ -592,7 +416,8 @@ query(int client_fd, int node_id)
 	if (req->args == NULL) {
 	    req->args = null_args;
 	}
-	printrecord(req->mdl, NULL, req->args, client_fd);
+	if (module_db_record_print(req->mdl, NULL, req->args, client_fd) < 0)
+	    handle_print_fail(req->mdl);
 	break;
     case Q_COMO:
 #if 0
@@ -626,27 +451,32 @@ FIXME
 
 
     /* quickly seek the file from which to start the search */
-    ofs = findfile(file_fd, req); 
+    ofs = module_db_seek_by_ts(req->src, file_fd, TIME2TS(req->start, 0));
 
     for (;;) { 
 	timestamp_t ts;
 	char * ptr; 
 
         len = req->src->callbacks.st_recordsize; 
-        ptr = getrecord(file_fd, &ofs, req->src, &len, &ts);
+        ptr = module_db_record_get(file_fd, &ofs, req->src, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
 	    if (errno == ENODATA) {
 		/* notify the end of stream to the module */
-		if (req->format == Q_OTHER || req->format == Q_HTML) 
-		    printrecord(req->mdl, NULL, NULL, client_fd); 
-		logmsg(V_LOGQUERY, "reached end of file %s\n",req->src->output);
+		if (req->format == Q_OTHER || req->format == Q_HTML) {
+		    if (module_db_record_print(req->mdl, NULL, NULL,
+					       client_fd)) {
+			handle_print_fail(req->mdl);
+		    }
+		}
+		logmsg(V_LOGQUERY, "reached end of file %s\n",
+		       req->src->output);
 		break;
 	    }
 	    panic("reading from file %s ofs %lld", req->src->output, ofs); 
 	}
 
 	/*
-	 * Now we have either good data or or GR_LOSTSYNC.
+	 * Now we have either good data or GR_LOSTSYNC.
 	 * If lost sync, move to the next file and try again. 
 	 */
 	if (ptr == GR_LOSTSYNC) {
@@ -666,13 +496,13 @@ FIXME
 	    switch (req->format) { 
 	    case Q_OTHER:
 	    case Q_HTML:
-		printrecord(req->mdl, NULL, NULL, client_fd); 
+		if (module_db_record_print(req->mdl, NULL, NULL, client_fd))
+		    handle_print_fail(req->mdl);
 		break;
-
 	    case Q_COMO: 
-		replayrecord(req->src, NULL, client_fd);
+		if (module_db_record_replay(req->src, NULL, client_fd))
+		    handle_replay_fail(req->src);
 		break;
-	
 	    default:
 		break;
 	    } 
@@ -684,7 +514,8 @@ FIXME
 
 	switch (req->format) { 
 	case Q_COMO: 	
-	    replayrecord(req->src, ptr, client_fd);
+	    if (module_db_record_replay(req->src, ptr, client_fd))
+		handle_replay_fail(req->src);
 	    break; 
 
 	case Q_RAW: 
@@ -696,7 +527,8 @@ FIXME
 		
 	case Q_OTHER: 
 	case Q_HTML:
-	    printrecord(req->mdl, ptr, NULL, client_fd); 
+	    if (module_db_record_print(req->mdl, ptr, NULL, client_fd))
+		handle_print_fail(req->mdl);
 	    break;
 	}
     }
