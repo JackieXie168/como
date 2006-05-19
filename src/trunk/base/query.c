@@ -285,7 +285,6 @@ query(int client_fd, int node_id)
     qreq_t *req;
     int supervisor_fd, storage_fd, file_fd;
     off_t ofs; 
-    char * output; 
     ssize_t len;
     int mode, ret;
     char * httpstr;
@@ -430,8 +429,6 @@ FIXME
         if (ret < 0)
             panic("could not send pktdesc");
 #endif
-        /* allocate the output buffer */
-        output = safe_calloc(1, DEFAULT_REPLAY_BUFSIZE);
 	break;
     }
 
@@ -452,6 +449,9 @@ FIXME
 
     /* quickly seek the file from which to start the search */
     ofs = module_db_seek_by_ts(req->src, file_fd, TIME2TS(req->start, 0));
+    if (ofs == -1) {
+	panic("seeking file %s", req->src->output);
+    }
 
     for (;;) { 
 	timestamp_t ts;
@@ -531,10 +531,6 @@ FIXME
 		handle_print_fail(req->mdl);
 	    break;
 	}
-    }
-    
-    if (req->format == Q_COMO) {
-	free(output);
     }
     
     /* close the file with STORAGE */
