@@ -100,4 +100,9 @@ void       _mem_free(void * p, const char * file, int line);
 #define mem_calloc(nmemb,sz)	_mem_calloc(nmemb, sz, __FILE__, __LINE__)
 #define mem_free(p)		_mem_free(p, __FILE__, __LINE__)
 
+/*
+ * modules.c
+ */
+module_t * module_lookup_with_name_and_node(const char *name, int node);
+
 #endif /*COMOPRIV_H_*/
