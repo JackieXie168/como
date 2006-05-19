@@ -499,10 +499,17 @@ FIXME
 		if (module_db_record_print(req->mdl, NULL, NULL, client_fd))
 		    handle_print_fail(req->mdl);
 		break;
-	    case Q_COMO: 
+#if 0
+	    /*
+	     * DISABLED and UNUSED and BROKEN: broken because
+	     * module_db_record_replay should be called with NULL prt also
+	     * when the end of file is reached
+	     */
+	    case Q_COMO:
 		if (module_db_record_replay(req->src, NULL, client_fd))
 		    handle_replay_fail(req->src);
 		break;
+#endif
 	    default:
 		break;
 	    } 
