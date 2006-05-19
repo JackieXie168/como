@@ -278,7 +278,6 @@ static char *
 validate_query(qreq_t * req, int node_id)
 {
     static char httpstr[8192];
-    int idx;
 
     if (req->module == NULL) {
         /*
@@ -303,28 +302,15 @@ validate_query(qreq_t * req, int node_id)
         return httpstr;
     }
 
-    /* check if the module is present in the current configuration */ 
-    for (idx = 0; idx <= map.module_last; idx++) {
-        req->mdl = &map.modules[idx];
-
-	if (req->mdl->status != MDL_ACTIVE)
-	    continue;
-
-	if (node_id != req->mdl->node) 
-	    continue; 
-
-        /* check module name */
-        if (!strcmp(req->module, req->mdl->name)) 
-	    break;
-    }
-
-    if (idx > map.module_last) {
+    /* check if the module is present in the current configuration */
+    req->mdl = module_lookup_with_name_and_node(req->module, node_id);
+    if (req->mdl == NULL) {
 	/*
 	 * the module is not present in the configuration file 
 	 */
 	logmsg(LOGWARN, "module %s not found\n", req->module);
 	sprintf(httpstr, HTTP_RESPONSE_404
-                "Module %s not found in the current configuration\n", 
+                "Module \"%s\" not found in the current configuration\n", 
 		req->module);
 	return httpstr;
     } 
@@ -413,17 +399,8 @@ validate_query(qreq_t * req, int node_id)
 	 *     of the filtering that the source module could have done
 	 *     on the data and we don't do any checks on that.
 	 */
-        for (idx = 0; idx <= map.module_last; idx++) {
-            req->src = &map.modules[idx];
-	    if (req->src->status != MDL_ACTIVE)
-		continue;
-	    if (node_id != req->src->node) 
-		continue; 
-            if (!strcmp(req->source, req->src->name))
-		break;
-        }
-        
-	if (idx > map.module_last) {
+	req->src = module_lookup_with_name_and_node(req->source, node_id);
+	if (req->src == NULL) {
             /* No source module found,
              * return an error message to the client and finish
              */

@@ -40,6 +40,8 @@
 #include "como.h"
 #include "comopriv.h"
 
+/* global state */
+extern struct _como map;
 
 /*
  * -- load_object
@@ -617,3 +619,34 @@ match_module(module_t * a, module_t * b)
 { 
     return (!strcmp(a->name, b->name) && a->node == b->node); 
 }
+
+/*
+ * -- module_lookup_with_name_and_node
+ * 
+ * lookup a module from the map given its name and node identifier,
+ * return the pointer to the module if the lookup succeeded or
+ * NULL if the module is not found.
+ * 
+ */
+module_t *
+module_lookup_with_name_and_node(const char *name, int node)
+{
+    int idx;
+    module_t *mdl;
+    
+    for (idx = 0; idx <= map.module_last; idx++) {
+        mdl = &map.modules[idx];
+	
+	if (mdl->status != MDL_ACTIVE)
+	    continue;
+	
+	if (mdl->node != node)
+	    continue;
+	
+        /* check module name */
+        if (strcmp(mdl->name, name) == 0)
+	    return mdl;
+    }
+    return NULL;
+}
+
