@@ -286,8 +286,8 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 #define PLAINFMT       "%10u.%06d %3d.%06d %3d %15s %5u %15s %5u %8llu %8llu\n"
 
 #define PRETTYHDR       					\
-    "Start                    "					\
-    "Duration  "						\
+    "Start                         "				\
+    "Duration     "						\
     "Proto Source IP:Port      Destination IP:Port   " 		\
     "Bytes    Packets\n"
 
