@@ -723,6 +723,11 @@ FIXME
 	    break;
 	}
     }
+    
+    if (req->format == Q_COMO) {
+	free(output);
+    }
+    
     /* close the file with STORAGE */
     csclose(file_fd, 0);
     /* close the socket and the file */
