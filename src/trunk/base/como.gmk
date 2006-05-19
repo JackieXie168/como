@@ -68,7 +68,9 @@ endif
 # and a corresponding entry point 
 #
 
-SNIFFERS = como		
+SNIFFERS = \
+	como \
+	ondemand
 
 # add pcap support
 ifeq ($(shell uname),Linux)
