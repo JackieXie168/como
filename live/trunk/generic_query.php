@@ -19,18 +19,18 @@
     }
 
     /*  These vars will catch the updates from the edit menus  */
-    if (isset($_POST['alertUpdate']))
-        $alertUpdate = $_POST['alertUpdate'];
+    if (isset($_POST['topnalert']))
+        $topnalert = $_POST['topnalert'];
     else
-        $alertUpdate = "";
-    if (isset($_POST['topdestUpdate']))
-        $topdestUpdate = $_POST['topdestUpdate'];
+        $topnalert = "";
+    if (isset($_POST['topntopdest']))
+        $topntopdest= $_POST['topntopdest'];
     else
-        $topdestUpdate = "";
-    if (isset($_POST['topportsUpdate']))
-        $topportsUpdate = $_POST['topportsUpdate'];
+        $topntopdest= "";
+    if (isset($_POST['topntopports']))
+        $topntopports = $_POST['topntopports'];
     else
-        $topportsUpdate = "";
+        $topntopports = "";
 
     /*  Get any extras in the url;  Currently to grab blinc stuff  */
     if (isset($_GET['extra']))
@@ -88,11 +88,16 @@
     }
 
     /*  Catch if topdest, topports, or alerts have new value  */
-    if (($topdestUpdate != "") || ($topportsUpdate != "")) {
-	if ($topdestUpdate != "") 
-	    $newval = $topdestUpdate;
-	if ($topportsUpdate != "")
-	    $newval = $topportsUpdate;
+    if (($topntopdest != "") || ($topntopports != "")) {
+	if ($topntopdest != "") {
+	    $newval = $topntopdest;
+            setcookie("topntopdest", $newval);
+        }
+	if ($topntopports!= "") {
+	    $newval = $topntopports;
+            setcookie("topntopdest", $newval);
+        }
+
         /*  Delete the cached file if necessary  */
         if ($G['USECACHE']) 
             $node -> removeFile ($filename);

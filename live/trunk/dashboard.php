@@ -6,7 +6,17 @@
 	setcookie("topdest", "block");
     if (!(isset($_COOKIE['topports'])))
 	setcookie("topports", "block");
-
+    if (!(isset($_COOKIE['topntopdest']))) {
+	setcookie("topntopdest", "5");
+        $topntopdest = $_COOKIE['topntopdest'];
+    } else 
+        $topntopdest = $_COOKIE['topntopdest'];
+ 
+    if (!(isset($_COOKIE['topntopports']))) {
+	setcookie("topntopports", "5");
+        $topntopports = $_COOKIE['topntopports'];
+    } else 
+        $topntopports = $_COOKIE['topntopports'];
 ?>
 <!--  $Id$  -->
 
@@ -90,6 +100,19 @@ function initializeConfigMenu(menuId, triggerId, module) {
      
     }
 }
+
+function readCookie(name) {
+    var nameEQ = name + "=";
+    var ca = document.cookie.split(';');
+    for(var i=0;i < ca.length;i++) {
+	var c = ca[i];
+	while (c.charAt(0)==' ') c = c.substring(1,c.length);
+	    if (c.indexOf(nameEQ) == 0) 
+		return c.substring(nameEQ.length,c.length);
+    }
+    return null;
+}
+
 
 function initializeMenu(menuId, triggerId, module) {
     var menu = document.getElementById(menuId);
@@ -181,7 +204,7 @@ function initializeMenu(menuId, triggerId, module) {
 		$modargs = $modargs . "source=tuple&";
 		$modargs = $modargs . "interval=$interval&";
                 $modargs = $modargs . "align-to=$stime&";
-		$modargs = $modargs . "topn=5&";
+		$modargs = $modargs . "topn=$topntopdest&";
 		$modargs = $modargs . "url=generic_query.php&";
 		$modargs = $modargs . "urlargs=stime=$stime&";
 		$modargs = $modargs . "urlargs=etime=$etime&";
@@ -196,7 +219,7 @@ function initializeMenu(menuId, triggerId, module) {
 	      }
 	      if ($sec_array[$i] == "topports"){
 		$modargs = "filter={$node->modinfo[$sec_array[$i]]['filter']}&";
-		$modargs = $modargs . "topn=5&";
+		$modargs = $modargs . "topn=$topntopports&";
                 $modargs = $modargs . "align-to=$stime&";
 		$modargs = $modargs . "source=tuple&";
 		$modargs = $modargs . "interval=$interval&";
@@ -205,6 +228,7 @@ function initializeMenu(menuId, triggerId, module) {
               /*  This is here the iframes is printed out  */
               #print "<form target=frame$i ";
               print "<form target=frame$i ";
+              print "name=topn$sec_array[$i] ";
 	      print "action=generic_query.php?comonode=$comonode&";
 	      print "module={$sec_array[$i]}&format=html&";
 	      print "stime=$stime&etime=$etime&";
@@ -219,7 +243,7 @@ function initializeMenu(menuId, triggerId, module) {
               print "edit</a>";
               print "<div id=$sec_array[$i]Menuedit class=menu>";
               print "Show ";
-              print "<input type=textbox size=1 name=$sec_array[$i]Update>";
+              print "<input type=textbox size=1 name=topn$sec_array[$i]>";
               print " $sec_array[$i] items ";
               print "<input type=submit value=Save>";
               print "</div>";
