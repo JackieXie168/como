@@ -55,9 +55,9 @@
 # the ones used by default).
 #
 # INST_BINDIR=/usr/local/bin
-# INST_LIBDIR=/usr/local/lib/como-1.0
-# INST_DATADIR=/usr/local/var/lib/como-1.0
-# INST_MANDIR=/usr/local/share/man/man1
+# INST_LIBDIR=/usr/local/libexec/como-1.0
+# INST_DBDIR=/usr/local/share/como-1.0
+# INST_MANDIR=/usr/local/man/man1
 # DEFAULT_CFGFILE=/usr/local/etc/como/como.conf
 
 #
