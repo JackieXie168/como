@@ -193,7 +193,7 @@ struct _csfile {
     int	rfd;			/* reader fd */
     csbytestream_t *bs;		/* the bytestream */
     off_t bs_offset;		/* bytestream offset (used as filename too) */
-    size_t cf_size;		/* file size, updated on each write request */
+    size_t cf_size;		/* file size, updated with S_INFORM */ 
     csclient_t *clients;	/* list of clients working on this file */
 };
 
