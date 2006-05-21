@@ -55,7 +55,7 @@ extern sniffer_t *__sniffers[];
 enum tokens {
     TOK_NULL=0,
 
-    TOK_BASEDIR,
+    TOK_DBDIR,
     TOK_SOURCE,
     TOK_DESCRIPTION,
     TOK_END,
@@ -122,7 +122,8 @@ struct _keyword {
 typedef struct _keyword keyword_t;
 
 keyword_t keywords[] = {
-    { "basedir",     TOK_BASEDIR,     2, CTX_GLOBAL },
+    { "basedir",     TOK_DBDIR,	      2, CTX_GLOBAL },	/* legacy */
+    { "db-path",     TOK_DBDIR,	      2, CTX_GLOBAL },
     { "librarydir",  TOK_LIBRARYDIR,  2, CTX_GLOBAL },
     { "logflags",    TOK_LOGFLAGS,    2, CTX_GLOBAL },
     { "module",      TOK_MODULE,      2, CTX_GLOBAL },
@@ -335,25 +336,25 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
 /* 
  * -- createdir
  * 
- * creates the basedir for CoMo output files. it generates the 
+ * creates the database directory for CoMo output files. it generates the 
  * entire directory tree if necessary. 
  * 
  */
 static void 
-createdir(char * basedir) 
+createdir(char * dbdir) 
 {
     char curdir[1024];
 
-    sprintf(curdir, basedir);
-    while (mkdir(basedir, (mode_t) (S_IRWXU | S_IRWXG | S_IRWXO)) != 0) {
+    sprintf(curdir, dbdir);
+    while (mkdir(dbdir, (mode_t) (S_IRWXU | S_IRWXG | S_IRWXO)) != 0) {
 	if (errno == ENOENT) { 
 	    /* 
 	     * we can deal with this trying to create a directory one 
-	     * level up from basedir. 
+	     * level up from dbdir. 
 	     */
-            panic("cannot create basedir %s", basedir);
+            panic("cannot create db-path %s", dbdir);
 	} else  
-            panic("cannot create basedir %s", basedir);
+            panic("cannot create db-path %s", dbdir);
     } 
 }
 
@@ -417,8 +418,8 @@ do_config(struct _como * m, int argc, char *argv[])
      * configuration actions
      */
     switch (t->action) {
-    case TOK_BASEDIR:
-	safe_dup(&m->basedir, argv[1]);
+    case TOK_DBDIR:
+	safe_dup(&m->dbdir, argv[1]);
 	break;
 
     case TOK_QUERYPORT:
@@ -894,7 +895,7 @@ typedef struct cli_args_t {
     int		done;
     char	**cfg_files;
     int		cfg_files_count;
-    char	*basedir;
+    char	*dbdir;
     char	*libdir;
     int		query_port;
     size_t	mem_size;
@@ -931,7 +932,7 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
      * string as well...
      */
     static const char * usage =
-	"usage: %s [-c config-file] [-D basedir] [-L libdir] [-p query-port] "
+	"usage: %s [-c config-file] [-D db-path] [-L libdir] [-p query-port] "
         "[-m mem-size] [-v logflags] "
         "[-s sniffer[:device[:\"args\"]]] [module[:\"module args\"] "
 	"[filter]]\n";
@@ -979,8 +980,8 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 	    m->cfg_files[m->cfg_files_count - 1] = optarg;
 	    break;
 
-	case 'D':	/* basedir */
-	    m->basedir = optarg;
+	case 'D':	/* db-path */
+	    m->dbdir = optarg;
 	    break;
 
 	case 'L':	/* libdir */
@@ -1088,7 +1089,7 @@ init_map(struct _como * m)
     for (i = 0; i < m->module_max; i++) 
 	m->modules[i].status = MDL_UNUSED; 
     m->workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
-    m->basedir = strdup(DEFAULT_BASEDIR);
+    m->dbdir = strdup(DEFAULT_DBDIR);
     m->libdir = strdup(DEFAULT_LIBDIR);
     m->node = safe_calloc(1, sizeof(node_t)); 
     m->node->id = 0;
@@ -1139,8 +1140,8 @@ configure(struct _como * m, int argc, char ** argv)
         parse_cfgfile(m, DEFAULT_CFGFILE);	/* add default config file */
 
     /* use cli args to override cfg file settings */
-    if (cli_args.basedir != NULL)
-	safe_dup(&m->basedir, cli_args.basedir);
+    if (cli_args.dbdir != NULL)
+	safe_dup(&m->dbdir, cli_args.dbdir);
     if (cli_args.libdir != NULL)
 	safe_dup(&m->libdir, cli_args.libdir);
     if (cli_args.query_port != -1)
@@ -1183,7 +1184,7 @@ configure(struct _como * m, int argc, char ** argv)
      * 
      * these new modules will have the same name but will be 
      * running the additional filter associated with the virtual 
-     * node and save data in the virtual node basedir.  
+     * node and save data in the virtual node dbdir.  
      */
     for (i = 0, j = m->module_last; i <= j; i++) { 
 	node_t * node; 
@@ -1226,13 +1227,13 @@ configure(struct _como * m, int argc, char ** argv)
     }
 
     /* 
-     * open the basedir for all nodes (virtual ones included) 
+     * open the dbdir for all nodes (virtual ones included) 
      */
-    if (m->basedir == NULL)
-	panicx("missing basedir");
-    d = opendir(m->basedir);
+    if (m->dbdir == NULL)
+	panicx("missing db-path");
+    d = opendir(m->dbdir);
     if (d == NULL) 
-	createdir(m->basedir); 
+	createdir(m->dbdir); 
     else 
 	closedir(d);
 }

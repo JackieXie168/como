@@ -78,7 +78,7 @@ struct _como {
     char **av;			/* command line arguments */
 
     char * workdir;		/* work directory for templates etc. */
-    char * basedir;     	/* base directory for output files */
+    char * dbdir; 	    	/* database directory for output files */
     char * libdir;		/* base directory for modules */
     int logflags;       	/* log flags (i.e., what to log) */
     FILE * logfile;		/* log file */
