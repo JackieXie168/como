@@ -460,7 +460,7 @@ FIXME
         len = req->src->callbacks.st_recordsize; 
         ptr = module_db_record_get(file_fd, &ofs, req->src, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
-	    if (errno == ENODATA) {
+	    if (len == 0) { 
 		/* notify the end of stream to the module */
 		if (req->format == Q_OTHER || req->format == Q_HTML) {
 		    if (module_db_record_print(req->mdl, NULL, NULL,
@@ -472,7 +472,8 @@ FIXME
 		       req->src->output);
 		break;
 	    }
-	    panic("reading from file %s ofs %lld", req->src->output, ofs); 
+	    panic("reading from file %s ofs %lld len %d", 
+		  req->src->output, ofs, len); 
 	}
 
 	/*
