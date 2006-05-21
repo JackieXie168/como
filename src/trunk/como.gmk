@@ -55,28 +55,31 @@ DBGFLAGS?=-g
 # Optimization flags
 # OPTFLAGS?=-O2
 
-INSTALL=/usr/bin/install
-
-# Install dirs
-PREFIX?=/usr/local
-INST_BINDIR?=$(DESTDIR)$(PREFIX)/bin
-INST_LIBDIR?=$(DESTDIR)$(PREFIX)/lib/como-$(COMOVER)
-INST_DATADIR?=$(DESTDIR)$(PREFIX)/var/lib/como-$(COMOVER)
-INST_MANDIR?=$(DESTDIR)$(PREFIX)/share/man/man1
-DEFAULT_CFGFILE?=$(PREFIX)/etc/como/como.conf
-
-# #define's used to build this version of the code.
+# build version number 
+# 
 SVNREV := $(shell cd $(BASEDIR) && ./comover-helper.sh)
-
-ifeq ($(strip $(SVNREV)),)
 COMOVER = 1.0
+ifeq ($(strip $(SVNREV)),)
+    DEFS += -DCOMO_VERSION=\"$(COMOVER)" 
+    COMOVERFILE = como-$(COMOVER)
 else
-COMOVER = 1.0\ \#$(SVNREV)
+    DEFS += -DCOMO_VERSION=\"$(COMOVER)\ \#$(SVNREV)\"
+    COMOVERFILE = como-$(COMOVER)-$(SVNREV)
 endif
 
-DEFS +=	-DCOMO_VERSION=\"$(COMOVER)\" \
-	-DDEFAULT_LIBDIR=\"$(INST_LIBDIR)\" \
-	-DDEFAULT_BASEDIR=\"$(INST_DATADIR)\" \
+INSTALL=/usr/bin/install
+
+# install target directories
+#
+PREFIX?=/usr/local
+INST_BINDIR?=$(PREFIX)/bin
+INST_LIBDIR?=$(PREFIX)/libexec/$(COMOVERFILE)
+INST_DBDIR?=$(PREFIX)/share/$(COMOVERFILE)
+INST_MANDIR?=$(PREFIX)/man/man1
+DEFAULT_CFGFILE?=$(PREFIX)/etc/como/como.conf
+
+DEFS +=	-DDEFAULT_LIBDIR=\"$(INST_LIBDIR)\" \
+	-DDEFAULT_DBDIR=\"$(INST_DBDIR)\" \
 	-DDEFAULT_CFGFILE=\"$(DEFAULT_CFGFILE)\"
 
 # You are really not supposed to touch this!
