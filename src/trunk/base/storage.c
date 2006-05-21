@@ -855,8 +855,16 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
 }
 
 
-/**
- * handle_seek
+/*
+ * -- handle_seek
+ * 
+ * S_SEEK messages are used to navigate the files of a 
+ * bytestream. It supports moving one file forward or backward. 
+ * Writers cannot seek. Moving after the last file or moving to 
+ * an empty file (because the writer has not yet committed the 
+ * latest writes) causes an ENODATA error. This is necessary to 
+ * avoid the reader to receive an error message later or to block. 
+ *
  */
 static void
 handle_seek(__unused procname_t sender, int s, csmsg_t * in,
@@ -919,7 +927,7 @@ handle_seek(__unused procname_t sender, int s, csmsg_t * in,
 	break;
     }
 
-    if (cf == NULL) { /* no more data */
+    if (cf == NULL || cf->cf_size == 0) { /* no more data */
 	logmsg(LOGSTORAGE, "id: %d,%s; seek reached the end of file\n", 
 	    in->id, cl->bs->name); 
 	senderr(s, in->id, ENODATA); 
