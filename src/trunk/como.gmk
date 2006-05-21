@@ -69,9 +69,9 @@ DEFAULT_CFGFILE?=$(PREFIX)/etc/como/como.conf
 SVNREV := $(shell cd $(BASEDIR) && ./comover-helper.sh)
 
 ifeq ($(strip $(SVNREV)),)
-COMOVER = 1.1-current
+COMOVER = 1.0
 else
-COMOVER = 1.1-current-$(SVNREV)
+COMOVER = 1.0\ \#$(SVNREV)
 endif
 
 DEFS +=	-DCOMO_VERSION=\"$(COMOVER)\" \
@@ -154,11 +154,14 @@ mkinstalldirs:
 	@echo "ok."
 
 clean:
-	rm -rf $(PROGS) $(MODULES) $(OTHER) $(TEMPORARY) *.core *.pid core.* \
-		$(foreach PG, $(PROGS), $(OBJS_$(PG))) \
-                $(foreach MO, $(MODULES), $(OBJS_$(MO))) \
-                $(foreach PG, $(PROGS), $(DDEPS_$(PG))) \
-                $(foreach MO, $(MODULES), $(DDEPS_$(MO)))
+ifneq ($(strip $(PROGS)),)
+	rm -rf $(PROGS) $(TEMPORARY) *.core core.* 
+	rm -rf $(foreach PG, $(PROGS), $(OBJS_$(PG)) $(DDEPS_$(PG))) 
+endif
+ifneq ($(strip $(MODULES)),)
+	rm -rf $(MODULES) $(OTHER)
+	rm -rf $(foreach MO, $(MODULES), $(OBJS_$(MO)) $(DDEPS_$(MO))) 
+endif
 
 # The suffixes we care about:
 .SUFFIXES:	.c .o .so .po .y .l
@@ -228,8 +231,7 @@ define module_compilation
 
 $(eval OBJS_$(MODULE) := $(SRCS_$(MODULE):.c=.o))
 
-$(eval DDEPS_$(MODULE) := $(addsuffix .d,$(basename $(MODULE))) \
-			  $(SRCS_$(MODULE):.c=.d))
+$(eval DDEPS_$(MODULE) := $(addsuffix .d,$(basename $(MODULE))))
 
 DDEPS += $(DDEPS_$(MODULE))
 
