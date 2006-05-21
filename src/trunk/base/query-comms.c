@@ -249,8 +249,8 @@ query_parse(char *buf, timestamp_t now)
 
     /* provide some default values */
     q.len = sizeof(q);
-    q.start = TS2SEC(now) - 50;
-    q.end = TS2SEC(now) + 20;
+    q.start = TS2SEC(now);
+    q.end = ~0;
     q.format = Q_OTHER; 
     q.wait = 1;
     q.source = NULL;
@@ -378,9 +378,8 @@ qryrecv(int sd, timestamp_t now)
 	    return NULL; 
 	ofs += rd;
 
-	if (strstr(buf, "\n\n") != NULL ||
-		strstr(buf, "\n\r\n") != NULL) /* found terminator */
-	    return query_parse(buf, now);
+	if (strstr(buf, "\n\n") != NULL || strstr(buf, "\n\r\n") != NULL)
+	    return query_parse(buf, now); 
 	if (rd == 0 || buf[0] < ' ')  /* invalid string */
 	    break;
     }
