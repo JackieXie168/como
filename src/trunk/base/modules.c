@@ -180,9 +180,9 @@ activate_module(module_t * mdl, char * libdir)
 int
 check_module(como_t * m, module_t *mdl)
 {
-    if (m->basedir && mdl->output[0] != '/') { /* prepend basedir */
+    if (m->dbdir && mdl->output[0] != '/') { /* prepend db-path */
 	char *p = mdl->output;
-	asprintf(&mdl->output, "%s/%s", m->basedir, p);
+	asprintf(&mdl->output, "%s/%s", m->dbdir, p);
 	free(p);
     }
 
