@@ -639,7 +639,8 @@ module_lookup_with_name_and_node(const char *name, int node)
     for (idx = 0; idx <= map.module_last; idx++) {
         mdl = &map.modules[idx];
 	
-	if (mdl->status != MDL_ACTIVE)
+	if (mdl->status != MDL_ACTIVE &&
+	    mdl->status != MDL_ACTIVE_REPLAY)
 	    continue;
 	
 	if (mdl->node != node)

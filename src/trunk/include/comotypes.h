@@ -77,6 +77,7 @@ typedef enum status_t {
     MDL_LOADING,            		/* module is being loaded */
     MDL_INCOMPATIBLE,			/* not compatible with sniffer */
     MDL_ACTIVE, 			/* active and processing packets */
+    MDL_ACTIVE_REPLAY,			/* active only to replay records */
     MDL_DISABLED            		/* disabled or turned off */
 } status_t;
 

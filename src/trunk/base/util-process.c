@@ -264,6 +264,11 @@ start_child(procname_t who, int mem_type,
 	/*
 	 * remove all modules in the map (it will
 	 * receive the proper information from SUPERVISOR)
+	 * 
+	 * the modules with status MDL_ACTIVE_REPLAY are not removed
+	 * because they can be used in CAPTURE to replay records
+	 * from inside sniffer-ondemand which require the module to
+	 * be available when sniffer_start is called
 	 *
 	 * XXX this is not that great but no other workaround comes
 	 *     to mind. the problem is when an IPC_MODULE_ADD message
@@ -273,11 +278,12 @@ start_child(procname_t who, int mem_type,
 	 *     while this is done at the very beginning.
 	 *
 	 */
-	for (idx = 0; idx < map.module_max; idx++)
-	    if (map.modules[idx].status != MDL_UNUSED) 
+	for (idx = 0; idx < map.module_max; idx++) {
+	    if (map.modules[idx].status != MDL_UNUSED &&
+		map.modules[idx].status != MDL_ACTIVE_REPLAY) {
 		remove_module(&map, &map.modules[idx]);
-	assert(map.module_used == 0); 
-	assert(map.module_last == -1);
+	    }
+	}
 
 	/* connect to SUPERVISOR */
         out_fd = ipc_connect(map.parent);
