@@ -150,10 +150,10 @@ install: all mkinstalldirs $(INSTALLS)
 
 mkinstalldirs:
 	@echo -n "Creating install directories... "
-	@test -d $(INST_BINDIR) || mkdir -p $(INST_BINDIR)
-	@test -d $(INST_LIBDIR) || mkdir -p $(INST_LIBDIR)
-	@test -d $(INST_DATADIR) || mkdir -p $(INST_DATADIR)
-	@test -d $(INST_MANDIR) || mkdir -p $(INST_MANDIR)
+	@test -d $(DESTDIR)$(INST_BINDIR) || mkdir -p $(DESTDIR)$(INST_BINDIR)
+	@test -d $(DESTDIR)$(INST_LIBDIR) || mkdir -p $(DESTDIR)$(INST_LIBDIR)
+	@test -d $(DESTDIR)$(INST_DBDIR) || mkdir -p $(DESTDIR)$(INST_DBDIR)
+	@test -d $(DESTDIR)$(INST_MANDIR) || mkdir -p $(DESTDIR)$(INST_MANDIR)
 	@echo "ok."
 
 clean:
@@ -225,7 +225,7 @@ endif
 
 install-$(PROG):
 	@echo "install($(PROG))"
-	@$$(INSTALL) -m 0755 $(PROG) $$(INST_BINDIR)/$(PROG)
+	@$$(INSTALL) -m 0755 $(PROG) $$(DESTDIR)$$(INST_BINDIR)/$(PROG)
 endef
 
 # Template rule to compile a module from several source files
@@ -253,7 +253,7 @@ $(MODULE): $(addsuffix .c,$(basename $(MODULE)))
 
 install-$(MODULE):
 	@echo "install($(MODULE))"
-	@$$(INSTALL) -m 0755 $(MODULE) $$(INST_LIBDIR)/$(MODULE)
+	@$$(INSTALL) -m 0755 $(MODULE) $$(DESTDIR)$$(INST_LIBDIR)/$(MODULE)
 endef
 
 # The template rule is instantiated as needed for each particular program
