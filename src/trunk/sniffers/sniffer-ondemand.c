@@ -64,7 +64,8 @@ struct _snifferinfo {
     timestamp_t start;
     timestamp_t end;
     int has_end;
-    void *resume_ptr;
+    off_t resume_ofs;
+    int done;
 };
 
 /**
@@ -137,6 +138,7 @@ static int
 sniffer_start(source_t * src) 
 {
     struct _snifferinfo *info;
+    off_t ofs;
     
     if (src->device == NULL) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
@@ -164,7 +166,7 @@ sniffer_start(source_t * src)
     
     /* find the module */
     info->mdl = module_lookup_with_name_and_node(src->device, info->node);
-    if (src->device == NULL) {
+    if (info->mdl == NULL) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
 	       "module \"%s\" not found\n", src->device);
 	goto error;
@@ -183,6 +185,42 @@ sniffer_start(source_t * src)
 	logmsg(LOGWARN, "sniffer-ondemand: "
 	       "error while seeking file %s\n", info->mdl->output);
 	goto error;
+    }
+    
+    /* seek the first interesting record */
+    ofs = csgetofs(info->fd);
+    
+    for (;;) {
+	void * ptr;
+	timestamp_t ts;
+	ssize_t len;
+	
+	len = info->mdl->callbacks.st_recordsize;
+	
+	ptr = module_db_record_get(info->fd, &ofs, info->mdl, &len, &ts);
+	if (ptr == NULL) {
+	    if (len != 0) {
+		logmsg(LOGWARN, "error reading file %s: %s\n",
+		       info->mdl->output, strerror(errno));
+	    }
+	    /* there's no data */
+	    return -1;
+	}
+	/*
+	 * Now we have either good data or GR_LOSTSYNC.
+	 * If lost sync, move to the next file and try again. 
+	 */
+	if (ptr == GR_LOSTSYNC) {
+	    ofs = csseek(info->fd, CS_SEEK_FILE_NEXT);
+	    logmsg(LOGSNIFFER, "lost sync, trying next file %s/%016llx\n", 
+		   info->mdl->output, ofs);
+	    continue;
+	}
+	
+	if (ts >= info->start) {
+	    info->resume_ofs = ofs - len;
+	    break;
+	}
     }
     
     return 0;
@@ -223,37 +261,55 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     info = (struct _snifferinfo *) src->ptr;
     base = info->buf;
     buf_size = BUFSIZE;
+    
+    if (info->done)
+	return -1;
 
     ofs = csgetofs(info->fd);
     
-    for (npkts = 0, pkt = out; npkts < max_no && buf_size > 65535;
-	 npkts++, pkt++) {
+    for (npkts = 0, pkt = out; npkts < max_no && buf_size > 65535; ) {
 	int left = 0;
 	timestamp_t ts;
 	
 	len = info->mdl->callbacks.st_recordsize;
-	if (info->resume_ptr == NULL) {
-	    ptr = module_db_record_get(info->fd, &ofs, info->mdl, &len, &ts);
-	} else {
-	    ptr = info->resume_ptr;
-	    info->resume_ptr = NULL;
+	if (info->resume_ofs != 0) {
+	    ofs = info->resume_ofs;
+	    info->resume_ofs = 0;
 	}
-	if (ptr == NULL || ts > info->end) {
-	    if (errno == ENODATA) {
-	    	/* we're finished */
-		errno = 0;
-	    } else {
+	
+	ptr = module_db_record_get(info->fd, &ofs, info->mdl, &len, &ts);
+	if (ptr == NULL) {
+	    if (len != 0) {
 		logmsg(LOGWARN, "error reading file %s: %s\n",
 		       info->mdl->output, strerror(errno));
+		/* error */
+		return -1;
 	    }
-	    return -1;
+	    /* we're finished */
+	    info->done = 1;
+	    return npkts;
 	}
-
+	/*
+	 * Now we have either good data or GR_LOSTSYNC.
+	 * If lost sync, move to the next file and try again. 
+	 */
+	if (ptr == GR_LOSTSYNC) {
+	    ofs = csseek(info->fd, CS_SEEK_FILE_NEXT);
+	    logmsg(LOGSNIFFER, "lost sync, trying next file %s/%016llx\n", 
+		   info->mdl->output, ofs);
+	    continue;
+	}
+	if (ts > info->end) {
+	    /* we're finished */
+	    info->done = 1;
+	    return npkts;
+	}
+	
 	if (npkts > 0) {
 	    if (ts - first_seen > max_ivl) {
 		/* Never returns more than max_ivl of traffic */
 		/* NOTE: need to restart from this record */
-		info->resume_ptr = ptr;
+		info->resume_ofs = ofs - len;
 		break;
 	    }
 	} else {

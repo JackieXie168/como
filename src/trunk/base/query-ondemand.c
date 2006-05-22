@@ -166,6 +166,8 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     for (idx = 0; idx < map.module_max; idx++)
 	if (map.modules[idx].status == MDL_ACTIVE)
 	    map.modules[idx].status = MDL_DISABLED;
+    /* enable the source module for record replaying */
+    req->src->status = MDL_ACTIVE_REPLAY;
 
     /* initialize the shared memory */
     memory_init(16);		/* XXX 16MB fixed memory size... check this! */
@@ -196,7 +198,8 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* find the virtual node this query refers to */
     for (node = map.node; node && node->id != node_id; node = node->next) 
 	;
-
+//#define REMOTE_QUERY
+#ifdef REMOTE_QUERY
     /* now configure a new sniffer-como */
     len = snprintf(sniffstr, sizeof(sniffstr), 
         "http://localhost:%d/?module=%s&start=%d&end=%d&format=como&wait=no", 
@@ -212,7 +215,13 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     
     /* create the entry in the map */
     add_sniffer(&map, "como", sniffstr, NULL); 
-
+#else
+    /* now configure a new sniffer-ondemand */
+    nargs = 0;
+    len = snprintf(sniffstr, sizeof(sniffstr), "node=%d start=%lld end=%lld",
+		   node_id, TIME2TS(req->start, 0), TIME2TS(req->end, 0));
+    add_sniffer(&map, "ondemand", req->source, sniffstr);
+#endif
     map.stats = mem_calloc(1, sizeof(stats_t)); 
     gettimeofday(&map.stats->start, NULL); 
     map.stats->first_ts = ~0;
