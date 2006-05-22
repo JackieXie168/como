@@ -56,7 +56,6 @@ CONFIGDESC {
     int topn;			/* number of top destinations */
     uint32_t mask;		/* prefix mask */
     uint32_t meas_ivl;		/* interval (secs) */
-    uint32_t align;		/* from when to count before exporting */
     uint32_t last_export;	/* last export time */
 };
 
@@ -72,8 +71,7 @@ init(void * self, char *args[])
     config->meas_ivl = 5;
     config->topn = 20;
     config->mask = 0xffffffff;
-    config->last_export = 0;
-    config->align = 0; 
+    config->last_export = 0; 
     
     /* 
      * process input arguments 
@@ -89,9 +87,11 @@ init(void * self, char *args[])
 	} else if (!strncmp(args[i], "mask", 4)) {
 	    config->mask <<= atoi(wh); 
 	} else if (!strncmp(args[i], "align-to", 8)) {
-	    config->align = atoi(wh); 
+	    config->last_export = atoi(wh); 
 	}
     }
+
+    /* align the time of the last export of data */ 
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
@@ -196,7 +196,6 @@ action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
        int count)
 {
     CONFIGDESC * config = CONFIG(self);
-    EFLOWDESC *ex = EF(efh);
 
     if (efh == NULL) { 
 	/* 
@@ -204,22 +203,13 @@ action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
 	 * check if it is time to export the table. 
 	 * if not stop. 
 	 */
-        uint32_t now;
-        
-        if (config->last_export == 0)
-	    config->last_export = TS2SEC(ivl);
-        
-        now = TS2SEC(current_time) - config->align;
-	if (now - config->last_export < config->meas_ivl) 
+	if (TS2SEC(current_time) < config->last_export + config->meas_ivl) 
 	    return ACT_STOP;		/* too early */
 
 	config->last_export = TS2SEC(ivl); 
 	return ACT_GO; 		/* dump the records */
     }
     
-    if (TS2SEC(current_time) < ex->ts + config->meas_ivl)
-	return ACT_GO; /* skip this record */
-
     return (count < config->topn)? ACT_STORE|ACT_DISCARD : ACT_DISCARD; 
 }
 
