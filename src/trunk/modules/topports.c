@@ -60,7 +60,6 @@ FLOWDESC {
 CONFIGDESC {
     uint16_t topn;    		/* number of top ports */
     uint32_t meas_ivl;		/* interval (secs) */
-    uint32_t align;             /* from when to count before exporting */
     uint32_t last_export;       /* last export time */
 };
 
@@ -77,7 +76,6 @@ init(void * self, char *args[])
     config->meas_ivl = 1;
     config->topn = 20;
     config->last_export = 0;
-    config->align = 0;
 
     /* 
      * process input arguments 
@@ -91,7 +89,7 @@ init(void * self, char *args[])
         } else if (!strncmp(args[i], "topn", 4)) {
             config->topn = atoi(wh);
         } else if (!strncmp(args[i], "align-to", 8)) {
-            config->align = atoi(wh);
+            config->last_export = atoi(wh);
         }
     }
     
@@ -204,17 +202,11 @@ action(void * self, void *efh,  __unused timestamp_t ivl,
          * check if it is time to export the table.
          * if not stop.
          */
-        uint32_t now;
-        
-        if (config->last_export == 0)
-	    config->last_export = TS2SEC(ivl);
-        
-        now = TS2SEC(current_time) - config->align;
-	if (now - config->last_export < config->meas_ivl) 
-	    return ACT_STOP;		/* too early */
+        if (TS2SEC(current_time) < config->last_export + config->meas_ivl)
+            return ACT_STOP;            /* too early */
 
-	config->last_export = now; 
-	return ACT_GO; 		/* dump the records */
+        config->last_export = TS2SEC(ivl);
+        return ACT_GO;          /* dump the records */
     }
 
     return ACT_STORE|ACT_DISCARD; 
