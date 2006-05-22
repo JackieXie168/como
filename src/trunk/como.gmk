@@ -57,10 +57,11 @@ DBGFLAGS?=-g
 
 # build version number 
 # 
-SVNREV := $(shell cd $(BASEDIR) && ./comover-helper.sh)
 COMOVER = 1.0
+SVNREV := $(shell cd $(BASEDIR) && ./comover-helper.sh)
+
 ifeq ($(strip $(SVNREV)),)
-    DEFS += -DCOMO_VERSION=\"$(COMOVER)" 
+    DEFS += -DCOMO_VERSION=\"$(COMOVER)\" 
     COMOVERFILE = como-$(COMOVER)
 else
     DEFS += -DCOMO_VERSION=\"$(COMOVER)\ \#$(SVNREV)\"
