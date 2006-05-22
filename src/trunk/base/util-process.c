@@ -343,7 +343,7 @@ handle_children(child_info_t *children, int children_count)
 	} else { 
 	    logmsg(LOGWARN, 
 		   "WARNING!! %s (pid %d) terminated (status: %d)\n",
-	           pid, getprocfullname(who), WEXITSTATUS(statbuf)); 
+	           getprocfullname(who), pid, WEXITSTATUS(statbuf)); 
 	    return 1; 
 	} 
     } 
@@ -351,14 +351,14 @@ handle_children(child_info_t *children, int children_count)
     if (WIFSIGNALED(statbuf)) {
 	logmsg(LOGWARN, 
 	       "WARNING!! %s (pid %d) terminated (signal: %d)\n",
-	       pid, getprocfullname(who), WTERMSIG(statbuf));
+	       getprocfullname(who), pid, WTERMSIG(statbuf));
 	return 1; 
     } 
 
     /* this would really be weird if it happened... */
     logmsg(LOGWARN, 
            "WEIRD WARNING!! %s (pid %d) terminated but nobody knows why!?!?\n",
-	   pid, getprocfullname(who)); 
+	   getprocfullname(who), pid); 
     return 1; 
 }
 
