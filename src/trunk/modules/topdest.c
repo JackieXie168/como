@@ -213,7 +213,7 @@ action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
 	if (now - config->last_export < config->meas_ivl) 
 	    return ACT_STOP;		/* too early */
 
-	config->last_export = now; 
+	config->last_export = TS2SEC(ivl); 
 	return ACT_GO; 		/* dump the records */
     }
     
