@@ -36,6 +36,8 @@ class Node {
     function Node($comonode, $G) {
         $this->NODEDB = $G['NODEDB'];
         $this->G = $G;
+	$absroot = $this -> G['ABSROOT'];
+	$results = trim ($this->G['RESULTS'], "./");
 
 	$timeperiod = $G['TIMEPERIOD'];
 	$timebound = $G['TIMEBOUND'];
@@ -50,9 +52,13 @@ class Node {
 	    $this -> timebound = $timebound;
 
             /*  Cache the status query so we don't have to query CoMo  */
-            $this -> statusExists($comonode);
-
-	    $query = file("http://$comonode/?status");
+            $statusinfo = $this -> statusExists($comonode);
+            if ($statusinfo[0] != 0) {
+		$statusfilename = "$statusinfo[1]";
+		$query = file($statusfilename);
+            } else {
+		$query = file("http://$comonode/?status");
+            }
 
 	} else {
             $query = FALSE;
@@ -62,8 +68,10 @@ class Node {
 	} else {
             $this->status="OK";
 	    /* parse the node information */
+            $buildstatus = "";
 	    for ($i=0;$i<count($query);$i++) {
               if ($query[$i] != "\n") {
+		$buildstatus = $buildstatus . $query[$i];
 		$lines = explode(" ", $query[$i],2);
 		$args = explode("|", $lines[1]);
                 $val = trim ($lines[0]); 
@@ -123,6 +131,11 @@ class Node {
 
             $this->stime = $stime;
             $this->etime = $etime;
+            /*  Write out the status file for future use  */
+            $statusfile = $comonode . "_status_" . $etime;
+	    $statusfilename = "$absroot/$results/$statusfile";
+            $fh = fopen($statusfilename, "w");
+            fwrite ($fh, $buildstatus);
 	}
     }
     function statusExists ($comonode) {
@@ -142,15 +155,17 @@ class Node {
         if (isset($statusfile)) {
 	    $tmpvar = split ("_", $statusfile);
 	    $curstatustime = $tmpvar[2];
+            /*  Make sure status is up to date  */
+	    $statusfilename = "$absroot/$results/$statusfile";
 	    if (($timenow - $curstatustime) > $statuslife) {
-		$returnstatus = 0;
-                $statusfilename = "$absroot/$results/$statusfile";
+		$returnstatus[0] = 0;
                 system ("rm -f $statusfilename");
 	    } else {
-		$returnstatus = 1;
+		$returnstatus[0] = 1;
+		$returnstatus[1] = $statusfilename;
 	    }
         } else 
-	    $returnstatus = 0;
+	    $returnstatus[0] = 0;
 
         return ($returnstatus);
     }
