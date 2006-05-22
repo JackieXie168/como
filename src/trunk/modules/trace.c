@@ -122,8 +122,10 @@ static const char *sc_text[] = {
 
 FLOWDESC {
     int len; 
-    char buf[2048]; /* FIXME: snaplen shouldn't be greater than this! */
+#define BUFSIZE	2048
+    char buf[BUFSIZE];
 };
+#define SNAPLEN_MAX	(BUFSIZE - sizeof(pkt_t))
 
 
 #define CONFIGDESC   struct _trace_config
@@ -141,12 +143,15 @@ init(void * self, char * args[])
     metadesc_t *inmd, *outmd;
 
     config = mem_mdl_malloc(self, sizeof(CONFIGDESC));
-    config->snaplen = 65535;
+    config->snaplen = SNAPLEN_MAX;
 
     for (i = 0; args && args[i]; i++) {
 	if (strstr(args[i], "snaplen=")) { 
 	    char * len = index(args[i], '=') + 1; 
 	    config->snaplen = atoi(len); 	    /* set the snaplen */
+	    if (config->snaplen > SNAPLEN_MAX) {
+		config->snaplen = SNAPLEN_MAX;
+	    }
 	} 
     }
     
@@ -638,7 +643,7 @@ replay(__unused void * self, char *buf, char *out, size_t * len,
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
-    st_recordsize: 65535,
+    st_recordsize: sizeof(FLOWDESC),
     init: init,
     check: NULL,
     hash: NULL,
