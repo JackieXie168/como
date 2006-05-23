@@ -181,14 +181,12 @@ sniffer_start(source_t * src)
     }
     
     /* quickly seek the file from which to start the search */
-    if (module_db_seek_by_ts(info->mdl, info->fd, info->start) < 0) {
+    ofs = module_db_seek_by_ts(info->mdl, info->fd, info->start);
+    if (ofs < 0) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
 	       "error while seeking file %s\n", info->mdl->output);
 	goto error;
     }
-    
-    /* seek the first interesting record */
-    ofs = csgetofs(info->fd);
     
     for (;;) {
 	void * ptr;
@@ -361,9 +359,11 @@ sniffer_stop(source_t * src)
 	info = (struct _snifferinfo *) src->ptr;
 	if (info->fd != -1) {
 	    csclose(info->fd, 0);
+	    info->fd = -1;
 	}
     }
     free(src->ptr);
+    src->ptr = NULL;
 }
 
 struct _sniffer ondemand_sniffer = { 
