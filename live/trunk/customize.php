@@ -1,10 +1,13 @@
-<!-- $id --> 
+<!-- $Id:$ --> 
 
 <?php
     $pagetitle="Customize CoMo";
     $includebanner=0;
     include ("include/header.php.inc");
     require_once("comolive.conf");
+    $G = init_global();
+    $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
+    $NODEDB = $G['NODEDB'];
     require_once("class/node.class.php");
   
     /*
@@ -34,7 +37,7 @@
      * initialize a new node by querying the node for the current 
      * status. If the query fails return an error message. 
      */
-    $node = new Node($comonode,$TIMEPERIOD, $TIMEBOUND);
+    $node = new Node($comonode,$G);
     if ($node->status == "FAIL") {
         /*
          * query failed. write error message and exit
