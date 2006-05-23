@@ -263,13 +263,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     
     if (info->done)
 	return -1;
-
-    if (info->resume_ofs != 0) {
-	ofs = info->resume_ofs;
-	info->resume_ofs = 0;
-    } else {
-	ofs = csgetofs(info->fd);
-    }
+    
+    ofs = info->resume_ofs;
     
     for (npkts = 0, pkt = out; npkts < max_no && buf_size > 65535; ) {
 	int left = 0;
@@ -344,6 +339,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	    pkt++;
 	} while (left > 0 && buf_size > 65535);
     }
+    info->resume_ofs = ofs;
 
     return npkts;
 }
