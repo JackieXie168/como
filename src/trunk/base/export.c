@@ -636,7 +636,7 @@ ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
      * The tables have been processed. Return them to capture
      * so it can merge and reuse the memory.
      */
-    ipc_send_with_fd(fd, IPC_FLUSH, buf, len);
+    ipc_send(sender, IPC_FLUSH, buf, len);
 }
 
 

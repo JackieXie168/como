@@ -510,7 +510,8 @@ process_batch(pkt_t * pkts, unsigned count)
 	    
 	    ivl = mdl->ca_hashtable->ivl;
 	    flush_state(mdl, &exp_tables);
-	    logmsg(LOGCAPTURE, "flexible flush occurred.\n");
+	    logmsg(LOGCAPTURE, "flexible flush for %s occurred\n", mdl->name);
+
 	    /* reset capture table */
 	    mdl->shared_map = memmap_new(allocator_shared(), 64,
 					 POLICY_HOLD_IN_USE_BLOCKS);
