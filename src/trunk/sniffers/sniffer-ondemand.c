@@ -145,7 +145,8 @@ sniffer_start(source_t * src)
 	       "device must contain a valid module\n");
     }
     
-    src->flags = SNIFF_FILE;
+    src->flags = SNIFF_POLL | SNIFF_FILE;
+    src->polling = 0;
     
     /* 
      * populate the sniffer specific information
@@ -263,17 +264,18 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     if (info->done)
 	return -1;
 
-    ofs = csgetofs(info->fd);
+    if (info->resume_ofs != 0) {
+	ofs = info->resume_ofs;
+	info->resume_ofs = 0;
+    } else {
+	ofs = csgetofs(info->fd);
+    }
     
     for (npkts = 0, pkt = out; npkts < max_no && buf_size > 65535; ) {
 	int left = 0;
 	timestamp_t ts;
 	
 	len = info->mdl->callbacks.st_recordsize;
-	if (info->resume_ofs != 0) {
-	    ofs = info->resume_ofs;
-	    info->resume_ofs = 0;
-	}
 	
 	ptr = module_db_record_get(info->fd, &ofs, info->mdl, &len, &ts);
 	if (ptr == NULL) {
@@ -304,7 +306,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	}
 	
 	if (npkts > 0) {
-	    if (ts - first_seen > max_ivl) {
+	    if (ts > first_seen && ts - first_seen > max_ivl) {
 		/* Never returns more than max_ivl of traffic */
 		/* NOTE: need to restart from this record */
 		info->resume_ofs = ofs - len;
