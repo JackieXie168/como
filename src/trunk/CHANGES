@@ -1,6 +1,24 @@
 $Id$
 
 -------------------------------------
+---- CoMo v1.1 (TBD) 
+--
+
+. Optimized packet batches from sniffers
+
+  Sniffers now send one batch of packet as soon at it exceeds the
+  flush interval of any of the running modules. This way we reduce 
+  the number of calls to sniffer_next in CAPTURE without forcing 
+  CAPTURE to expire too many tables before sending them to EXPORT 
+  (this is the case when one batch of packets covers many flush
+  intervals of the modules). 
+
+. Implemented on-demand sniffer
+
+. Optimized topdest module
+
+
+-------------------------------------
 ---- CoMo v1.0 (May 14th, 2006) 
 --
 
