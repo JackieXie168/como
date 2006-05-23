@@ -6,6 +6,10 @@
      *  $Id$  
      */
     require_once("comolive.conf");
+    $G = init_global();
+    $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
+    $NODEDB = $G['NODEDB'];
+    $ABSROOT = $G['$ABSROOT'];
     require_once("class/node.class.php");
 
     /*  Don't allow entrace without customization priviledge  */
@@ -35,7 +39,7 @@
         $action = "add";
 
     if ($action == "add") {
-        $node = new Node($comonode, $TIMEPERIOD, $TIMEBOUND);
+        $node = new Node($comonode, $G);
         if ($node->status == "FAIL"){
     	/*
     	 * query failed. write error message and exit
