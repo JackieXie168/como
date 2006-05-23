@@ -204,7 +204,7 @@ sniffer_start(source_t * src)
 		       info->mdl->output, strerror(errno));
 	    }
 	    /* there's no data */
-	    return -1;
+	    goto error;
 	}
 	/*
 	 * Now we have either good data or GR_LOSTSYNC.
@@ -287,7 +287,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	    }
 	    /* we're finished */
 	    info->done = 1;
-	    return npkts;
+	    return (npkts > 0) ? npkts : -1;
 	}
 	/*
 	 * Now we have either good data or GR_LOSTSYNC.
@@ -302,7 +302,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	if (ts > info->end) {
 	    /* we're finished */
 	    info->done = 1;
-	    return npkts;
+	    return (npkts > 0) ? npkts : -1;
 	}
 	
 	if (npkts > 0) {
