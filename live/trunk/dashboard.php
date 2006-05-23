@@ -14,7 +14,7 @@
  
     if (!(isset($_COOKIE['topntopports']))) {
 	setcookie("topntopports", "5");
-        $topntopports = $_COOKIE['topntopports'];
+        $topntopports = 5;
     } else 
         $topntopports = $_COOKIE['topntopports'];
 ?>
