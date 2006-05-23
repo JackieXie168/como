@@ -488,10 +488,11 @@ sniffer_start(source_t * src)
 	       strerror(errno));
 	goto error;
     }
+    src->fd = fd;
 
     memset((char *) &addr_in, 0, sizeof(struct sockaddr_in));
     addr_in.sin_family = AF_INET;
-    addr_in.sin_addr.s_addr = INADDR_ANY;
+    addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
     addr_in.sin_port = htons(info->port);
 
     if (src->device && strlen(src->device) > 0) {
@@ -515,8 +516,6 @@ sniffer_start(source_t * src)
 	       strerror(errno));
 	goto error;
     }
-
-    src->fd = fd;
 
     /* setup output descriptor */
     outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
@@ -579,7 +578,11 @@ sniffer_start(source_t * src)
     }
 
     return 0;
-  error:
+error:
+    if (src->fd != -1) {
+	close(src->fd);
+	src->fd = -1;
+    }
     free(src->ptr);
     src->ptr = NULL;
 
