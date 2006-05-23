@@ -33,7 +33,6 @@ function init_env ($node) {
 	}
     } else
 	$input_vars['etime'] = $node->etime;
-
     if(isset($_GET['stime']) && ($_GET['stime'] != "")){
 	$input_vars['stime'] = $_GET['stime'];
 	if (isset($node)){
