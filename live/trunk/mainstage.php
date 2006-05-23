@@ -192,7 +192,13 @@
 #			print "source=tuple&interval=$duration&"; 
 #		    } 
                     print "filter={$node->modinfo[$allmods[$i]]['filter']}&";
-		    print "stime=$node->stime&etime=$node->etime\">";
+/*  Commenting out next line and replacing with stime from GEt
+ *  Need to see if this breaks things.
+ *  This line was originally intended to grab the individual
+ *  module start time
+ */
+#		    print "stime=$node->stime&etime=$node->etime\">";
+		    print "stime=$stime&etime=$etime\">";
 		    print "$allmods[$i]</a></li>\n";
                 }
             }
