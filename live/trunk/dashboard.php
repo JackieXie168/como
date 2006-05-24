@@ -8,7 +8,7 @@
 	setcookie("topports", "block");
     if (!(isset($_COOKIE['topntopdest']))) {
 	setcookie("topntopdest", "5");
-        $topntopdest = $_COOKIE['topntopdest'];
+        $topntopdest = 5;
     } else 
         $topntopdest = $_COOKIE['topntopdest'];
  
