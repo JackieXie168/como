@@ -358,6 +358,20 @@ configsniffer(char * args, struct _snifferinfo * info)
 	return; 
 
     /*
+     * "port". 
+     * sets the port to which the UDP socket will be bound.
+     */
+    wh = strstr(args, "port");
+    if (wh != NULL) {
+	char *x = index(wh, '=');
+
+	if (x == NULL)
+	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
+	else
+	    info->port = atoi(x + 1);
+    }
+
+    /*
      * "window". 
      * sets how much ahead in the flow records we need to read 
      * before replaying packets to make sure that no out-of-order 
