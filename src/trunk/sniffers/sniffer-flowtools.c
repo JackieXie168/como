@@ -545,7 +545,8 @@ sniffer_start(source_t * src)
      */
     src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
     info = (struct _snifferinfo *) src->ptr; 
-    info->window = TIME2TS(300,0) ; 	/* default window is 5 minutes */
+    info->window = TIME2TS(300,0); 	/* default window is 5 minutes */
+    info->timescale = info->window; 	/* default timescale is window */
     info->sampling = 1;			/* default no sampling */
 
     /* 
