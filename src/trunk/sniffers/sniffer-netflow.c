@@ -78,7 +78,6 @@
 #define BUFSIZE		(1024*1024)
 struct _snifferinfo {
     heap_t * heap; 		/* heap with flow records read so far */
-    timestamp_t last_ts; 	/* last packet timestamp */
     timestamp_t min_ts; 	/* min start time in the heap (root) */
     timestamp_t max_ts; 	/* max start time in the heap */
     timestamp_t window; 	/* lookahead window */
@@ -539,7 +538,6 @@ sniffer_start(source_t * src)
      */
     info->min_ts = ~0;
     info->max_ts = 0;
-    info->last_ts = info->min_ts; 
 
     /*  
      * given that the output stream is not a plain packet 
@@ -612,6 +610,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     struct ftpdu *ftpdu;
     int i, n, offset;
     struct fts3rec_v5 *fr;
+    timestamp_t first_seen;
     
     assert(src != NULL);
     assert(src->ptr != NULL); 
@@ -714,11 +713,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	 * packets stop and return to CAPTURE so that it can 
  	 * process EXPORT messages, etc. 
 	 */
-	if (COMO(ts) - info->last_ts > max_ivl)
-	    break; 
+	if (npkts > 1) {
+	    if (COMO(ts) - first_seen > max_ivl) {
+		break;
+	    }
+	} else {
+	    first_seen = COMO(ts);
+	}
     }
 
-    info->last_ts = COMO(ts); 
     return npkts;
 }
 
