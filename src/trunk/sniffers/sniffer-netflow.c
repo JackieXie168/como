@@ -650,7 +650,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     }
 
     /* verify sequence number */
-    if (ftpdu_check_seq(ftpdu, &info->ftseq) < 0) {
+    if (info->exporter && ftpdu_check_seq(ftpdu, &info->ftseq) < 0) {
 	logmsg(LOGSNIFFER, "sniffer-netflow: PDU with wrong sequence number:"
 	       "expected: %lu got: %lu lost %lu\n",
 	       info->ftseq.seq_exp, info->ftseq.seq_rcv, info->ftseq.seq_lost);
