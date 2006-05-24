@@ -104,7 +104,7 @@ ifdef USE_SK98
 endif
 
 ifdef SUPPORT_NETFLOW_V5 
-	SNIFFERS += flowtools
+	SNIFFERS += flowtools netflow
 	LIBS += ft z
 	INCDIRS += /usr/local/netflow/include
 	LIBDIRS += /usr/local/netflow/lib
