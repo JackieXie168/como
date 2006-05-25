@@ -21,14 +21,14 @@ while 1:
     if tsm==0: 
         tsm = float(l[0])
 
-    lip = l[4]
-    proto = int(l[1])
+    lip = l[5]
+    proto = int(l[2])
     if proto!=6 and proto!=17:
         continue
 
-    lsport = l[5]
-    ldstip = l[2]
-    ldport = '_'+l[3]
+    lsport = l[6]
+    ldstip = l[3]
+    ldport = '_'+l[4]
 
     if not daily.has_key(lip):
 	daily[lip] = {}
