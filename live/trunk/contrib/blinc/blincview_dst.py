@@ -36,6 +36,7 @@ while 1:
     f  = (str(proto), lsport, ldport, ldstip)
     daily[lip][f] = 1
 
+
 for ip in daily.keys():
     g = printGraphlet.printGraphlet(daily[ip])
     g.dotprint(DOTCMD, ip, tsm, daily[ip], 0, dafilename)

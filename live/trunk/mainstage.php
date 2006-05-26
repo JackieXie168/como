@@ -173,8 +173,9 @@
 #	    $special = "ports";
 
             /*  Use the config file to decide how many modules to show  */
-            #$allmods = array_keys($node->loadedmodule); 
+            #$allmods = array_keys($node->loadedmodules); 
             $allmods = $node -> GetConfigModules ($comonode, "main");
+	    #print_r($allmods);
             
             for ($i = 1; $i < count($allmods); $i++) {
                 if (($i % $NUMLINKS == 0) && ($i != 0))
