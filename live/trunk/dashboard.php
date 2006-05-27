@@ -225,7 +225,7 @@ function initializeMenu(menuId, triggerId, module) {
 		$modargs = $modargs . "interval=$interval&";
 	      }
 
-              /*  This is here the iframes is printed out  */
+              /*  This is where the iframes is printed out  */
               #print "<form target=frame$i ";
               print "<form target=frame$i ";
               print "name=topn$sec_array[$i] ";
