@@ -1,4 +1,4 @@
-<!-- $Id:$ --> 
+<!-- $Id$ --> 
 
 <?php
     $pagetitle="Customize CoMo";
@@ -70,8 +70,9 @@
 	$action = "NORM";
 
 /*  Write out new config file  */
-    if ($action == "submit"){
+    if ($action == "submit") {
 	$val = explode ("&", $_SERVER['QUERY_STRING']);
+print "val is $val";
 	$secfile = "sec_mods";
 	$mainfile = "main_mods";
 	for ($i = 0; $i < count($val); $i++) {
@@ -90,16 +91,22 @@
 	    }
 	}
 	$secfile = $secfile . "\n";
-	if ($fh = fopen ("$NODEDB/$comonode.conf", "w")) {
+	$dadirname = $G['ABSROOT'] . "/" . $G['NODEDB'];
+	$needlefile = $comonode . "_config_";
+	$configfilename = $node -> queryDir ($dadirname, $needlefile);
+	if ($fh = fopen ("$NODEDB/$configfilename", "w")) {
 	    fwrite ($fh, $mainfile);
 	    fwrite ($fh, $secfile);
 	    fclose ($fh);
 	}
     }
-
     /*  Read config file  */
-    if (file_exists("$NODEDB/$comonode.conf")){
-        $dafile = file ("$NODEDB/$comonode.conf");
+    $dadirname = $G['ABSROOT'] . "/" . $G['NODEDB'];
+    $needlefile = $comonode . "_config_";
+    $configfilename = $node -> queryDir ($dadirname, $needlefile);
+    $configfilename = $dadirname . "/" . $configfilename;
+    if (file_exists($configfilename)) {
+        $dafile = file ($configfilename);
 	for ($i=0;$i<count($dafile);$i++){
 	    if (strstr($dafile[$i], "sec_mods")) {
                 $secfile = $dafile[$i];

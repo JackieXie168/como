@@ -52,7 +52,7 @@ class Node {
 	    $this -> timebound = $timebound;
 
             /*  Cache the status query so we don't have to query CoMo  */
-            $statusinfo = $this -> statusExists($comonode);
+            $statusinfo = $this -> statusExists($comonode, $G['RESULTS'], "status");
             if ($statusinfo[0] != 0) {
 		$statusfilename = "$statusinfo[1]";
 		$query = file($statusfilename);
@@ -118,6 +118,12 @@ class Node {
 	     */
 	    $stime = $etime - $this->timeperiod;
 
+            /*  Check if this is a virtual node and if 
+             *  so set module to default
+             */
+#            if (!(isset($module)))
+#                $module = "traffic";
+
             /*  Make sure start time is not before the module start time  */
             if ($stime < $this -> modinfo[$module]['stime'])
                 $stime = $this -> modinfo[$module]['stime'];
@@ -138,21 +144,31 @@ class Node {
             fwrite ($fh, $buildstatus);
 	}
     }
-    function statusExists ($comonode) {
-        $statuslife = "600";
-        $absroot = $this -> G['ABSROOT'];
-        $results = trim ($this->G['RESULTS'], "./");
-        $timenow = time();
-        /*  Get the current status file  */
-        $dh = opendir ("$absroot/$results");
-	$needlefile = $comonode . "_status_";
+    function queryDir ($dadirname, $needlefile) {
+        $dh = opendir ("$dadirname");
+#	$needlefile = $comonode . "_" . $key . "_";
 	while (false!==($filez= readdir($dh))) {
 	    if ($filez!= "." && $filez!= ".." 
                 && strstr ($filez, "$needlefile")) {
 		$statusfile = $filez;
 	    }
 	}
-        if (isset($statusfile)) {
+        if (isset ($statusfile))
+	    return ($statusfile);
+        else 
+            return (0);
+    }
+    function statusExists ($comonode, $dadir, $key) {
+        $statuslife = "600";
+        $absroot = $this -> G['ABSROOT'];
+        $results = trim ($dadir, "./");
+        $timenow = time();
+        /*  Get the current status file  */
+	$needlefile = $comonode . "_" . $key . "_";
+        $dadirname = $absroot . "/" . $results;
+        $statusfile = $this -> queryDir ($dadirname, $needlefile);
+
+        if ($statusfile) {
 	    $tmpvar = split ("_", $statusfile);
 	    $curstatustime = $tmpvar[2];
             /*  Make sure status is up to date  */
@@ -230,9 +246,14 @@ class Node {
 	    $needle = "main_mods";
         if ($value == "secondary")
 	    $needle = "sec_mods";
+	/*  Cache the status query so we don't have to query CoMo  */
+	$statusinfo = $this -> statusExists($comonode, $NODEDB, "config");
 
-	if (file_exists("$NODEDB/$comonode.conf")){
-	    $dafile = file ("$NODEDB/$comonode.conf");
+	if ($statusinfo[0] != 0) {
+	    $statusfilename = "$statusinfo[1]";
+	    $conffile = "$statusfilename";
+	    $dafile = file ("$conffile");
+
 	    for ($i=0;$i<count($dafile);$i++){
 		if (strstr($dafile[$i], $needle)) {
 		    $tmp = $dafile[$i];
@@ -245,7 +266,6 @@ class Node {
                 $val[$i] = trim($val[$i]);
 
             return ($val);
-            
 	} else {
 	    /*  Create a default file  */
             $usable_mods = $this -> GetModules("gnuplot");
@@ -256,10 +276,12 @@ class Node {
             }
 	    $val = $val . "\n"; 
 	    $val = $val . "sec_mods;;alert;;topdest;;topports\n";
-	    $fh = fopen ("$NODEDB/$comonode.conf", "w");
+
+            $statusfile = $comonode . "_config_" . $this->etime;
+	    $fh = fopen ("$NODEDB/$statusfile", "w");
 	    fwrite ($fh, $val);
             /*  Re-call this function  */
-            return ($this -> GetConfigModules($comonode, $NODEDB, $value));
+            return ($this -> GetConfigModules($comonode, $value));
 	}
     }
 
