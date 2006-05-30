@@ -443,7 +443,7 @@ configsniffer(char * args, struct _snifferinfo * info)
 	char * x = index(wh, '=');
 	if (x == NULL)
 	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
-	info->exporter = ntohl(inet_addr(x + 1));
+	info->exporter = inet_addr(x + 1);
     }
 }
 
