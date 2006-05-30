@@ -674,6 +674,7 @@ parse_cfgline(struct _como * m, const char *line)
 	IN_WORD,
 	IN_QUOTES,
 	END_QUOTES,
+	IN_ML_COMMENT,
         ESCAPE,
 	DONE
     } state = DONE;
@@ -726,6 +727,11 @@ parse_cfgline(struct _como * m, const char *line)
 		state = IN_QUOTES;
 		break;
 	    }
+	    if (c == '/' && line[i + 1] == '*') {
+		state = IN_ML_COMMENT;
+		i++;
+		break;
+	    }
 	    if (isalnum(c)) {
 		copy = 1;
 		state = IN_WORD;
@@ -756,6 +762,11 @@ parse_cfgline(struct _como * m, const char *line)
 		dst = 0;
 		return; /* error */
 	    }
+	    if (c == '/' && line[i + 1] == '*') {
+		state = IN_ML_COMMENT;
+		i++;
+		break;
+	    }
 	    /* assume all the rest is valid (could be more restrictive). */
 	    copy = 1;
 	    break;
@@ -783,6 +794,14 @@ parse_cfgline(struct _como * m, const char *line)
 	    end_token = 1;
 	    state = IN_BLANK;
 	    break;
+
+	case IN_ML_COMMENT:
+	    if (c == '*' && line[i + 1] == '/') {
+		state = DONE;
+		i++;
+	    }
+	    break;
+
 	}
 	if (copy)
 	    buf = add_char(buf, c, &dst, &len);
@@ -811,6 +830,8 @@ parse_cfgline(struct _como * m, const char *line)
     case DONE:
     case IN_BLANK:
 	state = DONE;
+	break;
+    case IN_ML_COMMENT:
 	break;
     }
     /* now we have NUL-separated keywords. */
