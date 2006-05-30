@@ -300,7 +300,7 @@ process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info)
      * check that the information in the flow record is valid 
      */ 
     if (fr->dPkts == 0 || fr->dOctets == 0) { 
-	logmsg(LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
+	logmsg(V_LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
 	    fr->dPkts, fr->dOctets); 
 	return netflow2ts(fr, fr->Last);
     }
@@ -611,6 +611,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     int i, n, offset;
     struct fts3rec_v5 *fr;
     timestamp_t first_seen;
+#ifdef SNIFFER_NETFLOW_DEBUG
+    uint32_t *hs;
+#endif
     
     assert(src != NULL);
     assert(src->ptr != NULL); 
@@ -654,6 +657,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	       "expected: %lu got: %lu lost %lu\n",
 	       info->ftseq.seq_exp, info->ftseq.seq_rcv, info->ftseq.seq_lost);
     }
+
+#ifdef SNIFFER_NETFLOW_DEBUG
+    hs = ((uint32_t *) info->heap) + 3;
+    logmsg(LOGWARN, "sniffer-netflow: enter heap first %lu\n", *hs);
+#endif
 
     /* decode */
 #ifdef COMO_LITTLE_ENDIAN
@@ -721,6 +729,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	    first_seen = COMO(ts);
 	}
     }
+
+#ifdef SNIFFER_NETFLOW_DEBUG
+    logmsg(LOGWARN, "sniffer-netflow: exit heap first %lu, npkts %d\n",
+	   *hs, npkts);
+#endif
 
     return npkts;
 }
