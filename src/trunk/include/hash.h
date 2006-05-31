@@ -33,13 +33,28 @@
 #ifndef HASH_H_
 #define HASH_H_
 
+/** Hash iterator object. The iterator is on the stack, but its real
+ * fields are hidden privately.
+ */
+struct hash_iter_t
+{
+  void *dummy1; /* Do not use. */
+  void *dummy2; /* Do not use. */
+  void *dummy3; /* Do not use. */
+  void *dummy4; /* Do not use. */
+  int   dummy5; /* Do not use. */
+  int   dummy6; /* Do not use. */
+};
+
 /*
  * Forward declarations of hash_table_t and related types.
  */
 typedef struct hash_t hash_t;
+typedef struct hash_iter_t  hash_iter_t;
 
 typedef unsigned int (*hash_key_fn) (const void *keyPtr);
 typedef int (*compare_hash_keys_fn) (const void *keyPtr1, const void *keyPtr2);
+typedef void (*destroy_notify_fn) (void *data);
 
 /*
  * Acceptable key types for hash tables:
@@ -60,6 +75,11 @@ typedef enum {
 hash_t *hash_new          (allocator_t *alc,
 			   int keyType, hash_key_fn hashKeyFn,
 			   compare_hash_keys_fn compareKeysFn);
+hash_t *hash_new_full     (allocator_t *alc,
+			   int keyType, hash_key_fn hashKeyFn,
+			   compare_hash_keys_fn compareKeysFn,
+			   destroy_notify_fn keyDestroyFn,
+			   destroy_notify_fn valueDestroyFn);
 void *  hash_lookup_string(hash_t *tablePtr, const char *key);
 void *  hash_lookup_ulong (hash_t *tablePtr, unsigned long key);
 void *  hash_lookup       (hash_t *tablePtr, void *key);
@@ -70,5 +90,14 @@ int     hash_remove_string(hash_t *tablePtr, const char *key);
 int     hash_remove_ulong (hash_t *tablePtr, unsigned long key);
 int     hash_remove       (hash_t *tablePtr, void *key);
 void    hash_destroy      (hash_t *tablePtr);
+
+void          hash_iter_init          (hash_t * table, hash_iter_t * iter);
+int           hash_iter_next          (hash_iter_t * iter);
+void          hash_iter_remove_entry  (hash_iter_t * iter);
+void *        hash_iter_get_value     (hash_iter_t * iter);
+void          hash_iter_set_value     (hash_iter_t * iter, void *value);
+void *        hash_iter_get_key       (hash_iter_t * iter);
+unsigned long hash_iter_get_ulong_key (hash_iter_t * iter);
+const char *  hash_iter_get_string_key(hash_iter_t * iter);
 
 #endif /*HASH_H_*/
