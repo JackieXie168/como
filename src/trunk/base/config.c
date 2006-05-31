@@ -1145,6 +1145,7 @@ configure(struct _como * m, int argc, char ** argv)
     }
     
     m->running = cli_args.running;
+    m->inline_fd = (m->running == INLINE) ? 1 /* stdout */ : -1; 
     if (cli_args.logflags != -1)
 	m->logflags = cli_args.logflags;
 

@@ -57,6 +57,15 @@ int storage_fd;                 /* socket to storage
 				 *     used to communicate with STORAGE too
 				 */
 
+inline static void
+handle_print_fail(module_t *mdl)
+{
+    if (errno == ENODATA) {
+	panicx("module \"%s\" failed to print\n", mdl->name);
+    } else {
+	err(EXIT_FAILURE, "sending data to the client");
+    }
+}
 
 /**
  * -- create_record
@@ -249,7 +258,8 @@ call_store(module_t * mdl, rec_t *rp)
 		sz = mdl->callbacks.load(mdl, p, ret, &ts);
 		
 		/* print this record */
-		module_db_record_print(mdl, p, NULL, -1);
+		if (module_db_record_print(mdl, p, NULL, map.inline_fd) < 0)
+		    handle_print_fail(mdl);
 		
 		/* move to next */
 		p += sz;
@@ -527,8 +537,9 @@ ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
 	/* setup the print format (make sure we 
 	 * don't send a NULL args pointer down)
 	 */
-	module_db_record_print(mdl, NULL, p, -1);
-    } 
+	if (module_db_record_print(mdl, NULL, p, map.inline_fd) < 0)
+	    handle_print_fail(mdl);
+    }
 }
  
 
@@ -684,7 +695,8 @@ ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
     store_records(map.inline_mdl, ~0, ~0);
 
     /* print the footer since running inline (asserted before) */
-    module_db_record_print(map.inline_mdl, NULL, NULL, -1);
+    if (module_db_record_print(map.inline_mdl, NULL, NULL, map.inline_fd) < 0)
+	handle_print_fail(map.inline_mdl);
     
     ipc_send(map.parent, IPC_DONE, NULL, 0); 
 }

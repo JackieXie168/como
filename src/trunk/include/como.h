@@ -111,7 +111,10 @@ struct _como {
 	 * matching function.
 	 */
 
-    module_t * inline_mdl;	/* module that needs to be run in inline mode */
+    module_t * inline_mdl;	/* module that needs to be run in inline
+				 * mode
+				 */
+    int inline_fd;		/* fd of inline client */
 };
 
 
