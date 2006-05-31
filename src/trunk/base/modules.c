@@ -780,7 +780,6 @@ module_db_record_print(module_t * mdl, char * ptr, char **args, int client_fd)
 {
     char * out; 
     size_t len; 
-    int ret; 
 #if 0
     FIXME: DEBUG only
     {
@@ -795,16 +794,8 @@ module_db_record_print(module_t * mdl, char * ptr, char **args, int client_fd)
     	return -1;
     }
     
-    if (len > 0) {
-	switch (client_fd) {
-	case -1:
-	    ipc_send(map.parent, IPC_RECORD, out, strlen(out) + 1);
-	    break;
-	default:
-	    ret = como_writen(client_fd, out, len);
-	    if (ret < 0)
-		return -1;
-	}
+    if (len > 0 && como_writen(client_fd, out, len) < 0) {
+	return -1;
     }
     return 0;
 }

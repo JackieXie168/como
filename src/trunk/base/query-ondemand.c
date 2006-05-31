@@ -45,7 +45,6 @@
 
 /* global state */
 extern struct _como map;
-static int client_fd;
 
 #define QD_CHILDREN_COUNT	2 /* only CA and EX */
 static child_info_t qd_children[QD_CHILDREN_COUNT];
@@ -75,7 +74,7 @@ qd_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
     ipc_send(sender, IPC_MODULE_START, &map.stats, sizeof(void *));
 }
 
-
+#if 0
 /*
  * -- qd_ipc_record
  *
@@ -94,7 +93,7 @@ qd_ipc_record(__unused procname_t sender, __unused int fd,
     if (ret < 0)
 	errx(EXIT_FAILURE, "sending data to the client");
 }
-
+#endif
 
 /*
  * -- qd_ipc_done  
@@ -160,7 +159,12 @@ query_ondemand(int fd, qreq_t * req, int node_id)
      */
 
     /* inline mode */
-    map.running = INLINE; 
+    map.running = INLINE;
+    /* 
+     * store the output file descriptor in a the map in order to make it
+     * accessible to EXPORT
+     */
+    map.inline_fd = fd;
 
     /* disable all modules */
     for (idx = 0; idx < map.module_max; idx++)
@@ -232,15 +236,8 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* register various IPC handlers */
     ipc_clear();
     ipc_register(IPC_SYNC, qd_ipc_sync);
-    ipc_register(IPC_RECORD, qd_ipc_record); 
     ipc_register(IPC_DONE, qd_ipc_done); 
 
-    /* 
-     * store the output file descriptor in a global variable
-     * accessible to the IPC handlers 
-     */
-    client_fd = fd; 
- 
     /* now start a new CAPTURE process */ 
     tag = child(CAPTURE, fd); 
     capture_fd = ipc_listen(tag); 
@@ -255,7 +252,7 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* get ready for the mainloop */
     FD_ZERO(&valid_fds);
     max_fd = 0;
-    max_fd = add_fd(client_fd, &valid_fds, max_fd);
+    max_fd = add_fd(fd, &valid_fds, max_fd);
     max_fd = add_fd(ondemand_fd, &valid_fds, max_fd);
 
     for (;;) {
@@ -265,10 +262,10 @@ query_ondemand(int fd, qreq_t * req, int node_id)
         r = valid_fds;
         n_ready = select(max_fd, &r, NULL, NULL, NULL);
         /* first check if the client is still there */
-	if (FD_ISSET(client_fd, &r)) {
+	if (FD_ISSET(fd, &r)) {
 	    char t;
 	    int ret;
-	    ret = read(client_fd, &t, 1);
+	    ret = read(fd, &t, 1);
 	    if (ret <= 0) {
 		/* client is gone */
 		errx(EXIT_FAILURE, "client is gone");
