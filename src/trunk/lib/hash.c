@@ -76,6 +76,15 @@
  * terms specified in this license. 
  */
 
+/* Portions are:
+ * 
+ * Copyright (C) 2002  Red Hat, Inc.
+ * Copyright (c) 1991-1993 The Regents of the University of California.
+ * Copyright (c) 1994 Sun Microsystems, Inc.
+ * 
+ * Licensed under the Academic Free License version 2.1
+ */
+
 #include <string.h>
 #include <assert.h>
 
@@ -100,64 +109,21 @@
 #define RANDOM_INDEX(tablePtr, i) \
     (((((long) (i))*1103515245) >> (tablePtr)->downShift) & (tablePtr)->mask)
 
-
-typedef void (*free_key_fn) (void *key);
-typedef void (*free_value_fn) (void *value);
-
 /*
  * Structure definition for an entry in a hash table.  No-one outside
  * Tcl should access any of these fields directly;  use the macros
  * defined below.
  */
 
-typedef struct hash_entry_t hash_entry_t;
-
-struct hash_entry_t {
-    hash_entry_t *nextPtr;		/* Pointer to next entry in this
+typedef struct hash_entry_t {
+    struct hash_entry_t *nextPtr;	/* Pointer to next entry in this
 					 * hash bucket, or NULL for end of
 					 * chain. */
-    hash_t *tablePtr;			/* Pointer to table containing entry. */
-    unsigned int hash;			/* Hash value. */
-    void *key;				/* Key. */
-    void *value;			/* Entry value. */
-};
-
-#if 0
-/*
- * Structure definition for the methods associated with a hash table
- * key type.
- */
-struct hash_key_t {
-
-    /* Calculates a hash value for the key. If this is NULL then the pointer
-     * itself is used as a hash value.
-     */
-    hash_key_fn *hashKeyFn;
-
-    /* Compares two keys and returns zero if they do not match, and non-zero
-     * if they do. If this is NULL then the pointers are compared.
-     */
-    compare_hash_keys_fn *compareKeysFn;
-
-    /* Called to allocate memory for a new entry, i.e. if the key is a
-     * string then this could allocate a single block which contains enough
-     * space for both the entry and the string. Only the key field of the
-     * allocated hash_entry_t structure needs to be filled in. If something
-     * else needs to be done to the key, i.e. incrementing a reference count
-     * then that should be done by this function. If this is NULL then
-     * como_alloc is used to allocate enough space for a hash_entry_t and the
-     * key pointer is assigned to key.oneWordValue.
-     */
-    alloc_hash_entry_fn *allocEntryFn;
-
-    /* Called to free memory associated with an entry. If something else needs
-     * to be done to the key, i.e. decrementing a reference count then that
-     * should be done by this function. If this is NULL then como_free is used
-     * to free the hash_entry_t.
-     */
-    free_hash_entry_fn *freeEntryFn;
-};
-#endif
+    hash_t *tablePtr;		/* Pointer to table containing entry. */
+    unsigned int hash;		/* Hash value. */
+    void *key;			/* Key. */
+    void *value;		/* Entry value. */
+} hash_entry_t;
 
 /*
  * Structure definition for a hash table.
@@ -165,53 +131,60 @@ struct hash_key_t {
 
 #define SMALL_HASH_TABLE 4
 struct hash_t {
-    hash_entry_t **buckets;		/* Pointer to bucket array.  Each
-					 * element points to first entry in
-					 * bucket's hash chain, or NULL. */
+    hash_entry_t **buckets;	/* Pointer to bucket array.  Each
+				 * element points to first entry in
+				 * bucket's hash chain, or NULL. */
     hash_entry_t *staticBuckets[SMALL_HASH_TABLE];
-					/* Bucket array used for small tables
-					 * (to avoid mallocs and frees). */
-    int numBuckets;			/* Total number of buckets allocated
-					 * at **bucketPtr. */
-    int numEntries;			/* Total number of entries present
-					 * in table. */
-    int rebuildSize;			/* Enlarge table when numEntries gets
-					 * to be this large. */
-    int downShift;			/* Shift count used in hashing
-					 * function.  Designed to use high-
-					 * order bits of randomized keys. */
-    int mask;				/* Mask value used in hashing
-					 * function. */
-    int keyType;			/* Type of keys used in this table. 
-					 * It's either TCL_CUSTOM_KEYS,
-					 * HASHKEYS_STRING, HASHKEYS_ULONG,
-					 * or an integer giving the number of
-					 * ints that is the size of the key.
-					 */
+    /* Bucket array used for small tables
+     * (to avoid mallocs and frees). */
+    int numBuckets;		/* Total number of buckets allocated
+				 * at **bucketPtr. */
+    int numEntries;		/* Total number of entries present
+				 * in table. */
+    int rebuildSize;		/* Enlarge table when numEntries gets
+				 * to be this large. */
+    int downShift;		/* Shift count used in hashing
+				 * function.  Designed to use high-
+				 * order bits of randomized keys. */
+    int mask;			/* Mask value used in hashing
+				 * function. */
+    int keyType;		/* Type of keys used in this table. 
+				 * It's either TCL_CUSTOM_KEYS,
+				 * HASHKEYS_STRING, HASHKEYS_ULONG,
+				 * or an integer giving the number of
+				 * ints that is the size of the key.
+				 */
     hash_key_fn hashKeyFn;
     compare_hash_keys_fn compareKeysFn;
-    allocator_t *alc;			/* Allocator of the hash table. */
+    destroy_notify_fn keyDestroyFn;
+    destroy_notify_fn valueDestroyFn;
+    allocator_t *alc;		/* Allocator of the hash table. */
 };
 
-/*
- * Structure definition for information used to keep track of searches
- * through hash tables:
+/* 
+ * Hash iterator
  */
-
-typedef struct hash_search_t {
-    hash_t *tablePtr;		/* Table being searched. */
-    int nextIndex;		/* Index of next bucket to be
-				 * enumerated after present one. */
-    hash_entry_t *nextEntryPtr;	/* Next entry to be enumerated in the
-				 * the current bucket. */
-} hash_search_t;
-
+typedef struct hash_real_iter_t {
+    hash_t *table;		/* Pointer to table containing entry. */
+    hash_entry_t **bucket;	/* Pointer to bucket that points to
+				 * first entry in this entry's chain:
+				 * used for deleting the entry.
+				 */
+    hash_entry_t *entry;	/* Current hash entry */
+    hash_entry_t *next_entry;	/* Next entry to be iterated onto in current
+				 * bucket
+				 */
+    int next_bucket;		/* index of next bucket */
+    int n_entries_on_init;	/* used to detect table resize since
+				 * initialization
+				 */
+} hash_real_iter_t;
 
 /*
  * Prototypes for the string hash key methods.
  */
 
-static unsigned int string_hash (const void *keyPtr);
+static unsigned int string_hash(const void *keyPtr);
 
 /*
  * Procedure prototypes for static procedures in this file:
@@ -231,7 +204,8 @@ static void rebuild_table(hash_t * tablePtr);
  *	tablePtr - Pointer to table record, which is supplied by the caller.
  *	keyType - Type of keys to use in table: HASHKEYS_STRING,
  *	          HASHKEYS_ULONG, or an integer >= 2.
- *	typePtr - Pointer to structure which defines the behaviour of this table.
+ *	typePtr - Pointer to structure which defines the behaviour of this
+ *	          table.
  *
  * Results:
  *	None.
@@ -244,11 +218,19 @@ static void rebuild_table(hash_t * tablePtr);
  */
 
 hash_t *
-hash_new(allocator_t *alc, int keyType, hash_key_fn hashKeyFn,
+hash_new(allocator_t * alc, int keyType, hash_key_fn hashKeyFn,
 	 compare_hash_keys_fn compareKeysFn)
 {
+    return hash_new_full(alc, keyType, hashKeyFn, compareKeysFn, NULL, NULL);
+}
+
+hash_t *
+hash_new_full(allocator_t * alc, int keyType, hash_key_fn hashKeyFn,
+	      compare_hash_keys_fn compareKeysFn,
+	      destroy_notify_fn keyDestroyFn, destroy_notify_fn valueDestroyFn)
+{
     hash_t *tablePtr;
-    
+
     assert(alc != NULL);
     tablePtr = alc_calloc(alc, 1, sizeof(hash_t));
 
@@ -268,22 +250,25 @@ hash_new(allocator_t *alc, int keyType, hash_key_fn hashKeyFn,
     tablePtr->alc = alc;
     tablePtr->hashKeyFn = hashKeyFn;
     tablePtr->compareKeysFn = compareKeysFn;
-    
+
     if (keyType == HASHKEYS_STRING) {
 	if (hashKeyFn == NULL) {
-    	    tablePtr->hashKeyFn = string_hash;
+	    tablePtr->hashKeyFn = string_hash;
 	}
-    	
+
 	if (compareKeysFn == NULL) {
-    	    tablePtr->compareKeysFn = (compare_hash_keys_fn) strcmp;
+	    tablePtr->compareKeysFn = (compare_hash_keys_fn) strcmp;
 	}
     }
+
+    tablePtr->keyDestroyFn = keyDestroyFn;
+    tablePtr->valueDestroyFn = valueDestroyFn;
 
     return tablePtr;
 }
 
 static hash_entry_t *
-hash_lookup_internal(hash_t *tablePtr, void *key)
+hash_lookup_internal(hash_t * tablePtr, void *key)
 {
     hash_entry_t *hPtr;
     unsigned int hash;
@@ -302,8 +287,7 @@ hash_lookup_internal(hash_t *tablePtr, void *key)
      */
     if (tablePtr->compareKeysFn) {
 	compare_hash_keys_fn compareKeysFn = tablePtr->compareKeysFn;
-	for (hPtr = tablePtr->buckets[i]; hPtr != NULL;
-	     hPtr = hPtr->nextPtr) {
+	for (hPtr = tablePtr->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
 	    if (hash != (unsigned int) hPtr->hash) {
 		continue;
 	    }
@@ -312,8 +296,7 @@ hash_lookup_internal(hash_t *tablePtr, void *key)
 	    }
 	}
     } else {
-	for (hPtr = tablePtr->buckets[i]; hPtr != NULL;
-	     hPtr = hPtr->nextPtr) {
+	for (hPtr = tablePtr->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
 	    if (hash != (unsigned int) hPtr->hash) {
 		continue;
 	    }
@@ -348,39 +331,38 @@ hash_lookup_internal(hash_t *tablePtr, void *key)
  */
 
 void *
-hash_lookup_string(hash_t *tablePtr, const char *key)
+hash_lookup_string(hash_t * tablePtr, const char *key)
 {
     hash_entry_t *hPtr;
-    
+
     assert(tablePtr->keyType == HASHKEYS_STRING);
-    
+
     hPtr = hash_lookup_internal(tablePtr, (void *) key);
-    
+
     return (hPtr) ? hPtr->value : NULL;
 }
 
-
 void *
-hash_lookup_ulong(hash_t *tablePtr, unsigned long key)
+hash_lookup_ulong(hash_t * tablePtr, unsigned long key)
 {
     hash_entry_t *hPtr;
-    
+
     assert(tablePtr->keyType == HASHKEYS_ULONG);
-    
+
     hPtr = hash_lookup_internal(tablePtr, (void *) key);
-    
+
     return (hPtr) ? hPtr->value : NULL;
 }
 
 void *
-hash_lookup(hash_t *tablePtr, void *key)
+hash_lookup(hash_t * tablePtr, void *key)
 {
     hash_entry_t *hPtr;
-    
+
     assert(tablePtr->keyType == HASHKEYS_POINTER);
-    
+
     hPtr = hash_lookup_internal(tablePtr, key);
-    
+
     return (hPtr) ? hPtr->value : NULL;
 }
 
@@ -409,7 +391,7 @@ hash_lookup(hash_t *tablePtr, void *key)
  */
 
 static int
-hash_insert_internal(hash_t *tablePtr, void *key, void *value)
+hash_insert_internal(hash_t * tablePtr, void *key, void *value)
 {
     hash_entry_t *hPtr;
     unsigned int hash;
@@ -429,26 +411,28 @@ hash_insert_internal(hash_t *tablePtr, void *key, void *value)
 
     if (tablePtr->compareKeysFn) {
 	compare_hash_keys_fn compareKeysFn = tablePtr->compareKeysFn;
-	for (hPtr = tablePtr->buckets[i]; hPtr != NULL;
-	     hPtr = hPtr->nextPtr) {
+	for (hPtr = tablePtr->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
 	    if (hash != (unsigned int) hPtr->hash) {
 		continue;
 	    }
 	    if (compareKeysFn(key, hPtr->key) == 0) {
+		if (tablePtr->valueDestroyFn && value != hPtr->value)
+		    tablePtr->valueDestroyFn(hPtr->value);
+
 		hPtr->value = value;
-		/* TODO: free value */
 		return 0;
 	    }
 	}
     } else {
-	for (hPtr = tablePtr->buckets[i]; hPtr != NULL;
-	     hPtr = hPtr->nextPtr) {
+	for (hPtr = tablePtr->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
 	    if (hash != (unsigned int) hPtr->hash) {
 		continue;
 	    }
 	    if (key == hPtr->key) {
+		if (tablePtr->valueDestroyFn && value != hPtr->value)
+		    tablePtr->valueDestroyFn(hPtr->value);
+
 		hPtr->value = value;
-		/* TODO: free value */
 		return 0;
 	    }
 	}
@@ -478,26 +462,26 @@ hash_insert_internal(hash_t *tablePtr, void *key, void *value)
 }
 
 int
-hash_insert_string(hash_t *tablePtr, const char *key, void *value)
+hash_insert_string(hash_t * tablePtr, const char *key, void *value)
 {
     assert(tablePtr->keyType == HASHKEYS_STRING);
-    
+
     return hash_insert_internal(tablePtr, (void *) key, value);
 }
 
 int
-hash_insert_ulong(hash_t *tablePtr, unsigned long key, void *value)
+hash_insert_ulong(hash_t * tablePtr, unsigned long key, void *value)
 {
     assert(tablePtr->keyType == HASHKEYS_ULONG);
-    
+
     return hash_insert_internal(tablePtr, (void *) key, value);
 }
 
 int
-hash_insert(hash_t *tablePtr, void *key, void *value)
+hash_insert(hash_t * tablePtr, void *key, void *value)
 {
     assert(tablePtr->keyType == HASHKEYS_POINTER);
-    
+
     return hash_insert_internal(tablePtr, key, value);
 }
 
@@ -523,10 +507,42 @@ hash_insert(hash_t *tablePtr, void *key, void *value)
  */
 
 static int
-hash_remove_internal(hash_t *tablePtr, void *key)
+hash_remove_entry_internal(hash_t * tablePtr, hash_entry_t ** bucketPtr,
+			   hash_entry_t * entryPtr)
+{
+    if (*bucketPtr == entryPtr) {
+	*bucketPtr = entryPtr->nextPtr;
+    } else {
+	hash_entry_t *prevPtr;
+
+	for (prevPtr = *bucketPtr;; prevPtr = prevPtr->nextPtr) {
+	    if (prevPtr == NULL) {
+		/* malformed bucket chain in hash_remove */
+		assert_not_reached();
+	    }
+	    if (prevPtr->nextPtr == entryPtr) {
+		prevPtr->nextPtr = entryPtr->nextPtr;
+		break;
+	    }
+	}
+    }
+
+    tablePtr->numEntries--;
+
+    if (tablePtr->keyDestroyFn)
+	tablePtr->keyDestroyFn(entryPtr->key);
+    if (tablePtr->valueDestroyFn)
+	tablePtr->valueDestroyFn(entryPtr->value);
+
+    alc_free(tablePtr->alc, entryPtr);
+
+    return 1;
+}
+
+static int
+hash_remove_internal(hash_t * tablePtr, void *key)
 {
     hash_entry_t *entryPtr;
-    hash_entry_t *prevPtr;
     hash_entry_t **bucketPtr;
     int i;
 
@@ -542,47 +558,30 @@ hash_remove_internal(hash_t *tablePtr, void *key)
 
     bucketPtr = &(tablePtr->buckets[i]);
 
-    if (*bucketPtr == entryPtr) {
-	*bucketPtr = entryPtr->nextPtr;
-    } else {
-	for (prevPtr = *bucketPtr;; prevPtr = prevPtr->nextPtr) {
-	    if (prevPtr == NULL) {
-		assert_not_reached(); /* malformed bucket chain in hash_remove */
-	    }
-	    if (prevPtr->nextPtr == entryPtr) {
-		prevPtr->nextPtr = entryPtr->nextPtr;
-		break;
-	    }
-	}
-    }
-
-    tablePtr->numEntries--;
-    alc_free(tablePtr->alc, entryPtr);
-    
-    return 1;
+    return hash_remove_entry_internal(tablePtr, bucketPtr, entryPtr);
 }
 
 int
-hash_remove_string(hash_t *tablePtr, const char *key)
+hash_remove_string(hash_t * tablePtr, const char *key)
 {
     assert(tablePtr->keyType == HASHKEYS_STRING);
-    
+
     return hash_remove_internal(tablePtr, (void *) key);
 }
 
 int
-hash_remove_ulong(hash_t *tablePtr, unsigned long key)
+hash_remove_ulong(hash_t * tablePtr, unsigned long key)
 {
     assert(tablePtr->keyType == HASHKEYS_ULONG);
-    
+
     return hash_remove_internal(tablePtr, (void *) key);
 }
 
 int
-hash_remove(hash_t *tablePtr, void *key)
+hash_remove(hash_t * tablePtr, void *key)
 {
     assert(tablePtr->keyType == HASHKEYS_POINTER);
-    
+
     return hash_remove_internal(tablePtr, key);
 }
 
@@ -606,11 +605,11 @@ hash_remove(hash_t *tablePtr, void *key)
  */
 
 void
-hash_destroy(hash_t *tablePtr)
+hash_destroy(hash_t * tablePtr)
 {
     hash_entry_t *hPtr, *nextPtr;
     int i;
-    
+
     /*
      * Free up all the entries in the table.
      */
@@ -618,12 +617,17 @@ hash_destroy(hash_t *tablePtr)
 	hPtr = tablePtr->buckets[i];
 	while (hPtr != NULL) {
 	    nextPtr = hPtr->nextPtr;
-	    /* TODO: free value */
+
+	    if (tablePtr->keyDestroyFn)
+		tablePtr->keyDestroyFn(hPtr->key);
+	    if (tablePtr->valueDestroyFn)
+		tablePtr->valueDestroyFn(hPtr->value);
+
 	    alc_free(tablePtr->alc, hPtr);
 	    hPtr = nextPtr;
 	}
     }
-	
+
     /*
      * Free up the bucket array, if it was dynamically allocated.
      */
@@ -634,85 +638,226 @@ hash_destroy(hash_t *tablePtr)
     alc_free(tablePtr->alc, tablePtr);
 }
 
-#if 0
-/*
- *----------------------------------------------------------------------
+/**
+ * Initializes a hash table iterator. To iterate over all entries in a
+ * hash table, use the following code (the printf assumes a hash
+ * from strings to strings obviously):
  *
- * hash_get_first_entry --
+ * @code
+ * hash_iter_t iter;
  *
- *	Locate the first entry in a hash table and set up a record
- *	that can be used to step through all the remaining entries
- *	of the table.
+ * hash_iter_init (table, &iter);
+ * while (hash_iter_next (&iter))
+ *   {
+ *      printf ("The first key is %s and value is %s\n",
+ *              hash_iter_get_string_key (&iter),
+ *              hash_iter_get_value (&iter));
+ *   }
+ * 
+ * 
+ * @endcode
  *
- * Arguments:
- *	tablePtr - Table to search.
- *	searchPtr - Place to store information about progress through the
- *	            table.
+ * The iterator is initialized pointing "one before" the first hash
+ * entry. The first call to hash_iter_next() moves it onto
+ * the first valid entry or returns 0 if the hash table is
+ * empty. Subsequent calls move to the next valid entry or return
+ * 0 if there are no more entries.
  *
- * Results:
- *	The return value is a pointer to the first entry in tablePtr,
- *	or NULL if tablePtr has no entries in it.  The memory at
- *	*searchPtr is initialized so that subsequent calls to
- *	hash_get_next_entry will return all of the entries in the table,
- *	one at a time.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
+ * Note that it is guaranteed to be safe to remove a hash entry during
+ * iteration, but it is not safe to add a hash entry.
+ * 
+ * @param table the hash table to iterate over.
+ * @param iter the iterator to initialize.
  */
-
-hash_entry_t *
-hash_get_first_entry(hash_t *tablePtr, hash_search_t *searchPtr)
+void
+hash_iter_init(hash_t * table, hash_iter_t * iter)
 {
-    searchPtr->tablePtr = tablePtr;
-    searchPtr->nextIndex = 0;
-    searchPtr->nextEntryPtr = NULL;
-    return hash_get_next_entry(searchPtr);
+    hash_real_iter_t *real;
+
+    assert(sizeof(hash_iter_t) == sizeof(hash_real_iter_t));
+
+    real = (hash_real_iter_t *) iter;
+
+    real->table = table;
+    real->bucket = NULL;
+    real->entry = NULL;
+    real->next_entry = NULL;
+    real->next_bucket = 0;
+    real->n_entries_on_init = table->numEntries;
 }
 
-/*
- *----------------------------------------------------------------------
+/**
+ * Move the hash iterator forward one step, to the next hash entry.
+ * The documentation for hash_iter_init() explains in more
+ * detail.
  *
- * hash_get_next_entry --
- *
- *	Once a hash table enumeration has been initiated by calling
- *	hash_get_first_entry, this procedure may be called to return
- *	successive elements of the table.
- *
- * Arguments:
- *	searchPtr - Place to store information about progress through the
- *	            table. Must have been initialized by calling
- *	            hash_get_first_entry.
- *
- * Results:
- *	The return value is the next entry in the hash table being
- *	enumerated, or NULL if the end of the table is reached.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
+ * @param iter the iterator to move forward.
+ * @returns 0 if there are no more entries to move to.
  */
-
-hash_entry_t *
-hash_get_next_entry(hash_search_t *searchPtr)
+int
+hash_iter_next(hash_iter_t * iter)
 {
-    hash_entry_t *hPtr;
-    hash_t *tablePtr = searchPtr->tablePtr;
+    hash_real_iter_t *real;
 
-    while (searchPtr->nextEntryPtr == NULL) {
-	if (searchPtr->nextIndex >= tablePtr->numBuckets) {
-	    return NULL;
+    assert(sizeof(hash_iter_t) == sizeof(hash_real_iter_t));
+
+    real = (hash_real_iter_t *) iter;
+
+    /* if this assertion failed someone probably added hash entries
+     * during iteration, which is bad.
+     */
+    assert(real->n_entries_on_init >= real->table->numEntries);
+
+    /* Remember that real->entry may have been deleted */
+
+    while (real->next_entry == NULL) {
+	if (real->next_bucket >= real->table->numBuckets) {
+	    /* invalidate iter and return false */
+	    real->entry = NULL;
+	    real->table = NULL;
+	    real->bucket = NULL;
+	    return 0;
 	}
-	searchPtr->nextEntryPtr = tablePtr->buckets[searchPtr->nextIndex];
-	searchPtr->nextIndex++;
+
+	real->bucket = &(real->table->buckets[real->next_bucket]);
+	real->next_entry = *(real->bucket);
+	real->next_bucket += 1;
     }
-    hPtr = searchPtr->nextEntryPtr;
-    searchPtr->nextEntryPtr = hPtr->nextPtr;
-    return hPtr;
+
+    assert(real->next_entry != NULL);
+    assert(real->bucket != NULL);
+
+    real->entry = real->next_entry;
+    real->next_entry = real->entry->nextPtr;
+
+    return 1;
 }
 
+/**
+ * Removes the current entry from the hash table.
+ * If a key_free_function or value_free_function
+ * was provided to hash_table_new(),
+ * frees the key and/or value for this entry.
+ *
+ * @param iter the hash table iterator.
+ */
+void
+hash_iter_remove_entry(hash_iter_t * iter)
+{
+    hash_real_iter_t *real;
+
+    real = (hash_real_iter_t *) iter;
+
+    assert(real->table != NULL);
+    assert(real->entry != NULL);
+    assert(real->bucket != NULL);
+
+    hash_remove_entry_internal(real->table, real->bucket, real->entry);
+
+    real->entry = NULL; /* make it crash if you try to use this entry */
+}
+
+/**
+ * Gets the value of the current entry.
+ *
+ * @param iter the hash table iterator.
+ */
+void *
+hash_iter_get_value(hash_iter_t * iter)
+{
+    hash_real_iter_t *real;
+
+    real = (hash_real_iter_t *) iter;
+
+    assert(real->table != NULL);
+    assert(real->entry != NULL);
+
+    return real->entry->value;
+}
+
+/**
+ * Sets the value of the current entry.
+ * If the hash table has a value_free_function
+ * it will be used to free the previous value.
+ * The hash table will own the passed-in value
+ * (it will not be copied).
+ *
+ * @param iter the hash table iterator.
+ * @param value the new value.
+ */
+void
+hash_iter_set_value(hash_iter_t * iter, void *value)
+{
+    hash_real_iter_t *real;
+
+    real = (hash_real_iter_t *) iter;
+
+    assert(real->table != NULL);
+    assert(real->entry != NULL);
+
+    if (real->table->valueDestroyFn && value != real->entry->value)
+	real->table->valueDestroyFn(real->entry->value);
+
+    real->entry->value = value;
+}
+
+/**
+ * Gets the key for the current entry.
+ * Only works for hash tables of type #HASHKEYS_POINTER.
+ *
+ * @param iter the hash table iterator.
+ */
+void *
+hash_iter_get_key(hash_iter_t * iter)
+{
+    hash_real_iter_t *real;
+
+    real = (hash_real_iter_t *) iter;
+
+    assert(real->table != NULL);
+    assert(real->entry != NULL);
+
+    return real->entry->key;
+}
+
+/**
+ * Gets the key for the current entry.
+ * Only works for hash tables of type #HASHKEYS_ULONG.
+ *
+ * @param iter the hash table iterator.
+ */
+unsigned long
+hash_iter_get_ulong_key(hash_iter_t * iter)
+{
+    hash_real_iter_t *real;
+
+    real = (hash_real_iter_t *) iter;
+
+    assert(real->table != NULL);
+    assert(real->entry != NULL);
+
+    return (unsigned long) real->entry->key;
+}
+
+/**
+ * Gets the key for the current entry.
+ * Only works for hash tables of type #HASHKEYS_STRING
+ * @param iter the hash table iterator.
+ */
+const char *
+hash_iter_get_string_key(hash_iter_t * iter)
+{
+    hash_real_iter_t *real;
+
+    real = (hash_real_iter_t *) iter;
+
+    assert(real->table != NULL);
+    assert(real->entry != NULL);
+
+    return real->entry->key;
+}
+
+#if 0
 /*
  *----------------------------------------------------------------------
  *
@@ -734,7 +879,7 @@ hash_get_next_entry(hash_search_t *searchPtr)
 
 const char *
 Tcl_HashStats(tablePtr)
-hash_t *tablePtr;	/* Table for which to produce stats. */
+hash_t *tablePtr;		/* Table for which to produce stats. */
 {
 #define NUM_COUNTERS 10
     int count[NUM_COUNTERS], overflow, i, j;
@@ -802,16 +947,16 @@ hash_t *tablePtr;	/* Table for which to produce stats. */
  */
 
 static unsigned int
-string_hash (const void *str)
+string_hash(const void *str)
 {
-  const char *p = (const char *) str;
-  unsigned int h = *p;
+    const char *p = (const char *) str;
+    unsigned int h = *p;
 
-  if (h)
-    for (p += 1; *p != '\0'; p++)
-      h = (h << 5) - h + *p;
+    if (h)
+	for (p += 1; *p != '\0'; p++)
+	    h = (h << 5) - h + *p;
 
-  return h;
+    return h;
 }
 
 /*
@@ -837,7 +982,7 @@ string_hash (const void *str)
  */
 
 static void
-rebuild_table(hash_t *tablePtr)
+rebuild_table(hash_t * tablePtr)
 {
     int oldSize, count, i;
     hash_entry_t **oldBuckets;
@@ -856,7 +1001,7 @@ rebuild_table(hash_t *tablePtr)
     tablePtr->numBuckets *= 4;
     tablePtr->buckets = alc_calloc(tablePtr->alc, tablePtr->numBuckets,
 				   sizeof(hash_entry_t *));
-    
+
     for (count = tablePtr->numBuckets, newChainPtr = tablePtr->buckets;
 	 count > 0; count--, newChainPtr++) {
 	*newChainPtr = NULL;
