@@ -58,8 +58,8 @@ FLOWDESC {
     n16_t src_as; 
     n16_t dst_as; 
     n16_t sampling;
-    uint64_t bytes;
-    uint64_t pkts;
+    uint32_t bytes;
+    uint32_t pkts;
     n32_t duration; 
 };
 
@@ -186,8 +186,8 @@ update(__unused void * self, pkt_t *pkt, void *fh, __unused int isnew)
     }
 
     x->sampling = NF(sampling);
-    x->bytes += H32(NF(pktcount)) * COMO(len);
-    x->pkts += H32(NF(pktcount));
+    x->bytes = H32(NF(pktcount)) * COMO(len);
+    x->pkts = H32(NF(pktcount));
     x->src_as = NF(src_as);
     x->dst_as = NF(dst_as);
     x->input = NF(input);
@@ -214,8 +214,8 @@ store(__unused void * self, void *efh, char *buf)
     PUTN16(buf, N16(x->src_as));
     PUTN16(buf, N16(x->dst_as));
     PUTN16(buf, N16(x->sampling)); 
-    PUTH64(buf, x->bytes);
-    PUTH64(buf, x->pkts);
+    PUTH32(buf, x->bytes);
+    PUTH32(buf, x->pkts);
     PUTN32(buf, N32(x->duration));
 
     return sizeof(FLOWDESC);
@@ -335,18 +335,85 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 	*len = sprintf(s, fmt, ts, x->proto, 
 		    src, (uint) H16(x->src_port), 
 		    dst, (uint) H16(x->dst_port), 
-		    NTOHLL(x->bytes), 
-		    NTOHLL(x->pkts));
+		    htonl(x->bytes), 
+		    htonl(x->pkts));
     } else { 
 	*len = sprintf(s, fmt, 
 		    asctime(localtime(&ts)), getprotoname(x->proto), 
 		    src, (uint) H16(x->src_port), 
 		    dst, (uint) H16(x->dst_port), 
-		    NTOHLL(x->bytes), NTOHLL(x->pkts));
+		    htonl(x->bytes), htonl(x->pkts));
     } 
     return s;
 };
 
+static int  
+replay(__unused void * self, char *buf, char *out, size_t * len, 
+       __unused int left)
+{
+    FLOWDESC * x;
+    uint64_t nbytes, npkts; 
+    size_t pktsz, paysz;
+    pkt_t * pkt;
+
+    if (buf == NULL) {
+	*len = 0;
+	return 0; 		/* nothing to do */
+    } 
+
+    /* 
+     * generate packets as long as we have space in the output 
+     * buffer. the packets will all be equal with the same timestamps
+     * and a packet length equal to the average packet lengths. 
+     */
+    x = (FLOWDESC *) buf; 
+    nbytes = htonl(x->bytes);
+    npkts = htonl(x->pkts);
+
+    /* fill the output buffer */
+    paysz = sizeof(struct _como_nf) + sizeof(struct _como_iphdr) +
+	    sizeof(struct _como_udphdr);
+    pktsz = sizeof(pkt_t) + paysz;
+    
+    if (*len < pktsz)
+	return -1;
+    
+    pkt = (pkt_t *) out;
+    
+    COMO(ts) = NTOHLL(x->start_ts);
+    COMO(caplen) = paysz;
+    COMO(len) = nbytes / npkts; 
+    COMO(type) = COMOTYPE_NF;
+    COMO(l2type) = LINKTYPE_NONE;
+    COMO(l3type) = ETHERTYPE_IP;
+    COMO(l3ofs) = sizeof(struct _como_nf); 
+    COMO(l4type) = x->proto; 
+    COMO(l4ofs) = COMO(l3ofs) + sizeof(struct _como_iphdr);
+    COMO(l7ofs) = COMO(l4ofs) + sizeof(struct _como_udphdr);
+    COMO(payload) = out + sizeof(pkt_t);
+    
+    N16(NF(sampling)) = N16(x->sampling);
+    N32(NF(pktcount)) = x->pkts;
+    N32(NF(duration)) = N32(x->duration);
+    
+    N16(NF(src_as)) = N16(x->src_as);
+    N16(NF(dst_as)) = N16(x->dst_as);
+    N16(NF(input)) = N16(x->input);
+    N16(NF(output)) = N16(x->output);
+    
+    IP(version) = 0x4;
+    IP(ihl) = 0x5;
+    IP(proto) = x->proto;
+    N16(IP(len)) = htons((uint16_t) COMO(len)); 
+    IP(src_ip) = x->src_ip;
+    IP(dst_ip) = x->dst_ip;
+    
+    UDP(src_port) = x->src_port;
+    UDP(dst_port) = x->dst_port;
+    
+    *len = pktsz;
+    return 0; 
+}
 
 callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
@@ -364,6 +431,6 @@ callbacks_t callbacks = {
     store: store,
     load: load,
     print: print,
-    replay: NULL,
+    replay: replay,
     formats: "plain pretty html"
 };
