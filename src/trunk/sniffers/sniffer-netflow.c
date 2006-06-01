@@ -51,7 +51,9 @@
 #include "como.h"
 #include "comoendian.h"
 #include "comotypes.h"
+#include "comopriv.h"
 #include "heap.h"
+#include "hash.h"
 
 #include <ftlib.h>      /* flow-tools stuff 
 			 * NOTE: this .h must be included last 
@@ -77,20 +79,16 @@
  */
 #define BUFSIZE		(1024*1024)
 struct _snifferinfo {
-    heap_t * heap; 		/* heap with flow records read so far */
-    timestamp_t min_ts; 	/* min start time in the heap (root) */
-    timestamp_t max_ts; 	/* max start time in the heap */
     timestamp_t window; 	/* lookahead window */
     timestamp_t timescale; 	/* timestamp resolution */ 
     uint16_t port;		/* socket port */
-    struct ftpdu ftpdu;		/* NetFlow PDU */
-    struct ftseq ftseq;		/* sequence numbers for this exporter */
     char buf[BUFSIZE];		/* buffer used between sniffer-next calls */
     uint nbytes; 		/* bytes used in the buffer */
     uint16_t sampling; 		/* scaling pkts/bytes for sampled Netflow */
     uint16_t iface; 		/* interface of interest (SNMP index) */
     uint32_t exporter; 		/* exporter address to be processed */
     int flags; 			/* options */
+    hash_t *ftch;		/* hash table for demuxing exporters */
 }; 
 
 
@@ -113,6 +111,12 @@ struct _flowinfo {
     uint bytes_left; 		/* bytes to be generated */ 
 };
 
+typedef struct ftche_t {
+    heap_t *heap;		/* heap with flow records read so far */
+    timestamp_t min_ts; 	/* min start time in the heap (root) */
+    timestamp_t max_ts; 	/* max start time in the heap */
+    struct ftseq ftseq;		/* sequence numbers for this exporter */
+} ftche_t;
 
 /* 
  * this macro is used to convert a timestamp in netflow (given by the
@@ -214,7 +218,12 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
     NF(dst_mask) = f->dst_mask;
     N16(NF(src_as)) = htons(f->src_as);
     N16(NF(dst_as)) = htons(f->dst_as);
+//#define LIBFT_BUGGY
+#ifdef LIBFT_BUGGY
+    N32(NF(exaddr)) = f->exaddr;
+#else
     N32(NF(exaddr)) = htonl(f->exaddr);
+#endif
     N32(NF(nexthop)) = htonl(f->nexthop);
     NF(engine_type) = f->engine_type;
     NF(engine_id) = f->engine_id;
@@ -251,7 +260,8 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
  * 
  */ 
 static void
-update_pkt(struct _flowinfo * flow, struct _snifferinfo * info) 
+update_pkt(struct _flowinfo * flow, struct _snifferinfo * info,
+	   ftche_t *ftche) 
 {
     pkt_t * pkt = &flow->pkt; 
 
@@ -272,7 +282,7 @@ update_pkt(struct _flowinfo * flow, struct _snifferinfo * info)
     if (info->flags & FLOWTOOLS_COMPACT)
 	update_flowvalues(pkt, flow, info->timescale); 
     
-    heap_insert(info->heap, flow); 
+    heap_insert(ftche->heap, flow); 
 } 
 
 
@@ -285,7 +295,8 @@ update_pkt(struct _flowinfo * flow, struct _snifferinfo * info)
  * 
  */ 
 timestamp_t 
-process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info) 
+process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info,
+	       ftche_t *ftche)
 { 
     struct _flowinfo *flow; 
 
@@ -316,13 +327,13 @@ process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info)
 	update_flowvalues(&flow->pkt, flow, info->timescale); 
 
     /* insert in the heap */
-    heap_insert(info->heap, flow);
+    heap_insert(ftche->heap, flow);
 
     /* update the max and min timestamps in the heap */
-    if (flow->pkt.ts > info->max_ts) 
-	info->max_ts = flow->pkt.ts; 
-    if (flow->pkt.ts < info->min_ts) 
-	info->min_ts = flow->pkt.ts; 
+    if (flow->pkt.ts > ftche->max_ts) 
+	ftche->max_ts = flow->pkt.ts; 
+    if (flow->pkt.ts < ftche->min_ts) 
+	ftche->min_ts = flow->pkt.ts; 
 
     return flow->pkt.ts; 
 }
@@ -339,6 +350,106 @@ static int
 flow_cmp(const void * fa, const void * fb) 
 {
     return (((struct _flowinfo*)fa)->pkt.ts < ((struct _flowinfo*)fb)->pkt.ts); 
+}
+
+static inline ftche_t *
+ftche_new()
+{
+    ftche_t *ftche;
+    
+    ftche = safe_calloc(1, sizeof(ftche_t));
+    ftche->heap = heap_init(flow_cmp);
+    ftche->min_ts = ~0;
+    ftche->max_ts = 0;
+    
+    return ftche;
+}
+
+static void
+ftche_destroy(ftche_t * ftche)
+{
+    heap_close(ftche->heap);
+    free(ftche);
+}
+
+/* 
+ * -- process_ftpdu
+ * 
+ * Receive and process a NetFlow PDU. 
+ */
+static int
+process_ftpdu(int fd, struct _snifferinfo *info, ftche_t **ftche_out)
+{
+    struct sockaddr_in agent;
+    socklen_t addr_len;
+    struct ftpdu ftpdu;		/* NetFlow PDU */
+    struct fts3rec_v5 *fr;
+    ftche_t *ftche;
+    int i, n, offset;
+    
+    *ftche_out = NULL;
+    
+    addr_len = sizeof(agent);
+    memset(&agent, 0, sizeof(agent));
+    ftpdu.bused = recvfrom(fd, ftpdu.buf, sizeof(ftpdu.buf),
+			    MSG_DONTWAIT,
+			    (struct sockaddr *) &agent, &addr_len);
+    if (ftpdu.bused <= 0) {
+    	if (errno != EAGAIN) {
+	    logmsg(LOGWARN, "sniffer-netflow: recvfrom: %s\n",
+		   strerror(errno));
+    	}
+	return -1;
+    }
+
+    /* verify integrity, get version */
+    if (ftpdu_verify(&ftpdu) < 0) {
+	logmsg(LOGWARN, "sniffer-netflow: PDU corrupted\n");
+	return 0;
+    }
+    
+    if (ftpdu.ftv.d_version != 5) {
+    	logmsg(LOGWARN, "sniffer-netflow: NetFlow V5 required!\n");
+	return 0;
+    }
+
+    /* if exporter src IP has been configured then make sure it matches */
+    if (info->exporter && (info->exporter != agent.sin_addr.s_addr)) {
+	/* ignore PDU */
+	return 0;
+    }
+    
+    ftche = hash_lookup_ulong(info->ftch, agent.sin_addr.s_addr);
+    if (ftche == NULL) {
+	ftche = ftche_new();
+    	hash_insert_ulong(info->ftch, agent.sin_addr.s_addr, ftche);
+    }
+
+    /* verify sequence number */
+    if (ftpdu_check_seq(&ftpdu, &ftche->ftseq) < 0) {
+	logmsg(LOGSNIFFER, "sniffer-netflow: PDU with wrong sequence number:"
+	       "expected: %lu got: %lu lost %lu\n",
+	       ftche->ftseq.seq_exp, ftche->ftseq.seq_rcv,
+	       ftche->ftseq.seq_lost);
+    }
+
+    /* decode */
+#ifdef COMO_LITTLE_ENDIAN
+    ftpdu.ftd.byte_order = FT_HEADER_LITTLE_ENDIAN;
+#else
+    ftpdu.ftd.byte_order = FT_HEADER_BIG_ENDIAN;
+#endif
+    ftpdu.ftd.exporter_ip = agent.sin_addr.s_addr;
+    n = fts3rec_pdu_decode(&ftpdu);
+    
+    /* write decoded flows */
+    for (i = 0, offset = 0; i < n; ++i, offset += ftpdu.ftd.rec_size) {
+	fr = (struct fts3rec_v5 *) (ftpdu.ftd.buf + offset);
+	process_record(fr, info, ftche);
+    }
+    
+    *ftche_out = ftche;
+    return 1;
 }
 
 
@@ -529,15 +640,9 @@ sniffer_start(source_t * src)
 	goto error;
     }
     
-    /* initialize the heap */
-    info->heap = heap_init(flow_cmp);
-
-    /* 
-     * read the first file just to put at least one flow record 
-     * in the heap for sniffer_next().
-     */
-    info->min_ts = ~0;
-    info->max_ts = 0;
+    /* initialize the hash table for demuxing exporters */
+    info->ftch = hash_new_full(allocator_safe(), HASHKEYS_ULONG, NULL, NULL,
+			       NULL, (destroy_notify_fn) ftche_destroy);
 
     /*  
      * given that the output stream is not a plain packet 
@@ -605,90 +710,44 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
     struct _snifferinfo * info; 
     pkt_t * pkt; 
     int npkts;                 /* processed pkts */
-    struct sockaddr_in agent;
-    socklen_t addr_len;
-    struct ftpdu *ftpdu;
-    int i, n, offset;
-    struct fts3rec_v5 *fr;
+    int r;
     timestamp_t first_seen;
-#ifdef SNIFFER_NETFLOW_DEBUG
-    uint32_t *hs;
-#endif
+    ftche_t *ftche;
     
     assert(src != NULL);
-    assert(src->ptr != NULL); 
-    assert(out != NULL); 
+    assert(src->ptr != NULL);
+    assert(out != NULL);
 
     info = (struct _snifferinfo *) src->ptr;
     info->nbytes = 0;
-    
-    ftpdu = &info->ftpdu;
-    
-    addr_len = sizeof(agent);
-    memset(&agent, 0, sizeof(agent));
-    ftpdu->bused = recvfrom(src->fd, ftpdu->buf, sizeof(ftpdu->buf), 0,
-				 (struct sockaddr *) &agent, &addr_len);
-    if (ftpdu->bused <= 0) {
-	logmsg(LOGWARN, "sniffer-netflow: recvfrom: %s\n",
-	       strerror(errno));
-	return -1;
-    }
 
-    /* verify integrity, get version */
-    if (ftpdu_verify(ftpdu) < 0) {
-	logmsg(LOGWARN, "sniffer-netflow: PDU corrupted\n");
-	return 0;
+    /* receive and process a NetFlow PDU */
+    r = process_ftpdu(src->fd, info, &ftche);
+    if (r <= 0) {
+    	return r;
     }
     
-    if (ftpdu->ftv.d_version != 5) {
-    	logmsg(LOGWARN, "sniffer-netflow: NetFlow V5 required!\n");
-	return 0;
-    }
-
-    /* if exporter src IP has been configured then make sure it matches */
-    if (info->exporter && (info->exporter != agent.sin_addr.s_addr)) {
-	/* ignore PDU */
-	return 0;
-    }
-
-    /* verify sequence number */
-    if (info->exporter && ftpdu_check_seq(ftpdu, &info->ftseq) < 0) {
-	logmsg(LOGSNIFFER, "sniffer-netflow: PDU with wrong sequence number:"
-	       "expected: %lu got: %lu lost %lu\n",
-	       info->ftseq.seq_exp, info->ftseq.seq_rcv, info->ftseq.seq_lost);
-    }
-
-#ifdef SNIFFER_NETFLOW_DEBUG
-    hs = ((uint32_t *) info->heap) + 3;
-    logmsg(LOGWARN, "sniffer-netflow: enter heap first %lu\n", *hs);
-#endif
-
-    /* decode */
-#ifdef COMO_LITTLE_ENDIAN
-    ftpdu->ftd.byte_order = FT_HEADER_LITTLE_ENDIAN;
-#else
-    ftpdu->ftd.byte_order = FT_HEADER_BIG_ENDIAN;
-#endif
-    ftpdu->ftd.exporter_ip = agent.sin_addr.s_addr;
-    n = fts3rec_pdu_decode(ftpdu);
-    
-    /* write decoded flows */
-    for (i = 0, offset = 0; i < n; ++i, offset += ftpdu->ftd.rec_size) {
-	fr = (struct fts3rec_v5 *) (ftpdu->ftd.buf + offset);
-	process_record(fr, info);
-    }
-    
-    for (npkts = 0, pkt = out; npkts < max_no; pkt++) {
+    for (npkts = 0, pkt = out; npkts < max_no;) {
 	struct _flowinfo * flow; 
 
 	/* 
 	 * check if we have a full info->window of flows in the heap.
 	 */ 
-	if (info->max_ts - info->min_ts < info->window)
-	    return npkts;
+	if (ftche == NULL || (ftche->max_ts - ftche->min_ts < info->window)) {
+	    /* try to get more data if available */
+	    if (process_ftpdu(src->fd, info, &ftche) == -1) {
+		/* break on error, probably EAGAIN */
+		break;
+	    }
+	    /*
+	     * a pdu has been either received or discarded, perform the check
+	     * again.
+	     */
+	    continue;
+	}
 
 	/* get the first flow from the heap */
-	heap_extract(info->heap, (void **) &flow); 
+	heap_extract(ftche->heap, (void **) &flow); 
 
 	/* 
 	 * check if we have enough space in the packet buffer 
@@ -707,33 +766,29 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	COMO(payload) = info->buf + info->nbytes; 
 	info->nbytes += COMO(caplen); 
 
-	update_pkt(flow, info);
+	update_pkt(flow, info, ftche);
 
 	/* update the minimum timestamp from the root of the heap */
-	flow = heap_root(info->heap);
+	flow = heap_root(ftche->heap);
 	if (flow == NULL) 
 	    break; 		/* we are done; next time we will stop */
-	info->min_ts = flow->pkt.ts;
-
-	npkts++;
+	ftche->min_ts = flow->pkt.ts;
 
 	/* if we have processed more than max_ivl worth of
 	 * packets stop and return to CAPTURE so that it can 
  	 * process EXPORT messages, etc. 
 	 */
-	if (npkts > 1) {
+	if (npkts > 0) {
 	    if (COMO(ts) - first_seen > max_ivl) {
 		break;
 	    }
 	} else {
 	    first_seen = COMO(ts);
 	}
-    }
 
-#ifdef SNIFFER_NETFLOW_DEBUG
-    logmsg(LOGWARN, "sniffer-netflow: exit heap first %lu, npkts %d\n",
-	   *hs, npkts);
-#endif
+	npkts++;
+	pkt++;
+    }
 
     return npkts;
 }
@@ -747,11 +802,12 @@ static void
 sniffer_stop(source_t * src)
 {
     struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
-
-    assert(src->ptr != NULL); 
-    assert(info->heap != NULL); 
-
-    heap_close(info->heap); 
+    
+    assert(src->ptr != NULL);
+    assert(info->ftch != NULL);
+    
+    hash_destroy(info->ftch);
+    
     if (src->fd > 0) { 
 	close(src->fd); 
     } 
