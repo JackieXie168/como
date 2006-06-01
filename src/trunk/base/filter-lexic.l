@@ -86,7 +86,6 @@ IFACE		input|output
                     yflval.byte = 1;
                 return(IFACE);
                 }
-		
 {DIR}           {
                 if (!strcmp(yytext, "src"))
                     yflval.byte = 0;
@@ -138,6 +137,7 @@ not             { return(NOT); }
 ":"             { return(COLON); }
 
 all             { return(ALL); }
+exporter        { return(EXPORTER); }	
 
 [ \t\n]+
 
