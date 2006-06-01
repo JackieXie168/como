@@ -103,6 +103,7 @@
 #define Tport  6
 #define Tproto 7
 #define Tiface 8
+#define Texporter 9
 
 struct _listnode
 {
@@ -251,6 +252,11 @@ tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
             t->data->iface.direction = data->iface.direction;
             t->data->iface.index = data->iface.index;
             break;
+	case Texporter:
+            asprintf(&(t->string), "exporter %d",
+                     data->exaddr.ip);
+            t->data->exaddr.ip = data->exaddr.ip;
+            break;
         }
     }
     t->right = right;
@@ -357,7 +363,7 @@ list_make(listnode_t *list, uint8_t type, treenode_t *tree)
 char *
 tree_to_string(treenode_t *tree)
 {
-    char *s;
+    char *s = NULL;
     listnode_t *list, *laux;
     
     if (!tree) return NULL;
@@ -664,7 +670,7 @@ cnf(treenode_t *t)
  */
 int evaluate_pred(treenode_t *t, pkt_t *pkt)
 {
-    int z;
+    int z = 0;
 
     if (t != NULL) {
         switch(t->pred_type) {
@@ -703,6 +709,12 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
 		z = (H16(NF(input)) == t->data->iface.index); 
 	    else 
 		z = (H16(NF(output)) == t->data->iface.index); 
+            break;
+	case Texporter:
+	    if (COMO(type) != COMOTYPE_NF) 
+		return 0; 
+	    z = (N32(NF(exaddr)) == t->data->exaddr.ip);
+            break;
         case Tproto:
             switch(t->data->proto) {
             case ETHERTYPE_IP:
@@ -733,7 +745,7 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
  */
 int evaluate(treenode_t *t, pkt_t *pkt)
 {
-    int x,y,z;
+    int x,y,z = 0;
     
     if (t == NULL) return 1;
     else {
@@ -773,21 +785,23 @@ int evaluate(treenode_t *t, pkt_t *pkt)
     ipaddr_t ipaddr;
     portrange_t portrange;
     iface_t iface;
+    ipaddr_t exaddr;
 }
 
 /* Data types and tokens used by the parser */
 
-%token NOT AND OR OPENBR CLOSEBR COLON ALL
+%token NOT AND OR OPENBR CLOSEBR COLON ALL EXPORTER
 %left NOT AND OR /* Order of precedence */
 %token <byte> DIR PORTDIR IFACE
 %token <word> LEVEL3 LEVEL4 NUMBER
 %token <dword> NETMASK
-%token <string> IPADDR 
+%token <string> IPADDR
 %type <tree> expr
 %type <ipaddr> ip
 %type <portrange> port
 %type <word> proto 
 %type <iface> iface
+%type <exaddr> exporter
 %start filter
 
 %%
@@ -855,6 +869,10 @@ expr: expr AND expr
       {
         $$ = tree_make(Tpred, Tiface, NULL, NULL, (nodedata_t *)&$1);
       }
+    | exporter
+      {
+        $$ = tree_make(Tpred, Texporter, NULL, NULL, (nodedata_t *)&$1);
+      }
 
 ip: DIR IPADDR
     {
@@ -912,7 +930,13 @@ iface: IFACE NUMBER
         $$.direction = $1;
 	$$.index = $2;
        }
-        
+
+exporter: EXPORTER IPADDR
+          {
+           if (parse_ip($2, &($$.ip)) == -1)
+               YYABORT;
+          }
+
 %%
 
 #include "filter-lexic.c"

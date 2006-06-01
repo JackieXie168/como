@@ -74,6 +74,7 @@ union _nodedata {
     portrange_t ports;
     uint16_t proto;
     iface_t iface;
+    ipaddr_t exaddr;
 };
 typedef union _nodedata nodedata_t;
 
