@@ -17,6 +17,17 @@ $Id$
 
 . Optimized topdest module
 
+  --- still more needs to be done.
+
+. Implemented NetFlow sniffer. 
+
+. Minor optimizations and bug fixes
+
+  Reduced used of IPC calls. 
+
+. New filter keyword "exporter"
+
+. 
 
 -------------------------------------
 ---- CoMo v1.0 (May 14th, 2006) 
