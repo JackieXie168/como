@@ -366,7 +366,7 @@ callbacks_t callbacks = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
-    capabilities: {has_flexible_flush: 1},
+    capabilities: {has_flexible_flush: 1, 0},
     init: init,
     check: NULL,
     hash: hash,

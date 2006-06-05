@@ -107,7 +107,7 @@ sniffer_config(char *args, struct _snifferinfo *info)
 	if (x == NULL)
 	    logmsg(LOGWARN, "sniffer-ondemand: invalid argument %s\n", wh);
 	else
-	    info->start = atoll(x + 1);
+	    info->start = strtoll(x + 1, (char **)NULL, 10);
     }
 
     /*
@@ -121,7 +121,7 @@ sniffer_config(char *args, struct _snifferinfo *info)
 	if (x == NULL)
 	    logmsg(LOGWARN, "sniffer-ondemand: invalid argument %s\n", wh);
 	else {
-	    info->end = atoll(x + 1);
+	    info->end = strtoll(x + 1, (char **)NULL, 10);
 	    info->has_end = 1;
 	}
     }
