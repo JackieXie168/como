@@ -77,22 +77,20 @@
 
 struct _como_dhcp {
   	uint8_t  op;		/* 0: Message opcode/type */
-	uint8_t  htype;	/* 1: Hardware addr type (net/if_types.h) */
+	uint8_t  htype;		/* 1: Hardware addr type (net/if_types.h) */
 	uint8_t  hlen;		/* 2: Hardware addr length */
 	uint8_t  hops;		/* 3: Number of relay agent hops from client */
 	n32_t xid;		/* 4: Transaction ID */
 	n16_t secs;		/* 8: Seconds since client started looking */
-	n16_t flags;	/* 10: Flag bits */
-	n32_t ciaddr;	/* 12: Client IP address (if already in use) */
-	n32_t yiaddr;	/* 16: Client IP address */
-	n32_t siaddr;	/* 18: IP address of next server to talk to */
-	n32_t giaddr;	/* 20: DHCP relay agent IP address */
-	unsigned char chaddr [16];	/* 24: Client hardware address */
-	char sname [DHCP_SNAME_LEN];	/* 40: Server name */
-	char file [DHCP_FILE_LEN];	/* 104: Boot filename */
-	uint8_t options [];
-				/* 212: Optional parameters
-				   (actual length dependent on MTU). */
+	n16_t flags;		/* 10: Flag bits */
+	n32_t ciaddr;		/* 12: Client IP address (if in use) */
+	n32_t yiaddr;		/* 16: Client IP address */
+	n32_t siaddr;		/* 18: IP address of next server to talk to */
+	n32_t giaddr;		/* 20: DHCP relay agent IP address */
+	uint8_t chaddr[16];	/* 24: Client hardware address */
+	char sname[DHCP_SNAME_LEN];	/* 40: Server name */
+	char file[DHCP_FILE_LEN];	/* 104: Boot filename */
+	uint8_t options[0]; 	/* 212: Options (length based on MTU) */
 };
 
 /* BOOTP (rfc951) message types */
