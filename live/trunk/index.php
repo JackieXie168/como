@@ -118,7 +118,7 @@ if ($numgroup < 1) {
 	    $nodefilecontents= file($nodefile);
             /*  Get the comonode and port for the dist query  */
             $distcomonode = "";
-            for ($k=2;$k<count($nodefilecontents);$k++) {
+            for ($k = 2; $k < count($nodefilecontents); $k++) {
 		list($name, $comonode, $loc, $iface, $comment) 
 		    = split(';;', $nodefilecontents[$k]);
 		$distcomonode .= $comonode;

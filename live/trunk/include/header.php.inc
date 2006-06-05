@@ -37,19 +37,8 @@
         
     if ($includebanner) {
         $checkindex = basename ($_SERVER['SCRIPT_NAME']);
-        if ($checkindex == "index.php") {
-	    print "<div id=header><a href={$G['WEBROOT']}>";
-	    print "<img src=images/bannerlive.jpg></a></div>\n";
-        } else {
-	    print "<table border=0 cellpadding=0 cellspacing=0>";
-	    print "<tr><td rowspan=2 valign=middle style=padding-top=2px;background-color=#000;>";
-	    print "<a href=\"{$G['WEBROOT']}\">";
-	    print "<img src=images/bannerlive_200.jpg></a>\n";
-	    print "</td></tr><tr><td valign=top";
-	    print " style=background-image:url(\"images/gradient.jpg\");>";
-        }
-
+	print "<div id=header><a href={$G['WEBROOT']}>";
+	print "<img src=images/comolive-smooth.png></a></div>\n";
         include ("include/mainmenu.php");
-        print "</td></tr></table>";
     } 
 ?>

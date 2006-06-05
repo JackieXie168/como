@@ -9,27 +9,30 @@ if (isset ($_GET['webroot']))
 
 ?>
 <div class=secmenubar>
-    <ul>
-<?
-    if ($sub == "system") {
-	print "    <li><a href=$webroot>CoMo System List</a></li>";
-#	print "    <li>DDI(Distributed Data Inference)</li>";
-    }
-    if ($sub == "application") {
-#	print "    <li>Blinc View </li>";
-#	print "    <li>DDI(Distributed Data Inference)</li>";
-    }
-    if ($sub == "help") {
-	print "    <li><a href=http://como.intel-research.net/people.php>";
-        print "    People</a></li>";
-	print "    <li><a href=http://como.intel-research.net/publications.php>";
-        print "    Publications</a></li>";
-	print "    <li><a href=http://como.intel-research.net/software.php>";
-        print "    Software</a></li>";
-	print "    <li><a href=http://como.intel-research.net>";
-        print "    About CoMo</a></li>";
-    }
-?>
-
-    </ul>
+  <ul>
+<? if ($sub == "view") { ?>
+    <li>
+      <a href=<?=$webroot?>>
+      &nbsp;&nbsp;&nbsp;List&nbsp;&nbsp;&nbsp;</a>
+    </li>
+    <li>
+      <a href=<?=$webroot?>>
+      &nbsp;&nbsp;&nbsp;Map&nbsp;&nbsp;&nbsp;</a>
+    </li>
+<? } else if ($sub == "system") { ?>
+    <li>
+      <a href=$webroot>
+      &nbsp;&nbsp;&nbsp;Customize&nbsp;&nbsp;&nbsp;</a>
+    </li>
+    <li>
+      <a href=$webroot>
+      &nbsp;&nbsp;&nbsp;Properties&nbsp;&nbsp;&nbsp;</a>
+    </li>
+<? } if ($sub == "help") { ?>
+    <li>
+      <a href=http://como.intel-research.net>
+      &nbsp;&nbsp;&nbsp;About CoMo&nbsp;&nbsp;&nbsp;</a>
+    </li>
+<? } ?>
+  </ul>
 </div>
