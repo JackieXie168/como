@@ -50,7 +50,7 @@ WARNINGS?=-W -Wall -Werror -Wshadow -Wcast-align
 # WARNINGS += -Wconversion # broken on some platforms
 
 # Debug flags
-DBGFLAGS?=-g
+DBGFLAGS?=-g 
 
 # Optimization flags
 # OPTFLAGS?=-O2
@@ -214,15 +214,9 @@ $(foreach o,$(OBJS_$(PROG)),$(eval $(o) : $(DEPS_$(PROG))))
 
 $(foreach o,$(OBJS_$(PROG)),$(eval $(PROG) : $o))
 $(PROG):
-ifeq ("$(suffix $(PROG))",     ".so")
-	@echo "building shared lib $(PROG)"
-	$$(CC) $$(CFLAGS) -shared -Wl,--export-dynamic -o $$(@) $$(^) \
-		$$(LIBOPTS) $$(LIBS_$(PROG):%=-l%)
-else
 	@echo "building program $(PROG)"
 	$$(CC) $$(CFLAGS) -Wl,--export-dynamic -o $$(@) $$(^) \
 		$$(LIBOPTS) $$(LIBS_$(PROG):%=-l%)
-endif
 
 install-$(PROG):
 	@echo "install($(PROG))"
@@ -245,7 +239,7 @@ $(foreach o,$(OBJS_$(MODULE)),$(eval $(MODULE) : $o))
 
 $(MODULE): $(addsuffix .c,$(basename $(MODULE)))
 	@echo "building module $(MODULE)"
-	$$(CC) $$(CFLAGS) -shared -Wl,-x -o $$(@) \
+	$$(CC) $$(CFLAGS) -shared -Wl,--export-dynamic -o $$(@) \
 	$(addsuffix .c,$(basename $(MODULE))) \
 	$$(LIBOPTS) $$(LIBS_$(MODULE):%=-l%)
 	@$$(CC) -MM -MG -P -w $$(CFLAGS) -c \
