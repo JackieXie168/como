@@ -33,9 +33,7 @@ img {
 
 /* all pages will use this as well */
 #header {
-    background:#FFF;
-    width:100%;
-    height:145px;
+    margin-bottom: 5px;
 }
 
 #footer {
