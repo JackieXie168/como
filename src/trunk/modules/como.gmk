@@ -18,7 +18,8 @@ MODULES= \
 	active-flows.so \
 	frames.so \
 	trace-nf.so \
-	dhcp.so
+	dhcp.so \
+	nfexlist.so
 
 ifneq ($(shell uname),CYGWIN_NT-5.1)
         MODULES += tuple.so \
