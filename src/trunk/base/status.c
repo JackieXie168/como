@@ -180,9 +180,10 @@ send_status(int client_fd, int node_id)
 	    }
 	}
 	    
-	len = sprintf(buf, "Module: %-15s | %s | %u | %s\n",
+	len = sprintf(buf, "Module: %-15s | %s | %u | %s | %s\n",
 		      mdl->name, mdl->filter_str, TS2SEC(ts),
-		      mdl->callbacks.formats);
+		      mdl->callbacks.formats, 
+		      (mdl->description? mdl->description : "--"));
 
 	ret = como_writen(client_fd, buf, len);
 	if (ret < 0)
