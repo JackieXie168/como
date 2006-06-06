@@ -65,6 +65,8 @@ static int wait_for_modules = 2;
 
 static timestamp_t s_min_flush_ivl = 0;
 
+static int s_active_modules = 0;
+
 /*
  * -- cleanup
  * 
@@ -198,17 +200,17 @@ flush_state(module_t * mdl, tailq_t *exp_tables)
  *
  */
 static void
-capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
+capture_pkt(module_t * mdl, pkt_t *pkts, int count, char *which,
 	    tailq_t *exp_tables)
 {
-    pkt_t *pkt = (pkt_t *) pkt_buf;
+    pkt_t *pkt;
     int i;
     int new_record;
     int record_size;		/* effective record size */
 
     record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
 
-    for (i = 0; i < no_pkts; i++, pkt++) {
+    for (i = 0, pkt = pkts; i < count; i++, pkt++, which++) {
 	rec_t *prev, *cand;
 	uint32_t hash;
 	uint bucket;
@@ -256,11 +258,8 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
 	}
 	mdl->ca_hashtable->ts = pkt->ts;
 
-	if (which[i] == 0)
+	if (*which == 0)
 	    continue;		/* no interest in this packet */
-
-	/* unset the filter for this packet */
-	which[i] = 0;
 
 	/*
 	 * check if there are any errors in the packet that
@@ -384,49 +383,60 @@ capture_pkt(module_t * mdl, void *pkt_buf, int no_pkts, int *which,
  * This needs to be optimized.
  *
  */
-static int *
-filter(pkt_t * pkt, int n_packets, int n_out, module_t * modules)
+static char *
+filter(pkt_t * pkts, int count)
 {
-    static int *which;
+    static char *which;
     static int size;
-    int i = n_packets * n_out * sizeof(int);	/* size of the output bitmap */
-    int j;
-    int *outs[n_out];
+    int i;
+    char *out;
     timestamp_t max_ts = 0;
+    int idx;
+    int first_done = 0;
+    
+    i = count * s_active_modules; /* size of the output bitmap */
 
     if (which == NULL) {
 	size = i;
-	which = (int *) malloc(i);
+	which = safe_malloc(i);
     } else if (size < i) {
 	size = i;
-	which = (int *) realloc(which, i);
+	which = safe_realloc(which, i);
     }
 
     bzero(which, i);
-    for (i = 0; i < n_out; i++)
-	outs[i] = which + n_packets * i;
+    
+    out = which;
+    
+    for (idx = 0; idx <= map.module_last; idx++) {
+    	module_t *mdl = &map.modules[idx];
+	pkt_t *pkt;
 
-    for (i = 0; i < n_packets; i++, pkt++) {
-	if (pkt->ts == 0) {
-	    logmsg(LOGCAPTURE, "pkt no. %d has NULL timestamp\n", i);
-	    for (j = 0; j < n_out; j++) {
-		outs[j][i] = 0;
-	    }
+	if (mdl->status != MDL_ACTIVE) {
 	    continue;
 	}
-	if (pkt->ts >= max_ts) {
-	    max_ts = pkt->ts;
-	} else {
-	    logmsg(LOGCAPTURE,
-		   "pkt no. %d timestamps not increasing " \
-		   "(%u.%06u --> %u.%06u)\n",
-		   i, TS2SEC(max_ts), TS2USEC(max_ts),
-		   TS2SEC(pkt->ts), TS2USEC(pkt->ts));
+	
+	for (i = 0, pkt = pkts; i < count; i++, pkt++, out++) {
+	    if (pkt->ts == 0) {
+		if (first_done == 0) {
+		    logmsg(LOGCAPTURE, "pkt no. %d has NULL timestamp\n", i);
+		}
+		continue;
+	    }
+	    if (pkt->ts >= max_ts) {
+		max_ts = pkt->ts;
+	    } else if (first_done == 0) {
+		logmsg(LOGCAPTURE,
+		       "pkt no. %d timestamps not increasing "
+		       "(%u.%06u --> %u.%06u)\n",
+		       i, TS2SEC(max_ts), TS2USEC(max_ts),
+		       TS2SEC(pkt->ts), TS2USEC(pkt->ts));
+	    }
+	    *out = evaluate(mdl->filter_tree, pkt);
 	}
-	for (j = 0; j < n_out; j++)
-	    outs[j][i] = evaluate(modules[j].filter_tree, pkt);
+	first_done = 1;
     }
-
+    
     return which;
 }
 
@@ -440,9 +450,9 @@ filter(pkt_t * pkt, int n_packets, int n_out, module_t * modules)
  * 
  */
 static timestamp_t
-process_batch(pkt_t * pkts, unsigned count)
+process_batch(pkt_t * pkts, int count)
 {
-    int *which;
+    char *which;
     int idx;
     tailq_t exp_tables = {NULL, NULL};
     expiredmap_t *first_exp_table;
@@ -456,10 +466,10 @@ process_batch(pkt_t * pkts, unsigned count)
      * of interest for the given classifier, and it is 0 otherwise.
      */
     logmsg(V_LOGCAPTURE,
-	   "calling filter with pkts %p, n_pkts %d, n_out %d\n",
-	   pkts, count, map.module_last);
+	   "calling filter with pkts %p, count %d\n",
+	   pkts, count);
     start_tsctimer(map.stats->ca_filter_timer);
-    which = filter(pkts, count, map.module_last + 1, map.modules);
+    which = filter(pkts, count);
     end_tsctimer(map.stats->ca_filter_timer);
 
     /*
@@ -475,10 +485,6 @@ process_batch(pkt_t * pkts, unsigned count)
 	module_t *mdl = &map.modules[idx];
 
 	if (mdl->status != MDL_ACTIVE) {
-	    /* Even if the module isn't active, we still must skip
-	     * some bytes in which[]
-	     */
-	    which += count;
 	    continue;
 	}
 
@@ -669,7 +675,7 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void * pack, size_t sz)
                        mdl->name, src->cb->name);
                 mdl->status = MDL_INCOMPATIBLE;
                 map.stats->modules_active--;
-                break;
+                return;
             }
         }
 
@@ -701,6 +707,8 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void * pack, size_t sz)
     if (s_min_flush_ivl == 0 || s_min_flush_ivl > mdl->flush_ivl) {
 	s_min_flush_ivl = mdl->flush_ivl;
     }
+    
+    s_active_modules++;
 }
 
 
@@ -725,7 +733,11 @@ ca_ipc_module_del(procname_t sender, __unused int fd, void * buf,
 
     idx = *(int *)buf; 
     mdl = &map.modules[idx];
-
+    
+    if (mdl->status == MDL_ACTIVE) {
+	s_active_modules--;
+    }
+    
     remove_module(&map, mdl); 
 }
     
