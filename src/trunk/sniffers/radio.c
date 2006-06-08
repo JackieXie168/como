@@ -31,6 +31,7 @@
  */
 
 #include "como.h"
+#include "comoendian.h"
 #include "wlan.h"
 #include "radiotap.h"
 
@@ -94,8 +95,13 @@ avs_header_to_como_radio(const char *buf, struct _como_radio *r)
     N32(r->antenna) = h->antenna;
     N32(r->priority) = h->priority;
     N32(r->ssitype) = h->ssitype;
-    N32(r->ssisignal) = h->ssisignal;
-    N32(r->ssinoise) = h->ssinoise;
+#ifdef COMO_LITTLE_ENDIAN
+    N32(r->ssisignal) = h->ssisignal + 0x00ffffff;
+    N32(r->ssinoise) = h->ssinoise + 0x00ffffff;
+#else
+    N32(r->ssisignal) = h->ssisignal - 256;
+    N32(r->ssinoise) = h->ssinoise - 256;
+#endif
     N32(r->preamble) = h->preamble;
     N32(r->encoding) = h->encoding;
 
