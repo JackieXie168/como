@@ -50,8 +50,8 @@
 #define FLOWDESC    struct _ssid
 FLOWDESC {
     timestamp_t ts;
-    uint32_t	signal; 
-    uint32_t	noise; 
+    int32_t	signal; 
+    int32_t	noise; 
     uint8_t	samples; 
     int8_t 	channel;
     uint8_t	wepmode;
@@ -216,7 +216,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     timestamp_t ts;
     time_t t; 
     char ssid[34];
-    uint8_t sig, noise;
+    int32_t sig, noise;
  
     if (buf == NULL && args != NULL) { 
 	int n; 
@@ -244,17 +244,17 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     ts = NTOHLL(x->ts);
     t = (time_t) TS2SEC(ts); 
     snprintf(ssid, x->len+1, x->ssid);   
-    sig = (uint8_t)(ntohl(x->signal) / x->samples); 
-    noise = (uint8_t)(ntohl(x->noise) / x->samples); 
+    sig = (int32_t)ntohl(x->signal) / x->samples; 
+    noise = (int32_t)ntohl(x->noise) / x->samples; 
     
     /* print according to the requested format */
     if (fmt == PRETTYFMT) {
 	char * wepmode = x->wepmode? "Y": "N"; 
-	*len = sprintf(s, fmt, asctime(localtime(&t)), (sig-256), (noise-256),
+	*len = sprintf(s, fmt, asctime(localtime(&t)), sig, noise,
 					x->channel, x->samples, wepmode, ssid); 
     } else {
 	*len = sprintf(s, fmt, (long int) t, x->wepmode, 
-		   x->channel, (sig-256), (noise-256), x->samples); 
+		   x->channel, sig, noise, x->samples); 
     } 
 
     return s;
