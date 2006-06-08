@@ -109,16 +109,16 @@ prism2_header_to_como_radio(const char *buf, struct _como_radio *r)
 
     h = (prism2_header *) buf;
 
-    N64(r->mactime) = h->mactime.data;
-    N64(r->hosttime) = h->hosttime.data;
+    N64(r->mactime) = (uint64_t) htonl(h->mactime.data);
+    N64(r->hosttime) = (uint64_t) htonl(h->hosttime.data);
     N32(r->phytype) = 0;
-    N32(r->channel) = h->channel.data;
-    N32(r->datarate) = h->rate.data;
+    N32(r->channel) = htonl(h->channel.data);
+    N32(r->datarate) = htonl(h->rate.data);
     N32(r->antenna) = 0;
     N32(r->priority) = 0;
     N32(r->ssitype) = RADIO_SSITYPE_DBM;
-    N32(r->ssisignal) = h->signal.data;
-    N32(r->ssinoise) = h->noise.data;
+    N32(r->ssisignal) = htonl(h->signal.data);
+    N32(r->ssinoise) = htonl(h->noise.data);
     N32(r->preamble) = 0;
     N32(r->encoding) = 0;
 
