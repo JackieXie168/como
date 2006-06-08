@@ -260,7 +260,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     if (fmt == PRETTYFMT) {
 	int n;
         *len = sprintf(s, fmt, hh, mm, ss, TS2USEC(ts), 
-		   ntohl(x->signal)-256, ntohl(x->noise)-256); 
+		   ntohl(x->signal), ntohl(x->noise)); 
   
 	for (n = 0; n < MAC_ADDR_SIZE; n++) 
 	    *len += sprintf(s + *len, "%02x%s", x->addr[n],	
@@ -323,8 +323,8 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 							    x->channel, ssid);
 	*len += sprintf(s + *len, "\n");
     } else {
-	*len = sprintf(s, fmt, (long int) t, (ntohl(x->signal)-256),
-			    (ntohl(x->noise)-256), x->bivl, x->channel, ssid);
+	*len = sprintf(s, fmt, (long int) t, ntohl(x->signal),
+			    ntohl(x->noise), x->bivl, x->channel, ssid);
     }
     
     return s;
