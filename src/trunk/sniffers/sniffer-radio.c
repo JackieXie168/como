@@ -733,7 +733,7 @@ sniffer_start(source_t * src)
     switch (sp_link(info->pcap)) {
     case DLT_PRISM_HEADER:
 	info->type = COMOTYPE_RADIO;
-	info->fallback_to_como_radio = prism2_header_to_como_radio;
+	info->fallback_to_como_radio = avs_or_prism2_header_to_como_radio;
 	break;
     case DLT_IEEE802_11_RADIO:
         info->type = COMOTYPE_RADIO;
