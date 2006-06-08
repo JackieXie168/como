@@ -53,11 +53,11 @@
 #define FLOWDESC	struct _list
 FLOWDESC {
     timestamp_t ts;
-    uint32_t signal;   /* signal strength value */ 
-    uint32_t noise;    /* noise value */
-    uint32_t phytype;  /* identifies phy type employed by WLAN device */
-    uint32_t encoding; /* specifies encoding of packet */
-    uint16_t bivl;     /* beacon interval */  
+    n32_t signal;   /* signal strength value */ 
+    n32_t noise;    /* noise value */
+    n32_t phytype;  /* identifies phy type employed by WLAN device */
+    n32_t encoding; /* specifies encoding of packet */
+    n16_t bivl;     /* beacon interval */  
     uint8_t  channel;  /* current channel number */
     uint8_t  len;
     uint8_t  addr[MAC_ADDR_SIZE];
@@ -134,18 +134,18 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 	x->ts = COMO(ts);
 
         if (COMO(type) == COMOTYPE_RADIO) {
-            x->signal = H32(RADIO(ssisignal));
-	    x->noise = H32(RADIO(ssinoise));
-            x->phytype = H32(RADIO(phytype));
-	    x->encoding = H32(RADIO(encoding));
+            x->signal = RADIO(ssisignal);
+	    x->noise = RADIO(ssinoise);
+            x->phytype = RADIO(phytype);
+	    x->encoding = RADIO(encoding);
         } else {
-            x->signal = 0;
-            x->noise = 0;
-            x->phytype = RADIO_PHYTYPE_NONE;
-            x->encoding = RADIO_ENCODING_UNKNOWN;
+            N32(x->signal) = 0;
+            N32(x->noise) = 0;
+            N32(x->phytype) = htonl(RADIO_PHYTYPE_NONE);
+            N32(x->encoding) = htonl(RADIO_ENCODING_UNKNOWN);
         }
 
-        x->bivl = H16(MGMT_BODY(bivl)); 
+        x->bivl = MGMT_BODY(bivl); 
 	x->channel = MGMT_BODY(ch);
         
 	/* get to the SSID information element */
@@ -177,11 +177,11 @@ store(__unused void * self, void *fh, char *buf)
     int i;
  
     PUTH64(buf, x->ts);
-    PUTH32(buf, x->signal);
-    PUTH32(buf, x->noise);
-    PUTH32(buf, x->phytype);
-    PUTH32(buf, x->encoding);
-    PUTH16(buf, x->bivl);
+    PUTN32(buf, N32(x->signal));
+    PUTN32(buf, N32(x->noise));
+    PUTN32(buf, N32(x->phytype));
+    PUTN32(buf, N32(x->encoding));
+    PUTN16(buf, N16(x->bivl));
     PUTH8(buf, x->channel);
     PUTH8(buf, x->len);
     
@@ -210,7 +210,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 #define PRETTYHDR  "timestamp       s(dbm)  n(dbm)  mac address \
        channel band   encoding   interval    ch    ssid\n"
 #define PRETTYFMT  "%02d:%02d:%02d:%06d %-7d %-7d "
-#define PLAINFMT   "%ld %d %d %d %d %s"
+#define PLAINFMT   "%ld %d %d %d %d %s\n"
 
 
 static char *
@@ -260,13 +260,13 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     if (fmt == PRETTYFMT) {
 	int n;
         *len = sprintf(s, fmt, hh, mm, ss, TS2USEC(ts), 
-		   ntohl(x->signal), ntohl(x->noise)); 
+		   (long int) H32(x->signal), (long int) H32(x->noise));
   
 	for (n = 0; n < MAC_ADDR_SIZE; n++) 
 	    *len += sprintf(s + *len, "%02x%s", x->addr[n],	
 			n < (MAC_ADDR_SIZE-1) ? ":": "  ");
 
-        switch (ntohl(x->phytype)) {
+        switch (H32(x->phytype)) {
 	case RADIO_PHYTYPE_FHSS_DOT11_97:
 	    *len += sprintf(s + *len, "%-15s", "FHSS 802.11 97");
 	    break; 
@@ -299,7 +299,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 	    break;
 	}
 
-	switch(ntohl(x->encoding)) {
+	switch(H32(x->encoding)) {
 	case RADIO_ENCODING_UNKNOWN:
 	    *len += sprintf(s + *len, "%-10s", "UNKNOWN");
 	    break; 
@@ -319,12 +319,12 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 	    *len += sprintf(s + *len, "%-10s", "FOREIGN");
 	    break;
 	}	
-	*len += sprintf(s + *len, " %-3d%-7s  %-5d %-32s", x->bivl, "ms", 
+	*len += sprintf(s + *len, " %-3d%-7s  %-5d %-32s", H16(x->bivl), "ms", 
 							    x->channel, ssid);
 	*len += sprintf(s + *len, "\n");
     } else {
-	*len = sprintf(s, fmt, (long int) t, ntohl(x->signal),
-			    ntohl(x->noise), x->bivl, x->channel, ssid);
+	*len = sprintf(s, fmt, (long int) t, (long int) H32(x->signal),
+			    (long int) H32(x->noise), H16(x->bivl), x->channel, ssid);
     }
     
     return s;
