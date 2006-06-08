@@ -735,10 +735,10 @@ sniffer_start(source_t * src)
 	info->type = COMOTYPE_RADIO;
 	info->fallback_to_como_radio = prism2_header_to_como_radio;
 	break;
-/*    case DLT_IEEE802_11_RADIO:
-    info->type = COMOTYPE_RADIO;
-    info->fallback_to_como_radio = NULL; // TODO: bsd
-    break;*/
+    case DLT_IEEE802_11_RADIO:
+        info->type = COMOTYPE_RADIO;
+        info->fallback_to_como_radio = radiotap_header_to_como_radio;
+        break;
     case DLT_IEEE802_11_RADIO_AVS:
 	info->type = COMOTYPE_RADIO;
 	info->fallback_to_como_radio = avs_header_to_como_radio;
@@ -827,6 +827,7 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
 
     COMO(ts) = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
     COMO(caplen) += len;
+    COMO(len) = h->len;
 
     updateofs(pkt, L2, LINKTYPE_80211);
 }
@@ -870,9 +871,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 	pdata.res_drop = 0;
 
 	/*
-	 * we use pcap_dispatch() because pcap_next() is assumend unaffected
-	 * by the pcap_setnonblock() call. (but it doesn't seem that this is 
-	 * actually the case but we still believe the man page. 
+	 * we use pcap_dispatch() because pcap_next() is assumed unaffected
+	 * by the pcap_setnonblock() call. (it doesn't seem that this is 
+	 * actually the case, but we still believe the man page.) 
 	 * 
 	 * we retrieve one packet at a time for simplicity. 
 	 * XXX check the cost of processing one packet at a time... 

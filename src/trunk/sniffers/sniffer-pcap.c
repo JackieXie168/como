@@ -165,6 +165,12 @@ sniffer_start(source_t * src)
 	type = COMOTYPE_LINK;
 	l2type = LINKTYPE_80211;
 	break;
+    case DLT_IEEE802_11_RADIO:
+        logmsg(LOGSNIFFER, "datalink 802.11_radiotap (%d)\n", pf.linktype);
+        type = COMOTYPE_RADIO;
+	l2type = LINKTYPE_80211;
+        to_como_radio = radiotap_header_to_como_radio;
+        break;
     case DLT_IEEE802_11_RADIO_AVS:
 	logmsg(LOGSNIFFER,
 	       "datalink 802.11 with AVS header (%d)\n", pf.linktype);
@@ -203,7 +209,7 @@ sniffer_start(source_t * src)
     lchi = headerinfo_lookup_with_type_and_layer(type, LCOMO);
     l2hi = headerinfo_lookup_with_type_and_layer(l2type, L2);
     assert(lchi);
-    assert(lchi);
+    assert(l2hi);
     
     snprintf(s_protos, 32, "%s:%s:any:any", lchi->name, l2hi->name);
     pkt = metadesc_tpl_add(outmd, s_protos);
@@ -285,7 +291,6 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, timestamp_t max_ivl)
 	/* check if entire record is available */
 	if (left < (int) sizeof(pcap_hdr_t) + ph.caplen)
 	    break;
-
 
 	/*      
 	 * Now we have a packet: start filling a new pkt_t struct
