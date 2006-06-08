@@ -19,7 +19,8 @@ MODULES= \
 	frames.so \
 	trace-nf.so \
 	dhcp.so \
-	nfexlist.so
+	nfexlist.so \
+	macssi.so
 
 ifneq ($(shell uname),CYGWIN_NT-5.1)
         MODULES += tuple.so \
