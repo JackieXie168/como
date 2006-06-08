@@ -30,6 +30,8 @@
  * $Id$
  */
 
+#include <string.h> /* memcpy */
+
 #include "como.h"
 #include "comoendian.h"
 #include "wlan.h"
@@ -143,46 +145,6 @@ avs_or_prism2_header_to_como_radio(const char *buf, struct _como_radio *r)
     return prism2_header_to_como_radio(buf, r);
 }
 
-static uint64_t
-unpack_uint64_t(char **buffer)
-{
-    uint64_t value = *((uint64_t *)*buffer);
-    *buffer = *buffer + sizeof(uint64_t);
-    return value;
-}
-
-static uint32_t __unused
-unpack_uint32_t(char **buffer)
-{
-    uint32_t value = *((uint32_t *)*buffer);
-    *buffer = *buffer + sizeof(uint32_t);
-    return value;
-}
-
-static uint16_t
-unpack_uint16_t(char **buffer)
-{
-    uint16_t value = *((uint16_t *)*buffer);
-    *buffer = *buffer + sizeof(uint16_t);
-    return value;
-}
-
-static uint8_t
-unpack_uint8_t(char **buffer)
-{
-    uint8_t value = *((uint8_t *)*buffer);
-    *buffer = *buffer + sizeof(uint8_t);
-    return value;
-}
-
-static int8_t
-unpack_int8_t(char **buffer)
-{
-    int8_t value = *((int8_t *)*buffer);
-    *buffer = *buffer + sizeof(int8_t);
-    return value;
-}
-
 static int
 channel_lookup_80211abg(uint16_t freq)
 {
@@ -230,9 +192,17 @@ radiotap_header_to_como_radio(const char *buf, struct _como_radio *r)
     struct ieee80211_radiotap_header *h;
     h = (struct ieee80211_radiotap_header *) buf;
     uint32_t *bitmap;
-    char *unpack;
+    char *unpack_ptr;
+    uint16_t uint16_value;
+    uint8_t uint8_value;
+    int8_t int8_value;
 
 #define BIT_PRESENT(value, x) (value & (1 << (x)))
+
+#define unpack(var) { \
+    memcpy(&(var), unpack_ptr, sizeof(var)); \
+    unpack_ptr += sizeof(var); \
+}
 
     /* values not provided: */
     N64(r->hosttime) = 0;
@@ -246,12 +216,13 @@ radiotap_header_to_como_radio(const char *buf, struct _como_radio *r)
     while (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_EXT))
         bitmap++;
 
-    unpack = (char *)(bitmap + 1); /* data starts after the bitmap */
+    unpack_ptr = (char *)(bitmap + 1); /* data starts after the bitmap */
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_TSFT))
-	N64(r->hosttime) = unpack_uint64_t(&unpack);
+	unpack(N64(r->hosttime));
 
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_FLAGS)) {
-	uint8_t flags = unpack_uint8_t(&unpack);
+	uint8_t flags;
+        unpack(flags);
 
         if (flags & IEEE80211_RADIOTAP_F_SHORTPRE)
             N32(r->preamble) = RADIO_PREAMBLE_SHORT_PREAMBLE;
@@ -259,15 +230,16 @@ radiotap_header_to_como_radio(const char *buf, struct _como_radio *r)
             N32(r->preamble) = RADIO_PREAMBLE_LONG_PREAMBLE;
     }
 
-    if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_RATE))
-        N32(r->datarate) = 5 * unpack_uint8_t(&unpack);
-
+    if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_RATE)) {
+        unpack(uint8_value);
+        N32(r->datarate) = 5 * uint8_value;
+    }
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_CHANNEL)) {
-        uint16_t freq, flags;
-        freq = unpack_uint16_t(&unpack);
-        flags = unpack_uint16_t(&unpack);
 
-        N32(r->channel) = channel_lookup_80211abg(freq);
+        unpack(uint16_value);
+        N32(r->channel) = channel_lookup_80211abg(uint16_value);
+
+        unpack(uint16_value); /* ignored flags */
 
         /*logmsg(LOGUI, "FREQ %x, flags=0x%x (", freq, flags);
 	if (flags & IEEE80211_CHAN_TURBO)
@@ -290,35 +262,37 @@ radiotap_header_to_como_radio(const char *buf, struct _como_radio *r)
     }
 
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_FHSS))
-	    unpack_uint16_t(&unpack);
+        unpack(uint16_value); /* ignored */
 
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_DBM_ANTSIGNAL)) {
-        char value = unpack_int8_t(&unpack);
+        unpack(int8_value);
         N32(r->ssitype) = RADIO_SSITYPE_DBM;
-        N32(r->ssisignal) =  htonl((int32_t) value + 256);
+        N32(r->ssisignal) =  htonl((int32_t) int8_value);
     }
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_DBM_ANTNOISE)) {
-        char value = unpack_int8_t(&unpack);
+        unpack(int8_value);
         N32(r->ssitype) = RADIO_SSITYPE_DBM;
-        N32(r->ssinoise) =  htonl((int32_t) value + 256);
+        N32(r->ssinoise) =  htonl((int32_t) int8_value);
     }
 
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_LOCK_QUALITY))
-	    unpack_uint16_t(&unpack);
+        unpack(uint16_value); /* ignored */
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_TX_ATTENUATION))
-	    unpack_uint16_t(&unpack);
+        unpack(uint16_value); /* ignored */
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_DB_TX_ATTENUATION))
-	    unpack_uint16_t(&unpack);
+        unpack(uint16_value); /* ignored */
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_DBM_TX_POWER))
-	    unpack_int8_t(&unpack);
+        unpack(int8_value); /* ignored */
 
-    if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_ANTENNA))
-	    N32(r->antenna) = unpack_uint8_t(&unpack);
+    if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_ANTENNA)) {
+        unpack(uint8_value);
+        N32(r->antenna) = uint8_value;
+    }
 
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_DB_ANTSIGNAL))
-	    unpack_uint8_t(&unpack);
+        unpack(uint8_value); /* ignored */
     if (BIT_PRESENT(h->it_present, IEEE80211_RADIOTAP_DB_ANTNOISE))
-	    unpack_uint8_t(&unpack);
+        unpack(uint8_value); /* ignored */
 
     return h->it_len;
 }
