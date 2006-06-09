@@ -1,19 +1,16 @@
+<!-- $Id$  -->
+
 <?php
-/*  node.class.php
- *  $Id$ 
- *
- *  methods:
- *    PrintDebug()
- *    SetStarttime(stime)
- *    SetEndtime(etime)
- */
 
 class Node {
-    var $comonode;
-    var $hostaddr;
-    var $hostport;
-    var $nodename;
-    var $nodeplace;
+    var $status; 		/* TRUE if initialization succeded */
+    var $hostaddr;		/* CoMo node IP address (or name) */
+    var $hostport;		/* CoMo node port number */
+    var $db_path;		/* Path to the CoMolive! DB */
+    var $results;		/* Path to the CoMolive! results directory */
+
+    var $nodename; 		/* Information derived from ?status query */ 
+    var $nodeplace;	
     var $comment;
     var $linkspeed;
     var $version;
@@ -21,176 +18,176 @@ class Node {
     var $start;
     var $curtime;
     var $modinfo;
-    var $status;
     var $module;
     var $filter;
-    var $stime;
-    var $etime;
-    var $timeperiod;
-    var $timebound;
-    /*  Some Globals  */
-    var $G;
-    var $NODEDB;
+ 
+    var $stime; 		/* query start and end time */ 
+    var $etime; 		/* XXX unclear why we need to keep it here */
 
-    /*  Constructor  */
+    /* 
+     * constructor for the class. 
+     * this will run a ?status query (unless it is already cached) 
+     * and store all informations about the node and the modules
+     * that are currently running. 
+     */
     function Node($comonode, $G) {
-        $this->NODEDB = $G['NODEDB'];
-        $this->G = $G;
-	$absroot = $this -> G['ABSROOT'];
-	$results = trim ($this->G['RESULTS'], "./");
+	$this->status = TRUE; 
+        $this->db_path = $G['ABSROOT'] . "/" . $G['NODEDB'];
+	$this->results = $G['ABSROOT'] . "/" . $G['RESULTS'];
 
-	$timeperiod = $G['TIMEPERIOD'];
-	$timebound = $G['TIMEBOUND'];
-    
-        /*  Check to make sure there is a host and port number */
+	/* 
+         * the comonode may consist of host:port or just port. if 
+         * it is just the port number, we assume host is equal to 
+         * localhost
+         */
         $hostarray = split (":", $comonode);
-        if ((count($hostarray)) == 2 && is_numeric ($hostarray[1])) {
-	    $this -> comonode = $comonode;
-	    $this -> hostaddr = $hostarray[0];
-	    $this -> hostport = $hostarray[1];
-	    $this -> timeperiod = $timeperiod;
-	    $this -> timebound = $timebound;
+        $this->hostaddr = (count($hostarray) > 1)? $hostarray[0] : "localhost";
+        $this->hostport = (count($hostarray) > 1)? $hostarray[1] : $hostarray; 
 
-            /*  Cache the status query so we don't have to query CoMo  */
-            $statusinfo = $this -> statusExists($comonode, $G['RESULTS'], "status");
-            if ($statusinfo[0] != 0) {
-		$statusfilename = "$statusinfo[1]";
-		$query = file($statusfilename);
-            } else {
-		$query = file("http://$comonode/?status");
-            }
+	if (!is_numeric($this->hostport)) {
+	    $this->status = FALSE; 
+	    return; 
+        } 
 
-	} else {
-            $query = FALSE;
-        }
-	if ($query == FALSE) {
-            $this->status="FAIL";
-	} else {
-            $this->status="OK";
-	    /* parse the node information */
-            $buildstatus = "";
-	    for ($i=0;$i<count($query);$i++) {
-              if ($query[$i] != "\n") {
-		$buildstatus = $buildstatus . $query[$i];
-		$lines = explode(" ", $query[$i],2);
-		$args = explode("|", $lines[1]);
-                $val = trim ($lines[0]); 
-                switch ($val) {
-                    case "Node:":
-                        list ($this->nodename, $this->nodeplace, 
-                              $this->linkspeed) = $args;
-		    break;
-		    case "Start:":
-			$this->start = $args[0];
-		    break;
-		    case "Current:":
-			$this->curtime = $args[0];
-		    break;
-		    case "Comment:":
-			$this->comment= $args[0];
-		    break;
-                    case "Module:":
-                        $str = urlencode(trim($args[1]));
-                        $module = trim($args[0]);
-                        $this->modinfo[$module]['filter'] = $str;
-                        $this->modinfo[$module]['stime'] = trim($args[2]);
-                        $this->modinfo[$module]['formats'] = trim($args[3]);
-		    break;
-                    case "--":
-			$version = explode("(built:", $args[0]);
-			$this->version = trim($version[0]);
-                        /*  Can't get rid of damn rt para  */
-                        $test = split (")", $version[1]);
-			$this->builddate = trim($test[0]);
-		    break;
-                }
-	      }
-	    } 
+	/* 
+	 * get the ?status information (cached or not) and parse it 
+         * to populate the node information and modules' array. 
+         */ 
+	$info = $this->getStatus($comonode, $G['RESULTS'], "status");
+	if ($info == FALSE) {
+	    $this->status = FALSE; 
+	    return; 
+        } 
 
-            /*
-	     *  Set the end time of the query to the current como time.
-	     */
-	    $etime = $this->curtime;
+	for ($i = 0; $i < count($info); $i++) {
+	    if ($info[$i] == "\n") 
+		continue; 
 
-	    /*
-	     *  get the start time. if not defined, we use
-	     *  the default value TIMEPERIOD defined in comolive.conf
-	     */
-	    $stime = $etime - $this->timeperiod;
+	    /* get the first word of the line */ 
+	    $lines = explode(" ", $info[$i], 2);
 
-            /*  Check if this is a virtual node and if 
-             *  so set module to default
-             */
-#            if (!(isset($module)))
-#                $module = "traffic";
+	    /* fields are separated by | */ 
+	    $args = explode("|", $lines[1]);
 
-            /*  Make sure start time is not before the module start time  */
-            if ($stime < $this -> modinfo[$module]['stime'])
-                $stime = $this -> modinfo[$module]['stime'];
+	    $val = trim($lines[0]); 
+	    switch ($val) {
+	    case "Node:":
+		list($this->nodename,$this->nodeplace,$this->linkspeed) = $args;
+		break;
 
-	    /*
-	     *  all timestamps are always aligned to the timebound
-	     *  defined in the comolive.conf file.
-	     */
-	    $stime -= $stime % $this->timebound;
-	    $etime -= $etime % $this->timebound;
+	    case "Start:":
+		$this->start = $args[0];
+		break;
 
-            $this->stime = $stime;
-            $this->etime = $etime;
-            /*  Write out the status file for future use  */
-            $statusfile = $comonode . "_status_" . $etime;
-	    $statusfilename = "$absroot/$results/$statusfile";
-            $fh = fopen($statusfilename, "w");
-            fwrite ($fh, $buildstatus);
-	}
-    }
-    function queryDir ($dadirname, $needlefile) {
-        $dh = opendir ("$dadirname");
-#	$needlefile = $comonode . "_" . $key . "_";
-	while (false!==($filez= readdir($dh))) {
-	    if ($filez!= "." && $filez!= ".." 
-                && strstr ($filez, "$needlefile")) {
-		$statusfile = $filez;
+	    case "Current:":
+		$this->curtime = $args[0];
+		break;
+
+	    case "Comment:":
+		$this->comment= $args[0];
+		break;
+
+	    case "Module:":
+		$module = trim($args[0]);
+		$this->modinfo[$module]['filter'] = urlencode(trim($args[1]));
+		$this->modinfo[$module]['stime'] = trim($args[2]);
+		$this->modinfo[$module]['formats'] = trim($args[3]);
+		if (count($args) > 4)
+		    $this->modinfo[$module]['name'] = trim($args[4]);
+		else 
+		    $this->modinfo[$module]['name'] = $module; 
+		break;
+
+	    case "--":
+		$version = explode("(built:", $args[0]);
+		$this->version = trim($version[0]);
+		/*  Can't get rid of damn rt para  */
+		$test = split (")", $version[1]);
+		$this->builddate = trim($test[0]);
+		break;
 	    }
 	}
-        if (isset ($statusfile))
-	    return ($statusfile);
-        else 
-            return (0);
+
+	/*
+	 * set current time interval 
+	 */ 
+	$this->etime = $this->curtime;
+	$this->stime = $this->etime - $G['TIMEPERIOD'];
+
+	/*  Make sure start time is not before the module start time  */
+	if ($this->stime < $this->modinfo[$module]['stime'])
+	    $this->stime = $this->modinfo[$module]['stime'];
+
+	/*
+	 *  all timestamps are always aligned to the timebound
+	 *  defined in the comolive.conf file.
+	 */
+	$this->stime -= $this->stime % $G['TIMEBOUND'];
+	$this->etime -= $this->etime % $G['TIMEBOUND'];
     }
-    function statusExists ($comonode, $dadir, $key) {
+
+
+    /* 
+     * -- queryDir
+     * 
+     * browse a directory ($dadirname) to find a file with a 
+     * name that contains the $needle. if no file is found 
+     * return FALSE. 
+     */ 
+    function queryDir($dadirname, $needle) {
+        $dh = opendir("$dadirname");
+
+	while (FALSE !== ($file = readdir($dh))) 
+	    if (strstr($file, $needle)) 
+		return $file; 
+		
+	return FALSE; 
+    }
+
+    /* 
+     * -- getStatus 
+     * 
+     * look if we have a recent copy of the status query. if
+     * not, send a query to the node and store the results for 
+     * future reference. return the contents of the file. 
+     *
+     */
+    private function getStatus() {
         $statuslife = "600";
-        $absroot = $this -> G['ABSROOT'];
-        $results = trim ($dadir, "./");
         $timenow = time();
+
         /*  Get the current status file  */
-	$needlefile = $comonode . "_" . $key . "_";
-        $dadirname = $absroot . "/" . $results;
-        $statusfile = $this -> queryDir ($dadirname, $needlefile);
+	$needlefile = $this->hostaddr . ":" . $this->hostport . "_status_"; 
+        $statusfile = $this->queryDir($this->results, $needlefile);
 
-        if ($statusfile) {
-	    $tmpvar = split ("_", $statusfile);
-	    $curstatustime = $tmpvar[2];
-            /*  Make sure status is up to date  */
-	    $statusfilename = "$absroot/$results/$statusfile";
-	    if (($timenow - $curstatustime) > $statuslife) {
-		$returnstatus[0] = 0;
+        if ($statusfile != FALSE) {
+	    /* 
+	     * make sure the file is up-to-date. the name contains
+             * the timestamp and it needs to be less than $statuslife 
+             * seconds old. 
+             */
+	    $tmpvar = split("_", $statusfile);
+	    $statusfilename = "$this->results/$statusfile";
+	    if (($timenow - $tmpvar[2]) > $statuslife)
                 system ("rm -f $statusfilename");
-	    } else {
-		$returnstatus[0] = 1;
-		$returnstatus[1] = $statusfilename;
-	    }
-        } else 
-	    $returnstatus[0] = 0;
+	    else 
+		return file($statusfilename); 
+        } 
 
-        return ($returnstatus);
+	/* run the ?status query */
+	$info = file("http://$this->hostaddr:$this->hostport/?status");
+	if ($info == FALSE) 
+	    return FALSE; 
+
+	/* store the new ?status query results */
+	$statusfilename = "$this->results/$needlefile$timenow";
+        file_put_contents($statusfilename, $info); 
+
+        return $info; 
     }
     
-    function removeFile ($filename) {
-        $absroot = $this -> G['ABSROOT'];
-        $results = trim ($this->G['RESULTS'], "./");
-	$dafilename = "$absroot/$results/$filename";
-	system ("rm -f $dafilename");
+    function removeFile($filename) {
+	system ("rm -f $this->results/$filename");
     }
 
     function PrintDebug() {
@@ -205,13 +202,16 @@ class Node {
 	print "lastpacket: $this->lastpacket<br>";
 
     }
+
     function SetStarttime ($stime) {
         $this->stime = $stime;
     }
+
     function SetEndtime ($etime) {
         $this->etime = $etime;
     }
-    function CheckFirstPacket ($stime,$mod) {
+
+    function CheckFirstPacket($stime, $mod) {
         if ($stime < $this->modinfo[$mod]['stime']){
             $this->stime = $this->modinfo[$mod]['stime'];
         } else {
@@ -219,71 +219,77 @@ class Node {
         }
         return $this->stime;
     }
+
     /*  Return a list of modules that support different features  
      *  needle may be gnuplot, html, etc.  This info is captured
      *  on a per module basis.  
      */
-    function GetModules ($needle) {
-        $keys = array_keys($this -> modinfo);
+    function GetModules($needle) {
+        $keys = array_keys($this->modinfo);
         $modules = array();
-        for ($i=0;$i<count($keys); $i++) {
-            $haystack = $this -> modinfo[$keys[$i]]['formats'];
+        for ($i = 0; $i < count($keys); $i++) {
+            $haystack = $this->modinfo[$keys[$i]]['formats'];
             if (strstr($haystack, $needle)) {
                 array_push ($modules, $keys[$i]);
             }
         }
         return ($modules);
     }
-    /*  Return an array with the modules that a user
-     *  has chosen that are saved in a config file.  
-     *  Appropriate values for value are
-     *  "main" for the main window  and "secondary"
-     *  for the right hand queries
+
+
+    /* 
+     * -- parseConfig
+     * 
+     * parses a module config file to find all modules listed 
+     * as "main" or "secondary". It returns an array with the module 
+     * names. 
+     *
      */
-    function GetConfigModules ($comonode, $value) {
-        $NODEDB = $this -> NODEDB;
-        if ($value == "main")
-	    $needle = "main_mods";
-        if ($value == "secondary")
-	    $needle = "sec_mods";
-	/*  Cache the status query so we don't have to query CoMo  */
-	$statusinfo = $this -> statusExists($comonode, $NODEDB, "config");
+    private function parseConfig($config, $value) {
 
-	if ($statusinfo[0] != 0) {
-	    $statusfilename = "$statusinfo[1]";
-	    $conffile = "$statusfilename";
-	    $dafile = file ("$conffile");
-
-	    for ($i=0;$i<count($dafile);$i++){
-		if (strstr($dafile[$i], $needle)) {
-		    $tmp = $dafile[$i];
-		}
+	/* search the line with the $value modules */
+	for ($i = 0; $i < count($config); $i++) {
+	    if (strstr($config[$i], $value)) { 
+		$tmp = $config[$i];
+		break;
 	    }
-            $val = explode (";;", $tmp);
-
-            /*  Trim out the new line  */
-            for ($i=0;$i<count($val);$i++) 
-                $val[$i] = trim($val[$i]);
-
-            return ($val);
-	} else {
-	    /*  Create a default file  */
-            $usable_mods = $this -> GetModules("gnuplot");
-	    $val = "main_mods";
-            for ($i=0;$i<count($usable_mods);$i++) {
-                $val = $val . ";;"; 
-                $val = $val . $usable_mods[$i];
-            }
-	    $val = $val . "\n"; 
-	    $val = $val . "sec_mods;;alert;;topdest;;topports\n";
-
-            $statusfile = $comonode . "_config_" . $this->etime;
-	    $fh = fopen ("$NODEDB/$statusfile", "w");
-	    fwrite ($fh, $val);
-            /*  Re-call this function  */
-            return ($this -> GetConfigModules($comonode, $value));
 	}
-    }
 
+	$res = explode (";;", $tmp);
+       
+	/* trim out the new line  */   
+	for ($i = 0; $i < count($res); $i++)
+	    $res[$i] = trim($res[$i]);
+
+	return ($res);
+    } 
+
+    /*  
+     * -- getConfig
+     * 
+     * Return an array with the modules that a user has chosen that 
+     * are saved in a config file. Appropriate values for value are 
+     * "main" for the main window and "secondary" for the right hand queries
+     * 
+     */
+    function getConfig($comonode, $value) {
+	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
+	$config = file($filename); 
+	if ($config == FALSE) {  
+	    /* create a default config file */ 
+	    $usable_mods = $this->getModules("gnuplot");
+	    $config = "main";
+	    for ($i = 0; $i < count($usable_mods); $i++) {
+		$config = $config . ";;"; 
+		$config = $config . $usable_mods[$i];
+	    }
+	    $config = $config . "\n"; 
+	    $config = $config . "secondary;;alert;;topdest;;topports\n";
+	    file_put_contents($filename, $config); 
+	} 
+
+	/* parse the config information */
+	return $this->parseConfig($config, $value); 
+    }
 }
 ?>
