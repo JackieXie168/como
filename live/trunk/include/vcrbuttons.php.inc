@@ -3,7 +3,7 @@
 <?php 
     require_once("comolive.conf");
     $interval = $etime - $stime; 
-    $now = $node->curtime - ($node->curtime % $node->timebound) ;
+    $now = $node->curtime - ($node->curtime % $G['TIMEBOUND']); 
     /* 
      * Zoom in  -- halve the interval 
      */

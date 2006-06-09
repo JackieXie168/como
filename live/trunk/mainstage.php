@@ -107,14 +107,14 @@
 	$http_query_string = $http_query_string . "&filter=" . $node -> modinfo[$module]['filter'];
 	$query = new Query($stime, $etime, $G);
 	$query_string = $query->get_query_string($module, $format, $http_query_string);
-	$data = $query->do_query ($node->comonode, $query_string);
+	$data = $query->do_query($comonode, $query_string);
     }
     if (!$data[0]) {
 	print "<p align=center>"; 
 	print "Sorry but this module is not available <br>";
 	print "on this node at the moment.<br>";
     } else {   
-	$filename = $query->plot_query($data[1], $node->comonode, $module);
+	$filename = $query->plot_query($data[1], $comonode, $module);
     } 
 ?>
 
@@ -174,7 +174,7 @@
 
             /*  Use the config file to decide how many modules to show  */
             #$allmods = array_keys($node->loadedmodules); 
-            $allmods = $node -> GetConfigModules ($comonode, "main");
+            $allmods = $node->getConfig($comonode, "main");
 	    #print_r($allmods);
             
             for ($i = 1; $i < count($allmods); $i++) {

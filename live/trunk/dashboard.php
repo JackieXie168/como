@@ -41,16 +41,17 @@
     include("include/getinputvars.php.inc");
     $node = new Node($comonode, $G);
     /*  If cannot connect to node, fail with error  */
-    if ($node -> status == "FAIL") {
-        print "<center>An attempt to query $node->comonode has failed.<br>";
+    if ($node->status == FALSE) { 
+        print "<center>An attempt to query $comonode has failed.<br>";
         print "Please ensure hostname and port are correct and try again.<br>";
 	print "<br><br><br><br><br><br>";
 	include("include/footer.php.inc");
 	exit;
     }
+
     /*
-    * GET input variables
-    */
+     * GET input variables
+     */
     $input_vars = init_env($node);
     $module = $input_vars['module'];
     $filter = $input_vars['filter'];
@@ -190,7 +191,7 @@ function initializeMenu(menuId, triggerId, module) {
 	   */
 
 
-          $sec_array = $node -> GetConfigModules ($comonode, "secondary");
+          $sec_array = $node->getConfig($comonode, "secondary");
           $interval=$etime-$stime;
           for ($i=1;$i<count($sec_array);$i++) {
 	      /*  Hard code module specific options here  */

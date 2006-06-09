@@ -60,7 +60,7 @@
     /*  Query the CoMo node  */
 
     $node = new Node($comonode,$G);
-    if ($node->status == "FAIL") {
+    if ($node->status == FALSE) { 
 	/*
 	 * query failed. write error message and exit
 	 */
