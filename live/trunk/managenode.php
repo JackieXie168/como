@@ -5,12 +5,14 @@
      *
      *  $Id$  
      */
-    require_once("comolive.conf");
+    require_once "comolive.conf";
+    require_once "class/node.class.php";
+    require_once "include/framing.php"; 
+
     $G = init_global();
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
     $NODEDB = $G['NODEDB'];
     $ABSROOT = $G['$ABSROOT'];
-    require_once("class/node.class.php");
 
     /*  Don't allow entrace without customization priviledge  */
     if (!$ALLOWCUSTOMIZE) {
@@ -44,8 +46,7 @@
     	/*
     	 * query failed. write error message and exit
     	 */
-            $includebanner=1;
-    	include("include/header.php.inc");
+	print_header(1, $comonode); 
         ?>
     	<div id=content>
     	  <div class=graph">
@@ -54,8 +55,7 @@
     	    available at the moment. Please try another time.<br><br>
     	  </div>
     	</div>
-        <?php
-    	include("include/footer.php.inc");
+        <? print_footer(); 
     	exit;
         } else {
 	  if (!file_exists($NODEDB)) {

@@ -5,9 +5,8 @@
      * this is the entry page to the CoMolive! site. show the banner
      * and add the usual html header stuff. 
      */
-    $includebanner=1;
-    include("include/header.php.inc");
     require_once ("comolive.conf");
+    require_once("include/framing.php");
     if (!(isset ($G)))
 	$G = init_global();
     /** get the all the groups that have been created  
@@ -39,6 +38,8 @@
 	   }
         }
     }
+
+    print_header(1, null); 
 ?>
 <script>
     function clearText(thefield){
@@ -207,8 +208,6 @@ if ($numgroup < 1) {
 </body>
 
 
-<?php
-    include("include/footer.php.inc");
-?>
+<?php print_footer(); ?>
 
 
