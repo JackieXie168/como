@@ -1,10 +1,10 @@
 <?php
-    require_once ("include/header.php.inc");
     require_once("comolive.conf");
-    if (!(isset($G)))
-        $G = init_global();
+    require_once ("include/framing.php");
+    $G = init_global();
     require_once("class/node.class.php");
     require_once("include/getinputvars.php.inc");
+
     /*  get the node hostname and port number */
     /*  This is not in the include file because it needs to be called
      *  before the getinputvars.php.inc file is called (Chicken/egg)
