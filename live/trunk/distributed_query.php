@@ -1,49 +1,69 @@
-<!--  $Id$  -->
+<!--  $Id: mainstage.php 615 2006-06-09 09:01:56Z iannak1 $  -->
 
 <?php
-    require_once ("comolive.conf");
-    if (!(isset($G)))
-        $G = init_global();
-    require_once ("class/node.class.php");
-    require_once ("class/query.class.php");
-    require_once ("include/getinputvars.php.inc");
+    /* 
+     * XXX this code is the continuation of mainstage.php. it assumes
+     *     that a lot of code has already been running in that file. 
+     *     it is in a very experimental stage and doesn't run at the moment. 
+     */ 
+    $numnodes = count($comonode_array);
+    $val_data = array ();
+    for ($i=0;$i<count($comonode_array);$i++) {
+	$node = new Node($comonode_array[$i], $G);
+	$input_vars = init_env($node);
+	$module = $input_vars['module'];
+	$fiter = $input_vars['filter'];
+	$etime = $input_vars['etime'];
+	$stime = $input_vars['stime'];
+	$format = $input_vars['format'];
+	$http_query_string = $input_vars['http_query_string'];
 
-    /*  get the node hostname and port number */
-    if (!isset($_GET['comonode'])) {
-	print "{$_SERVER['SCRIPT_FILENAME']}";
-	print " requires the comonode=host:port arg passed to it";
-	exit;
+	$http_query_string = "&filter=" . $node -> modinfo[$module]['filter'] . "&comonode=" . $comonode_array[$i] . "&module=" . $module;
+	$query = new Query($stime, $etime, $G);
+	$query_string = $query->get_query_string($module, $format, $http_query_string);
+	$data = $query->do_query ($node->comonode, $query_string);
+	$filename = $query->plot_query($data[1], $node->comonode, $module);
+
+	/*  This extracts the gnuplot command  */
+	$gptmp = preg_split ("/([0-9]{10})/", $data[1],2, PREG_SPLIT_DELIM_CAPTURE);
+	$gnuplot_cmd = $gptmp[0];
+	/*  This is the value array  */
+	preg_match_all ("/[0-9]{10}.*/", $data[1], $val);
+	/*  Get number of columns in data set  */
+	$numcols = count (split (" ", $val[0][1]));
+	for ($j=0;$j<count($val,1)-1;$j++) {
+	    $tmp = split (" ", $val[0][$j]);
+	    for ($k=0;$k<count($tmp)-1;$k++) {
+		if (isset ($val_data[$tmp[0]][$k]))
+		    $val_data[$tmp[0]][$k] += $tmp[$k+1];
+		else
+		    $val_data[$tmp[0]][$k] = $tmp[$k+1];
+	    }
+	}
     }
-
-    $comonode = $_GET['comonode'];
-    $comonode_array = split (";;", $comonode);
-
-    /* Check if this is a distributed query
-     * Eventually this will be a como module, however, we will hard
-     * code it to get an idea of our future direction
-     * 
-     * XXX very experimental code. (i.e. doesn't run at the moment)
+    /*  Get the average  */
+    $keys = array_keys($val_data);
+    for ($j=0;$j<count($val_data);$j++) {
+	for ($k=0;$k<$numcols-1;$k++) {
+	    $val_data[$keys[$j]][$k] = $val_data[$keys[$j]][$k] / $numnodes;
+	}
+    }
+    /*  prepare the gnuplot file */
+    $data[0] = 1;
+    $data[1] = $gnuplot_cmd; 
+    for ($j=0;$j<count($val_data);$j++) {
+	$data[1] = $data[1] . $keys[$j] . " "; 
+	for ($k=0;$k<$numcols-1;$k++) {
+	    $data[1] = $data[1] . $val_data[$keys[$j]][$k] . " "; 
+	}
+	$data[1] = $data[1] . "\n"; 
+    }
+    /*  Put the end of the data marker here (e)  */
+    /*  Need to do a better job of this once I remember how this is 
+     *  generated
      */
-    if (count($comonode_array) > 1) {
-	include "distributed_query.php"; 
-	exit;
-    } 
-
-    /*  Normal single node query  */
-    $node = new Node($comonode, $G);
-    $input_vars = init_env($node);
-    $module = $input_vars['module'];
-    $fiter = $input_vars['filter'];
-    $etime = $input_vars['etime'];
-    $stime = $input_vars['stime'];
-    $format = $input_vars['format'];
-    $http_query_string = $input_vars['http_query_string'];
-
-    $http_query_string = $http_query_string . "&filter=" . $node -> modinfo[$module]['filter'];
-    $query = new Query($stime, $etime, $G);
-    $query_string = $query->get_query_string($module, $format, $http_query_string);
-    $data = $query->do_query($comonode, $query_string);
-
+    $data[1] = $data[1] . "e"; 
+        
     if (!$data[0]) {
 	print "<p align=center>"; 
 	print "Sorry but this module is not available <br>";

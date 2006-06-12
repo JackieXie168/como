@@ -39,6 +39,9 @@
         padding-bottom: 3px;
         color: #475677;
       }
+      .nvtitle a,a:visited{
+        color: #475677;
+      } 
       .seperator {
           padding-left : 12px;
           border-left : 1px solid grey;

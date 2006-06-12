@@ -224,13 +224,13 @@ class Node {
      *  needle may be gnuplot, html, etc.  This info is captured
      *  on a per module basis.  
      */
-    function GetModules($needle) {
+    function getModules($needle) {
         $keys = array_keys($this->modinfo);
         $modules = array();
         for ($i = 0; $i < count($keys); $i++) {
             $haystack = $this->modinfo[$keys[$i]]['formats'];
             if (strstr($haystack, $needle)) {
-                array_push ($modules, $keys[$i]);
+                array_push($modules, $keys[$i]);
             }
         }
         return ($modules);
@@ -245,51 +245,77 @@ class Node {
      * names. 
      *
      */
-    private function parseConfig($config, $value) {
-
-	/* search the line with the $value modules */
+    private function parseConfig($config, $which) {
+	/* 
+	 * search the config array for $which 
+   	 */ 
 	for ($i = 0; $i < count($config); $i++) {
-	    if (strstr($config[$i], $value)) { 
-		$tmp = $config[$i];
+	    $res = explode(";;", $config[$i]); 
+	    if ($res[0] == $which) 
 		break;
-	    }
 	}
 
-	$res = explode (";;", $tmp);
-       
-	/* trim out the new line  */   
-	for ($i = 0; $i < count($res); $i++)
+	/* 
+	 * get rid of the first element and
+         * trim whitespaces and carriage return 
+         */ 
+	array_shift($res); 
+	for ($i = 0; $i < count($res); $i++) 
 	    $res[$i] = trim($res[$i]);
-
-	return ($res);
+	return $res;
     } 
 
     /*  
      * -- getConfig
      * 
      * Return an array with the modules that a user has chosen that 
-     * are saved in a config file. Appropriate values for value are 
+     * are saved in a config file. Appropriate values for 'which' are 
      * "main" for the main window and "secondary" for the right hand queries
      * 
      */
-    function getConfig($comonode, $value) {
+    function getConfig($which) {
 	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
-	$config = file($filename); 
-	if ($config == FALSE) {  
+	if (file_exists($filename) == false) { 
 	    /* create a default config file */ 
 	    $usable_mods = $this->getModules("gnuplot");
-	    $config = "main";
+	    $config[0] = "main";
 	    for ($i = 0; $i < count($usable_mods); $i++) {
-		$config = $config . ";;"; 
-		$config = $config . $usable_mods[$i];
+		$config[0] = $config[0] . ";;"; 
+		$config[0] = $config[0] . $usable_mods[$i];
 	    }
-	    $config = $config . "\n"; 
-	    $config = $config . "secondary;;alert;;topdest;;topports\n";
+	    $config[0] = $config[0] . "\n"; 
+	    $config[1] = "secondary;;alert;;topdest;;topports\n";
 	    file_put_contents($filename, $config); 
-	} 
+	} else {
+	    $config = file($filename); 
+	}
 
 	/* parse the config information */
-	return $this->parseConfig($config, $value); 
+	return $this->parseConfig($config, $which); 
     }
+
+    /* 
+     * -- saveConfig
+     * 
+     * Saves to file a list of modules splitting them in 
+     * two categories: 'main', if they support gnuplot, 'secondary' 
+     * if they support only html. 
+     * 
+     */ 
+    function saveConfig($mods) { 
+	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
+	$mainline = "main"; 
+	$secline = "secondary"; 
+
+	for ($i = 0; $i < count($mods); $i++) {
+	    $formats = $this->modinfo[$mods[$i]]['formats'];
+	    if (strstr($formats, "gnuplot"))
+		$mainline = $mainline . ";;" . $mods[$i]; 
+	    else if (strstr($formats, "html"))
+		$secline = $secline . ";;" . $mods[$i]; 
+	} 
+
+	file_put_contents($filename, "$mainline\n$secline"); 
+    } 
 }
 ?>

@@ -15,7 +15,7 @@ body,table,tr,td {
     margin-bottom: 10px;
     margin-left: 10px;
 }
-a, a:visited  {
+a,a:visited  {
     color: #475677;
     text-decoration: none;
 }

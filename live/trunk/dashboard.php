@@ -1,4 +1,10 @@
+<!--  $Id$  -->
+
 <?php
+    require_once("comolive.conf");		/* init_global */
+    require_once("class/node.class.php");	/* Node class */
+    require_once("include/framing.php"); 	/* header/footer functions */
+
     /*  Create a cookie and initialize to all fields visible  */
     if (!(isset($_COOKIE['alert'])))
 	setcookie("alert", "block");
@@ -17,35 +23,29 @@
         $topntopports = 5;
     } else 
         $topntopports = $_COOKIE['topntopports'];
-?>
-<!--  $Id$  -->
 
-<?php
-    $includebanner=1;
-    include("include/header.php.inc");
-    $includebanner=0;	/* we have one banner, avoid that others include it */
     /*  get the node hostname and port number */
-    if (isset($_GET['comonode'])) {
-	$comonode = $_GET['comonode'];
-    } else {
+    if (!isset($_GET['comonode'])) {
 	print "This file requires the comonode=host:port arg passed to it<br>";
 	print "Thanks for playing!<br><br><br><br><br><br><br>";
 	include("include/footer.php.inc");
 	exit;
     }
-    
 
-    require_once ("comolive.conf");
+    $comonode = $_GET['comonode'];
+    print_header(1, $comonode); 
 
-    require_once ("class/node.class.php");
+    $G = init_global(); 
+
     include("include/getinputvars.php.inc");
+
     $node = new Node($comonode, $G);
-    /*  If cannot connect to node, fail with error  */
     if ($node->status == FALSE) { 
+	/* cannot connect to node, fail with error */
         print "<center>An attempt to query $comonode has failed.<br>";
         print "Please ensure hostname and port are correct and try again.<br>";
 	print "<br><br><br><br><br><br>";
-	include("include/footer.php.inc");
+	print_footer(); 
 	exit;
     }
 
@@ -77,11 +77,11 @@
 <script type="text/javascript">
     <!--
 window.onload = function() {
-    initializeMenu("alertMenu", "alertTrig", "alert");
+    initializeMenu("alertMenu", "alertTrig", "alertImage", "alert");
     initializeConfigMenu("alertMenuedit", "alertTrigedit", "alertedit");
-    initializeMenu("topdestMenu", "topdestTrig", "topdest");
+    initializeMenu("topdestMenu", "topdestTrig", "topdestImage", "topdest");
     initializeConfigMenu("topdestMenuedit", "topdestTrigedit", "topdestedit");
-    initializeMenu("topportsMenu", "topportsTrig", "topports");
+    initializeMenu("topportsMenu", "topportsTrig", "topportsImage", "topports");
     initializeConfigMenu("topportsMenuedit", "topportsTrigedit", "topportsedit");
 }
     if (!document.getElementById)
@@ -115,26 +115,29 @@ function readCookie(name) {
 }
 
 
-function initializeMenu(menuId, triggerId, module) {
+function initializeMenu(menuId, triggerId, imageId, module) {
     var menu = document.getElementById(menuId);
     var trigger = document.getElementById(triggerId);
+    var image = document.getElementById(imageId); 
     var state = readCookie(module);
     menu.style.display = state; 
     var display = menu.style.display;
-    menu.parentNode.style.backgroundImage =
-            (display == "block") ? "url(images/plus.gif)" : 
-                                   "url(images/minus.gif)";
+    image.src = (display == "block")? "images/minus.gif" : "images/plus.gif";
 
     trigger.onclick = function() {
         var display = menu.style.display;
-        this.parentNode.style.backgroundImage = 
-        (display == "block") ? "url(images/minus.gif)" : "url(images/plus.gif)";
-        menu.style.display = (display == "block") ? "none" : "block";
-	/*document.cookie = module + "=" + display; */
-	var opposite = (display=="block") ? "none" : "block";
-	document.cookie = module+"="+opposite;
+	if (display == "block") { 
+	    image.src = "images/plus.gif"; 
+	    menu.style.display = "none"; 
+	    document.cookie = module + "=none"; 
+        } else { 
+	    image.src = "images/minus.gif"; 
+	    menu.style.display = "block"; 
+	    document.cookie = module + "=block"; 
+        } 
         return false;
     }
+
     function readCookie(name) {
 	var nameEQ = name + "=";
 	var ca = document.cookie.split(';');
@@ -149,25 +152,45 @@ function initializeMenu(menuId, triggerId, module) {
 }
     //-->
 </script>
+
 <style>
-    .menubar {
-        background : url(images/plus.gif) no-repeat 0em 0.3em; 
-        background-color : #EEE;
-        text-align : left;
+    #sidebox_bar {
+        background-color: #475677;
+        text-align: left;
+	padding: 2px;
+	margin: 0px;
     }
-    .menu {
-    }
-    .trig {
-        padding : 10px ;
-    }
+    #sidebox_bar a,a:visited {
+	color: #FFF; 
+    } 
+    .sidebox_name {
+	font-family: "lucida sans unicode", verdana, arial;
+	font-size: 9pt; 
+	font-weight: bold;
+	color: #FFF; 
+    } 
+    .sidebox_edit { 
+	#position: absolute; 
+	#right: 30px; 
+	font-weight: normal;
+	margin-left: 10px;
+    } 
+    .sidebox_image { 
+	padding-left: 2px; 
+	margin-right: 10px; 
+    } 
+    .sidebox_content {
+	margin: 1px;
+    } 
 </style>
+
 <table class=fence border=0 cellpadding=0 cellspacing=0>
   <tr>
     <td colspan=2>
     <table class=topcontent border=0 cellpadding=0 cellspacing=0>
       <tr>
 	<td valign=top width=50%>
-	  <?php include("sysinfo.php"); ?>
+	  <?php include "sysinfo.php"; ?>
 	</td>
 	<td valign=top>
 	  <?php include("netview.php"); ?>
@@ -180,6 +203,7 @@ function initializeMenu(menuId, triggerId, module) {
       <iframe width=620 height=520 frameborder=0
 	      src=mainstage.php?<?=$http_query_string?>>
       </iframe>
+    </td>
     <td class=rightcontent>
       <?php 
 	  /* 
@@ -191,9 +215,9 @@ function initializeMenu(menuId, triggerId, module) {
 	   */
 
 
-          $sec_array = $node->getConfig($comonode, "secondary");
+          $sec_array = $node->getConfig("secondary");
           $interval=$etime-$stime;
-          for ($i=1;$i<count($sec_array);$i++) {
+          for ($i = 0; $i < count($sec_array); $i++) {
 	      /*  Hard code module specific options here  */
 	      $modargs = "";
 	      if ($sec_array[$i] == "alert"){
@@ -236,20 +260,27 @@ function initializeMenu(menuId, triggerId, module) {
 	      print "$modargs";
 	      print "urlargs=comonode=$comonode& ";
               print "method=POST>";
-              print "<div class=menubar>";
-	      print "<a href=# id=$sec_array[$i]Trig class=trig>";
-              print "$sec_array[$i]</a>";
-              /*  This section is for the edit dropdown  */
-	      print "<a href=# id=$sec_array[$i]Trigedit class=trig>";
-              print "edit</a>";
-              print "<div id=$sec_array[$i]Menuedit class=menu>";
+
+              /* sidebox label */
+              print "<div id=sidebox_bar>";
+	      print "<a href=# id=$sec_array[$i]Trig class=sidebox_name>";
+              print "<img src=images/plus.gif id=$sec_array[$i]Image 
+                          class=sidebox_image>"; 
+              print "{$node->modinfo[$sec_array[$i]]['name']}</a>";
+	      print "<a href=# id=$sec_array[$i]Trigedit class=sidebox_edit>";
+              print "[edit]</a>";
+              print "</div>";
+
+	      /* edit dropdown */
+              print "<div id=$sec_array[$i]Menuedit>";
               print "Show ";
               print "<input type=textbox size=1 name=topn$sec_array[$i]>";
-              print " $sec_array[$i] items ";
+              print " items ";
               print "<input type=submit value=Save>";
               print "</div>";
-              /*  This section is the content  */
-              print "<div id=$sec_array[$i]Menu class=menu>";
+
+              /* sidebox content */ 
+              print "<div id=$sec_array[$i]Menu class=sidebox_content>";
 	      print "\n\n<iframe width=100% frameborder=0 ";
 	      print "name=frame$i ";
 	      print "src=generic_query.php?comonode=$comonode&";
@@ -260,7 +291,6 @@ function initializeMenu(menuId, triggerId, module) {
 #	      print "urlargs=module=$module&";
 	      print "urlargs=filter={$node->modinfo[$sec_array[$i]]['filter']}>";
 	      print "</iframe>\n\n";
-              print "</div>";
               print "</div>\n";
               print "</form>";
 	  }
@@ -269,6 +299,6 @@ function initializeMenu(menuId, triggerId, module) {
   </tr>
 </table>
 
-<?php
-    include("include/footer.php.inc");
+<?php 
+    print_footer(); 
 ?>
