@@ -39,7 +39,6 @@
 #include "module.h"
 
 #define MAC_ADDR_SIZE   6
-#define SSID_SIZE       34
 
 #define MEASUREMENT_IVL TIME2TS(1, 0)
 
@@ -48,7 +47,7 @@ FLOWDESC {
     timestamp_t ts;
     int32_t signal_strength;
     size_t  samples;
-    int32_t channel;
+    n32_t channel;
     uint8_t addr[MAC_ADDR_SIZE];
 };
 
@@ -94,7 +93,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
         x->ts = COMO(ts) - COMO(ts) % MEASUREMENT_IVL;
-        x->channel = H32(RADIO(channel));
+        x->channel = RADIO(channel);
         x->signal_strength = 0;
         x->samples = 0;
         memcpy(x->addr, IEEE80211_BASE(addr2), MAC_ADDR_SIZE);
@@ -115,7 +114,7 @@ store(__unused void * self, void *rp, char *buf)
     PUTH64(buf, x->ts);
     PUTH32(buf, x->signal_strength);
     PUTH32(buf, x->samples);
-    PUTN32(buf, x->channel);
+    PUTN32(buf, N32(x->channel));
     for (i = 0; i < MAC_ADDR_SIZE; i++)
         PUTH8(buf, x->addr[i]);
 
@@ -149,10 +148,10 @@ mac_addr_to_ascii(uint8_t *mac, char *dest)
 }
 
 static char *
-print(__unused void *self, char *buf, size_t *len, char *const args[] __unused)
+print(__unused void *self, char *buf, size_t *len, __unused char *const args[])
 {
     static char output[1024];
-    char ascii_mac[3 * MAC_ADDR_SIZE];
+    char ascii_mac[20];
     uint32_t chan, samples;
     int32_t strength;
     timestamp_t ts;
@@ -167,7 +166,7 @@ print(__unused void *self, char *buf, size_t *len, char *const args[] __unused)
 
     x = (FLOWDESC *) buf;
     ts = NTOHLL(x->ts);
-    chan = ntohl(x->channel);
+    chan = ntohl(N32(x->channel));
     samples = ntohl(x->samples);
     strength = ntohl(x->signal_strength);
     mean_strength = (float)strength / (float)samples;
