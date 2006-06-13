@@ -138,10 +138,15 @@ print(__unused void *self, char *buf, size_t *len, __unused char *const args[])
     FLOWDESC *x;
     struct in_addr addr;
 
-    if (buf == NULL) {
+    if (buf == NULL && args != NULL) {
         *len = sprintf(output, "ts                  IP               "
                 "chan strength samples\n");
         return output;
+    }
+
+    if (buf == NULL) {
+	*len = 0;
+	return output;
     }
 
     x = (FLOWDESC *) buf;
