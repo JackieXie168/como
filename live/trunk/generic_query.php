@@ -1,22 +1,22 @@
 <?php
-    require_once("comolive.conf");
-    require_once ("include/framing.php");
-    $G = init_global();
-    require_once("class/node.class.php");
-    require_once("include/getinputvars.php.inc");
+    require_once "comolive.conf";
+    require_once "class/node.class.php";
+    require_once "class/query.class.php";
+    require_once "include/framing.php";
+    require_once "include/getinputvars.php.inc";
 
     /*  get the node hostname and port number */
     /*  This is not in the include file because it needs to be called
      *  before the getinputvars.php.inc file is called (Chicken/egg)
      */
-    if (isset($_GET['comonode'])){
-        $comonode = $_GET['comonode'];
-    }else{
+    if (!isset($_GET['comonode'])) { 
         print "This file requires the comonode=host:port arg passed to it<br>";
         print "Thanks for playing!<br><br><br><br><br><br><br>";
         include("include/footer.php.inc");
         exit;
     }
+
+    $comonode = $_GET['comonode'];
 
     /*  These vars will catch the updates from the edit menus  */
     if (isset($_POST['topnalert']))
@@ -38,7 +38,9 @@
     else
         $extra = "";
 
+    $G = init_global();
     $node = new Node ("$comonode", $G);
+
     /*  Get Input Vars  */
     $input_vars = init_env($node);
     $module = $input_vars['module'];
@@ -46,14 +48,15 @@
     $etime = $input_vars['etime'];
     $stime = $input_vars['stime'];
     $format = $input_vars['format'];
-    $http_query_string = $input_vars['http_query_string'];
+
+    $http_query_string = $_SERVER['QUERY_STRING']; 
 
     /*  This we catch if ip=addr is passed back from the
      *  module.  If it is, rewrite the filter to include
      *  the ip address that is returned
      */
     if (isset($input_vars['ip'])) {
-        $var = explode ("&", $http_query_string);
+        $var = explode ("&", $http_query_string); 
         $http_query_string = "";
         for ($i=0;$i<count($var);$i++) {
             if (strstr($var[$i],"filter=")) {
@@ -83,8 +86,11 @@
 		     "_" . $extra . "_" . $stime . "_" .
 		     $etime . "_" . $daip . ".blinc.dat";
     } else {
+	$filename = md5($_SERVER['QUERY_STRING']) . "." . $format; 
+/*
 	$filename=$comonode . "_" . $module . "_" . $stime . "_" .
 		  $etime . "_" . $daip . "_" . $format;
+*/
     }
 
     /*  Catch if topdest, topports, or alerts have new value  */
@@ -100,9 +106,9 @@
 
         /*  Delete the cached file if necessary  */
         if ($G['USECACHE']) 
-            $node -> removeFile ($filename);
+            $node->removeFile($filename);
 
-	$http_query_string = ereg_replace ("topn=[0-9]*", "topn=$newval", $http_query_string);
+	$http_query_string = ereg_replace("topn=[0-9]*", "topn=$newval", $http_query_string);
     }
 
     /*  File caching check  */
@@ -110,16 +116,15 @@
         $data = array();
         $data[0] = 1;
         $data[1] = file_get_contents($G['RESULTS'] . "/" . $filename);
-
-    /*  File doesn't exist or USECACHE is off, regen file  */
     } else {
+	/*  File doesn't exist or USECACHE is off, regen file  */
+
         /*  If USEBLINC is not set, then just print out the html formatted
          *  text that CoMo will return
          */
         if ($extra == "blincview" && !$G['USEBLINCVIEW']) {
             $format = "html";
         }
-        require_once ("class/query.class.php");
         $query = new Query($stime, $etime, $G);
         $query_string = $query->get_query_string($module, $format,
                                                  $http_query_string);

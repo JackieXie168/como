@@ -317,5 +317,62 @@ class Node {
 
 	file_put_contents($filename, "$mainline\n$secline"); 
     } 
+
+    /* 
+     * -- module_args 
+     * 
+     * this method returns a list of arguments that are 
+     * specific to this node and the module '$name'. it 
+     * receives as input the time window and a list of additional 
+     * arguments from the caller. 
+     * 
+     * XXX in the future most of these arguments should come 
+     *     directly from the ?status query. 
+     * 
+     */  
+    function module_args($name, $stime, $etime, $args)
+    {
+	$modargs = "filter={$this->modinfo[$name]['filter']}&";
+	$interval = $etime - $stime;
+
+	switch ($name) {
+	case "alert":
+	    $modargs = $modargs . "url=dashboard.php&";
+	    break;
+
+	case "topdest":
+	    $modargs = $modargs . "source=tuple&";
+	    $modargs = $modargs . "interval=$interval&";
+	    $modargs = $modargs . "align-to=$stime&";
+	    $modargs = $modargs . "topn={$args['topntopdest']}&";
+	    $modargs = $modargs . "url=generic_query.php&";
+	    $modargs = $modargs . "urlargs=stime=$stime&";
+	    $modargs = $modargs . "urlargs=etime=$etime&";
+	    $modargs = $modargs . "urlargs=interval=$interval&";
+	    $modargs = $modargs . "urlargs=module=tuple&";
+	    $modargs = $modargs . "urlargs=source=tuple&";
+	    if ($args['useblincview']) {
+		$modargs = $modargs . "urlargs=format=plain&";
+		$modargs = $modargs . "urlargs=extra=blincview&";
+	    } else {
+		$modargs = $modargs . "urlargs=format=html&";
+	    }
+	    $modargs = $modargs .
+		       "urlargs=comonode={$this->hostaddr}:{$this->hostport}&";
+	    $modargs = $modargs .
+		       "urlargs=filter={$this->modinfo[$name]['filter']}&";
+	    break;
+
+	case "topports":
+	    $modargs = $modargs . "topn={$args['topntopports']}&";
+	    $modargs = $modargs . "align-to=$stime&";
+	    $modargs = $modargs . "source=tuple&";
+	    $modargs = $modargs . "interval=$interval&";
+	    break;
+	}
+
+	return $modargs;
+    }
+
 }
 ?>

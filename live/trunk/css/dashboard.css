@@ -1,0 +1,78 @@
+<!--  $Id: dashboard.php 616 2006-06-12 08:31:23Z iannak1 $  -->
+
+#sidebox_bar {
+  background-color: #475677;
+  padding: 1px;
+  margin: 0px;
+}
+
+#sidebox_bar a:visited {
+  color: #FFF; 
+} 
+
+#sidebox_bar a:hover {
+  text-decoration: none; 
+} 
+
+.sidebox_name {
+  font-family: "lucida sans unicode", verdana, arial;
+  font-size: 9pt; 
+  font-weight: bold;
+  color: #FFF; 
+} 
+
+.sidebox_edit { 
+  position: absolute;
+  right: 30px;
+  font-weight: normal;
+  margin-left: 10px;
+} 
+
+.sidebox_image { 
+  padding-left: 2px; 
+  margin-right: 10px; 
+} 
+
+.sidebox_content {
+  margin: 1px;
+} 
+
+.infobar{
+  width :100%;
+  padding :2px;
+}
+
+.info {
+  top: 0px;
+  width: 100%;
+  vertical-align:top;
+  background-color: #FFF;
+  margin: 2;
+  padding-left: 5px;
+  padding-right: 5px;
+  font-size: 9pt;
+  text-align:left;
+}
+
+.title {
+  font-weight: bold;
+  font-size: 9pt;
+  padding-bottom: 3px;
+  color: #475677;
+}
+
+.title a,a:visited {
+  color: #475677;
+}
+
+.separator {
+  padding-left : 12px;
+  border-left : 1px solid grey;
+}
+
+.search { 
+  margin: 0px; 
+  padding: 0px; 
+  font-family: "lucida sans unicode", verdana, arial;
+  font-size: 9pt; 
+} 
