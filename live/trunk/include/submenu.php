@@ -1,14 +1,14 @@
 <?php 
 
-if (isset ($_GET['sub'])) 
+if (isset($_GET['sub'])) 
     $sub = $_GET['sub'];
 else
     $sub = "none";
 
-if (isset ($_GET['webroot'])) 
+if (isset($_GET['webroot'])) 
     $webroot = $_GET['webroot'];
 
-if (isset ($_GET['comonode'])) 
+if (isset($_GET['comonode'])) 
     $comonode = $_GET['comonode'];
 
 ?>
@@ -26,7 +26,7 @@ if (isset ($_GET['comonode']))
     </li>
 <? } else if ($sub == "system") { ?>
     <li>
-      <a href=$webroot>
+      <a href=sysinfo.php/?comonode=<?=$comonode?> target=new> 
       &nbsp;&nbsp;&nbsp;Properties&nbsp;&nbsp;&nbsp;</a>
     </li>
     <li>

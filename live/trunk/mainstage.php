@@ -37,9 +37,8 @@
     $etime = $input_vars['etime'];
     $stime = $input_vars['stime'];
     $format = $input_vars['format'];
-    $http_query_string = $input_vars['http_query_string'];
 
-    $http_query_string = $http_query_string . "&filter=" . $node -> modinfo[$module]['filter'];
+    $http_query_string = $_SERVER['QUERY_STRING'] . "&filter=" . $node -> modinfo[$module]['filter'];
     $query = new Query($stime, $etime, $G);
     $query_string = $query->get_query_string($module, $format, $http_query_string);
     $data = $query->do_query($comonode, $query_string);

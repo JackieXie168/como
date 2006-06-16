@@ -1,19 +1,10 @@
 <!--  $Id$ -->
-<!--  The following variables are set with this file
-      . modules
-      . filter
-      . stime and etime (require node to be instantiated)
-      . format
-      . ip
-      . http_query_string
--->
-<?
+
+<?php
+
 /*  getinputvars.php.inc
  *
  */
-#
-# GET input variables
-#
 function init_env ($node) {
     $input_vars = array();
     if (isset($_GET['module']) && ($_GET['module'] != ""))
