@@ -994,18 +994,18 @@ union yyalloc
 #endif
 
 /* YYFINAL -- State number of the termination state. */
-#define YYFINAL  25
+#define YYFINAL  24
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   53
+#define YYLAST   40
 
 /* YYNTOKENS -- Number of terminals. */
 #define YYNTOKENS  19
 /* YYNNTS -- Number of nonterminals. */
 #define YYNNTS  8
 /* YYNRULES -- Number of rules. */
-#define YYNRULES  25
+#define YYNRULES  22
 /* YYNRULES -- Number of states. */
-#define YYNSTATES  43
+#define YYNSTATES  34
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
@@ -1052,31 +1052,29 @@ static const unsigned char yytranslate[] =
    YYRHS.  */
 static const unsigned char yyprhs[] =
 {
-       0,     0,     3,     5,     7,    11,    17,    21,    27,    30,
-      35,    39,    41,    43,    45,    47,    49,    52,    56,    59,
-      63,    67,    72,    74,    76,    79
+       0,     0,     3,     5,     7,    11,    15,    18,    22,    24,
+      26,    28,    30,    32,    35,    39,    42,    46,    50,    55,
+      57,    59,    62
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS. */
 static const yysigned_char yyrhs[] =
 {
       20,     0,    -1,    21,    -1,     9,    -1,    21,     4,    21,
-      -1,     6,    21,     4,    21,     7,    -1,    21,     5,    21,
-      -1,     6,    21,     5,    21,     7,    -1,     3,    21,    -1,
-       3,     6,    21,     7,    -1,     6,    21,     7,    -1,    22,
-      -1,    23,    -1,    24,    -1,    25,    -1,    26,    -1,    11,
-      18,    -1,    11,    18,    17,    -1,    12,    16,    -1,    12,
-      16,     8,    -1,    12,     8,    16,    -1,    12,    16,     8,
-      16,    -1,    14,    -1,    15,    -1,    13,    16,    -1,    10,
-      18,    -1
+      -1,    21,     5,    21,    -1,     3,    21,    -1,     6,    21,
+       7,    -1,    22,    -1,    23,    -1,    24,    -1,    25,    -1,
+      26,    -1,    11,    18,    -1,    11,    18,    17,    -1,    12,
+      16,    -1,    12,    16,     8,    -1,    12,     8,    16,    -1,
+      12,    16,     8,    16,    -1,    14,    -1,    15,    -1,    13,
+      16,    -1,    10,    18,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const unsigned short int yyrline[] =
 {
-       0,   811,   811,   819,   827,   831,   835,   839,   843,   848,
-     852,   856,   860,   864,   868,   872,   877,   885,   894,   900,
-     906,   912,   919,   923,   928,   934
+       0,   811,   811,   819,   827,   831,   835,   840,   844,   848,
+     852,   856,   860,   865,   873,   882,   888,   894,   900,   907,
+     911,   916,   922
 };
 #endif
 
@@ -1106,16 +1104,16 @@ static const unsigned short int yytoknum[] =
 static const unsigned char yyr1[] =
 {
        0,    19,    20,    20,    21,    21,    21,    21,    21,    21,
-      21,    21,    21,    21,    21,    21,    22,    22,    23,    23,
-      23,    23,    24,    24,    25,    26
+      21,    21,    21,    22,    22,    23,    23,    23,    23,    24,
+      24,    25,    26
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
 static const unsigned char yyr2[] =
 {
-       0,     2,     1,     1,     3,     5,     3,     5,     2,     4,
-       3,     1,     1,     1,     1,     1,     2,     3,     2,     3,
-       3,     4,     1,     1,     2,     2
+       0,     2,     1,     1,     3,     3,     2,     3,     1,     1,
+       1,     1,     1,     2,     3,     2,     3,     3,     4,     1,
+       1,     2,     2
 };
 
 /* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
@@ -1123,11 +1121,10 @@ static const unsigned char yyr2[] =
    means the default is an error.  */
 static const unsigned char yydefact[] =
 {
-       0,     0,     0,     3,     0,     0,     0,     0,    22,    23,
-       0,     2,    11,    12,    13,    14,    15,     0,     8,     0,
-      25,    16,     0,    18,    24,     1,     0,     0,     0,     0,
-       0,    10,    17,    20,    19,     4,     6,     9,     4,     6,
-      21,     5,     7
+       0,     0,     0,     3,     0,     0,     0,     0,    19,    20,
+       0,     2,     8,     9,    10,    11,    12,     6,     0,    22,
+      13,     0,    15,    21,     1,     0,     0,     7,    14,    17,
+      16,     4,     5,    18
 };
 
 /* YYDEFGOTO[NTERM-NUM]. */
@@ -1141,11 +1138,10 @@ static const yysigned_char yydefgoto[] =
 #define YYPACT_NINF -17
 static const yysigned_char yypact[] =
 {
-       0,    21,    34,   -17,   -16,   -14,    14,   -11,   -17,   -17,
-      19,     3,   -17,   -17,   -17,   -17,   -17,    34,   -17,    13,
-     -17,     4,     7,    30,   -17,   -17,    34,    34,    46,    34,
-      34,   -17,   -17,   -17,    23,   -17,   -17,   -17,    35,    36,
-     -17,   -17,   -17
+       0,    16,    16,   -17,   -16,   -14,    24,   -11,   -17,   -17,
+      21,     3,   -17,   -17,   -17,   -17,   -17,   -17,    13,   -17,
+       6,    17,     8,   -17,   -17,    16,    16,   -17,   -17,   -17,
+      18,   -17,   -17,   -17
 };
 
 /* YYPGOTO[NTERM-NUM].  */
@@ -1161,22 +1157,20 @@ static const yysigned_char yypgoto[] =
 #define YYTABLE_NINF -1
 static const unsigned char yytable[] =
 {
-      18,    19,    20,     1,    21,    24,     2,    26,    27,     3,
-       4,     5,     6,     7,     8,     9,    28,    29,    30,    25,
-      31,    32,    22,    33,     1,    35,    36,    17,    38,    39,
-      23,     4,     5,     6,     7,     8,     9,     1,    34,    40,
-       2,     0,    41,    42,     4,     5,     6,     7,     8,     9,
-      29,    30,     0,    37
+      17,    18,    19,     1,    20,    23,     2,    25,    26,     3,
+       4,     5,     6,     7,     8,     9,    30,    25,    26,     1,
+      27,    24,     2,    28,    31,    32,     4,     5,     6,     7,
+       8,     9,    21,    29,    33,     0,     0,     0,     0,     0,
+      22
 };
 
 static const yysigned_char yycheck[] =
 {
        1,     2,    18,     3,    18,    16,     6,     4,     5,     9,
-      10,    11,    12,    13,    14,    15,    17,     4,     5,     0,
-       7,    17,     8,    16,     3,    26,    27,     6,    29,    30,
-      16,    10,    11,    12,    13,    14,    15,     3,     8,    16,
-       6,    -1,     7,     7,    10,    11,    12,    13,    14,    15,
-       4,     5,    -1,     7
+      10,    11,    12,    13,    14,    15,     8,     4,     5,     3,
+       7,     0,     6,    17,    25,    26,    10,    11,    12,    13,
+      14,    15,     8,    16,    16,    -1,    -1,    -1,    -1,    -1,
+      16
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
@@ -1184,10 +1178,9 @@ static const yysigned_char yycheck[] =
 static const unsigned char yystos[] =
 {
        0,     3,     6,     9,    10,    11,    12,    13,    14,    15,
-      20,    21,    22,    23,    24,    25,    26,     6,    21,    21,
-      18,    18,     8,    16,    16,     0,     4,     5,    21,     4,
-       5,     7,    17,    16,     8,    21,    21,     7,    21,    21,
-      16,     7,     7
+      20,    21,    22,    23,    24,    25,    26,    21,    21,    18,
+      18,     8,    16,    16,     0,     4,     5,     7,    17,    16,
+       8,    21,    21,    16
 };
 
 #define yyerrok		(yyerrstatus = 0)
@@ -1610,7 +1603,7 @@ yyparse (void)
 #else
 int
 yyparse ()
-
+    ;
 #endif
 #endif
 {
@@ -1887,83 +1880,62 @@ yyreduce:
   case 5:
 #line 832 "filter-syntax.y"
     {
-        (yyval.tree) = tree_make(Tand, Tnone, (yyvsp[-3].tree), (yyvsp[-1].tree), NULL);
+        (yyval.tree) = tree_make(Tor, Tnone, (yyvsp[-2].tree), (yyvsp[0].tree), NULL);
       ;}
     break;
 
   case 6:
 #line 836 "filter-syntax.y"
     {
-        (yyval.tree) = tree_make(Tor, Tnone, (yyvsp[-2].tree), (yyvsp[0].tree), NULL);
+        (yyval.tree) = tree_make(Tnot, Tnone, (yyvsp[0].tree), NULL, NULL);
+        
       ;}
     break;
 
   case 7:
-#line 840 "filter-syntax.y"
+#line 841 "filter-syntax.y"
     {
-        (yyval.tree) = tree_make(Tor, Tnone, (yyvsp[-3].tree), (yyvsp[-1].tree), NULL);
+        (yyval.tree) = tree_copy((yyvsp[-1].tree));
       ;}
     break;
 
   case 8:
-#line 844 "filter-syntax.y"
+#line 845 "filter-syntax.y"
     {
-        (yyval.tree) = tree_make(Tnot, Tnone, (yyvsp[0].tree), NULL, NULL);
-        
+        (yyval.tree) = tree_make(Tpred, Tip, NULL, NULL, (nodedata_t *)&(yyvsp[0].ipaddr));
       ;}
     break;
 
   case 9:
 #line 849 "filter-syntax.y"
     {
-        (yyval.tree) = tree_make(Tnot, Tnone, (yyvsp[-1].tree), NULL, NULL);
+        (yyval.tree) = tree_make(Tpred, Tport, NULL, NULL, (nodedata_t *)&(yyvsp[0].portrange));
       ;}
     break;
 
   case 10:
 #line 853 "filter-syntax.y"
     {
-        (yyval.tree) = tree_copy((yyvsp[-1].tree));
+        (yyval.tree) = tree_make(Tpred, Tproto, NULL, NULL, (nodedata_t *)&(yyvsp[0].word));
       ;}
     break;
 
   case 11:
 #line 857 "filter-syntax.y"
     {
-        (yyval.tree) = tree_make(Tpred, Tip, NULL, NULL, (nodedata_t *)&(yyvsp[0].ipaddr));
+        (yyval.tree) = tree_make(Tpred, Tiface, NULL, NULL, (nodedata_t *)&(yyvsp[0].iface));
       ;}
     break;
 
   case 12:
 #line 861 "filter-syntax.y"
     {
-        (yyval.tree) = tree_make(Tpred, Tport, NULL, NULL, (nodedata_t *)&(yyvsp[0].portrange));
-      ;}
-    break;
-
-  case 13:
-#line 865 "filter-syntax.y"
-    {
-        (yyval.tree) = tree_make(Tpred, Tproto, NULL, NULL, (nodedata_t *)&(yyvsp[0].word));
-      ;}
-    break;
-
-  case 14:
-#line 869 "filter-syntax.y"
-    {
-        (yyval.tree) = tree_make(Tpred, Tiface, NULL, NULL, (nodedata_t *)&(yyvsp[0].iface));
-      ;}
-    break;
-
-  case 15:
-#line 873 "filter-syntax.y"
-    {
         (yyval.tree) = tree_make(Tpred, Texporter, NULL, NULL, (nodedata_t *)&(yyvsp[0].exaddr));
       ;}
     break;
 
-  case 16:
-#line 878 "filter-syntax.y"
+  case 13:
+#line 866 "filter-syntax.y"
     {
         (yyval.ipaddr).direction = (yyvsp[-1].byte);
         if (parse_ip((yyvsp[0].string), &((yyval.ipaddr).ip)) == -1)
@@ -1973,8 +1945,8 @@ yyreduce:
     ;}
     break;
 
-  case 17:
-#line 886 "filter-syntax.y"
+  case 14:
+#line 874 "filter-syntax.y"
     {
         (yyval.ipaddr).direction = (yyvsp[-2].byte);
         if (parse_ip((yyvsp[-1].string), &((yyval.ipaddr).ip)) == -1)
@@ -1984,8 +1956,8 @@ yyreduce:
     ;}
     break;
 
-  case 18:
-#line 895 "filter-syntax.y"
+  case 15:
+#line 883 "filter-syntax.y"
     {
         (yyval.portrange).direction = (yyvsp[-1].byte);
         (yyval.portrange).lowport = (yyvsp[0].word);
@@ -1993,8 +1965,8 @@ yyreduce:
       ;}
     break;
 
-  case 19:
-#line 901 "filter-syntax.y"
+  case 16:
+#line 889 "filter-syntax.y"
     {
         (yyval.portrange).direction = (yyvsp[-2].byte);
         (yyval.portrange).lowport = (yyvsp[-1].word);
@@ -2002,8 +1974,8 @@ yyreduce:
       ;}
     break;
 
-  case 20:
-#line 907 "filter-syntax.y"
+  case 17:
+#line 895 "filter-syntax.y"
     {
         (yyval.portrange).direction = (yyvsp[-2].byte);
         (yyval.portrange).lowport = 1;
@@ -2011,8 +1983,8 @@ yyreduce:
       ;}
     break;
 
-  case 21:
-#line 913 "filter-syntax.y"
+  case 18:
+#line 901 "filter-syntax.y"
     {
         (yyval.portrange).direction = (yyvsp[-3].byte);
         (yyval.portrange).lowport = (yyvsp[-2].word);
@@ -2020,30 +1992,30 @@ yyreduce:
       ;}
     break;
 
-  case 22:
-#line 920 "filter-syntax.y"
+  case 19:
+#line 908 "filter-syntax.y"
     {
         (yyval.word) = (yyvsp[0].word);
        ;}
     break;
 
-  case 23:
-#line 924 "filter-syntax.y"
+  case 20:
+#line 912 "filter-syntax.y"
     {
         (yyval.word) = (yyvsp[0].word);
        ;}
     break;
 
-  case 24:
-#line 929 "filter-syntax.y"
+  case 21:
+#line 917 "filter-syntax.y"
     {
         (yyval.iface).direction = (yyvsp[-1].byte);
 	(yyval.iface).index = (yyvsp[0].word);
        ;}
     break;
 
-  case 25:
-#line 935 "filter-syntax.y"
+  case 22:
+#line 923 "filter-syntax.y"
     {
            if (parse_ip((yyvsp[0].string), &((yyval.exaddr).ip)) == -1)
                YYABORT;
@@ -2055,7 +2027,7 @@ yyreduce:
     }
 
 /* Line 1126 of yacc.c.  */
-#line 2059 "filter-syntax.c"
+#line 2031 "filter-syntax.c"
 
   yyvsp -= yylen;
   yyssp -= yylen;
@@ -2323,7 +2295,7 @@ yyreturn:
 }
 
 
-#line 940 "filter-syntax.y"
+#line 928 "filter-syntax.y"
 
 
 #include "filter-lexic.c"
@@ -2342,10 +2314,14 @@ void yferror(char *fmt, ...)
 int 
 parse_filter(char *f, treenode_t **result_tree, char **result_cmp)
 {
+    int result;
     filter_tree = result_tree;
     filter_cmp = result_cmp;
     yf_scan_string(f);
-    return yfparse();
+    result = yfparse();
+
+    tree_print(*result_tree);
+    return result;
 }
 
 

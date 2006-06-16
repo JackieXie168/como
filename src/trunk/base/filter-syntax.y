@@ -823,31 +823,19 @@ filter: expr
         if (filter_cmp != NULL)
 	    asprintf(filter_cmp, "all");
         }
-          
+;
 expr: expr AND expr
       {
         $$ = tree_make(Tand, Tnone, $1, $3, NULL);
-      }
-    | OPENBR expr AND expr CLOSEBR
-      {
-        $$ = tree_make(Tand, Tnone, $2, $4, NULL);
       }
     | expr OR expr
       {
         $$ = tree_make(Tor, Tnone, $1, $3, NULL);
       }
-    | OPENBR expr OR expr CLOSEBR
-      {
-        $$ = tree_make(Tor, Tnone, $2, $4, NULL);
-      }
     | NOT expr
       {
         $$ = tree_make(Tnot, Tnone, $2, NULL, NULL);
         
-      }
-    | NOT OPENBR expr CLOSEBR
-      {
-        $$ = tree_make(Tnot, Tnone, $3, NULL, NULL);
       }
     | OPENBR expr CLOSEBR
       {
@@ -873,7 +861,7 @@ expr: expr AND expr
       {
         $$ = tree_make(Tpred, Texporter, NULL, NULL, (nodedata_t *)&$1);
       }
-
+;
 ip: DIR IPADDR
     {
         $$.direction = $1;
@@ -890,7 +878,7 @@ ip: DIR IPADDR
         if (parse_nm($3, &($$.nm)) == -1)
             YYABORT;
     }
-
+;
 port: PORTDIR NUMBER
       {
         $$.direction = $1;
@@ -915,7 +903,7 @@ port: PORTDIR NUMBER
         $$.lowport = $2;
         $$.highport = $4;
       }
-
+;
 proto: LEVEL3
        {
         $$ = $1;
@@ -924,19 +912,19 @@ proto: LEVEL3
        {
         $$ = $1;
        }
-        
+;
 iface: IFACE NUMBER
        {
         $$.direction = $1;
 	$$.index = $2;
        }
-
+;
 exporter: EXPORTER IPADDR
           {
            if (parse_ip($2, &($$.ip)) == -1)
                YYABORT;
           }
-
+;
 %%
 
 #include "filter-lexic.c"
