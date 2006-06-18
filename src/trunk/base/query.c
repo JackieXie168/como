@@ -255,6 +255,19 @@ handle_replay_fail(module_t *mdl)
     }
 }
 
+inline static void
+handle_db_eof(qreq_t * req, int client_fd) 
+{
+    logmsg(V_LOGQUERY, "reached end of file %s\n", req->src->output);
+
+    /* notify the end of stream to the module */
+    if (req->format == Q_OTHER || req->format == Q_HTML) {
+	if (module_db_record_print(req->mdl, NULL, NULL, client_fd)) {
+	    handle_print_fail(req->mdl);
+	}
+    }
+}
+
 
 /*
  * -- query
@@ -461,15 +474,7 @@ FIXME
         ptr = module_db_record_get(file_fd, &ofs, req->src, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
 	    if (len == 0) { 
-		/* notify the end of stream to the module */
-		if (req->format == Q_OTHER || req->format == Q_HTML) {
-		    if (module_db_record_print(req->mdl, NULL, NULL,
-					       client_fd)) {
-			handle_print_fail(req->mdl);
-		    }
-		}
-		logmsg(V_LOGQUERY, "reached end of file %s\n",
-		       req->src->output);
+		handle_db_eof(req, client_fd); 
 		break;
 	    }
 	    panic("reading from file %s ofs %lld len %d", 
@@ -482,6 +487,13 @@ FIXME
 	 */
 	if (ptr == GR_LOSTSYNC) {
 	    ofs = csseek(file_fd, CS_SEEK_FILE_NEXT);
+	    if (ofs == -1) { 
+		/* no more data, notify the end of the 
+		 * stream to the module
+		 */ 
+		handle_db_eof(req, client_fd); 
+                break;
+	    } 
 	    logmsg(LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
 		req->src->output, ofs); 
 	    continue;
