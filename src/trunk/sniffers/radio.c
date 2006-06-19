@@ -125,8 +125,8 @@ prism2_header_to_como_radio(const char *buf, struct _como_radio *r)
     N32(r->antenna) = 0;
     N32(r->priority) = 0;
     N32(r->ssitype) = RADIO_SSITYPE_DBM;
-    N32(r->ssisignal) = htonl(h->signal.data);
-    N32(r->ssinoise) = htonl(h->noise.data);
+    N32(r->ssisignal) = htonl((int32_t)h->signal.data - 256);
+    N32(r->ssinoise) = htonl((int32_t)h->noise.data - 256);
     N32(r->preamble) = 0;
     N32(r->encoding) = 0;
 
