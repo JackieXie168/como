@@ -2314,14 +2314,10 @@ void yferror(char *fmt, ...)
 int 
 parse_filter(char *f, treenode_t **result_tree, char **result_cmp)
 {
-    int result;
     filter_tree = result_tree;
     filter_cmp = result_cmp;
     yf_scan_string(f);
-    result = yfparse();
-
-    tree_print(*result_tree);
-    return result;
+    return yfparse();
 }
 
 
