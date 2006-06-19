@@ -1,4 +1,4 @@
-<!--  $Id: dashboard.php 616 2006-06-12 08:31:23Z iannak1 $  -->
+<!--  $Id:$  -->
 
 window.onload = function() {
     initializeMenu("alertMenu", "alertTrig", "alertImage", "alert");
