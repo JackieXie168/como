@@ -1,3 +1,4 @@
+<!--  $Id:$  -->
 var xmlHttp;
 
 function createXMLHttpRequest() {
