@@ -338,6 +338,8 @@ class Node {
 	switch ($name) {
 	case "alert":
 	    $modargs = $modargs . "url=dashboard.php&";
+	    $modargs = $modargs . "urlargs=comonode={$this->hostaddr}";
+            $nodargs = $modargs . ":{$this->hostport}&";
 	    break;
 
 	case "topdest":
