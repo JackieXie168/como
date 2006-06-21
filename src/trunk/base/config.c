@@ -1218,7 +1218,7 @@ configure(struct _como * m, int argc, char ** argv)
 	    char * nm; 
 
 	    if (node->id == 0) 
-		break; 	/* master node. nothing to do */
+		continue; 	/* master node. nothing to do */
 
 	    /* create a new module and copy it from  new module */
 	    mdl = copy_module(m, orig, node->id, -1, NULL);
@@ -1239,7 +1239,8 @@ configure(struct _como * m, int argc, char ** argv)
 		mdl->filter_str = flt; /* FIXME: possible leak */
 	    } 
 
-            logmsg(LOGUI, "... module %s [%d][%d] ",
+            logmsg(LOGUI, "... module%s %s [%d][%d] ",
+                   (mdl->running == RUNNING_ON_DEMAND) ? " on-demand" : "",
                    mdl->name, mdl->node, mdl->priority);
             logmsg(LOGUI, " filter %s; out %s (%uMB)\n",
                    mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
