@@ -38,7 +38,6 @@
 #include "stdpkt.h"
 #include "comotypes.h"
 #include "comofunc.h"
-#include "memory.h"
 
 /*
  * Some useful macros to write modules
@@ -65,6 +64,7 @@
  * we use CONFIG() to retrieve the state from that structure 
  */
 #define CONFIG(x)	(((module_t *) (x))->config)
+
 /* 
  * ESTATE is defined by each individual module and stored 
  * somewhere in the module_t data structure (opaque to modules). 
@@ -72,6 +72,7 @@
  */
 
 #define ESTATE(x)	(((module_t *) (x))->estate)
+
 /* 
  * FSTATE is defined by each individual module and stored 
  * somewhere in the module_t data structure (opaque to modules). 
