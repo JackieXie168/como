@@ -1,4 +1,4 @@
-<!--  $Id:$  -->
+<!--  $Id$  -->
 <?php 
 
 if (isset($_GET['sub'])) 

@@ -1,4 +1,4 @@
-<!--  $Id:$  -->
+<!--  $Id$  -->
 
 <?php
 
@@ -20,27 +20,27 @@ function do_header($comonode, $customize)
      * add the main menu. (note that the &nbsp; around the menu items
      * are needed for aesthetical reasons). 
      */ 
-    $header = $header . "<div id=menubar><ul>"; 
+    $header = $header . "<div id=menubar><ul>\n"; 
     $param = "webroot=$webroot&comonode=$comonode";
     if ($customize) 
 	$param = $param . "&customize=1";
 
     if (!is_null($comonode)) {
 	// $param = $param . "&comonode=$comonode";
-        $header = $header .  "<li><a href=# " . 
-		  "onclick=\"startRequest('system&$param');\">" . 
-		  "&nbsp;&nbsp;&nbsp;System&nbsp;&nbsp;&nbsp;</a></li>";
+        $header = $header .  "<li>\n<a href=# " . 
+		  "onclick=\"startMenuRequest('system&$param');\">" . 
+		  "&nbsp;&nbsp;&nbsp;System&nbsp;&nbsp;&nbsp;</a></li>\n";
     } 
 
-    $header = $header . "<li><a href=# " .
-	      "onclick=\"startRequest('view&$param');\">" . 
-	      "&nbsp;&nbsp;&nbsp;View&nbsp;&nbsp;&nbsp;</a></li>";
+    $header = $header . "<li>\n<a href=# " .
+	      "onclick=\"startMenuRequest('view&$param');\">" . 
+	      "&nbsp;&nbsp;&nbsp;View&nbsp;&nbsp;&nbsp;</a></li>\n";
 
-    $header = $header . "<li><a href=# " .
-	      "onclick=\"startRequest('help&$param');\">" . 
-	      "&nbsp;&nbsp;&nbsp;Help&nbsp;&nbsp;&nbsp;</a></li>";
+    $header = $header . "<li>\n<a href=# " .
+	      "onclick=\"startMenuRequest('help&$param');\">" . 
+	      "&nbsp;&nbsp;&nbsp;Help&nbsp;&nbsp;&nbsp;</a></li>\n";
 
-    $header = $header . "</ul><div id=\"results\"></div></div>\n";
+    $header = $header . "</ul>\n<div id=\"results\"></div></div>\n";
 
     return $header; 
 }
