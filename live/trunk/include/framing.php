@@ -1,4 +1,4 @@
-<!--  $Id: header.php.inc 600 2006-06-05 11:59:59Z iannak1 $  -->
+<!--  $Id:$  -->
 
 <?php
 
@@ -96,8 +96,8 @@ function do_footer()
  * XXX legacy function. it should go once all code is using 
  *     HTML templates. 
  */ 
-function print_footer() { 
 
+function print_footer() { 
     print do_footer(); 
     print "</body></html>\n";
 }

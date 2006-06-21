@@ -334,12 +334,11 @@ class Node {
     {
 	$modargs = "filter={$this->modinfo[$name]['filter']}&";
 	$interval = $etime - $stime;
-
 	switch ($name) {
 	case "alert":
 	    $modargs = $modargs . "url=dashboard.php&";
-	    $modargs = $modargs . "urlargs=comonode={$this->hostaddr}";
-            $nodargs = $modargs . ":{$this->hostport}&";
+	    $modargs = $modargs . "urlargs=comonode=";
+            $modargs = $modargs . "{$this->hostaddr}:{$this->hostport}&";
 	    break;
 
 	case "topdest":

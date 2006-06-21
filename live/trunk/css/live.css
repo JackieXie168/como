@@ -36,18 +36,17 @@ img {
     width:100%;
     height:20px;
     background-color: #DDD;
-    border-top: 1px dashed gray;
     border-bottom: 1px solid gray;
     font-family : "lucida sans unicode", verdana, arial, sans-serif;
     font-size: 8pt;
     text-align: center;
+    margin-top : 10px;
 
 }
 
 .fence {
-    border-style:dashed; 
-    border-width:1px;
-    width: 98%;
+    border-width:0px;
+    width: 100%;
 }
 
 .topcontent{

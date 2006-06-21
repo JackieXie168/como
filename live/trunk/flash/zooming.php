@@ -1,3 +1,4 @@
+<!--  $Id:$  -->
 <?php 
 
     /* we need to create the string of parameters to be sent to 
