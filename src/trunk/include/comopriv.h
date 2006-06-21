@@ -51,23 +51,9 @@ pktmeta_type_t pktmeta_type_from_name(const char *name);
 /*
  * util-process.c
  */
-typedef void (*mainloop_fn) (int out_fd, int in_fd);
-
-typedef struct child_info_t {
-    procname_t who;
-    pid_t pid;
-} child_info_t;
-
-pid_t start_child (procname_t who, int mem_type, 
-		   mainloop_fn mainloop, int in_fd,
-		   child_info_t *children, int children_count);
-int handle_children (child_info_t *children, int children_count);
-
-/*
- * supervisor.c
- */
-#define SU_CHILDREN_COUNT	10
-extern child_info_t su_children[SU_CHILDREN_COUNT];
+typedef void (*mainloop_fn) (int out_fd, int in_fd, int id);
+pid_t start_child (procname_t who, int mtype, mainloop_fn mainloop, int, int);
+int handle_children ();
 
 /*
  * inline.c

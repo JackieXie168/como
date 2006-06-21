@@ -75,7 +75,7 @@ typedef struct _query_req qreq_t;
 /* 
  * prototypes 
  */
-void query(int client_fd, int node_id);
+void query(int client_fd, int, int node_id);
 qreq_t * qryrecv(int, timestamp_t); 
 void query_ondemand(int client, qreq_t * req, int node_id); 
 void send_status(int client_fd, int node_id); 
