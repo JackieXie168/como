@@ -1,18 +1,28 @@
 <!--  $Id: dashboard.php 616 2006-06-12 08:31:23Z iannak1 $  -->
 
 #sidebox_bar {
-  background-color: #475677;
+  background-color : #475677;
   padding: 1px;
   margin: 0px;
 }
 
-#sidebox_bar a:visited {
-  color: #FFF; 
+.sidebox_bar {
+  background-color : #475677;
+  padding: 1px;
+  margin: 0px;
 } 
 
-#sidebox_bar a:hover {
-  text-decoration: none; 
-} 
+.sidebox_bar :link{
+  color : #FFF;
+}
+
+.sidebox_bar :visited{
+  color : #FFF;
+}
+.sidebox_bar :hover{
+  color : #FFF;
+  text-decoration : none;
+}
 
 .sidebox_name {
   font-family: "lucida sans unicode", verdana, arial;
