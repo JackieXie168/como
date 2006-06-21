@@ -613,7 +613,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	    } 
 
 	    /* count the number of arguments we already have */
-	    for (j = 0; mdl->args[j]; j++) 
+	    for (j = 0; mdl->args && mdl->args[j]; j++) 
 		; 
 
 	    /* read each line in the file and parse it again */ 
