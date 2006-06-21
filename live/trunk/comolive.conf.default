@@ -43,7 +43,7 @@ function init_global() {
     $GLOBAL['GNUPLOT'] = "/usr/bin/gnuplot"; 
 
     /* convert command -- check that this is the correct path */
-    $GLOBAL['CONVERT'] = "/usr/bin/convert -density 600x600 -resize 600x450"; 
+    $GLOBAL['CONVERT'] = "/usr/bin/convert -density 200x200 -resize 600x450"; 
 
     /*  
      *  Error report values are defined on php.net
