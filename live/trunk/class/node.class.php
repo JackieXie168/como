@@ -12,6 +12,7 @@ class Node {
     var $nodename; 		/* Information derived from ?status query */ 
     var $nodeplace;	
     var $comment;
+    var $load;
     var $linkspeed;
     var $version;
     var $builddate;
@@ -27,7 +28,7 @@ class Node {
     /* 
      * constructor for the class. 
      * this will run a ?status query (unless it is already cached) 
-     * and store all informations about the node and the modules
+     * and store all information about the node and the modules
      * that are currently running. 
      */
     function Node($comonode, $G) {
@@ -53,7 +54,7 @@ class Node {
 	 * get the ?status information (cached or not) and parse it 
          * to populate the node information and modules' array. 
          */ 
-	$info = $this->getStatus($comonode, $G['RESULTS'], "status");
+	$info = $this->getStatus();
 	if ($info == FALSE) {
 	    $this->status = FALSE; 
 	    return; 
@@ -84,7 +85,13 @@ class Node {
 		break;
 
 	    case "Comment:":
-		$this->comment= $args[0];
+		$this->comment = $args[0];
+		break;
+
+	    case "Load:":
+		$this->load[0] = $args[0];
+		$this->load[1] = $args[1];
+		$this->load[2] = $args[2];
 		break;
 
 	    case "Module:":
