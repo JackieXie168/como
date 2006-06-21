@@ -49,8 +49,6 @@
 /* global state */
 extern struct _como map;
 
-child_info_t su_children[SU_CHILDREN_COUNT];
-
 
 /*
  * -- ipc_echo_handler()
@@ -88,9 +86,6 @@ su_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
 {
     int i; 
     
-    if (getprocclass(sender) == QUERY || getprocclass(sender) == STORAGE)
-	return;
-
     /* 
      * initialize all modules and send the start signal to 
      * the other processes 
@@ -324,7 +319,7 @@ reconfigure(__unused int si_code)
 static void
 defchld(__unused int si_code)
 {
-    handle_children(su_children, SU_CHILDREN_COUNT);
+    handle_children();
 }
 
 
@@ -350,9 +345,6 @@ supervisor_mainloop(int accept_fd)
 
     /* register a handler for exit */
     atexit(cleanup);
-
-    /* init su children array */
-    bzero(su_children, sizeof(su_children)); 
 
     /* register handlers for IPC */
     ipc_clear();
@@ -478,9 +470,9 @@ supervisor_mainloop(int accept_fd)
 
 	    for (id = 0; id < map.node_count; id++) {
 		struct sockaddr_in addr;
+		procname_t who; 
 		socklen_t len;
 		int cd;
-		pid_t pid;
 	    
 		if (i != external_fd[id]) 
 		    continue; 
@@ -501,25 +493,11 @@ supervisor_mainloop(int accept_fd)
 		       inet_ntoa(addr.sin_addr), cd); 
 
 		/* 
-		 * fork a process to serve the query. 
-	 	 * we don't use start_child here because we need to 
-		 * pass down the virtual node information and we don't 
-		 * really care to know if the query succeds or fails. 
+		 * start a query process. 
 	   	 */
-		pid = fork(); 	
-		if (pid < 0) 
-		    logmsg(LOGWARN, "fork query: %s\n",
-				strerror(errno));
-
-		if (pid == 0) {	/* here is the child... */
-		    for (i = 3; i < max_fd; i++) {
-			if (i != cd)
-			    close(i);
-		    }
-		    query(cd, id); 
-		    exit(EXIT_SUCCESS); 
-		} else	/* parent */
-		    close(cd);
+		who = buildtag(map.whoami, QUERY, cd);
+		start_child(who, COMO_PRIVATE_MEM, query, cd, id); 
+		close(cd);
 		goto next_one;
 	    }
 

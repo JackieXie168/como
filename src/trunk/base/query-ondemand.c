@@ -46,9 +46,6 @@
 /* global state */
 extern struct _como map;
 
-#define QD_CHILDREN_COUNT	2 /* only CA and EX */
-static child_info_t qd_children[QD_CHILDREN_COUNT];
-
 /*
  * -- qd_ipc_sync()
  *
@@ -123,7 +120,7 @@ qd_ipc_done(procname_t sender, __unused int fd,
 static void
 defchld(__unused int si_code)
 {
-    if (handle_children(qd_children, QD_CHILDREN_COUNT))
+    if (handle_children())
 	exit(EXIT_FAILURE);
 }
 
@@ -241,13 +238,11 @@ query_ondemand(int fd, qreq_t * req, int node_id)
     /* now start a new CAPTURE process */ 
     tag = child(CAPTURE, fd); 
     capture_fd = ipc_listen(tag); 
-    start_child(tag, COMO_SHARED_MEM, capture_mainloop, capture_fd,
-		qd_children, SU_CHILDREN_COUNT);
+    start_child(tag, COMO_SHARED_MEM, capture_mainloop, capture_fd, 0);
 
     /* now start a new EXPORT process */ 
     tag = child(EXPORT, fd); 
-    start_child(tag, COMO_PRIVATE_MEM, export_mainloop, -1,
-		qd_children, SU_CHILDREN_COUNT);
+    start_child(tag, COMO_PRIVATE_MEM, export_mainloop, -1, 0); 
     
     /* get ready for the mainloop */
     FD_ZERO(&valid_fds);

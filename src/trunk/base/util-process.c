@@ -67,7 +67,7 @@ extern como_t map;
 static struct {
     char * shortname;
     char * fullname; 
-} procalias[] = { 
+} s_procalias[] = { 
     {"??", "NONE"}, 
     {"su", "SUPERVISOR"}, 
     {"ca", "CAPTURE"}, 
@@ -75,6 +75,20 @@ static struct {
     {"st", "STORAGE"}, 
     {"qu", "QUERY"},
 };
+
+
+/* 
+ * children process information 
+ * (both children of SUPERVISOR and QUERY for 
+ * on-demand queries)
+ */ 
+#define MAX_CHILDREN		256
+static struct { 
+    procname_t who;
+    pid_t pid;
+} s_child_info[MAX_CHILDREN];
+
+static int s_children = 0; 
 
 
 #define GETPROCPARENT(x) 	(((x) >> 24) & 0xff) 
@@ -104,10 +118,10 @@ getprocname(procname_t who)
     c = GETPROCCHILD(who); 
     x = GETPROCID(who); 
     if (p == 0) 
-	sprintf(name, "%s", procalias[c].shortname);
+	sprintf(name, "%s", s_procalias[c].shortname);
     else 
 	sprintf(name, "%s-%d-%s", 
-		procalias[p].shortname, x, procalias[c].shortname); 
+		s_procalias[p].shortname, x, s_procalias[c].shortname); 
 
     return name;
 }
@@ -130,10 +144,10 @@ getprocfullname(procname_t who)
     c = GETPROCCHILD(who); 
     x = GETPROCID(who); 
     if (p == 0) 
-	sprintf(name, "%s", procalias[c].fullname);
+	sprintf(name, "%s", s_procalias[c].fullname);
     else 
 	sprintf(name, "%s-%d-%s", 
-		procalias[p].fullname, x, procalias[c].fullname); 
+		s_procalias[p].fullname, x, s_procalias[c].fullname); 
 
     return name;
 }
@@ -222,23 +236,26 @@ isvalidproc(procname_t who)
  * The last argument is an optional fd to be passed to the program.
  */
 pid_t
-start_child(procname_t who, int mem_type, 
-	    mainloop_fn mainloop, int in_fd,
-	    child_info_t *children, int children_count)
+start_child(procname_t who, int mem_type, mainloop_fn mainloop, 
+	int in_fd, int id)
 {
     pid_t pid;
     int i;
 
-    /* find a slot for the child */
-    for (i = 0; i < children_count; i++)
-	if (!isvalidproc(children[i].who))
-	    break;
-    if (i == children_count) 
-	errx(EXIT_FAILURE, 
-	     "--- cannot create child %s, no more slots\n", 
-	     getprocfullname(who));
+    if (s_children == 0) { 
+	/* initialize the s_child_info array */ 
+	bzero(s_child_info, sizeof(s_child_info)); 
+    } 
 
-    children[i].who = who;
+    /* find a slot for the child */
+    for (i = 0; i < MAX_CHILDREN; i++)
+	if (!isvalidproc(s_child_info[i].who))
+	    break;
+    if (i == MAX_CHILDREN) { 
+	logmsg(LOGWARN, "cannot create child %s, no more slots\n", 
+	     getprocfullname(who));
+	return -1; 
+    } 
 
     /* ok, fork a regular process and return pid to the caller. */
     pid = fork();
@@ -296,11 +313,13 @@ start_child(procname_t who, int mem_type,
 	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
 	       getprocfullname(who), getpid()); 
 
-	mainloop(in_fd, out_fd);
+	mainloop(in_fd, out_fd, id);
 	exit(0);
     }
-    children[i].who = who;
-    children[i].pid = pid;
+
+    s_child_info[i].who = who;
+    s_child_info[i].pid = pid;
+    s_children++;
     
     return pid;
 }
@@ -314,7 +333,7 @@ start_child(procname_t who, int mem_type,
  * terminate with an EXIT_SUCCESS and 0 otherwise. 
  */
 int
-handle_children(child_info_t *children, int children_count)
+handle_children()
 {
     int j;
     procname_t who = 0;
@@ -326,19 +345,17 @@ handle_children(child_info_t *children, int children_count)
 	return 0;
     } 
 
-    for (j = 0; j < children_count; j++) {
-	if (children[j].pid == pid) {
-	    who = children[j].who;
+    for (j = 0; j < s_children; j++) {
+	if (s_child_info[j].pid == pid) {
+	    who = s_child_info[j].who;
 	    break;
 	}
     }
 
-//    assert(j < children_count);
-    if (j == children_count)
-	return 0;
+    assert(j < s_children);
 
-    children[j].pid = -1;
-    children[j].who = 0;
+    s_child_info[j].pid = 0;
+    s_child_info[j].who = 0;
 
     if (WIFEXITED(statbuf)) {
 	if (WEXITSTATUS(statbuf) == EXIT_SUCCESS) { 
@@ -347,7 +364,7 @@ handle_children(child_info_t *children, int children_count)
 		   getprocfullname(who), pid); 
 	    return 0; 
 	} else { 
-	    logmsg(LOGWARN, 
+	    logmsg(V_LOGWARN, 
 		   "WARNING!! %s (pid %d) terminated (status: %d)\n",
 	           getprocfullname(who), pid, WEXITSTATUS(statbuf)); 
 	    return 1; 

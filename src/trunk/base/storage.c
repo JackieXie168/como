@@ -1551,7 +1551,7 @@ st_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
  *
  */
 void
-storage_mainloop(int accept_fd, int supervisor_fd)
+storage_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 {
     int max_fd; 
     fd_set valid_fds; 
