@@ -1,4 +1,4 @@
-<!--  $Id: dashboard.php 616 2006-06-12 08:31:23Z iannak1 $  -->
+<!--  $Id:$  -->
 
 <html>
   <head>
@@ -71,16 +71,21 @@
 	    <form target="frame<?= $i ?>" name="box_<?= $module[$i] ?>"
 		  action="<?= $query[$i] ?>" method=POST>
 
-	      <div class="sidebox_bar">
+                <table class=sidebox_bar border=0 cellspacing=0 cellpadding=0>
+                <tr><td>
 		<a href=# id="<?= $module[$i] ?>Trig" class=sidebox_name>
 		  <img src="images/plus.gif"
 		       id="<?= $module[$i] ?>Image" class="sidebox_image">
                   <?=$name[$i]?>
 		</a>
+                </td>
+                <td>
 		<a href=# id="<?= $module[$i] ?>Trigedit" class=sidebox_edit>
 		  [edit]
 		</a>
-	      </div>
+                </td></tr>
+                </table>
+                 
 
 	      <div id=<?= $module[$i] ?>Menuedit>
 		Show 
