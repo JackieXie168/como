@@ -510,6 +510,11 @@ struct _statistics {
     size_t mem_usage_peak; 	/* peak shared memory usage */
     uint64_t pkts; 		/* sniffed packets so far */
     int drops; 			/* global packet drop counter */
+    
+    uint64_t load_15m[15];	/* bytes load in last 15m */
+    uint64_t load_1h[60];	/* bytes load in last 1h */
+    uint64_t load_6h[360];	/* bytes load in last 6h */
+    uint64_t load_1d[1440];	/* bytes load in last 1d */
 
     /* we define here a set of timers that use TSC */
     tsc_t * ca_full_timer; 	/* capture entire mainloop */

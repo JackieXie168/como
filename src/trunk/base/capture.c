@@ -393,6 +393,13 @@ filter(pkt_t * pkts, int count)
     timestamp_t max_ts = 0;
     int idx;
     int first_done = 0;
+    static uint64_t ld_bytes; /* bytes seen in one minute */
+    static timestamp_t ld_ts; /* end of load meas interval */
+    static uint32_t ld_idx; /* index of load meas interval */
+
+    if (ld_ts == 0) {
+	ld_ts = COMOP(pkts, ts) + TIME2TS(60, 0);
+    }
     
     i = count * s_active_modules; /* size of the output bitmap */
 
@@ -417,22 +424,35 @@ filter(pkt_t * pkts, int count)
 	}
 	
 	for (i = 0, pkt = pkts; i < count; i++, pkt++, out++) {
-	    if (pkt->ts == 0) {
+	    if (COMO(ts) == 0) {
 		if (first_done == 0) {
 		    logmsg(LOGCAPTURE, "pkt no. %d has NULL timestamp\n", i);
 		}
 		continue;
 	    }
-	    if (pkt->ts >= max_ts) {
-		max_ts = pkt->ts;
+	    if (COMO(ts) >= max_ts) {
+		max_ts = COMO(ts);
 	    } else if (first_done == 0) {
 		logmsg(LOGCAPTURE,
 		       "pkt no. %d timestamps not increasing "
 		       "(%u.%06u --> %u.%06u)\n",
 		       i, TS2SEC(max_ts), TS2USEC(max_ts),
-		       TS2SEC(pkt->ts), TS2USEC(pkt->ts));
+		       TS2SEC(COMO(ts)), TS2USEC(COMO(ts)));
 	    }
 	    *out = evaluate(mdl->filter_tree, pkt);
+	    if (first_done == 0) {
+	    	if (COMO(ts) < ld_ts) {
+		    ld_bytes += (uint64_t) COMO(len);
+	    	} else {
+		    map.stats->load_15m[ld_idx % 15] = ld_bytes;
+		    map.stats->load_1h[ld_idx % 60] = ld_bytes;
+		    map.stats->load_6h[ld_idx % 360] = ld_bytes;
+		    map.stats->load_1d[ld_idx] = ld_bytes;
+		    ld_idx = (ld_idx + 1) % 1440;
+	    	    ld_bytes = (uint64_t) COMO(len);
+	    	    ld_ts += TIME2TS(60, 0);
+	    	}
+	    }
 	}
 	first_done = 1;
     }
