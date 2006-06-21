@@ -56,7 +56,6 @@ class Node {
          */ 
 	$info = $this->getStatus();
 	if ($info == FALSE) {
-print "status shoud be false";
 	    $this->status = FALSE; 
 	    return; 
         } 
