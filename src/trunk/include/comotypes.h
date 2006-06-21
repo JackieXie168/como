@@ -447,6 +447,7 @@ struct _capture_table {
     uint32_t size;		/* size of hash table */
     uint32_t records;		/* no. active records */
     uint32_t first_full;	/* index of first full slot */
+    uint32_t last_full;		/* index of last full slot */
     uint32_t live_buckets;	/* no. active buckets */
     uint32_t filled_records;    /* no. records filled */
     uint32_t bytes;             /* size of table and contents in memory */
