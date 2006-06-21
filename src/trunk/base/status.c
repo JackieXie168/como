@@ -65,6 +65,8 @@ send_status(int client_fd, int node_id)
     int storage_fd;
     int ret, len, idx;
     int secs, dd, hh, mm, ss; 
+    uint64_t ld_15m = 0, ld_1h = 0, ld_6h = 0, ld_1d = 0;
+    int i;
 
     /* first find the node */ 
     for (node = map.node; node && node->id != node_id; node = node->next)
@@ -96,7 +98,7 @@ send_status(int client_fd, int node_id)
     timedata = gmtime(&last); 
     strftime(datebuf, sizeof(datebuf), "%a %B %e %T %Z %Y", timedata); 
     len += sprintf(buf + len, "Current: %u | %s\n", (unsigned) last, datebuf); 
-		
+    
     /* print the duration */
     secs = last - start; 
     dd = secs / 86400;
@@ -104,7 +106,23 @@ send_status(int client_fd, int node_id)
     mm = (secs % 3600) / 60;
     ss = secs % 60;
     len += sprintf(buf + len, "Duration: %dd %dh %dm %ds\n", dd, hh, mm, ss); 
- 
+    
+    /* print the load */
+    for (i = 0; i < 15; i++) {
+    	ld_15m += map.stats->load_15m[i];
+    }
+    for (i = 0; i < 60; i++) {
+    	ld_1h += map.stats->load_1h[i];
+    }
+    for (i = 0; i < 360; i++) {
+    	ld_6h += map.stats->load_6h[i];
+    }
+    for (i = 0; i < 1440; i++) {
+    	ld_1d += map.stats->load_1d[i];
+    }
+    len += sprintf(buf + len, "Load: %llu | %llu | %llu | %llu\n",
+		   ld_15m, ld_1h, ld_6h, ld_1d);
+    
     /* add comments if any */
     if (node->comment != NULL) 
 	len += sprintf(buf + len, "Comment: %s\n", node->comment); 
