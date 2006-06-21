@@ -59,6 +59,8 @@
 /* global state */
 extern struct _como map;
 
+static int s_wait_for_modules = 1; 
+
 #define HTTP_RESPONSE_404 \
 "HTTP/1.0 404 Not Found\r\n" \
 "Content-Type: text/plain\r\n\r\n"
@@ -270,6 +272,55 @@ handle_db_eof(qreq_t * req, int client_fd)
 
 
 /*
+ * -- qu_ipc_module_add
+ *
+ * handle IPC_MODULE_ADD messages by unpacking the module
+ * and activating it.
+ *
+ */
+static void
+qu_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
+{
+    module_t tmp;
+    module_t * mdl;
+
+    /* only the parent process should send this message */
+    assert(src == map.parent);
+
+    /* unpack the received module info */
+    if (unpack_module(pack, sz, &tmp)) {
+        logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n");
+        return;
+    }
+
+    /* find an empty slot in the modules array */
+    mdl = copy_module(&map, &tmp, tmp.node, tmp.index, NULL);
+
+    /* free memory from the tmp module */
+    clean_module(&tmp);
+
+    if (activate_module(mdl, map.libdir)) 
+        logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
+}
+
+
+/* 
+ * -- qu_ipc_start 
+ * 
+ * once we get the IPC_START message from SUPERVISOR we can start
+ * looking into the query itself... 
+ *
+ */
+static void
+qu_ipc_start(procname_t sender, __unused int fd, __unused void * buf,
+             __unused size_t len)
+{
+    /* only SUPERVISOR should send this message */
+    assert(sender == map.parent);
+    s_wait_for_modules = 0;
+}
+
+/*
  * -- query
  *
  * This function is used for all queries. It is called by
@@ -293,10 +344,10 @@ handle_db_eof(qreq_t * req, int client_fd)
  *
  */
 void
-query(int client_fd, int node_id)
+query(int client_fd, int supervisor_fd, int node_id)
 {
     qreq_t *req;
-    int supervisor_fd, storage_fd, file_fd;
+    int storage_fd, file_fd;
     off_t ofs; 
     ssize_t len;
     int mode, ret;
@@ -308,15 +359,7 @@ query(int client_fd, int node_id)
      * the modules will be able to allocate and use, and change the process
      * name accordingly. 
      */
-    map.parent = map.whoami; 
-    map.whoami = buildtag(map.parent, QUERY, client_fd);
-    map.mem_type = COMO_PRIVATE_MEM;
     setproctitle(getprocfullname(map.whoami));
-
-    /* connect to the supervisor so we can send messages */
-    supervisor_fd = ipc_connect(SUPERVISOR); 
-    logmsg(V_LOGWARN, "starting process QUERY #%d: node %d pid %d\n",
-	client_fd, node_id, getpid()); 
 
     if (map.debug) {
 	if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
@@ -326,6 +369,15 @@ query(int client_fd, int node_id)
 	}
     }
 
+    /* register handlers for IPC messages */
+    ipc_clear();
+    ipc_register(IPC_MODULE_ADD, qu_ipc_module_add);
+    ipc_register(IPC_MODULE_START, qu_ipc_start);
+
+    /* handle the message from SUPERVISOR */ 
+    while (s_wait_for_modules) 
+	ipc_handle(supervisor_fd); 
+ 
     req = (qreq_t *) qryrecv(client_fd, map.stats->ts); 
     if (req == NULL) {
 	close(client_fd);

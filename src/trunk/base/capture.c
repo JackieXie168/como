@@ -107,6 +107,7 @@ create_table(module_t * mdl, timestamp_t ivl)
 
     ct->size = mdl->ca_hashsize;
     ct->first_full = ct->size;	/* all records are empty */
+    ct->last_full = 0; 		/* all records are empty */
     ct->records = 0;
     ct->live_buckets = 0;
     ct->flexible = 0;
@@ -284,6 +285,8 @@ capture_pkt(module_t * mdl, pkt_t *pkts, int count, char *which,
 	 */
 	if (bucket < mdl->ca_hashtable->first_full)
 	    mdl->ca_hashtable->first_full = bucket;
+	if (bucket > mdl->ca_hashtable->last_full)
+	    mdl->ca_hashtable->last_full = bucket;
 
 	prev = NULL;
 	cand = mdl->ca_hashtable->bucket[bucket];
@@ -894,7 +897,7 @@ ca_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
  *
  */
 void
-capture_mainloop(int accept_fd, int supervisor_fd)
+capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 {
     pkt_t pkts[PKT_BUFFER];	/* packet buffer */
     int active_sniffers;	/* how many sniffers are left ? */

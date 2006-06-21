@@ -303,7 +303,7 @@ process_table(ctable_t * ct, module_t * mdl)
      * scan all buckets and save the information to the output file.
      * then see what the EXPORT process has to keep about the entry.
      */
-    for (; ct->first_full < ct->size; ct->first_full++) {
+    for (; ct->first_full <= ct->last_full; ct->first_full++) {
 	rec_t *rec; 
 
 	/*
@@ -627,7 +627,7 @@ ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 	 */
 	if (mdl->status != MDL_ACTIVE)
 	    continue;
-	
+
 	if (exp->ct->records) {
 	    /* process capture table and update export table */
 	    start_tsctimer(map.stats->ex_table_timer);
@@ -729,7 +729,7 @@ ex_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
  * the action() callback tells us to do (save, discard, etc.).
  */
 void
-export_mainloop(__unused int in_fd, int parent_fd)
+export_mainloop(__unused int in_fd, int parent_fd, __unused int id)
 {
     int capture_fd; 
     int	max_fd;
