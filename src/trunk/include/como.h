@@ -57,6 +57,7 @@ struct _node {
     char * comment;
     int query_port;		/* port for incoming queries */
     char * filter_str;          /* filter expression */
+    char ** args;               /* parameters for the modules */
     struct _node * next; 	/* next node */
 };
 
