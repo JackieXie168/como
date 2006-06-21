@@ -319,6 +319,12 @@ query_parse(char *buf, timestamp_t now)
 	    q.args[nargs] = strdup(p1); 
 	    nargs++;
 	    assert(nargs < max_args);
+        } else if (strstr(p1, "format=sidebox") == p1) {
+	    q.format = Q_HTML;
+	    /* we forward this to the module */
+	    q.args[nargs] = strdup(p1); 
+	    nargs++;
+	    assert(nargs < max_args);
         } else if (strstr(p1, "wait=no") == p1) {
 	    q.wait = 0; 
         } else if (strstr(p1, "status") == p1) {
