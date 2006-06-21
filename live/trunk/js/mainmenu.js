@@ -1,24 +1,24 @@
-<!--  $Id:$  -->
-var xmlHttp;
+<!--  $Id$  -->
+var xmlHttpMainMenu;
 
-function createXMLHttpRequest() {
+function createXMLHttpRequestMainMenu() {
     if (window.ActiveXObject) {
-        xmlHttp = new ActiveXObject("Microsoft.XMLHTTP");
+        xmlHttpMainMenu = new ActiveXObject("Microsoft.XMLHTTP");
     } else if (window.XMLHttpRequest) {
-        xmlHttp = new XMLHttpRequest();
+        xmlHttpMainMenu = new XMLHttpRequest();
     }
 }
 
-function startRequest(val) {
+function startMenuRequest(val) {
     var val;
-    createXMLHttpRequest();
-    xmlHttp.onreadystatechange = handleStateChange;
-    xmlHttp.open("GET", "include/submenu.php?sub=" + val, true);
-    xmlHttp.send(null);
+    createXMLHttpRequestMainMenu();
+    xmlHttpMainMenu.onreadystatechange = handleMenuStateChange;
+    xmlHttpMainMenu.open("GET", "include/submenu.php?sub=" + val, true);
+    xmlHttpMainMenu.send(null);
 }
 
-function handleStateChange() {
-    if(xmlHttp.readyState == 4 && xmlHttp.status == 200)
-        document.getElementById("results").innerHTML = xmlHttp.responseText;
+function handleMenuStateChange() {
+    if(xmlHttpMainMenu.readyState == 4 && xmlHttpMainMenu.status == 200)
+        document.getElementById("results").innerHTML = xmlHttpMainMenu.responseText;
 }
 
