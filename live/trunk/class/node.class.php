@@ -1,4 +1,4 @@
-<!-- $Id$  -->
+<!--  $Id$  -->
 
 <?php
 
@@ -56,6 +56,7 @@ class Node {
          */ 
 	$info = $this->getStatus();
 	if ($info == FALSE) {
+print "status shoud be false";
 	    $this->status = FALSE; 
 	    return; 
         } 
@@ -92,6 +93,7 @@ class Node {
 		$this->load[0] = $args[0];
 		$this->load[1] = $args[1];
 		$this->load[2] = $args[2];
+		$this->load[3] = $args[3];
 		break;
 
 	    case "Module:":
@@ -131,6 +133,7 @@ class Node {
 	 */
 	$this->stime -= $this->stime % $G['TIMEBOUND'];
 	$this->etime -= $this->etime % $G['TIMEBOUND'];
+
     }
 
 
