@@ -1,14 +1,16 @@
 <!--  $Id: dashboard.php 616 2006-06-12 08:31:23Z iannak1 $  -->
 
-#sidebox_bar {
+#sidebox_bar table {
   background-color : #475677;
-  padding: 1px;
+  padding: 0px;
   margin: 0px;
 }
 
-.sidebox_bar {
+.sidebox_bar td {
+  text-align : left;
+  width : 100%;
   background-color : #475677;
-  padding: 1px;
+  padding: 0px;
   margin: 0px;
 } 
 
@@ -32,8 +34,7 @@
 } 
 
 .sidebox_edit { 
-  position: absolute;
-  right: 30px;
+  right: 90px;
   font-weight: normal;
   margin-left: 10px;
 } 
