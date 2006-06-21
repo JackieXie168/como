@@ -138,8 +138,8 @@ keyword_t keywords[] = {
     { "description", TOK_DESCRIPTION, 2, CTX_MODULE },
     { "end",         TOK_END,         1, CTX_MODULE|CTX_GLOBAL|CTX_VIRTUAL },
     { "streamsize",  TOK_STREAMSIZE,  2, CTX_MODULE },
-    { "args",        TOK_ARGS,        2, CTX_MODULE },
-    { "args-file",   TOK_ARGSFILE,    2, CTX_MODULE },
+    { "args",        TOK_ARGS,        2, CTX_MODULE|CTX_VIRTUAL },
+    { "args-file",   TOK_ARGSFILE,    2, CTX_MODULE|CTX_VIRTUAL },
     { "priority",    TOK_PRIORITY,    1, CTX_MODULE },
     { "running",     TOK_RUNNING,     2, CTX_MODULE },
     { "name",        TOK_NAME,        2, CTX_GLOBAL },
@@ -544,7 +544,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	break;
 
     case TOK_ARGS:
-	do { 
+	if (scope == CTX_MODULE) {
 	    int i,j;
 
 	    if (mdl->args == NULL) {
@@ -569,11 +569,37 @@ do_config(struct _como * m, int argc, char *argv[])
 	     * when args finish from the modules
 	     */
 	    mdl->args[i+j-1] = NULL;
-	} while (0); 
+	} else if (scope == CTX_VIRTUAL) {
+	    int i,j;
+
+	    if (m->node->args == NULL) {
+		m->node->args = safe_calloc(argc, sizeof(char *));
+		j = 0; 
+	    } else { 
+		/* 
+		 * we need to add the current list of optional arguments 
+		 * to the list we already have. first, count how many we 
+		 * have got so far and then reallocate memory accordingly 
+		 */
+		for (j = 0; m->node->args[j]; j++) 
+		    ; 
+		m->node->args = safe_realloc(m->node->args, (argc + j) *
+					     sizeof(char*));
+	    } 
+
+	    for (i = 1; i < argc; i++) 
+		m->node->args[i+j-1] = safe_strdup(argv[i]);
+
+	    /* 
+	     * Last position is set to null to be able to know
+	     * when args finish from the modules
+	     */
+	    m->node->args[i+j-1] = NULL;
+	}
 	break;
 
     case TOK_ARGSFILE: 
-	do { 
+	if (scope == CTX_MODULE) {
 	    FILE *auxfp;
 	    char line[512];
 	    int j;
@@ -605,7 +631,41 @@ do_config(struct _como * m, int argc, char *argv[])
 	    mdl->args[j] = NULL; 
 
 	    fclose(auxfp);
-	} while (0);
+	} else if (scope == CTX_VIRTUAL) {
+	    FILE *auxfp;
+	    char line[512];
+	    int j;
+
+	    /* open the file */
+	    auxfp = fopen(argv[1], "r"); 
+	    if (auxfp == NULL) { 
+		sprintf(errstr, "opening file %s: %s\n", argv[1], 
+			strerror(errno)); 
+		return errstr; 
+	    } 
+
+	    /* count the number of arguments we already have */
+	    for (j = 0; m->node->args[j]; j++) 
+		; 
+
+	    /* read each line in the file and parse it again */ 
+	    /* XXX we reallocate mdl->args for each line in the file. 
+	     *     this should be done better in a less expensive way. 
+	     */
+	    while (fgets(line, sizeof(line), auxfp)) {
+		j++;
+		m->node->args = safe_realloc(m->node->args, j *
+					     sizeof(char *));
+		m->node->args[j - 1] = safe_strdup(line);
+	    }
+
+	    /* add the last NULL pointer */
+	    m->node->args = safe_realloc(m->node->args, (j + 1) *
+					 sizeof(char *));
+	    m->node->args[j] = NULL; 
+
+	    fclose(auxfp);
+	}
 	break;
     
     case TOK_PRIORITY: 
@@ -1221,7 +1281,7 @@ configure(struct _como * m, int argc, char ** argv)
 		continue; 	/* master node. nothing to do */
 
 	    /* create a new module and copy it from  new module */
-	    mdl = copy_module(m, orig, node->id, -1, NULL);
+	    mdl = copy_module(m, orig, node->id, -1, node->args);
 	    
 	    /* append node id to module's output file */
 	    asprintf(&nm, "%s-%d", mdl->output, mdl->node); 
