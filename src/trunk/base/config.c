@@ -602,7 +602,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	if (scope == CTX_MODULE) {
 	    FILE *auxfp;
 	    char line[512];
-	    int j = 0;
+	    int j;
 
 	    /* open the file */
 	    auxfp = fopen(argv[1], "r"); 
@@ -613,12 +613,8 @@ do_config(struct _como * m, int argc, char *argv[])
 	    } 
 
 	    /* count the number of arguments we already have */
-	    if (mdl->args == NULL) {
-		mdl->args = safe_calloc(1, sizeof(char *));
-	    } else {
-		for (; mdl->args[j]; j++) 
-		    ; 
-	    }
+	    for (j = 0; mdl->args && mdl->args[j]; j++) 
+		; 
 
 	    /* read each line in the file and parse it again */ 
 	    /* XXX we reallocate mdl->args for each line in the file. 
@@ -638,7 +634,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	} else if (scope == CTX_VIRTUAL) {
 	    FILE *auxfp;
 	    char line[512];
-	    int j = 0;
+	    int j;
 
 	    /* open the file */
 	    auxfp = fopen(argv[1], "r"); 
@@ -649,13 +645,9 @@ do_config(struct _como * m, int argc, char *argv[])
 	    } 
 
 	    /* count the number of arguments we already have */
-	    if (m->node->args == NULL) {
-		m->node->args = safe_calloc(1, sizeof(char *));
-	    } else {
-		for (; m->node->args[j]; j++) 
-		    ; 
-	    }
-	    
+	    for (j = 0; m->node->args && m->node->args[j]; j++) 
+		; 
+
 	    /* read each line in the file and parse it again */ 
 	    /* XXX we reallocate mdl->args for each line in the file. 
 	     *     this should be done better in a less expensive way. 
