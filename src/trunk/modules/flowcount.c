@@ -223,22 +223,22 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
      * incrementally hash relevant fields
      */
     if (config->flow_fields & USE_SRC)
-        hash = uhash(&config->hfunc, (char *) &IP(src_ip), 4);
+        hash = uhash(&config->hfunc, (uint8_t *) &IP(src_ip), 4);
     if (config->flow_fields & USE_DST)
-        hash = uhash(&config->hfunc, (char *) &IP(dst_ip), 4);
+        hash = uhash(&config->hfunc, (uint8_t *) &IP(dst_ip), 4);
     if (config->flow_fields & USE_PROTO)
-        hash = uhash(&config->hfunc, (char *) &IP(proto), 1);
+        hash = uhash(&config->hfunc, (uint8_t *) &IP(proto), 1);
     if (config->flow_fields & USE_SPORT) {
         if (isTCP)
-            hash = uhash(&config->hfunc, (char *) &TCP(src_port), 2);
+            hash = uhash(&config->hfunc, (uint8_t *) &TCP(src_port), 2);
         else if (isUDP)
-            hash = uhash(&config->hfunc, (char *) &UDP(src_port), 2);
+            hash = uhash(&config->hfunc, (uint8_t *) &UDP(src_port), 2);
     }
     if (config->flow_fields & USE_DPORT) {
         if (isTCP)
-            hash = uhash(&config->hfunc, (char *) &TCP(dst_port), 2);
+            hash = uhash(&config->hfunc, (uint8_t *) &TCP(dst_port), 2);
         else if (isUDP)
-            hash = uhash(&config->hfunc, (char *) &UDP(dst_port), 2);
+            hash = uhash(&config->hfunc, (uint8_t *) &UDP(dst_port), 2);
     }
 
     set_bit(st->bm, hash & config->mask); /* update bitmap */
