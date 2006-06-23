@@ -46,7 +46,9 @@ SRCS_como := \
 
 SRCS_como += \
 	$(BASEDIR)/lib/heap.c \
-	$(BASEDIR)/lib/hash.c
+	$(BASEDIR)/lib/hash.c \
+        $(BASEDIR)/lib/uhash.c \
+        $(BASEDIR)/lib/bitmap.c
 
 LIBS = $(LIBDL) m		
 LIBDIRS = /usr/local/lib
