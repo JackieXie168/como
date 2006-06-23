@@ -21,7 +21,8 @@ MODULES= \
 	dhcp.so \
 	nfexlist.so \
 	macssi.so \
-	ipssi.so
+	ipssi.so \
+        flowcount.so
 
 ifneq ($(shell uname),CYGWIN_NT-5.1)
         MODULES += tuple.so \
