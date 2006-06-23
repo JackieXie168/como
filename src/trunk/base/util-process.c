@@ -352,7 +352,10 @@ handle_children()
 	}
     }
 
-    assert(j < s_children);
+    if (j == s_children) {
+	/* don't bother about unknown children */
+	return 0;
+    }
 
     s_child_info[j].pid = 0;
     s_child_info[j].who = 0;
