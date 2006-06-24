@@ -385,7 +385,7 @@ query(int client_fd, int supervisor_fd, int node_id)
 	return; 
     } 
 
-    logmsg(LOGQUERY,
+    logmsg(V_LOGQUERY,
         "query (%d bytes); node: %d mdl: %s filter: %s\n",  
         ntohs(req->len), node_id, req->module, req->filter_str); 
     if (req->filter_str) 
@@ -546,7 +546,7 @@ FIXME
 		handle_db_eof(req, client_fd); 
                 break;
 	    } 
-	    logmsg(LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
+	    logmsg(V_LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
 		req->src->output, ofs); 
 	    continue;
 	}
