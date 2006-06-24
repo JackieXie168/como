@@ -503,12 +503,6 @@ do_config(struct _como * m, int argc, char *argv[])
     case TOK_MEMSIZE:
         /* this keyword can be used in two contexts */
 	m->mem_size = atoi(argv[1]);
-	if (m->mem_size <= 0 || m->mem_size > 512) {
-	    sprintf(errstr, 
-		    "invalid memory size %d, range is 1..512\n", 
-		    m->mem_size);
-	    return errstr; 
-	} 
         break;
 
     case TOK_MODULE:
@@ -1078,13 +1072,7 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
             break;
 
         case 'm':   /* capture/export memory usage */
-	    {
-		int size = atoi(optarg);
-		if (size <= 0 || size > 512)
-		    warnx("ignoring invalid memory size %d, range is 1..512", size);
-		else 
-		    m->mem_size = size;
-	    }
+	    m->mem_size = atoi(optarg);
 	    break;
 
         case 'v':   /* verbose */
@@ -1312,12 +1300,13 @@ configure(struct _como * m, int argc, char ** argv)
     /* 
      * open the dbdir for all nodes (virtual ones included) 
      */
-    if (m->dbdir == NULL)
-	panicx("missing db-path");
-    d = opendir(m->dbdir);
-    if (d == NULL) 
-	createdir(m->dbdir); 
-    else 
-	closedir(d);
+    if (m->running == NORMAL) {
+	if (m->dbdir == NULL)
+	    panicx("missing db-path");
+	d = opendir(m->dbdir);
+	if (d == NULL) 
+	    createdir(m->dbdir); 
+	else 
+	    closedir(d);
+    } 
 }
-
