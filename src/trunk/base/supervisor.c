@@ -90,11 +90,14 @@ su_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
      * initialize all modules and send the start signal to 
      * the other processes 
      */
-    for (i = 0; i < map.module_max; i++) { 
+    for (i = 0; i <= map.module_last; i++) { 
         char * pack;
         int sz;
 
-	if (map.modules[i].status != MDL_ACTIVE ||
+	if (map.modules[i].status != MDL_ACTIVE) 
+	    continue; 
+
+	if (getprocclass(sender) != QUERY && 
 	    map.modules[i].running == RUNNING_ON_DEMAND)
 	    continue; 
 
