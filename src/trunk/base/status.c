@@ -159,7 +159,8 @@ send_status(int client_fd, int node_id)
 
     /* 
      * connect to the storage process, open the module output file 
-     * and then start reading the file and send the data back 
+     * and read the very first timestamp. we will send this information 
+     * to let the user know how much past data is available to each module
      */
     storage_fd = ipc_connect(STORAGE); 
 
