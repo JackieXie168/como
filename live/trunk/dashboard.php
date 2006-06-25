@@ -106,6 +106,7 @@
      */ 
     $module = $node->getConfig("secondary");
     $sideboxes = count($module); 
+    $window_onload = "";
 
     $args['topntopdest'] = $topntopdest;
     $args['topntopports'] = $topntopports;
@@ -123,16 +124,17 @@
 		     "etime={$iv['etime']}&comonode=$comonode";
 
 	$name[$i] = $node->modinfo[$module[$i]]['name'];
+
+	// prepare the javascript onload function 
+	$window_onload = $window_onload . 
+		"initializeMenu('{$module[$i]}');\n" . 
+                "initializeConfigMenu('$module[$i]');\n"; 
     } 
 
-    /* 
-     * prepare header and footer 
-     */ 
+    // prepare header and footer 
     $header = do_header($comonode, $G['ALLOWCUSTOMIZE']); 
     $footer = do_footer(); 
 
-    /* 
-     * include the HTML template 
-     */ 
+    // include the HTML template 
     include "html/dashboard.html"; 
 ?>

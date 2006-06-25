@@ -1,4 +1,4 @@
-<!--  $Id:$  -->
+<!--  $Id$  -->
 
 <html>
   <head>
@@ -11,6 +11,11 @@
   </head>
 
   <script language="JavaScript" src="js/dashboard.js"></script> 
+  <script type="text/javascript">
+    window.onload = function() {
+	<?= $window_onload ?>
+    }
+  </script>
 
   <body>
 
@@ -80,14 +85,14 @@
 		</a>
                 </td>
                 <td>
-		<a href=# id="<?= $module[$i] ?>Trigedit" class=sidebox_edit>
+		<a href=# id="<?= $module[$i] ?>TrigEdit" class=sidebox_edit>
 		  [edit]
 		</a>
                 </td></tr>
                 </table>
                  
 
-	      <div id=<?= $module[$i] ?>Menuedit>
+	      <div id=<?= $module[$i] ?>MenuEdit>
 		Show 
 		<input type=text size=1 name="topn<?= $module[$i] ?>">
 		items 
