@@ -6,9 +6,6 @@
     require_once "include/getinputvars.php.inc";
 
     /*  get the node hostname and port number */
-    /*  This is not in the include file because it needs to be called
-     *  before the getinputvars.php.inc file is called (Chicken/egg)
-     */
     if (!isset($_GET['comonode'])) { 
         print "This file requires the comonode=host:port arg passed to it<br>";
         print "Thanks for playing!<br><br><br><br><br><br><br>";
