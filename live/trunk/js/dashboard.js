@@ -1,18 +1,11 @@
-<!--  $Id:$  -->
-
-window.onload = function() {
-    initializeMenu("alertMenu", "alertTrig", "alertImage", "alert");
-    initializeConfigMenu("alertMenuedit", "alertTrigedit", "alertedit");
-    initializeMenu("topdestMenu", "topdestTrig", "topdestImage", "topdest");
-    initializeConfigMenu("topdestMenuedit", "topdestTrigedit", "topdestedit");
-    initializeMenu("topportsMenu", "topportsTrig", "topportsImage", "topports");
-    initializeConfigMenu("topportsMenuedit", "topportsTrigedit","topportsedit");
-}
+<!--  $Id$  -->
 
 if (!document.getElementById)
     document.getElementById = function() { return null; }
 
-function initializeConfigMenu(menuId, triggerId, module) {
+function initializeConfigMenu(module) {
+    var menuId = module + "MenuEdit";
+    var triggerId = module + "TrigEdit";
     var menu = document.getElementById(menuId);
     var trigger = document.getElementById(triggerId);
     menu.style.display = "none"; 
@@ -39,7 +32,10 @@ function readCookie(name) {
     return null;
 }
 
-function initializeMenu(menuId, triggerId, imageId, module) {
+function initializeMenu(module) {
+    var menuId = module + "Menu";
+    var triggerId = module + "Trig";
+    var imageId = module + "Image"; 
     var menu = document.getElementById(menuId);
     var trigger = document.getElementById(triggerId);
     var image = document.getElementById(imageId); 
