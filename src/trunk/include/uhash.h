@@ -39,8 +39,12 @@
 #define UHASH_H_
 #include <inttypes.h>
 
+#define UHASH_NEW		0x00		/* restart from zero */
+#define UHASH_APPEND		0x01 		/* XOR with previous hash */
+
 #define H3_BASE   256 /* base is a byte */
 #define H3_KEYLEN  16 /* max length of keys in bytes */
+
 struct _uhash {
     uint32_t m[H3_BASE * H3_KEYLEN];
     uint32_t value;
@@ -49,8 +53,7 @@ struct _uhash {
 typedef struct _uhash uhash_t;
 
 void     uhash_initialize(uhash_t *h);
-void     uhash_restart(uhash_t *h);
-uint32_t uhash(uhash_t *h, uint8_t *key, size_t length);
+uint32_t uhash(uhash_t *h, uint8_t *key, size_t length, int type);
 
 #endif
 
