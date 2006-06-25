@@ -433,7 +433,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	float pkts = 0; 
 
 	/* print the timestamp */
-	*len = sprintf(s, "%u ", ts) ; 
+	*len = sprintf(s, "%u ", (uint) ts) ; 
 
 	for (i = 0; i < cf->classes; i++) {
 	    bytessum += values[i].bytes; 
@@ -458,7 +458,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	uint32_t pkts = 0; 
 
 	/* print the timestamp */
-	*len = sprintf(s, "%u ", ts) ; 
+	*len = sprintf(s, "%u ", (uint) ts) ; 
 
 	/* now print the values */
 	for (i = 0; i < cf->classes; i++) { 
