@@ -1,4 +1,4 @@
-<!--  $Id: dashboard.php 616 2006-06-12 08:31:23Z iannak1 $  -->
+/* $Id: dashboard.php 616 2006-06-12 08:31:23Z iannak1 $ */
 
 #sidebox_bar table {
   background-color : #475677;
@@ -14,14 +14,14 @@
   margin: 0px;
 } 
 
-.sidebox_bar :link{
+.sidebox_bar :link {
   color : #FFF;
 }
 
-.sidebox_bar :visited{
+.sidebox_bar :visited {
   color : #FFF;
 }
-.sidebox_bar :hover{
+.sidebox_bar :hover {
   color : #FFF;
   text-decoration : none;
 }
