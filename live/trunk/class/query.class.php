@@ -142,16 +142,20 @@ class Query {
                 print "convert ({$this -> CONVERT})<br>";
                 exit;
             }
-	    system("sed \"s/\`//g\" $fullname.gp > $fullname.clngp", $return);
+
+	    /* remove all shell commands from gnuplot script we receive */ 
+	    system("sed -e \"s/\`//g\" -e \"s/\!//g\" $fullname.gp > $fullname.clngp", $return);
+
+	    /* run the gnuplot command */ 
 	    system("$this->GNUPLOT < $fullname.clngp > $fullname.eps", $return);
-            /*  If eps file has filesize of 0, do not create jpg  */
-            
+
+            /* if .eps file has filesize of 0, do not create jpg */
             if (filesize("$fullname.eps"))
 		system("$this->CONVERT $fullname.eps $fullname.jpg", $return);
 
+	    /* delete working files */ 
 	    system("rm -f $fullname.gp", $return);
 	    system("rm -f $fullname.clngp", $return);
-
 	}
         $this->fullname = $fullname;
 	return "$this->results_dir/$this->filename";
