@@ -559,9 +559,13 @@ process_batch(pkt_t * pkts, int count)
      * where to free it and what module it refers to. 
      */
     first_exp_table = TQ_HEAD(&exp_tables);
-    if (ipc_send(sibling(EXPORT), IPC_FLUSH, &first_exp_table,
-		 sizeof(expiredmap_t *)) != IPC_OK) {
-	panic("IPC_FLUSH failed!");
+    if (first_exp_table != NULL) { 
+        int ret; 
+
+	ret = ipc_send(sibling(EXPORT), IPC_FLUSH, 
+		       &first_exp_table, sizeof(expiredmap_t *)); 
+	if (ret != IPC_OK) 
+	    panic("IPC_FLUSH failed!");
     }
     
     /*  
