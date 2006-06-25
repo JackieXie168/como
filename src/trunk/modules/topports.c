@@ -58,9 +58,11 @@ FLOWDESC {
 
 #define CONFIGDESC   struct _topports_config
 CONFIGDESC {
-    uint16_t topn;    		/* number of top ports */
-    uint32_t meas_ivl;		/* interval (secs) */
-    uint32_t last_export;       /* last export time */
+    uint16_t topn;    			/* number of top ports */
+    uint32_t meas_ivl;			/* interval (secs) */
+    uint32_t last_export;       	/* last export time */
+    char * tcp_service[65536]; 		/* TCP application names */ 
+    char * udp_service[65536];		/* UDP application names */
 };
 
 
@@ -72,10 +74,9 @@ init(void * self, char *args[])
     pkt_t *pkt;
     int i;
     
-    config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config = mem_mdl_calloc(self, 1, sizeof(CONFIGDESC)); 
     config->meas_ivl = 1;
     config->topn = 20;
-    config->last_export = 0;
 
     /* 
      * process input arguments 
@@ -90,6 +91,20 @@ init(void * self, char *args[])
             config->topn = atoi(wh);
         } else if (!strncmp(args[i], "align-to", 8)) {
             config->last_export = atoi(wh);
+        } else if (strstr(args[i], "udp")) {
+            int port = atoi(args[i]);
+	    char *x, *z; 
+	    z = index(wh, ',') + 1;
+	    x = strpbrk(z, "\t\n\0");
+	    config->udp_service[port] = mem_mdl_calloc(self, 1, x - z);
+	    strncpy(config->udp_service[port], z, x - z);
+        } else if (strstr(args[i], "tcp")) {
+            int port = atoi(args[i]);
+	    char *x, *z; 
+	    z = index(wh, ',') + 1;
+	    x = strpbrk(z, "\t\n\0");
+	    config->udp_service[port] = mem_mdl_calloc(self, 1, x - z);
+	    strncpy(config->udp_service[port], z, x - z);
         }
     }
     
@@ -231,8 +246,7 @@ store(void * self, void *rp, char *buf)
     int i, j;
     
     /* allocate the array with the results */
-    tp = mem_mdl_malloc(self, sizeof(struct topports) * (config->topn + 1)); 
-    bzero(tp, sizeof(struct topports) * (config->topn + 1)); 
+    tp = mem_mdl_calloc(self, config->topn + 1, sizeof(struct topports)); 
 
     /* 
      * go thru the array of bytes to find the topn port 
@@ -286,6 +300,7 @@ store(void * self, void *rp, char *buf)
 	PUTH32(buf, tp[i].pkts); 
     } 
 
+    mem_mdl_free(self, tp);
     return (i * sizeof(struct topports)); 
 }
 
@@ -306,46 +321,53 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
 
 
 #define PRETTYHDR	\
-    "Date                     Port  Bytes       Packets   \n"
+    "Date                      Port     Name       Bytes       Packets   \n"
 
-#define PRETTYFMT 	"%.24s %5u/%s %10llu %8u\n"
+#define PRETTYFMT 	"%.24s %5u/%s %s %10llu %8u\n"
 
-#define PLAINFMT	"%u %u %s %llu %u\n"
+#define PLAINFMT	"%u %u %s %s %llu %u\n"
 
 #define HTMLHDR                                                 \
     "<html>\n"                                                  \
     "<head>\n"                                                  \
     "  <style type=\"text/css\">\n"                             \
-    "   body {font-size: 9pt; margin: 0; padding: 0 \n"		\
+    "   body {font-size: 9pt; margin: 0; padding: 0; \n"	\
     "     font-family: \"lucida sans unicode\", verdana, arial;}\n" \
-    "   table,tr,td {background-color: #ddd;\n" 	           \
-    "     font-size: 9pt; \n"		            \
+    "   table,tr,td {background-color: #ddd;\n" 	        \
+    "     font-size: 9pt; \n"		            		\
     "     font-family: \"lucida sans unicode\", verdana, arial;}\n" \
     "   a, a:visited { color: #475677; text-decoration: none;}\n" \
     "   .netview {\n"                                           \
     "     top: 0px; width: 100%%; vertical-align:top;\n"        \
-    "     margin: 2; padding-left: 5px;\n" \
-    "     padding-right: 5px; text-align:left;}\n" \
+    "     margin: 2; padding-left: 5px;\n" 			\
+    "     padding-right: 5px; text-align:left;}\n" 		\
     "   .nvtitle {\n"                                           \
-    "     font-weight: bold; padding-bottom: 3px;\n" \
+    "     font-weight: bold; padding-bottom: 3px;\n" 		\
     "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
-    "     font-size: 9pt; \n"		            \
+    "     font-size: 9pt; \n"		            		\
     "     color: #475677;}\n"                                   \
     "  </style>\n"                                              \
     "</head>\n"                                                 \
     "<body>\n"                                                  \
-    "<div class=nvtitle style=\"border-top: 1px solid;\">"	\
-    "Top-%d Port Numbers</div>\n" 		\
-    "<table class=netview>\n" 			\
+
+#define HTMLTITLE						\
+    "<div class=nvtitle>Top-%d Port Numbers</div>\n" 		\
+    "<table class=netview>\n" 					\
     "  <tr class=nvtitle>\n"					\
-    "      <td>Port</td>\n"                 	\
-    "      <td width=60>Mbps</td></tr>\n"
+    "    <td>Port</td>\n"                 			\
+    "    <td width=60>Mbps</td></tr>\n"
+
+#define SIDEBOXHDR						\
+    "<table class=netview>\n" 					\
+    "  <tr class=nvtitle>\n"					\
+    "    <td>Port</td>\n"                 			\
+    "    <td width=60>Mbps</td></tr>\n"
 
 #define HTMLFOOTER						\
     "</table>\n"						\
     "</body></html>\n"						
 
-#define HTMLFMT		"<tr><td>%5u/%s</td><td>%.2f</td></tr>\n"
+#define HTMLFMT		"<tr><td>%5u/%s</td><td>%s</td><td>%.2f</td></tr>\n"
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -353,6 +375,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static char s[2048];
     static char * fmt; 
     CONFIGDESC * config = CONFIG(self);
+    char * name; 
     uint8_t proto, res; 
     uint16_t port; 
     uint64_t bytes; 
@@ -371,11 +394,15 @@ print(void * self, char *buf, size_t *len, char * const args[])
             if (!strcmp(args[n], "format=plain")) {
                 *len = 0; 
                 fmt = PLAINFMT;
-            } 
-            if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR, config->topn); 
+            } else if (!strcmp(args[n], "format=html")) {
+                *len = sprintf(s, HTMLHDR); 
+                *len += sprintf(s + *len, HTMLTITLE, config->topn); 
                 fmt = HTMLFMT;
-            } 
+            } else if (!strcmp(args[n], "format=sidebox")) {
+                *len = sprintf(s, HTMLHDR); 
+                *len += sprintf(s + *len, SIDEBOXHDR); 
+                fmt = HTMLFMT;
+	    }
         } 
 
 	return s; 
@@ -395,16 +422,21 @@ print(void * self, char *buf, size_t *len, char * const args[])
     GETH64(buf, &bytes); 
     GETH32(buf, &pkts); 
 
+    name = (proto == IPPROTO_TCP)? 
+	    config->tcp_service[port] : config->udp_service[port]; 
+    if (name == NULL) 
+	name = "Unknown"; 
+
     /* read each field of the record */
     if (fmt == PRETTYFMT) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), 
-		   port, getprotoname(proto), bytes, pkts); 
+		   port, getprotoname(proto), name, bytes, pkts); 
     } else if (fmt == HTMLFMT) { 
-	float mbps = (float) bytes * 8 / (float) config->meas_ivl;
-	mbps /= 1000000;
-	*len = sprintf(s, fmt, port, getprotoname(proto), mbps); 
+	float mbps = ((float) bytes * 8 / (float) config->meas_ivl) / 1000000;
+	*len = sprintf(s, fmt, port, getprotoname(proto), name, mbps); 
     } else 
-	*len = sprintf(s, fmt, ts, port, getprotoname(proto), bytes, pkts); 
+	*len = sprintf(s, fmt, ts, port, getprotoname(proto), 
+		       name, bytes, pkts); 
 	
     return s;
 }

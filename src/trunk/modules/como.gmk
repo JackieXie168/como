@@ -9,6 +9,7 @@ MODULES= \
 	counter.so \
 	utilization.so \
 	topdest.so \
+	topaddr.so \
 	connx.so \
 	application.so \
 	topports.so \
@@ -22,7 +23,11 @@ MODULES= \
 	nfexlist.so \
 	macssi.so \
 	ipssi.so \
-        flowcount.so
+	apps.so	\
+	flowcount.so \
+	traffic.so \
+  	unknown-ports.so \
+        ewma.so
 
 ifneq ($(shell uname),CYGWIN_NT-5.1)
         MODULES += tuple.so \
