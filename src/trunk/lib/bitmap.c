@@ -38,43 +38,87 @@
 #include "memory.h"
 #include "comopriv.h"
 
+
+/*
+ * We will be selecting the size of the bitmap depending on the max
+ * amount of unique keys the user expects. The following table provides,
+ * given the maximum expected number of unique keys, the bitmap size
+ * required to count with at most 1% of error.
+ *
+ * Bitmap sizes must be (in our implementation) a power of 2.
+ */
+static struct { 
+    size_t size;
+    size_t max_unique_keys;
+} bitmap_sizes[] = {
+    { 1<<13,      10869u },
+    { 1<<14,      46382u },
+    { 1<<15,     134190u },
+    { 1<<16,     342020u },
+    { 1<<17,     819660u },
+    { 1<<18,    1894900u },
+    { 1<<19,    4278600u },
+    { 1<<20,    9502100u },
+    { 1<<21,   20844000u },
+    { 1<<22,   45289000u },
+    { 1<<23,   97654000u },
+    { 1<<24,  209250000u },
+    { 1<<25,  446030000u },
+    { 1<<26,  946540000u },
+    { 1<<27, 2001000000u },
+    { 1<<28, 4216000000u },
+    { 0, 0 }
+};
+
+
 /*
  * -- new_bitmap, mdl_new_bitmap
  *
  * allocate a bitmap of nbits
  */
 static __inline__ void
-_initialize_bitmap(bitmap_t *bm, size_t nbits)
+_initialize_bitmap(bitmap_t *bm, size_t max_keys)
 {
-    bm->nbits = nbits;
-    bm->bytes = nbits / 8;
+    int j; 
+
+    for (j = 0; bitmap_sizes[j].size != 0; j++)
+	if (bitmap_sizes[j].max_unique_keys > max_keys)
+	    break;
+
+    if (bitmap_sizes[j].size == 0)
+	j--;  /* XXX issue a warning to the user? 
+               * cannot handle that many keys
+	       */
+
+    bm->nbits = bitmap_sizes[j].size;
+    bm->bytes = bm->nbits / 8;
     bm->unused_bits = 0;
-    if (nbits % 8) {
+    if (bm->nbits % 8) {
         bm->bytes++;
-        bm->unused_bits = 8 - (nbits % 8);
+        bm->unused_bits = 8 - (bm->nbits % 8);
     }
-    bm->zeros = nbits;
+    bm->zeros = bm->nbits;
 }
 
 bitmap_t *
-mdl_new_bitmap(void *mdl_self, size_t nbits)
+mdl_new_bitmap(void *mdl_self, size_t max_elements)
 {
     bitmap_t *bm;
 
     bm = mem_mdl_malloc(mdl_self, sizeof(bitmap_t));
-    _initialize_bitmap(bm, nbits);
+    _initialize_bitmap(bm, max_elements);
     bm->map = mem_mdl_malloc(mdl_self, bm->bytes);
     bzero(bm->map, bm->bytes);
     return bm;
 }
 
 bitmap_t *
-new_bitmap(size_t nbits)
+new_bitmap(size_t max_elements)
 {
     bitmap_t *bm;
 
     bm = safe_malloc(sizeof(bitmap_t));
-    _initialize_bitmap(bm, nbits);
+    _initialize_bitmap(bm, max_elements);
     bm->map = safe_malloc(bm->bytes); /* no need to bzero */
     return bm;
 }
@@ -108,8 +152,9 @@ mdl_destroy_bitmap(void *mdl_self, bitmap_t *bm)
  * Set a bit in the bitmap, and maintain the counter of zeros.
  */
 void
-set_bit(bitmap_t *bm, int bit)
+set_bit(bitmap_t *bm, uint32_t key)
 {
+    int bit = key & (bm->nbits - 1);
     int where = which_byte(bit);
     int what = which_bit(bit);
 

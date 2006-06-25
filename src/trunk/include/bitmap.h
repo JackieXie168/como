@@ -56,7 +56,7 @@ void mdl_destroy_bitmap(void *mdl_self, bitmap_t *bm);
 
 void reset_bitmap(bitmap_t *bm);
 
-void set_bit(bitmap_t *bm, int bit);
+void set_bit(bitmap_t *bm, uint32_t key);
 char get_bit(bitmap_t *bm, int bit);
 
 #define count_ones(bm) ((bm)->nbits - (bm)->zeros)

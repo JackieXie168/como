@@ -53,17 +53,6 @@ uhash_initialize(uhash_t *h)
     h->value = 0;
 }
 
-/*
- * -- uhash_restart
- *
- * Restart the hash function. To be run before hashing any data.
- */
-void
-uhash_restart(uhash_t *h)
-{
-    h->position = -1;
-    h->value = 0;
-}
 
 /*
  * -- uhash
@@ -75,9 +64,14 @@ uhash_restart(uhash_t *h)
  * value. Do never hash more than H3_KEYLEN bytes.
  */
 uint32_t
-uhash(uhash_t *h, uint8_t *key, size_t length)
+uhash(uhash_t *h, uint8_t *key, size_t length, int type) 
 {
     size_t i;
+
+    if (type == UHASH_NEW) {
+	h->position = -1;
+	h->value = 0;
+    } 
 
     for (i = 0; i < length; i++) {
         h->position += key[i] + 1;
