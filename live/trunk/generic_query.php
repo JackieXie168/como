@@ -15,20 +15,6 @@
 
     $comonode = $_GET['comonode'];
 
-    /*  These vars will catch the updates from the edit menus  */
-    if (isset($_POST['topnalert']))
-        $topnalert = $_POST['topnalert'];
-    else
-        $topnalert = "";
-    if (isset($_POST['topntopdest']))
-        $topntopdest= $_POST['topntopdest'];
-    else
-        $topntopdest= "";
-    if (isset($_POST['topntopports']))
-        $topntopports = $_POST['topntopports'];
-    else
-        $topntopports = "";
-
     /*  Get any extras in the url;  Currently to grab blinc stuff  */
     if (isset($_GET['extra']))
         $extra = $_GET['extra'];
@@ -47,6 +33,13 @@
     $format = $input_vars['format'];
 
     $http_query_string = $_SERVER['QUERY_STRING']; 
+
+    $varname = "topn" . $module; 
+    if (isset($_POST[$varname])) {
+        $items = $_POST[$varname]; 
+	setcookie($varname, $items);
+	$http_query_string = ereg_replace("topn=[0-9]*", "topn=$items", $http_query_string);
+    } 
 
     /*  This we catch if ip=addr is passed back from the
      *  module.  If it is, rewrite the filter to include
@@ -78,35 +71,7 @@
         $daip="none";
     }
 
-    if (($extra == "blincview") && ($G['USEBLINCVIEW'])) {
-	$filename = $comonode . 
-		     "_" . $extra . "_" . $stime . "_" .
-		     $etime . "_" . $daip . ".blinc.dat";
-    } else {
-	$filename = md5($_SERVER['QUERY_STRING']) . "." . $format; 
-/*
-	$filename=$comonode . "_" . $module . "_" . $stime . "_" .
-		  $etime . "_" . $daip . "_" . $format;
-*/
-    }
-
-    /*  Catch if topdest, topports, or alerts have new value  */
-    if (($topntopdest != "") || ($topntopports != "")) {
-	if ($topntopdest != "") {
-	    $newval = $topntopdest;
-            setcookie("topntopdest", $newval);
-        }
-	if ($topntopports!= "") {
-	    $newval = $topntopports;
-            setcookie("topntopdest", $newval);
-        }
-
-        /*  Delete the cached file if necessary  */
-        if ($G['USECACHE']) 
-            $node->removeFile($filename);
-
-	$http_query_string = ereg_replace("topn=[0-9]*", "topn=$newval", $http_query_string);
-    }
+    $filename = md5($http_query_string) . "." . $format; 
 
     /*  File caching check  */
     if ((file_exists($G['RESULTS']. "/" . $filename)) && ($G['USECACHE'])) {
