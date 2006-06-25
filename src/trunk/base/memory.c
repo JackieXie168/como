@@ -579,9 +579,12 @@ mem_mdl_smalloc(size_t sz, const char * file, int line, module_t * mdl)
 	m = safe_calloc(1, sz + sizeof(mem_block_t));
 	m->_magic = MY_MAGIC_IN_USE;
 	m->size = sz;
-	/* TODO: we don't need a memmap for this, just a list of blocks will
-	 * suffice */
+	/* XXX we don't use the inprocess_map yet. the plan is to use 
+ 	 *     it only for bookkeeping anyway. 
+	 */
+#if 0 
 	mem_insert(mdl->inprocess_map, m);
+#endif
 	x = m->data;
     }
     
@@ -601,7 +604,7 @@ mem_mdl_scalloc(size_t nmemb, size_t size, const char * file, int line,
 }
 
 /*
- * -- mdl_mem_free
+ * -- mem_mdl_sfree
  *
  * Free memory from a module. If the pointer is within the shared memory 
  * region, use mfree_mem otherwise use the free() function. 
@@ -612,10 +615,15 @@ mem_mdl_sfree(void *p, const char * file, int line, module_t * mdl)
     /* check input parameters */
     assert(mdl != NULL);
 
-    if ((char *) p < shared_mem->low || (char *) p >= shared_mem->high)
-	free(p);
-    else 
+    if ((char *) p < shared_mem->low || (char *) p >= shared_mem->high) {
+	/* this block is in system memory. move back by one mem_block_t 
+         * and free that pointer. 
+         */ 
+	char * m = ((char *) p) - sizeof(mem_block_t); 
+	free(m);
+    } else {
 	_mfree_mem(shared_mem->map, p, 0, file, line);
+    } 
 }
 
 allocator_t *
