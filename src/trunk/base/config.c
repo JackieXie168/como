@@ -79,7 +79,8 @@ enum tokens {
     TOK_TYPE,
     TOK_COMMENT,
     TOK_MAXFILESIZE,
-    TOK_VIRTUAL 
+    TOK_VIRTUAL,
+    TOK_ALIAS
 };
 
 
@@ -97,6 +98,7 @@ enum tokens {
 #define CTX_GLOBAL      0x01
 #define CTX_MODULE      0x02
 #define CTX_VIRTUAL	0x04		/* virtual node section */
+#define CTX_ALIAS	0x08		/* aliases definitions */
 
 /*
  * this structure is a dictionary of symbols that can be
@@ -126,7 +128,7 @@ keyword_t keywords[] = {
     { "db-path",     TOK_DBDIR,	      2, CTX_GLOBAL },
     { "librarydir",  TOK_LIBRARYDIR,  2, CTX_GLOBAL },
     { "logflags",    TOK_LOGFLAGS,    2, CTX_GLOBAL },
-    { "module",      TOK_MODULE,      2, CTX_GLOBAL },
+    { "module",      TOK_MODULE,      2, CTX_GLOBAL|CTX_ALIAS },
     { "module-limit",TOK_MODULE_MAX,  2, CTX_GLOBAL },
     { "query-port",  TOK_QUERYPORT,   2, CTX_GLOBAL|CTX_VIRTUAL },
     { "sniffer",     TOK_SNIFFER,     3, CTX_GLOBAL },
@@ -135,11 +137,11 @@ keyword_t keywords[] = {
     { "hashsize",    TOK_HASHSIZE,    2, CTX_MODULE },
     { "source",      TOK_SOURCE,      2, CTX_MODULE },
     { "filter",      TOK_FILTER,      2, CTX_GLOBAL|CTX_VIRTUAL|CTX_MODULE },
-    { "description", TOK_DESCRIPTION, 2, CTX_MODULE },
-    { "end",         TOK_END,         1, CTX_MODULE|CTX_GLOBAL|CTX_VIRTUAL },
+    { "description", TOK_DESCRIPTION, 2, CTX_MODULE|CTX_ALIAS },
+    { "end",         TOK_END,         1, CTX_ANY }, 
     { "streamsize",  TOK_STREAMSIZE,  2, CTX_MODULE },
-    { "args",        TOK_ARGS,        2, CTX_MODULE|CTX_VIRTUAL },
-    { "args-file",   TOK_ARGSFILE,    2, CTX_MODULE|CTX_VIRTUAL },
+    { "args",        TOK_ARGS,        2, CTX_MODULE|CTX_VIRTUAL|CTX_ALIAS },
+    { "args-file",   TOK_ARGSFILE,    2, CTX_MODULE|CTX_VIRTUAL|CTX_ALIAS },
     { "priority",    TOK_PRIORITY,    1, CTX_MODULE },
     { "running",     TOK_RUNNING,     2, CTX_MODULE },
     { "name",        TOK_NAME,        2, CTX_GLOBAL },
@@ -148,6 +150,7 @@ keyword_t keywords[] = {
     { "comment",     TOK_COMMENT,     2, CTX_GLOBAL|CTX_VIRTUAL },
     { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL|CTX_VIRTUAL },
     { "virtual-node",TOK_VIRTUAL,     2, CTX_GLOBAL },
+    { "alias",       TOK_ALIAS,       2, CTX_GLOBAL },
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -373,6 +376,79 @@ parse_size(const char *arg)
     return res;
 }
 
+static char ** 
+copy_multiple_args(char ** x, char ** argv, int argc) 
+{
+    int j,i; 
+
+    if (x == NULL) {
+	x = safe_calloc(argc, sizeof(char *));
+	j = 0;  
+    } else {
+	/*
+	 * we need to add the current list of optional arguments
+	 * to the list we already have. first, count how many we
+	 * have got so far and then reallocate memory accordingly
+	 */
+	for (j = 0; x[j]; j++)
+	    ;
+	x = safe_realloc(x, (argc + j) * sizeof(char*));
+    }
+  
+    for (i = 1; i < argc; i++)
+	x[i+j-1] = safe_strdup(argv[i]);
+
+    /*
+     * Last position is set to null to be able to know
+     * when args finish from the modules
+     */
+    x[i+j-1] = NULL;
+
+    return x; 
+}
+
+static char ** 
+copy_multiple_args_from_file(char ** x, char * file, int * count) 
+{
+    FILE *auxfp;
+    char line[512];
+    int j, n; 
+
+    /* open the file */
+    auxfp = fopen(file, "r");
+    if (auxfp == NULL) {
+	logmsg(LOGWARN, "ignoring %s: %s\n", file, strerror(errno));
+	if (count != NULL) 
+	    *count = 0; 
+	return x; 
+    }
+
+    /* count the number of arguments we already have */
+    for (j = 0; x && x[j]; j++)
+	;
+
+    /* read each line in the file and parse it again */
+    /* XXX we reallocate mdl->args for each line in the file.
+     *     this should be done better in a less expensive way.
+     */ 
+    n = 0; 
+    while (fgets(line, sizeof(line), auxfp)) {
+	j++;
+	n++;
+	x = safe_realloc(x, j * sizeof(char *));
+	x[j - 1] = safe_strdup(line);
+    }
+
+    /* add the last NULL pointer */
+    x = safe_realloc(x, (j + 1) * sizeof(char *));
+    x[j] = NULL;
+
+    fclose(auxfp);
+    if (count) 	
+	*count = n;
+    return x; 
+}
+
 
 /*
  * -- do_config
@@ -388,6 +464,7 @@ do_config(struct _como * m, int argc, char *argv[])
     static char errstr[1024]; 
     static int scope = CTX_GLOBAL;      	/* scope of current keyword */
     static module_t * mdl = NULL;       	/* module currently open */
+    static alias_t * alias = NULL;       	/* alias currently open */
     keyword_t *t;
 
     /*
@@ -427,7 +504,10 @@ do_config(struct _como * m, int argc, char *argv[])
 	break;
 
     case TOK_DESCRIPTION:
-	safe_dup(&mdl->description, argv[1]);
+	if (scope == CTX_MODULE) 
+	    safe_dup(&mdl->description, argv[1]);
+	else 
+	    safe_dup(&alias->description, argv[1]);
 	break;
 
     case TOK_END:
@@ -452,9 +532,6 @@ do_config(struct _como * m, int argc, char *argv[])
 		   mdl->name, mdl->node, mdl->priority); 
 	    logmsg(LOGUI, " filter %s; out %s (%uMB)\n", 
 		   mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
-	    if (mdl->description != NULL) 
-		logmsg(LOGUI, "    -- %s\n", mdl->description); 
-	    scope = CTX_GLOBAL;
         } else if (scope == CTX_VIRTUAL) { 
 	    /* 
 	     * we are done with this virtual node. let's recover
@@ -473,8 +550,8 @@ do_config(struct _como * m, int argc, char *argv[])
 		p->next = m->node; 
 		m->node = p;
 	    } 
-	    scope = CTX_GLOBAL; 
 	}
+	scope = CTX_GLOBAL; 
 	break;
 	    
     case TOK_FILTER:
@@ -506,8 +583,12 @@ do_config(struct _como * m, int argc, char *argv[])
         break;
 
     case TOK_MODULE:
-	mdl = new_module(m, argv[1], (m->running == INLINE? -1 : 0), -1);
-        scope = CTX_MODULE; 		/* change scope */
+	if (scope == CTX_GLOBAL) { 
+	    mdl = new_module(m, argv[1], (m->running == INLINE? -1 : 0), -1);
+	    scope = CTX_MODULE; 		/* change scope */
+	} else { 
+	    safe_dup(&alias->module, argv[1]);
+	} 
         break;
         
     case TOK_MODULE_MAX:
@@ -537,130 +618,30 @@ do_config(struct _como * m, int argc, char *argv[])
 	} 
 	break;
 
-    case TOK_ARGS:
-	if (scope == CTX_MODULE) {
-	    int i,j;
-
-	    if (mdl->args == NULL) {
-		mdl->args = safe_calloc(argc, sizeof(char *));
-		j = 0; 
-	    } else { 
-		/* 
-		 * we need to add the current list of optional arguments 
-		 * to the list we already have. first, count how many we 
-		 * have got so far and then reallocate memory accordingly 
-		 */
-		for (j = 0; mdl->args[j]; j++) 
-		    ; 
-		mdl->args = safe_realloc(mdl->args, (argc + j) * sizeof(char*));
-	    } 
-
-	    for (i = 1; i < argc; i++) 
-		mdl->args[i+j-1] = safe_strdup(argv[i]);
-
-	    /* 
-	     * Last position is set to null to be able to know
-	     * when args finish from the modules
-	     */
-	    mdl->args[i+j-1] = NULL;
-	} else if (scope == CTX_VIRTUAL) {
-	    int i,j;
-
-	    if (m->node->args == NULL) {
-		m->node->args = safe_calloc(argc, sizeof(char *));
-		j = 0; 
-	    } else { 
-		/* 
-		 * we need to add the current list of optional arguments 
-		 * to the list we already have. first, count how many we 
-		 * have got so far and then reallocate memory accordingly 
-		 */
-		for (j = 0; m->node->args[j]; j++) 
-		    ; 
-		m->node->args = safe_realloc(m->node->args, (argc + j) *
-					     sizeof(char*));
-	    } 
-
-	    for (i = 1; i < argc; i++) 
-		m->node->args[i+j-1] = safe_strdup(argv[i]);
-
-	    /* 
-	     * Last position is set to null to be able to know
-	     * when args finish from the modules
-	     */
-	    m->node->args[i+j-1] = NULL;
-	}
+    case TOK_ARGS: 
+	if (scope == CTX_MODULE) 
+	    mdl->args = copy_multiple_args(mdl->args, argv, argc); 
+	else if (scope == CTX_VIRTUAL) 
+	    m->node->args = copy_multiple_args(m->node->args, argv, argc); 
+        else if (scope == CTX_ALIAS) {
+	    alias->args = copy_multiple_args(alias->args, argv, argc); 
+	    alias->ac += argc; 
+	} 
 	break;
 
     case TOK_ARGSFILE: 
 	if (scope == CTX_MODULE) {
-	    FILE *auxfp;
-	    char line[512];
-	    int j;
-
-	    /* open the file */
-	    auxfp = fopen(argv[1], "r"); 
-	    if (auxfp == NULL) { 
-		sprintf(errstr, "opening file %s: %s\n", argv[1], 
-			strerror(errno)); 
-		return errstr; 
-	    } 
-
-	    /* count the number of arguments we already have */
-	    for (j = 0; mdl->args && mdl->args[j]; j++) 
-		; 
-
-	    /* read each line in the file and parse it again */ 
-	    /* XXX we reallocate mdl->args for each line in the file. 
-	     *     this should be done better in a less expensive way. 
-	     */
-	    while (fgets(line, sizeof(line), auxfp)) {
-		j++;
-		mdl->args = safe_realloc(mdl->args, j * sizeof(char *));
-		mdl->args[j - 1] = safe_strdup(line);
-	    }
-
-	    /* add the last NULL pointer */
-	    mdl->args = safe_realloc(mdl->args, (j + 1) * sizeof(char *));
-	    mdl->args[j] = NULL; 
-
-	    fclose(auxfp);
+	    mdl->args = copy_multiple_args_from_file(mdl->args, argv[1], NULL); 
 	} else if (scope == CTX_VIRTUAL) {
-	    FILE *auxfp;
-	    char line[512];
-	    int j;
-
-	    /* open the file */
-	    auxfp = fopen(argv[1], "r"); 
-	    if (auxfp == NULL) { 
-		sprintf(errstr, "opening file %s: %s\n", argv[1], 
-			strerror(errno)); 
-		return errstr; 
-	    } 
-
-	    /* count the number of arguments we already have */
-	    for (j = 0; m->node->args && m->node->args[j]; j++) 
-		; 
-
-	    /* read each line in the file and parse it again */ 
-	    /* XXX we reallocate mdl->args for each line in the file. 
-	     *     this should be done better in a less expensive way. 
-	     */
-	    while (fgets(line, sizeof(line), auxfp)) {
-		j++;
-		m->node->args = safe_realloc(m->node->args, j *
-					     sizeof(char *));
-		m->node->args[j - 1] = safe_strdup(line);
-	    }
-
-	    /* add the last NULL pointer */
-	    m->node->args = safe_realloc(m->node->args, (j + 1) *
-					 sizeof(char *));
-	    m->node->args[j] = NULL; 
-
-	    fclose(auxfp);
-	}
-	break;
+	    m->node->args = 
+		copy_multiple_args_from_file(m->node->args, argv[1], NULL); 
+        } else if (scope == CTX_ALIAS) {
+	    int count; 
+	    alias->args = 
+		copy_multiple_args_from_file(alias->args, argv[1], &count); 
+	    alias->ac += count; 
+	} 
+	break; 
     
     case TOK_PRIORITY: 
         mdl->priority = atoi(argv[1]);
@@ -690,7 +671,7 @@ do_config(struct _como * m, int argc, char *argv[])
     case TOK_VIRTUAL: 
 	do { 
 	    node_t * node; 
-	    node = safe_calloc(1, sizeof(struct _node)); 
+	    node = safe_calloc(1, sizeof(node_t)); 
 	    node->id = m->node_count; 
 	    safe_dup(&node->name, argv[1]);
 	    node->next = m->node;
@@ -698,6 +679,14 @@ do_config(struct _como * m, int argc, char *argv[])
 	    m->node_count++;
 	    scope = CTX_VIRTUAL; 
 	} while (0);
+	break;
+
+    case TOK_ALIAS: 
+	alias = safe_calloc(1, sizeof(alias_t)); 
+	safe_dup(&alias->name, argv[1]);
+	alias->next = m->aliases;
+	m->aliases = alias; 
+	scope = CTX_ALIAS; 
 	break;
 
     default:

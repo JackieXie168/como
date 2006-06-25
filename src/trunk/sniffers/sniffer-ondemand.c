@@ -166,7 +166,7 @@ sniffer_start(source_t * src)
 	goto error;
     
     /* find the module */
-    info->mdl = module_lookup_with_name_and_node(src->device, info->node);
+    info->mdl = module_lookup(src->device, info->node);
     if (info->mdl == NULL) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
 	       "module \"%s\" not found\n", src->device);

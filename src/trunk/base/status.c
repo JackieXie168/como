@@ -171,6 +171,7 @@ send_status(int client_fd, int node_id)
 	size_t rlen, sz;
 	timestamp_t ts = 0;
 	char * ptr;
+	alias_t * alias; 
 
 	mdl = &map.modules[idx]; 
 
@@ -197,6 +198,7 @@ send_status(int client_fd, int node_id)
 		    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
 		}
 	    }
+	    csclose(file_fd, 0);
 	}
 	    
 	len = sprintf(buf, "Module: %-15s | %s | %u | %s | %s\n",
@@ -208,31 +210,24 @@ send_status(int client_fd, int node_id)
 	if (ret < 0)
 	    err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
-	if (file_fd >= 0) {
-	    csclose(file_fd, 0);
-	}
+	/* 
+	 * before moving to the next module, check if this one has 
+         * any aliases. we should print them as well in the ?status query
+         */ 
+	for (alias = map.aliases; alias; alias = alias->next) { 
+	     if (strcmp(alias->module, mdl->name) != 0) 
+		continue; 
+
+	    len = sprintf(buf, "Module: %-15s | %s | %u | %s | %s\n",
+		      alias->name, mdl->filter_str, TS2SEC(ts),
+		      mdl->callbacks.formats, 
+		      (alias->description? alias->description : "--"));
+	    ret = como_writen(client_fd, buf, len);
+	    if (ret < 0)
+		err(EXIT_FAILURE, 
+		    "sending status to the client [%d]", client_fd);
+	 } 
     } 
-
-
-#if 0 
-    /* send usage information */
-    len = sprintf(buf, 
-            "Memory current: %.1fMB\n"
-            "Memory peak: %.1fMB\n"
-            "Memory size: %dMB\n"
-            "Modules total: %d\n"  
-            "Modules active: %d\n"  
-	    "Avg. Packets/sec (24 hours): %d\n"
-	    "Avg. Packets/sec (1 hour): %d\n"
-	    "Avg. Packets/sec (5 minutes): %d\n",
-            (float) map.stats->mem_usage_cur/(1024*1024),
-            (float) map.stats->mem_usage_peak/(1024*1024),
-            map.mem_size, map.stats->modules_active, map.module_used,
-	    map.stats->pps_24hrs, map.stats->pps_1hr, map.stats->pps_5min); 
-    ret = como_writen(client_fd, buf, len);
-    if (ret < 0)
-        panic("sending status to the client");
-#endif
 
     /* print version and copyright information */
     len = sprintf(buf, "\n-- CoMo v%s (built: %s %s)\n", COMO_VERSION, 

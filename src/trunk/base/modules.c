@@ -158,8 +158,14 @@ activate_module(module_t * mdl, char * libdir)
     if (cb->formats == NULL) 
 	asprintf(&cb->formats, "plain"); 
 
+    /* XXX comment out inprocess_map because not used yet. 
+     *     we will need it in the future for book keeping purposes only. 
+     */
+#if 0 
     mdl->inprocess_map = memmap_new(allocator_safe(), 32,
 				    POLICY_HOLD_IN_USE_BLOCKS);
+#endif
+
     allocator_init_module(mdl);
     
     /* store the callbacks */
@@ -631,7 +637,7 @@ match_module(module_t * a, module_t * b)
  * 
  */
 module_t *
-module_lookup_with_name_and_node(const char *name, int node)
+module_lookup(const char *name, int node)
 {
     int idx;
     module_t *mdl;

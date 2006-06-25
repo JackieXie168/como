@@ -43,6 +43,7 @@
  */
 typedef struct _como		como_t;		/* main como map */
 typedef struct _module          module_t;       /* module package */
+typedef struct _alias           alias_t;        /* aliases */
 typedef uint32_t		procname_t;	/* process names */
 typedef struct _callbacks       callbacks_t;    /* callbacks */
 typedef struct _flushmsg        flushmsg_t;     /* message capture/export */
@@ -396,6 +397,21 @@ struct _module {
 
     int seen;                   /* used in config.c to find out what modules
                                  * have been removed from cfg files */
+};
+
+
+/* 
+ * aliases are used to define new module names that correspond to 
+ * existing running modules with an additional set of arguments. 
+ * they can be seen exactly as unix shell command aliases. 
+ */ 
+struct _alias { 
+    char * name; 		/* alias name */
+    char * description; 	/* alias description */ 
+    char * module; 		/* actual module name */
+    char ** args; 		/* arguments */ 
+    int ac; 			/* no. of arguments */
+    struct _alias * next; 	/* next alias */
 };
 
 /*
