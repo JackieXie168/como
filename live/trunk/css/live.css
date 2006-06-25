@@ -105,15 +105,16 @@ img {
 }
 
 #rightcontenttext {
-    padding-left:9px;
-    background:#FFF;
-    top:0px;
-    width:95%;
-    height:20%;
-    border:1px,1px,1px,1px;
-    border-style:solid;
-    border-color:black;
+    padding-left: 9px;
+    background: #FFF;
+    top: 0px;
+    width: 95%;
+    height: 20%;
+    border: 1px;
+    border-style: solid;
+    border-color: black;
 }
+
 #logo {
     text-align:center;
     padding:10px;
@@ -164,9 +165,9 @@ img {
 }
 
 #menubar ul {
-    padding : 0px ;
-    margin : 0px 0px 0px 0px;
-    border : 0px 0px 0px 0px;
+    padding : 0px;
+    margin : 0px;
+    border : 0px;
     background-color : #FFF;
     display : inline;
 }
@@ -192,8 +193,8 @@ img {
 
 .secmenubar ul {
     padding : 0px 3px 3px 3px;
-    margin : 0px 0px 0px 0px;
-    border : 0px 0px 0px 0px;
+    margin : 0px;
+    border : 0px;
 }
 
 .secmenubar ul li {
