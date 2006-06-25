@@ -101,6 +101,8 @@ struct _como {
     int module_used; 	  	/* number of used entries */
     int module_last;  		/* last used entry in modules array */
 
+    alias_t * aliases; 		/* module aliases */ 
+
     size_t maxfilesize; 	/* max file size in one bytestream */
     int maxqueries;
 

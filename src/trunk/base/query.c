@@ -108,16 +108,38 @@ validate_query(qreq_t * req, int node_id)
     }
 
     /* check if the module is present in the current configuration */
-    req->mdl = module_lookup_with_name_and_node(req->module, node_id);
+    req->mdl = module_lookup(req->module, node_id);
     if (req->mdl == NULL) {
 	/*
-	 * the module is not present in the configuration file 
+	 * the module is not present in the configuration file.
+	 * check if we have an alias instead.  
 	 */
-	logmsg(LOGWARN, "module %s not found\n", req->module);
-	sprintf(httpstr, HTTP_RESPONSE_404
-                "Module \"%s\" not found in the current configuration\n", 
-		req->module);
-	return httpstr;
+	alias_t * alias; 
+	int nargs, i; 
+
+	for (alias = map.aliases; alias; alias = alias->next) {
+	    if (strcmp(alias->name, req->module) == 0) 
+		break;
+	} 
+
+	if (alias == NULL) {
+	    logmsg(LOGWARN, "module %s not found\n", req->module);
+	    sprintf(httpstr, HTTP_RESPONSE_404
+		    "Module \"%s\" not found in the current configuration\n", 
+		    req->module);
+	    return httpstr;
+	} 
+
+	req->mdl = module_lookup(alias->module, node_id); 
+
+	/* count the query arguments */
+	for (nargs = 0; req->args[nargs]; nargs++)
+	    ; 
+
+	/* add the alias arguments to the query */
+	req->args = safe_realloc(req->args,(nargs + alias->ac)*sizeof(char *));
+	for (i = nargs; i < nargs + alias->ac; i++) 
+	    req->args[i] = safe_strdup(alias->args[i - nargs]); 
     } 
 
     if (!req->mdl->callbacks.print && 
@@ -204,7 +226,7 @@ validate_query(qreq_t * req, int node_id)
 	 *     of the filtering that the source module could have done
 	 *     on the data and we don't do any checks on that.
 	 */
-	req->src = module_lookup_with_name_and_node(req->source, node_id);
+	req->src = module_lookup(req->source, node_id);
 	if (req->src == NULL) {
             /* No source module found,
              * return an error message to the client and finish
