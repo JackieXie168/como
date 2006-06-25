@@ -338,10 +338,14 @@ class Node {
      * XXX in the future most of these arguments should come 
      *     directly from the ?status query. 
      * 
+     * XXX this function contains a significant amount of hard-wired
+     *     information about modules. it should disappear in the 
+     *     long term. 
      */  
     function module_args($name, $stime, $etime, $args)
     {
-	$modargs = "filter={$this->modinfo[$name]['filter']}&";
+	// $modargs = "filter={$this->modinfo[$name]['filter']}&";
+	$modargs = "";
 	$interval = $etime - $stime;
 	switch ($name) {
 	case "alert":
@@ -351,10 +355,19 @@ class Node {
 	    break;
 
 	case "topdest":
+        case "topdst": 
+        case "topsrc": 
+	    $cookiename = "topn" . $name; 
+	    if (!(isset($_COOKIE[$cookiename]))) {
+		setcookie($cookiename, "5");
+		$items = 5;
+	    } else
+		$items = $_COOKIE[$cookiename];
+
 	    $modargs = $modargs . "source=tuple&";
 	    $modargs = $modargs . "interval=$interval&";
 	    $modargs = $modargs . "align-to=$stime&";
-	    $modargs = $modargs . "topn={$args['topntopdest']}&";
+	    $modargs = $modargs . "topn=$items&";
 	    $modargs = $modargs . "url=generic_query.php&";
 	    $modargs = $modargs . "urlargs=stime=$stime&";
 	    $modargs = $modargs . "urlargs=etime=$etime&";
@@ -367,22 +380,39 @@ class Node {
 	    } else {
 		$modargs = $modargs . "urlargs=format=html&";
 	    }
-	    $modargs = $modargs .
-		       "urlargs=comonode={$this->hostaddr}:{$this->hostport}&";
-	    $modargs = $modargs .
-		       "urlargs=filter={$this->modinfo[$name]['filter']}&";
 	    break;
 
 	case "topports":
-	    $modargs = $modargs . "topn={$args['topntopports']}&";
+	    $cookiename = "topn" . $name; 
+	    if (!(isset($_COOKIE[$cookiename]))) {
+		setcookie($cookiename, "5");
+		$items = 5;
+	    } else
+		$items = $_COOKIE[$cookiename];
+
+	    $modargs = $modargs . "topn=$items&";
 	    $modargs = $modargs . "align-to=$stime&";
 	    $modargs = $modargs . "source=tuple&";
 	    $modargs = $modargs . "interval=$interval&";
 	    break;
+
+        case "unknowns": 
+	    $modargs = $modargs . "source=tuple&";
+	    $modargs = $modargs . "interval=$interval&";
+	    $modargs = $modargs . "align-to=$stime&";
+	    $modargs = $modargs . "url=generic_query.php&";
+	    $modargs = $modargs . "urlargs=stime=$stime&";
+	    $modargs = $modargs . "urlargs=etime=$etime&";
+	    $modargs = $modargs . "urlargs=interval=$interval&";
+	    $modargs = $modargs . "urlargs=module=tuple&";
+	    $modargs = $modargs . "urlargs=source=tuple&";
+	    $modargs = $modargs . "urlargs=format=html&";
+	    $modargs = $modargs .
+		       "urlargs=comonode={$this->hostaddr}:{$this->hostport}&";
+	    break; 
 	}
 
 	return $modargs;
     }
-
 }
 ?>

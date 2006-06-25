@@ -20,26 +20,6 @@
 	exit;
     }
 
-    /*  Create a cookie and initialize to all fields visible  */
-    if (!(isset($_COOKIE['alert'])))
-	setcookie("alert", "block");
-    if (!(isset($_COOKIE['topdest'])))
-	setcookie("topdest", "block");
-    if (!(isset($_COOKIE['topports'])))
-	setcookie("topports", "block");
-
-    if (!(isset($_COOKIE['topntopdest']))) {
-	setcookie("topntopdest", "5");
-        $topntopdest = 5;
-    } else 
-        $topntopdest = $_COOKIE['topntopdest'];
- 
-    if (!(isset($_COOKIE['topntopports']))) {
-	setcookie("topntopports", "5");
-        $topntopports = 5;
-    } else 
-        $topntopports = $_COOKIE['topntopports'];
-
     $comonode = $_GET['comonode'];
 
     $G = init_global(); 
@@ -108,8 +88,6 @@
     $sideboxes = count($module); 
     $window_onload = "";
 
-    $args['topntopdest'] = $topntopdest;
-    $args['topntopports'] = $topntopports;
     $args['useblincview'] = $G['USEBLINCVIEW'];
 
     for ($i = 0; $i < count($module); $i++) {
@@ -124,6 +102,10 @@
 		     "etime={$iv['etime']}&comonode=$comonode";
 
 	$name[$i] = $node->modinfo[$module[$i]]['name'];
+
+	/* create a cookie and initialize to be hidden */ 
+	if (!(isset($_COOKIE[$module[$i]])))
+	    setcookie($module[$i], "none");
 
 	// prepare the javascript onload function 
 	$window_onload = $window_onload . 
