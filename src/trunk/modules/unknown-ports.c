@@ -412,7 +412,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 	if (fmt == PRETTYFMT)
 	    *len = sprintf(s, "%.24s ", asctime(localtime(&ts))); 
 	else if (fmt == PLAINFMT)
-	    *len = sprintf(s, "%u ", ts); 
+	    *len = sprintf(s, "%u ", (uint) ts); 
 	    
 	*len += sprintf(s + *len, fmt, ntohs(tp[i].port), 
 		   getprotoname(tp[i].proto), ntohl(tp[i].pkts), 
