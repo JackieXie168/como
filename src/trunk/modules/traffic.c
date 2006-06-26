@@ -182,7 +182,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static int granularity = 1; 
     static int use_bytes = 0; 
     static int no_records = 0; 
-    static uint64_t count[2] = {0, 0};
+    static int64_t count[2] = {0, 0};
     config_t * cf = CONFIG(self); 
     FLOWDESC *x; 
     timestamp_t ts;
