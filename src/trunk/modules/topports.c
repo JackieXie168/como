@@ -354,20 +354,25 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
     "<div class=nvtitle>Top-%d Port Numbers</div>\n" 		\
     "<table class=netview>\n" 					\
     "  <tr class=nvtitle>\n"					\
+    "    <td>#</td>\n" 	                			\
     "    <td>Port</td>\n"                 			\
-    "    <td width=60>Mbps</td></tr>\n"
+    "    <td>Name</td>\n"                 			\
+    "    <td>Mbps</td></tr>\n"
 
 #define SIDEBOXHDR						\
     "<table class=netview>\n" 					\
     "  <tr class=nvtitle>\n"					\
+    "    <td>#</td>\n" 	                			\
     "    <td>Port</td>\n"                 			\
-    "    <td width=60>Mbps</td></tr>\n"
+    "    <td>Name</td>\n"                 			\
+    "    <td>Mbps</td></tr>\n"
 
 #define HTMLFOOTER						\
     "</table>\n"						\
     "</body></html>\n"						
 
-#define HTMLFMT		"<tr><td>%5u/%s</td><td>%s</td><td>%.2f</td></tr>\n"
+#define HTMLFMT							\
+    "<tr><td>%d</td><td>%5u/%s</td><td>%s</td><td>%.2f</td></tr>\n"
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -461,6 +466,6 @@ callbacks_t callbacks = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "plain pretty html"
+    formats: "plain pretty html sidebox"
 };
 
