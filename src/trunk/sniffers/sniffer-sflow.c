@@ -32,7 +32,7 @@
 
 
 /* 
- * This sniffer support sFlow(R) datagrams for Version 4 and 5 as 
+ * This sniffer support sFlow(R) datagrams for Version 2, 4 and 5 as 
  * specified in IETF RFC 3176 or in http://www.sflow.org/sflow_version_5.txt. 
  * 
  * sFlow is a trademark of InMon Corporation.
@@ -66,7 +66,7 @@
 #include "como.h"
 #include "comotypes.h"
 
-#include "sflow.h"		/* sFlow v5 */
+#include "sflow.h"		/* sFlow */
 
 enum sf_err {
     SF_OK = 0,
@@ -76,23 +76,19 @@ enum sf_err {
     SF_ABORT_RECV_ERROR = 4
 };
 
-typedef struct _SFCursor {
+typedef struct _SFDatagram {
     u_char *buf;
     u_char *end;
     uint32_t *cur;
     uint32_t len;
     int err;
-} SFCursor;
-
-typedef struct _SFDatagram {
-    SFCursor sc;
     uint32_t buf_length;
     SFLSample_datagram_hdr hdr;
 } SFDatagram;
 
 typedef struct _SFTag {
-    SFCursor sc;
     uint32_t type;
+    uint32_t len;
     SFDatagram *dg;
 } SFTag;
 
@@ -108,180 +104,195 @@ typedef struct _SFTag {
 #define sf_warning(format...)	logmsg(LOGWARN, format)
 
 
-static __inline__ uint32_t
-sf_read32(SFCursor * c)
+static inline uint32_t
+sf_read32(SFDatagram * dg)
 {
-    return ntohl(*(c->cur)++);
+    return ntohl(*(dg->cur)++);
 }
 
-static __inline__ void
-sf_copy(SFCursor * c, void *dest, size_t n)
+static inline void
+sf_copy(SFDatagram * dg, void *dest, size_t n)
 {
-    memcpy(dest, c->cur, n);
-    c->cur = (uint32_t *) ((u_char *) c->cur + n);
+    memcpy(dest, dg->cur, n);
+    dg->cur = (uint32_t *) ((u_char *) dg->cur + n);
 }
 
-static __inline__ void
-sf_skip_bytes(SFCursor * c, int skip)
+static inline void
+sf_skip_bytes(SFDatagram * dg, int skip)
 {
     int quads = (skip + 3) / 4;
 
-    c->cur += quads;
+    dg->cur += quads;
 }
 
-static __inline__ int
-sf_check(SFCursor * c)
+static inline int
+sf_check(SFDatagram * dg)
 {
-    if ((u_char *) c->cur > c->end)
-	c->err = SF_ABORT_EOS;
-    return c->err;
+    if ((u_char *) dg->cur > dg->end)
+	dg->err = SF_ABORT_EOS;
+    return dg->err;
 }
 
 static int
-sflow_datagram_read(int fd, SFDatagram * dg)
+sflow_datagram_read(SFDatagram * dg, int fd)
 {
     struct sockaddr_in agent;
     socklen_t addr_len;
     int bytes;
-    SFCursor *sc = (SFCursor *) dg;
 
     addr_len = sizeof(agent);
     memset(&agent, 0, sizeof(agent));
-    bytes = recvfrom(fd, sc->buf, (size_t) dg->buf_length, 0,
+    bytes = recvfrom(fd, dg->buf, (size_t) dg->buf_length, 0,
 		     (struct sockaddr *) &agent, &addr_len);
     if (bytes <= 0) {
 	sf_warning("sniffer-sflow: recvfrom() failed: %s\n", strerror(errno));
-	sc->err = SF_ABORT_RECV_ERROR;
+	dg->err = SF_ABORT_RECV_ERROR;
 	return SF_ABORT_RECV_ERROR;
     }
-    sc->len = bytes;
-    sc->cur = (uint32_t *) sc->buf;
-    sc->end = ((u_char *) sc->cur) + sc->len;
-    sc->err = SF_OK;
+    dg->len = bytes;
+    dg->cur = (uint32_t *) dg->buf;
+    dg->end = ((u_char *) dg->cur) + dg->len;
+    dg->err = SF_OK;
 
     return SF_OK;
+}
+
+static int
+sflow_read_address(SFDatagram * dg, SFLAddress * a)
+{
+    a->type = sf_read32(dg);
+    if (a->type == SFLADDRESSTYPE_IP_V4) {
+	sf_copy(dg, &a->address.ip_v4.s_addr, 4);
+    } else {
+	sf_copy(dg, &a->address.ip_v6.s6_addr, 16);
+    }
+    return sf_check(dg);
+}
+
+static int
+sflow_read_string(SFDatagram * dg, SFLString * s)
+{
+    s->len = sf_read32(dg);
+    s->str = (char *) dg->cur;
+    sf_skip_bytes(dg, s->len);
+    return sf_check(dg);
 }
 
 static int
 sflow_datagram_decode_hdr(SFDatagram * dg)
 {
     /* check the version */
-    dg->hdr.datagram_version = sf_read32((SFCursor *) dg);
+    dg->hdr.datagram_version = sf_read32(dg);
     sf_log("datagramVersion %d\n", dg->hdr.datagram_version);
 
     if (dg->hdr.datagram_version != 2 &&
 	dg->hdr.datagram_version != 4 && dg->hdr.datagram_version != 5) {
 	sf_warning("unexpected datagram version number\n");
-	dg->sc.err = SF_ABORT_DECODE_ERROR;
+	dg->err = SF_ABORT_DECODE_ERROR;
 	return SF_ABORT_DECODE_ERROR;
     }
 
     /* get the agent address */
-    dg->hdr.agent_address.type = sf_read32((SFCursor *) dg);
-    if (dg->hdr.agent_address.type == SFLADDRESSTYPE_IP_V4) {
-	sf_copy((SFCursor *) dg,
-		&dg->hdr.agent_address.address.ip_v4.s_addr, 4);
-    } else {
-	sf_copy((SFCursor *) dg,
-		&dg->hdr.agent_address.address.ip_v6.s6_addr, 16);
-    }
+    sflow_read_address(dg, &dg->hdr.agent_address);
 
     /* version 5 has an agent sub-id as well */
     if (dg->hdr.datagram_version == 5) {
-	dg->hdr.sub_agent_id = sf_read32((SFCursor *) dg);
+	dg->hdr.sub_agent_id = sf_read32(dg);
     }
 
     /* this is the packet sequence number */
-    dg->hdr.sequence_number = sf_read32((SFCursor *) dg);
-    dg->hdr.uptime = sf_read32((SFCursor *) dg);
-    dg->hdr.num_records = sf_read32((SFCursor *) dg);
+    dg->hdr.sequence_number = sf_read32(dg);
+    dg->hdr.uptime = sf_read32(dg);
+    dg->hdr.num_records = sf_read32(dg);
 
-    return sf_check((SFCursor *) dg);
+    return sf_check(dg);
 }
 
 static int
 sflow_datagram_next_tag(SFDatagram * dg, SFTag * tag)
 {
-    tag->sc.buf = (u_char *) dg->sc.cur;
-    tag->type = sf_read32((SFCursor *) dg);
-    tag->sc.len = sf_read32((SFCursor *) dg);
-    tag->sc.cur = dg->sc.cur;	/* actually tag->sc.buf + 2*sizeof(uint32_t) */
-    tag->sc.end = ((u_char *) tag->sc.cur) + tag->sc.len;
+    tag->type = sf_read32(dg);
+    if (dg->hdr.datagram_version == 5) {
+	tag->len = sf_read32(dg);
+    } else {
+	tag->len = 0;
+    }
     tag->dg = dg;
-    sf_skip_bytes((SFCursor *) dg, tag->sc.len);
 
-    return sf_check((SFCursor *) dg);
+    return sf_check(dg);
 }
 
 static int
 sflow_tag_decode_flow_sample(SFTag * tag, SFLFlow_sample * fs)
 {
-    fs->sequence_number = sf_read32((SFCursor *) tag);
-    fs->source_id = sf_read32((SFCursor *) tag);
-    fs->sampling_rate = sf_read32((SFCursor *) tag);
-    sf_log("sampling_rate %d\n", fs->sampling_rate);
-    fs->sample_pool = sf_read32((SFCursor *) tag);
-    sf_log("sample_pool %d\n", fs->sample_pool);
-    fs->drops = sf_read32((SFCursor *) tag);
-    fs->input = sf_read32((SFCursor *) tag);
-    fs->output = sf_read32((SFCursor *) tag);
-    fs->num_elements = sf_read32((SFCursor *) tag);
+    fs->sequence_number = sf_read32(tag->dg);
+    fs->source_id = sf_read32(tag->dg);
+    fs->sampling_rate = sf_read32(tag->dg);
+    fs->sample_pool = sf_read32(tag->dg);
+    fs->drops = sf_read32(tag->dg);
+    fs->input = sf_read32(tag->dg);
+    fs->output = sf_read32(tag->dg);
+    if (tag->dg->hdr.datagram_version == 5) {
+	fs->num_elements = sf_read32(tag->dg);
+    } else {
+	fs->num_elements = 1;
+    }
     fs->elements = NULL;	/* not used as no memory is allocated here */
 
-    return sf_check((SFCursor *) tag);
+    return sf_check(tag->dg);
 }
 
 static int
 sflow_tag_decode_flow_sample_expanded(SFTag * tag,
 				      SFLFlow_sample_expanded * fse)
 {
-    fse->sequence_number = sf_read32((SFCursor *) tag);
-    fse->ds_class = sf_read32((SFCursor *) tag);
-    fse->ds_index = sf_read32((SFCursor *) tag);
-    fse->sampling_rate = sf_read32((SFCursor *) tag);
-    fse->sample_pool = sf_read32((SFCursor *) tag);
-    fse->drops = sf_read32((SFCursor *) tag);
-    fse->inputFormat = sf_read32((SFCursor *) tag);
-    fse->input = sf_read32((SFCursor *) tag);
-    fse->outputFormat = sf_read32((SFCursor *) tag);
-    fse->output = sf_read32((SFCursor *) tag);
-    fse->num_elements = sf_read32((SFCursor *) tag);
+    fse->sequence_number = sf_read32(tag->dg);
+    fse->ds_class = sf_read32(tag->dg);
+    fse->ds_index = sf_read32(tag->dg);
+    fse->sampling_rate = sf_read32(tag->dg);
+    fse->sample_pool = sf_read32(tag->dg);
+    fse->drops = sf_read32(tag->dg);
+    fse->inputFormat = sf_read32(tag->dg);
+    fse->input = sf_read32(tag->dg);
+    fse->outputFormat = sf_read32(tag->dg);
+    fse->output = sf_read32(tag->dg);
+    fse->num_elements = sf_read32(tag->dg);
     fse->elements = NULL;	/* not used as no memory is allocated here */
 
-    return sf_check((SFCursor *) tag);
+    return sf_check(tag->dg);
 }
 
 static int
 sflow_read_flow_sample_header(SFTag * tag, SFLFlow_sample_element * el)
 {
     sf_log("flowSampleType HEADER\n");
-    el->flowType.header.header_protocol = sf_read32((SFCursor *) tag);
+    el->flowType.header.header_protocol = sf_read32(tag->dg);
     sf_log("headerProtocol %lu\n", el->flowType.header.header_protocol);
-    el->flowType.header.frame_length = sf_read32((SFCursor *) tag);
+    el->flowType.header.frame_length = sf_read32(tag->dg);
     sf_log("sampledPacketSize %lu\n", el->flowType.header.frame_length);
     if (tag->dg->hdr.datagram_version > 4) {
 	/* stripped count introduced in sFlow version 5 */
-	el->flowType.header.stripped = sf_read32((SFCursor *) tag);
+	el->flowType.header.stripped = sf_read32(tag->dg);
 	sf_log("strippedBytes %lu\n", el->flowType.header.stripped);
     }
-    el->flowType.header.header_length = sf_read32((SFCursor *) tag);
+    el->flowType.header.header_length = sf_read32(tag->dg);
     sf_log("headerLen %lu\n", el->flowType.header.header_length);
 
     /* just point at the header */
-    el->flowType.header.header_bytes = (u_int8_t *) tag->sc.cur;
-    sf_skip_bytes((SFCursor *) tag, el->flowType.header.header_length);
+    el->flowType.header.header_bytes = (u_int8_t *) tag->dg->cur;
+    sf_skip_bytes(tag->dg, el->flowType.header.header_length);
 
-    return sf_check((SFCursor *) tag);
+    return sf_check(tag->dg);
 }
 
 static int
 sflow_read_flow_sample_ethernet(SFTag * tag, SFLFlow_sample_element * el)
 {
     sf_log("flowSampleType ETHERNET\n");
-    el->flowType.ethernet.eth_len = sf_read32((SFCursor *) tag);
-    sf_copy((SFCursor *) tag, el->flowType.ethernet.src_mac, 6);
-    sf_copy((SFCursor *) tag, el->flowType.ethernet.dst_mac, 6);
-    el->flowType.ethernet.eth_type = sf_read32((SFCursor *) tag);
+    el->flowType.ethernet.eth_len = sf_read32(tag->dg);
+    sf_copy(tag->dg, el->flowType.ethernet.src_mac, 6);
+    sf_copy(tag->dg, el->flowType.ethernet.dst_mac, 6);
+    el->flowType.ethernet.eth_type = sf_read32(tag->dg);
 
     sf_log("ethernet_type %lu\n", el->flowType.ethernet.eth_type);
     sf_log("ethernet_len %lu\n", el->flowType.ethernet.eth_len);
@@ -299,59 +310,162 @@ sflow_read_flow_sample_ethernet(SFTag * tag, SFLFlow_sample_element * el)
     }
 #endif
 
-    return sf_check((SFCursor *) tag);
+    return sf_check(tag->dg);
 }
 
 static int
 sflow_read_flow_sample_ipv4(SFTag * tag, SFLFlow_sample_element * el)
 {
     sf_log("flowSampleType IPV4\n");
-    el->flowType.ipv4.length = sf_read32((SFCursor *) tag);
-    el->flowType.ipv4.protocol = sf_read32((SFCursor *) tag);
-    sf_copy((SFCursor *) tag, &el->flowType.ipv4.src_ip,	/* 4 */
-	    sizeof(el->flowType.ipv4.src_ip));
-    sf_copy((SFCursor *) tag, &el->flowType.ipv4.dst_ip,	/* 4 */
-	    sizeof(el->flowType.ipv4.dst_ip));
-    el->flowType.ipv4.src_port = sf_read32((SFCursor *) tag);
-    el->flowType.ipv4.dst_port = sf_read32((SFCursor *) tag);
-    el->flowType.ipv4.tcp_flags = sf_read32((SFCursor *) tag);
-    el->flowType.ipv4.tos = sf_read32((SFCursor *) tag);
+    el->flowType.ipv4.length = sf_read32(tag->dg);
+    el->flowType.ipv4.protocol = sf_read32(tag->dg);
+    sf_copy(tag->dg, &el->flowType.ipv4.src_ip, 4);
+    sf_copy(tag->dg, &el->flowType.ipv4.dst_ip, 4);
+    el->flowType.ipv4.src_port = sf_read32(tag->dg);
+    el->flowType.ipv4.dst_port = sf_read32(tag->dg);
+    el->flowType.ipv4.tcp_flags = sf_read32(tag->dg);
+    el->flowType.ipv4.tos = sf_read32(tag->dg);
 
-    return sf_check((SFCursor *) tag);
+    return sf_check(tag->dg);
 }
 
 static int
 sflow_read_flow_sample_ipv6(SFTag * tag, SFLFlow_sample_element * el)
 {
     sf_log("flowSampleType IPV6\n");
-    el->flowType.ipv6.length = sf_read32((SFCursor *) tag);
-    el->flowType.ipv6.protocol = sf_read32((SFCursor *) tag);
-    sf_copy((SFCursor *) tag, &el->flowType.ipv6.src_ip,	/* 16 */
-	    sizeof(el->flowType.ipv6.src_ip));
-    sf_copy((SFCursor *) tag, &el->flowType.ipv4.dst_ip,	/* 16 */
-	    sizeof(el->flowType.ipv6.dst_ip));
-    el->flowType.ipv6.src_port = sf_read32((SFCursor *) tag);
-    el->flowType.ipv6.dst_port = sf_read32((SFCursor *) tag);
-    el->flowType.ipv6.tcp_flags = sf_read32((SFCursor *) tag);
-    el->flowType.ipv6.priority = sf_read32((SFCursor *) tag);
+    el->flowType.ipv6.length = sf_read32(tag->dg);
+    el->flowType.ipv6.protocol = sf_read32(tag->dg);
+    sf_copy(tag->dg, &el->flowType.ipv6.src_ip, 16);
+    sf_copy(tag->dg, &el->flowType.ipv6.dst_ip, 16);
+    el->flowType.ipv6.src_port = sf_read32(tag->dg);
+    el->flowType.ipv6.dst_port = sf_read32(tag->dg);
+    el->flowType.ipv6.tcp_flags = sf_read32(tag->dg);
+    el->flowType.ipv6.priority = sf_read32(tag->dg);
 
-    return sf_check((SFCursor *) tag);
+    return sf_check(tag->dg);
 }
+
+static int
+sflow_read_extended_switch(SFTag * tag, SFLExtended_switch * r)
+{
+    sf_log("extendedType SWITCH\n");
+    r->src_vlan = sf_read32(tag->dg);
+    r->src_priority = sf_read32(tag->dg);
+    r->dst_vlan = sf_read32(tag->dg);
+    r->dst_priority = sf_read32(tag->dg);
+
+    return sf_check(tag->dg);
+}
+
+static int
+sflow_read_extended_router(SFTag * tag, SFLExtended_router * r)
+{
+    sf_log("extendedType ROUTER\n");
+    sflow_read_address(tag->dg, &r->nexthop);
+    r->src_mask = sf_read32(tag->dg);
+    r->dst_mask = sf_read32(tag->dg);
+
+    return sf_check(tag->dg);
+}
+
+static int
+sflow_read_extended_gateway(SFTag * tag, SFLExtended_gateway * r)
+{
+    uint32_t seg;
+
+    sf_log("extendedType GATEWAY\n");
+
+    if (tag->dg->hdr.datagram_version == 5) {
+	sflow_read_address(tag->dg, &r->nexthop);
+    }
+
+    r->as = sf_read32(tag->dg);
+    r->src_as = sf_read32(tag->dg);
+    r->src_peer_as = sf_read32(tag->dg);
+    if (tag->dg->hdr.datagram_version != 2) {
+	r->dst_as_path_segments = sf_read32(tag->dg);
+	if (r->dst_as_path_segments > 0) {
+	    for (seg = 0; seg < r->dst_as_path_segments; seg++) {
+		uint32_t seg_type;
+		uint32_t seg_len;
+		seg_type = sf_read32(tag->dg);
+		seg_len = sf_read32(tag->dg);
+		sf_skip_bytes(tag->dg, seg_len * 4);
+	    }
+	}
+	r->communities_length = sf_read32(tag->dg);
+	sf_skip_bytes(tag->dg, r->communities_length * 4);
+	r->localpref = sf_read32(tag->dg);
+    } else {
+	uint32_t seg_len;
+	seg_len = sf_read32(tag->dg);
+	sf_skip_bytes(tag->dg, seg_len * 4);
+    }
+
+    return sf_check(tag->dg);
+}
+
+static int
+sflow_read_extended_user(SFTag * tag, SFLExtended_user * r)
+{
+    sf_log("extendedType USER\n");
+
+    if (tag->dg->hdr.datagram_version == 5) {
+	r->src_charset = sf_read32(tag->dg);
+    }
+    sflow_read_string(tag->dg, &r->src_user);
+
+    if (tag->dg->hdr.datagram_version == 5) {
+	r->dst_charset = sf_read32(tag->dg);
+    }
+    sflow_read_string(tag->dg, &r->dst_user);
+
+    return sf_check(tag->dg);
+}
+
+static int
+sflow_read_extended_url(SFTag * tag, SFLExtended_url * r)
+{
+    sf_log("extendedType URL\n");
+
+    r->direction = sf_read32(tag->dg);
+    sflow_read_string(tag->dg, &r->url);
+    if (tag->dg->hdr.datagram_version == 5) {
+	sflow_read_string(tag->dg, &r->host);
+    }
+    return sf_check(tag->dg);
+}
+
+enum INMExtended_information_type {
+    INMEXTENDED_SWITCH = 1,	/* Extended switch information */
+    INMEXTENDED_ROUTER = 2,	/* Extended router information */
+    INMEXTENDED_GATEWAY = 3,	/* Extended gateway router information */
+    INMEXTENDED_USER = 4,	/* Extended TACAS/RADIUS user information */
+    INMEXTENDED_URL = 5		/* Extended URL information */
+};
 
 static int
 sflow_tag_next_flow_sample(SFTag * tag, SFLFlow_sample_element * el)
 {
-    el->tag = sf_read32((SFCursor *) tag);
-    el->length = sf_read32((SFCursor *) tag);
+    int res;
+
+    el->tag = sf_read32(tag->dg);
+    if (tag->dg->hdr.datagram_version == 5) {
+	el->length = sf_read32(tag->dg);
+    }
     switch (el->tag) {
     case SFLFLOW_HEADER:
-	return sflow_read_flow_sample_header(tag, el);
+	res = sflow_read_flow_sample_header(tag, el);
+	break;
     case SFLFLOW_ETHERNET:
-	return sflow_read_flow_sample_ethernet(tag, el);
+	res = sflow_read_flow_sample_ethernet(tag, el);
+	break;
     case SFLFLOW_IPV4:
-	return sflow_read_flow_sample_ipv4(tag, el);
+	res = sflow_read_flow_sample_ipv4(tag, el);
+	break;
     case SFLFLOW_IPV6:
-	return sflow_read_flow_sample_ipv6(tag, el);
+	res = sflow_read_flow_sample_ipv6(tag, el);
+	break;
 	/*case SFLFLOW_EX_SWITCH:
 	   case SFLFLOW_EX_ROUTER:
 	   case SFLFLOW_EX_GATEWAY:
@@ -366,11 +480,98 @@ sflow_tag_next_flow_sample(SFTag * tag, SFLFlow_sample_element * el)
 	   case SFLFLOW_EX_VLAN_TUNNEL:
 	   case SFLFLOW_EX_PROCESS: */
     default:
-	sf_skip_bytes((SFCursor *) tag, el->length);
+	if (tag->dg->hdr.datagram_version != 5) {
+	    tag->dg->err = SF_ABORT_DECODE_ERROR;
+	    return tag->dg->err;
+	}
+	/* NOTE: el->length exists only in v5 */
+	sf_skip_bytes(tag->dg, el->length);
 	break;
     }
 
-    return sf_check((SFCursor *) tag);
+    if (res != SF_OK)
+	return res;
+
+    if (tag->dg->hdr.datagram_version != 5) {
+	uint32_t num_extended, x;
+
+	num_extended = sf_read32(tag->dg);
+
+	for (x = 0; x < num_extended; x++) {
+	    uint32_t ext_type;
+	    ext_type = sf_read32(tag->dg);
+	    switch (ext_type) {
+	    case INMEXTENDED_SWITCH:
+		{
+		    SFLExtended_switch r;
+		    sflow_read_extended_switch(tag, &r);
+		}
+		break;
+	    case INMEXTENDED_ROUTER:
+		{
+		    SFLExtended_router r;
+		    sflow_read_extended_router(tag, &r);
+		}
+		break;
+	    case INMEXTENDED_GATEWAY:
+		{
+		    SFLExtended_gateway r;
+		    sflow_read_extended_gateway(tag, &r);
+		}
+		break;
+	    case INMEXTENDED_USER:
+		{
+		    SFLExtended_user r;
+		    sflow_read_extended_user(tag, &r);
+		}
+		break;
+	    case INMEXTENDED_URL:
+		{
+		    SFLExtended_url r;
+		    sflow_read_extended_url(tag, &r);
+		}
+		break;
+	    }
+	}
+    }
+
+    return sf_check(tag->dg);
+}
+
+static int
+sflow_tag_ignore(SFTag * tag)
+{
+    if (tag->dg->hdr.datagram_version == 5) {
+	sf_skip_bytes(tag->dg, tag->len);
+    } else {
+	uint32_t counters_type;
+	assert(tag->type == SFLCOUNTERS_SAMPLE);
+	/* skip sequence_number, source_id, sampling_interval */
+	sf_skip_bytes(tag->dg, 12);
+	counters_type = sf_read32(tag->dg);
+	switch (counters_type) {
+	case SFLCOUNTERS_GENERIC:
+	    sf_skip_bytes(tag->dg, sizeof(SFLIf_counters));
+	    break;
+	case SFLCOUNTERS_ETHERNET:
+	    sf_skip_bytes(tag->dg, sizeof(SFLEthernet_counters));
+	    break;
+	case SFLCOUNTERS_TOKENRING:
+	    sf_skip_bytes(tag->dg, sizeof(SFLTokenring_counters));
+	    break;
+	case SFLCOUNTERS_VG:
+	    sf_skip_bytes(tag->dg, sizeof(SFLVg_counters));
+	    break;
+	case SFLCOUNTERS_VLAN:
+	    sf_skip_bytes(tag->dg, sizeof(SFLVlan_counters));
+	    break;
+	case SFLCOUNTERS_PROCESSOR:
+	    sf_skip_bytes(tag->dg, sizeof(SFLProcessor_counters));
+	    break;
+	}
+    }
+
+    return sf_check(tag->dg);
 }
 
  /*
@@ -519,9 +720,9 @@ sniffer_start(source_t * src)
 
     /* setup output descriptor */
     outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
-    
+
     outmd->ts_resolution = TIME2TS(1, 0);
-    
+
     switch (info->flow_type_tag) {
     case SFLFLOW_HEADER:
 	pkt = metadesc_tpl_add(outmd, "sflow:any:any:any");
@@ -540,10 +741,9 @@ sniffer_start(source_t * src)
 	IP(proto) = 0xff;
 	N32(IP(src_ip)) = 0xffffffff;
 	N32(IP(dst_ip)) = 0xffffffff;
-	
+
 	pkt = metadesc_tpl_add(outmd, "sflow:none:~ip:~tcp");
-	COMO(caplen) = sizeof(struct _como_iphdr) +
-		       sizeof(struct _como_tcphdr);
+	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_tcphdr);
 	IP(tos) = 0xff;
 	N16(IP(len)) = 0xffff;
 	IP(proto) = 0xff;
@@ -642,11 +842,12 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 
     info = (struct _snifferinfo *) src->ptr;
 
+    memset(&tag, 0, sizeof(tag));
     memset(&dg, 0, sizeof(dg));
-    dg.sc.buf = buf;
+    dg.buf = buf;
     dg.buf_length = MAX_PKT_SIZ;
 
-    if (sflow_datagram_read(src->fd, &dg) != SF_OK) {
+    if (sflow_datagram_read(&dg, src->fd) != SF_OK) {
 	/* an error here cannot be ignored, return with -1 */
 	return -1;
     }
@@ -760,7 +961,7 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 		memcpy(COMO(payload), &como_sflow_hdr,
 		       sizeof(struct _como_sflow));
 		COMO(caplen) = sizeof(struct _como_sflow);
-		
+
 		/* no options since here */
 		COMO(pktmetaslen) = 0;
 
@@ -920,6 +1121,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 	    }
 	    /* unless every element was processed will add a positive number */
 	    src->drops += num_elements - eli;
+	} else {
+	    sflow_tag_ignore(&tag);
 	}
     }
 
