@@ -1,4 +1,4 @@
-<!--  $Id:$  -->
+<!--  $Id$  -->
 
 <?php 
 
@@ -12,16 +12,16 @@
  * show the image. 
  * 
  */ 
-function zoom_in($stime, $etime, $node, $basequery, $timebound)
+function zoom_in($start, $end, $node, $basequery, $timebound)
 { 
-    $interval = $etime - $stime; 
+    $interval = $end - $start; 
 
     if ($interval < $timebound) 
 	return "<img src=images/zoom-in.png align=middle>";
 
-    $zstime = $stime + floor($interval/4);
-    $zetime = $etime - floor($interval/4);
-    $button = "<a href=\"$basequery&stime=$zstime&etime=$zetime\">";
+    $zstart = $start + floor($interval/4);
+    $zend = $end - floor($interval/4);
+    $button = "<a href=\"$basequery&start=$zstart&end=$zend\">";
     $button = $button . "<img src=images/zoom-in.png align=middle></a>";
 
     return $button; 
@@ -34,19 +34,19 @@ function zoom_in($stime, $etime, $node, $basequery, $timebound)
  * to the query with an interval that is three times the original 
  * interval and centered in the middle of the original interval. 
  */ 
-function zoom_out($stime, $etime, $node, $basequery, $timebound)
+function zoom_out($start, $end, $node, $basequery, $timebound)
 { 
-    $interval = $etime - $stime; 
+    $interval = $end - $start; 
 
-    $zstime = $stime - $interval;
-    $zetime = $etime + $interval;
+    $zstart = $start - $interval;
+    $zend = $end + $interval;
 
     //  Make sure we don't go into future
     $now = $node->curtime - ($node->curtime % $timebound); 
-    if ($zetime > $now)  
-	$zetime = $now;
+    if ($zend > $now)  
+	$zend = $now;
 
-    $button = "<a href=\"$basequery&stime=$zstime&etime=$zetime\">";
+    $button = "<a href=\"$basequery&start=$zstart&end=$zend\">";
     $button = $button . "<img src=images/zoom-out.png align=middle></a>";
 
     return $button; 
@@ -58,16 +58,16 @@ function zoom_out($stime, $etime, $node, $basequery, $timebound)
  * return a string with the image for the zoom-out and an anchor
  * to the query with the same interval shifted by half interval forward. 
  */ 
-function forward($stime, $etime, $node, $basequery, $timebound)
+function forward($start, $end, $node, $basequery, $timebound)
 { 
     $now = $node->curtime - ($node->curtime % $timebound); 
 
-    if ($etime >= $now)
+    if ($end >= $now)
 	return "<img src=images/forward.png align=middle>";
 
-    $shift = floor(($etime - $stime)/2); 
-    $fstime = $stime + $shift; 
-    $fetime = $etime + $shift; 
+    $shift = floor(($end - $start)/2); 
+    $fstart = $start + $shift; 
+    $fend = $end + $shift; 
 
     $shift /= 60; 
     $shift_text = "Forward $shift minutes";
@@ -76,7 +76,7 @@ function forward($stime, $etime, $node, $basequery, $timebound)
 	$shift_text = "Forward $shift hours"; 
     } 
     
-    $button = "<a href=\"$basequery&stime=$fstime&etime=$fetime\">";
+    $button = "<a href=\"$basequery&start=$fstart&end=$fend\">";
     $button = $button . "<img src=images/forward.png align=middle ";
     $button = $button . "alt=\"$shift_text\"></a>";
 
@@ -91,16 +91,16 @@ function forward($stime, $etime, $node, $basequery, $timebound)
  * to the query with the same interval shifted by half interval
  * backward. 
  */ 
-function backward($stime, $etime, $node, $basequery, $timebound)
+function backward($start, $end, $node, $basequery, $timebound)
 { 
     $past = $node->start - ($node->start % $timebound); 
 
-    if ($stime <= $past)
+    if ($start <= $past)
 	return "<img src=images/backward.png align=middle>";
 
-    $shift = floor(($etime - $stime)/2); 
-    $fstime = $stime - $shift; 
-    $fetime = $etime - $shift; 
+    $shift = floor(($end - $start)/2); 
+    $fstart = $start - $shift; 
+    $fend = $end - $shift; 
 
     $shift /= 60; 
     $shift_text = "Backward $shift minutes";
@@ -109,7 +109,7 @@ function backward($stime, $etime, $node, $basequery, $timebound)
 	$shift_text = "Backward $shift hours"; 
     } 
     
-    $button = "<a href=\"$basequery&stime=$fstime&etime=$fetime\">";
+    $button = "<a href=\"$basequery&start=$fstart&end=$fend\">";
     $button = $button . "<img src=images/backward.png align=middle "; 
     $button = $button . "alt=\"$shift_text\"></a>";
 
@@ -139,9 +139,9 @@ function detail_button($basequery)
  * go forward until current time 
  * 
  */
-function until_now($stime, $etime, $basequery)
+function until_now($start, $end, $basequery)
 {
-    $button = "<a href=\"$basequery&stime=$stime&etime=$etime\">";
+    $button = "<a href=\"$basequery&start=$start&end=$end\">";
     $button = $button . "<img src=images/forward-now.png align=middle ";
     $button = $button . "alt=\"forward until present time\"></a>";
 

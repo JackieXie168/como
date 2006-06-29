@@ -17,21 +17,21 @@ function init_env ($node) {
     else
 	$input_vars['filter'] = "all";
 
-    if (isset($_GET['etime']) && ($_GET['etime'] != "")){
-	$input_vars['etime'] = $_GET['etime'];
+    if (isset($_GET['end']) && ($_GET['end'] != "")){
+	$input_vars['end'] = $_GET['end'];
 	if (isset($node)){
-	    $node->SetEndtime($input_vars['etime']);
+	    $node->SetEndtime($input_vars['end']);
 	}
     } else
-	$input_vars['etime'] = $node->etime;
-    if(isset($_GET['stime']) && ($_GET['stime'] != "")){
-	$input_vars['stime'] = $_GET['stime'];
+	$input_vars['end'] = $node->end;
+    if(isset($_GET['start']) && ($_GET['start'] != "")){
+	$input_vars['start'] = $_GET['start'];
 	if (isset($node)){
-	    $input_vars['stime'] = $node->CheckFirstPacket($input_vars['stime'],$input_vars['module']);
-	    $node->SetStarttime($input_vars['stime']);
+	    $input_vars['start'] = $node->CheckFirstPacket($input_vars['start'],$input_vars['module']);
+	    $node->SetStarttime($input_vars['start']);
 	}
     } else
-	$input_vars['stime'] = $node->stime;
+	$input_vars['start'] = $node->start;
 
     if(isset($_GET['format']) && ($_GET['format'] != ""))
 	$input_vars['format'] = $_GET['format'];

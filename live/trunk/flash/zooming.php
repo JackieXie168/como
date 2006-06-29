@@ -1,4 +1,4 @@
-<!--  $Id:$  -->
+<!--  $Id$  -->
 <?php 
 
     /* we need to create the string of parameters to be sent to 
@@ -13,7 +13,7 @@
 
     /* the query that the flash client needs to send back */
     $info .= "&link=dashboard.php&comonode=$comonode&module=$module";
-    $info .= "&start=$stime&end=$etime&format=gnuplot&";
+    $info .= "&start=$start&end=$end&format=gnuplot&";
     $info .= "$http_query_string";
 ?>
 

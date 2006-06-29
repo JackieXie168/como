@@ -42,7 +42,7 @@
 	    $is_selected = in_array($mods[$i], $selected); 
 	    $cl = $is_selected? "module_selected" : "module_normal"; 
 	    $timestr = gmstrftime("%a %b %d %T %Y", 
-				  $node->modinfo[$mods[$i]]['stime']);
+				  $node->modinfo[$mods[$i]]['start']);
 	    $fl = urldecode($node->modinfo[$mods[$i]]['filter']);
 
 	    print "<table class=$cl style=\"border:1px dashed; width:100%\">\n";

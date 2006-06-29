@@ -34,12 +34,12 @@
     $input_vars = init_env($node);
     $module = $input_vars['module'];
     $fiter = $input_vars['filter'];
-    $etime = $input_vars['etime'];
-    $stime = $input_vars['stime'];
+    $end = $input_vars['end'];
+    $start = $input_vars['start'];
     $format = $input_vars['format'];
 
     $http_query_string = $_SERVER['QUERY_STRING'] . "&filter=" . $node -> modinfo[$module]['filter'];
-    $query = new Query($stime, $etime, $G);
+    $query = new Query($start, $end, $G);
     $query_string = $query->get_query_string($module, $format, $http_query_string);
     $data = $query->do_query($comonode, $query_string);
 
@@ -123,17 +123,17 @@
 		    print "comonode=$comonode&module=$allmods[$i]&";
 /*  Commenting this out because I don't know what it is...  */
 #		    if ($allmods[$i] == $special) {
-#			$duration = $node->etime - $node->stime; 
+#			$duration = $node->end - $node->start; 
 #			print "source=tuple&interval=$duration&"; 
 #		    } 
                     print "filter={$node->modinfo[$allmods[$i]]['filter']}&";
-/*  Commenting out next line and replacing with stime from GEt
+/*  Commenting out next line and replacing with start from GEt
  *  Need to see if this breaks things.
  *  This line was originally intended to grab the individual
  *  module start time
  */
-#		    print "stime=$node->stime&etime=$node->etime\">";
-		    print "stime=$stime&etime=$etime\">";
+#		    print "start=$node->start&end=$node->end\">";
+		    print "start=$start&end=$end\">";
 		    print "$allmods[$i]</a></li>\n";
                 }
             }

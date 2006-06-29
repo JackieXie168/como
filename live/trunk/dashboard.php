@@ -37,11 +37,11 @@
     $iv = init_env($node);
 
     /* prepare variables for time interval */ 
-    $startstr = gmstrftime("%a %b %d %T %Y", $iv['stime']);
-    $endstr = gmstrftime("%a %b %d %T %Y", $iv['etime']);
+    $startstr = gmstrftime("%a %b %d %T %Y", $iv['start']);
+    $endstr = gmstrftime("%a %b %d %T %Y", $iv['end']);
     $firstpacket = gmstrftime("%a %b %d %T %Y", 
-		              $node->modinfo[$iv['module']]['stime']);
-    $duration = $iv['etime'] - $iv['stime'];
+		              $node->modinfo[$iv['module']]['start']);
+    $duration = $iv['end'] - $iv['start'];
     $days = floor($duration / 86400);
     $hours = floor(($duration % 86400) / 3600);
     $mins = floor(($duration % 3600) / 60);
@@ -52,34 +52,34 @@
      */ 
     $base = "dashboard.php?comonode=$comonode&module={$iv['module']}";
 
-    $st = $iv['etime'] - 900;
-    $query_15m = "$base&stime=$st&etime={$iv['etime']}";
-    $st = $iv['etime'] - 3600;
-    $query_1h = "$base&stime=$st&etime={$iv['etime']}";
-    $st = $iv['etime'] - 3600*6;
-    $query_6h = "$base&stime=$st&etime={$iv['etime']}";
-    $st = $iv['etime'] - 86400;
-    $query_1d = "$base&stime=$st&etime={$iv['etime']}";
+    $st = $iv['end'] - 900;
+    $query_15m = "$base&start=$st&end={$iv['end']}";
+    $st = $iv['end'] - 3600;
+    $query_1h = "$base&start=$st&end={$iv['end']}";
+    $st = $iv['end'] - 3600*6;
+    $query_6h = "$base&start=$st&end={$iv['end']}";
+    $st = $iv['end'] - 86400;
+    $query_1d = "$base&start=$st&end={$iv['end']}";
 
-    $zoomin = zoom_in($iv['stime'],$iv['etime'],$node,$base,$G['TIMEBOUND']); 
-    $zoomout = zoom_out($iv['stime'],$iv['etime'],$node,$base,$G['TIMEBOUND']); 
-    $fwd = forward($iv['stime'],$iv['etime'],$node,$base,$G['TIMEBOUND']); 
-    $bwd = backward($iv['stime'],$iv['etime'],$node,$base,$G['TIMEBOUND']); 
+    $zoomin = zoom_in($iv['start'],$iv['end'],$node,$base,$G['TIMEBOUND']); 
+    $zoomout = zoom_out($iv['start'],$iv['end'],$node,$base,$G['TIMEBOUND']); 
+    $fwd = forward($iv['start'],$iv['end'],$node,$base,$G['TIMEBOUND']); 
+    $bwd = backward($iv['start'],$iv['end'],$node,$base,$G['TIMEBOUND']); 
 
     $now = $node->curtime - ($node->curtime % $G['TIMEBOUND']);
-    $fwd_now = until_now($iv['stime'], $now, $base); 
+    $fwd_now = until_now($iv['start'], $now, $base); 
 
     $tmp = "generic_query.php?comonode=$comonode&module=tuple&source=tuple&";
-    $tmp = $tmp . "interval=$duration&stime={$iv['stime']}&"; 
-    $tmp = $tmp . "etime={$iv['etime']}&format=html";
+    $tmp = $tmp . "interval=$duration&start={$iv['start']}&"; 
+    $tmp = $tmp . "end={$iv['end']}&format=html";
     $details = detail_button($tmp);
 
     /* 
      * prepare search bar 
      */ 
     $searchquery = "search.php?comonode=$comonode&module=tuple&source=tuple&" .
-		   "interval=$duration&stime={$iv['stime']}&" .
-		   "etime={$iv['etime']}&format=html";
+		   "interval=$duration&start={$iv['start']}&" .
+		   "end={$iv['end']}&format=html";
 
     /* 
      * prepare queries for sideboxes 
@@ -93,13 +93,13 @@
     for ($i = 0; $i < count($module); $i++) {
 	// add module-specific options
 	$margs = $node->module_args($module[$i],
-				    $iv['stime'], 
-				    $iv['etime'],
+				    $iv['start'], 
+				    $iv['end'],
 				    $args);
 	 
 	$query[$i] = "generic_query.php?$margs&module={$module[$i]}&" . 
-	             "format=html&stime={$iv['stime']}&" . 
-		     "etime={$iv['etime']}&comonode=$comonode";
+	             "format=html&start={$iv['start']}&" . 
+		     "end={$iv['end']}&comonode=$comonode";
 
 	$name[$i] = $node->modinfo[$module[$i]]['name'];
 
