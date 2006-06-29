@@ -604,20 +604,20 @@ ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
 static void
 ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 {
-    expiredmap_t *exp;
+    expiredmap_t *em;
     
     assert(sender == sibling(CAPTURE));
     assert(len == sizeof(expiredmap_t *));
     
-    for (exp = *((expiredmap_t **) buf); exp; exp = exp->next) {
+    for (em = *((expiredmap_t **) buf); em; em = em->next) {
 	module_t * mdl; 
 
 	/*
 	 * use the correct module flush state & shared map
 	 */
-	mdl = exp->mdl; 
-	mdl->fstate = exp->fstate;
-	mdl->shared_map = exp->shared_map;
+	mdl = em->mdl; 
+	mdl->fstate = em->fstate;
+	mdl->shared_map = em->shared_map;
 	
 	/* if in inline mode, make sure this is the inline module */
 	assert(map.running == NORMAL || mdl == map.inline_mdl); 
@@ -628,18 +628,18 @@ ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 	if (mdl->status != MDL_ACTIVE)
 	    continue;
 
-	if (exp->ct->records) {
+	if (em->ct->records) {
 	    /* process capture table and update export table */
 	    start_tsctimer(map.stats->ex_table_timer);
-	    process_table(exp->ct, mdl);
+	    process_table(em->ct, mdl);
 	    end_tsctimer(map.stats->ex_table_timer);
 	} else {
-	    assert(exp->ct->flexible);
+	    assert(em->ct->flexible);
 	}
 
 	/* process export table, storing/discarding records */
 	start_tsctimer(map.stats->ex_store_timer);
-	store_records(mdl, exp->ct->ivl, exp->ct->ts);
+	store_records(mdl, em->ct->ivl, em->ct->ts);
 	end_tsctimer(map.stats->ex_store_timer);
     }
 
