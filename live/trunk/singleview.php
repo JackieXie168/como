@@ -7,14 +7,14 @@ if (isset($_GET['nodeplace']))
     $nodeplace = $_GET['nodeplace'];
 if (isset($_GET['module']))
     $module = $_GET['module'];
-if (isset($_GET['stime']))
-    $stime = $_GET['stime'];
-if (isset($_GET['etime']))
-    $etime = $_GET['etime'];
+if (isset($_GET['start']))
+    $start = $_GET['start'];
+if (isset($_GET['end']))
+    $end = $_GET['end'];
 
-$startstr = gmstrftime("%a %b %d %T %Y", $stime);
-$endstr = gmstrftime("%a %b %d %T %Y", $etime);
-$duration = $etime - $stime;
+$startstr = gmstrftime("%a %b %d %T %Y", $start);
+$endstr = gmstrftime("%a %b %d %T %Y", $end);
+$duration = $end - $start;
 $days = floor($duration / 86400);
 $hours = floor(($duration % 86400) / 3600);
 $mins = floor(($duration % 3600) / 60);

@@ -28,8 +28,8 @@
     $input_vars = init_env($node);
     $module = $input_vars['module'];
     $fiter = $input_vars['filter'];
-    $etime = $input_vars['etime'];
-    $stime = $input_vars['stime'];
+    $end = $input_vars['end'];
+    $start = $input_vars['start'];
     $format = $input_vars['format'];
 
     $http_query_string = $_SERVER['QUERY_STRING']; 
@@ -87,7 +87,7 @@
         if ($extra == "blincview" && !$G['USEBLINCVIEW']) {
             $format = "html";
         }
-        $query = new Query($stime, $etime, $G);
+        $query = new Query($start, $end, $G);
         $query_string = $query->get_query_string($module, $format,
                                                  $http_query_string);
         $data = $query->do_query ($comonode, $query_string);
@@ -111,8 +111,8 @@
 	if (($extra == "blincview") && ($G['USEBLINCVIEW'])) {
 	    $BRESULTS = $G['ABSROOT'] . "/" . $G['RESULTS'];
 	    $blincfile = $comonode . 
-			 "_" . $extra . "_" . $stime . "_" .
-			 $etime . "_" . $daip . ".blinc";
+			 "_" . $extra . "_" . $start . "_" .
+			 $end . "_" . $daip . ".blinc";
 	    $absblincfile = $BRESULTS . "/" . $blincfile;
             /*  Is there a blinc png file?  */
 	    if ((!(file_exists("$absblincfile.png"))) || (!($G['USECACHE']))) {

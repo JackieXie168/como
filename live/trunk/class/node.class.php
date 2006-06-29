@@ -16,14 +16,14 @@ class Node {
     var $linkspeed;
     var $version;
     var $builddate;
-    var $start;
+    var $modstart;
     var $curtime;
     var $modinfo;
     var $module;
     var $filter;
  
-    var $stime; 		/* query start and end time */ 
-    var $etime; 		/* XXX unclear why we need to keep it here */
+    var $start; 		/* query start and end time */ 
+    var $end; 		/* XXX unclear why we need to keep it here */
 
     /* 
      * constructor for the class. 
@@ -78,7 +78,7 @@ class Node {
 		break;
 
 	    case "Start:":
-		$this->start = $args[0];
+		$this->modstart = $args[0];
 		break;
 
 	    case "Current:":
@@ -99,7 +99,7 @@ class Node {
 	    case "Module:":
 		$module = trim($args[0]);
 		$this->modinfo[$module]['filter'] = urlencode(trim($args[1]));
-		$this->modinfo[$module]['stime'] = trim($args[2]);
+		$this->modinfo[$module]['start'] = trim($args[2]);
 		$this->modinfo[$module]['formats'] = trim($args[3]);
 		if (count($args) > 4)
 		    $this->modinfo[$module]['name'] = trim($args[4]);
@@ -120,19 +120,19 @@ class Node {
 	/*
 	 * set current time interval 
 	 */ 
-	$this->etime = $this->curtime;
-	$this->stime = $this->etime - $G['TIMEPERIOD'];
+	$this->end = $this->curtime;
+	$this->start = $this->end - $G['TIMEPERIOD'];
 
 	/*  Make sure start time is not before the module start time  */
-	if ($this->stime < $this->modinfo[$module]['stime'])
-	    $this->stime = $this->modinfo[$module]['stime'];
+	if ($this->start < $this->modinfo[$module]['start'])
+	    $this->start = $this->modinfo[$module]['start'];
 
 	/*
 	 *  all timestamps are always aligned to the timebound
 	 *  defined in the comolive.conf file.
 	 */
-	$this->stime -= $this->stime % $G['TIMEBOUND'];
-	$this->etime -= $this->etime % $G['TIMEBOUND'];
+	$this->start -= $this->start % $G['TIMEBOUND'];
+	$this->end -= $this->end % $G['TIMEBOUND'];
 
     }
 
@@ -204,24 +204,24 @@ class Node {
     }
 
 
-    function SetStarttime ($stime) 
+    function SetStarttime ($start) 
     {
-        $this->stime = $stime;
+        $this->start = $start;
     }
 
-    function SetEndtime ($etime) 
+    function SetEndtime ($end) 
     {
-        $this->etime = $etime;
+        $this->end = $end;
     }
 
-    function CheckFirstPacket($stime, $mod) 
+    function CheckFirstPacket($start, $mod) 
     {
-        if ($stime < $this->modinfo[$mod]['stime']){
-            $this->stime = $this->modinfo[$mod]['stime'];
+        if ($start < $this->modinfo[$mod]['start']){
+            $this->start = $this->modinfo[$mod]['start'];
         } else {
-            $this->stime = $stime;
+            $this->start = $start;
         }
-        return $this->stime;
+        return $this->start;
     }
 
     /*  Return a list of modules that support different features  
@@ -341,11 +341,11 @@ class Node {
      *     information about modules. it should disappear in the 
      *     long term. 
      */  
-    function module_args($name, $stime, $etime, $args)
+    function module_args($name, $start, $end, $args)
     {
 	// $modargs = "filter={$this->modinfo[$name]['filter']}&";
 	$modargs = "";
-	$interval = $etime - $stime;
+	$interval = $end - $start;
 	switch ($name) {
 	case "alert":
 	    $modargs = $modargs . "url=dashboard.php&";
@@ -365,11 +365,11 @@ class Node {
 
 	    $modargs = $modargs . "source=tuple&";
 	    $modargs = $modargs . "interval=$interval&";
-	    $modargs = $modargs . "align-to=$stime&";
+	    $modargs = $modargs . "align-to=$start&";
 	    $modargs = $modargs . "topn=$items&";
 	    $modargs = $modargs . "url=generic_query.php&";
-	    $modargs = $modargs . "urlargs=stime=$stime&";
-	    $modargs = $modargs . "urlargs=etime=$etime&";
+	    $modargs = $modargs . "urlargs=start=$start&";
+	    $modargs = $modargs . "urlargs=end=$end&";
 	    $modargs = $modargs . "urlargs=interval=$interval&";
 	    $modargs = $modargs . "urlargs=module=tuple&";
 	    $modargs = $modargs . "urlargs=source=tuple&";
@@ -390,7 +390,7 @@ class Node {
 		$items = $_COOKIE[$cookiename];
 
 	    $modargs = $modargs . "topn=$items&";
-	    $modargs = $modargs . "align-to=$stime&";
+	    $modargs = $modargs . "align-to=$start&";
 	    $modargs = $modargs . "source=tuple&";
 	    $modargs = $modargs . "interval=$interval&";
 	    break;
@@ -398,10 +398,10 @@ class Node {
         case "unknowns": 
 	    $modargs = $modargs . "source=tuple&";
 	    $modargs = $modargs . "interval=$interval&";
-	    $modargs = $modargs . "align-to=$stime&";
+	    $modargs = $modargs . "align-to=$start&";
 	    $modargs = $modargs . "url=generic_query.php&";
-	    $modargs = $modargs . "urlargs=stime=$stime&";
-	    $modargs = $modargs . "urlargs=etime=$etime&";
+	    $modargs = $modargs . "urlargs=start=$start&";
+	    $modargs = $modargs . "urlargs=end=$end&";
 	    $modargs = $modargs . "urlargs=interval=$interval&";
 	    $modargs = $modargs . "urlargs=module=tuple&";
 	    $modargs = $modargs . "urlargs=source=tuple&";

@@ -7,7 +7,7 @@
  *  an image.
  *
  *  query.php needs to be passed comonode=host:port 
- *  other options are module, filter, etime, and  stime 
+ *  other options are module, filter, end, and  start 
  * 
  *  set some internal variables 
  */
@@ -18,8 +18,8 @@
  */
 
 class Query {
-    var $stime;
-    var $etime;
+    var $start;
+    var $end;
     var $filter = "all";
     var $query_string;
     var $format;
@@ -33,7 +33,7 @@ class Query {
     var $fullname;
 
     /*  Constructor  */
-    function Query ($stime, $etime, $G) {
+    function Query ($start, $end, $G) {
         $results_dir = $G['RESULTS']; 
 	$gp = $G['GNUPLOT']; 
 	$con = $G['CONVERT'];
@@ -41,11 +41,11 @@ class Query {
 
         $this->GNUPLOT=$gp;
         $this->CONVERT=$con;
-        $this->stime=$stime;
-        $this->etime=$etime;
+        $this->start=$start;
+        $this->end=$end;
 
         /*  Set the Granularity  */
-        $this->granularity = ($this->etime - $this->stime) / $res;
+        $this->granularity = ($this->end - $this->start) / $res;
 
         /*
          * Check directories and make sure they exist and are writable
@@ -62,16 +62,16 @@ class Query {
         $a = explode("&", $args);
         for ($i=0; $i<count($a);$i++){
             $var = explode("=", $a[$i]);
-            if (!(("stime" == $var[0]) || ("etime" == $var[0]) || 
+            if (!(("start" == $var[0]) || ("end" == $var[0]) || 
 		  ("comonode" == $var[0]) || ("module" == $var[0]) ||
 		  ("format" == $var[0]))) {
                 $query .= "&" . $a[$i];
             }
         }
         if ($module != "netflow-anon") {
-	   $this->query_string  = "module=$module&start=$this->stime&end=$this->etime&wait=$this->wait&format=$format&granularity=$this->granularity" . $query;
+	   $this->query_string  = "module=$module&start=$this->start&end=$this->end&wait=$this->wait&format=$format&granularity=$this->granularity" . $query;
         } else {
-	   $this->query_string  = "module=$module&start=$this->stime&end=$this->etime&wait=$this->wait&format=$format" . $query;
+	   $this->query_string  = "module=$module&start=$this->start&end=$this->end&wait=$this->wait&format=$format" . $query;
         }
         return $this->query_string;
     }
@@ -98,7 +98,7 @@ class Query {
     }
     function plot_query($query_output, $comonode, $module) {
 
-	$this->filename = "$comonode" . "_" . $module . "_" . $this->stime . "_" . $this->etime;
+	$this->filename = "$comonode" . "_" . $module . "_" . $this->start . "_" . $this->end;
 	$fullname = "$this->rootdir/$this->results_dir/$this->filename";
 
         /*  See if the plot is already there  */
