@@ -1,0 +1,98 @@
+<!--  $Id:$ -->
+<html>
+  <head>
+    <title>CoMolive! - Intel Research Cambridge</title>
+    <link rel="stylesheet" type="text/css" href="css/live.css">
+    <link rel="stylesheet" type="text/css" href="css/nodeview.css">
+    <link rel="shortcut icon" href="images/favicon.ico">
+    <meta http-equiv="Content-Type" content="text/html" charset="iso-8859-1">
+    <meta name=description content="CoMolive!">
+  </head>
+
+  <body>
+    <?= $header ?>
+
+<body>
+<table class=fence>
+  <tr>
+    <td class=leftmain>
+
+    <div class="sysinfobar">
+    <form action="nodeview.php" method="GET">
+    <center>
+    <table border=0><tr><td>
+        <table class=sysinfo border=0>
+            <tr><td width=300> 
+            <div class=title>Group name</div> 
+            </td></tr>
+	    <tr><td> 
+	    <select size=1 name=groupselect>
+	        <option value=default selected>Group
+	    <?  for ($i = 0; $i < count($all_groups); $i++) { ?>
+		<option value=<?=$all_groups[$i][0]?>>
+		<?=$all_groups[$i][1]?>
+	    <? } ?>
+	    </select>
+	    </td></tr>
+	    <tr><td>  
+		<div class=title>Como Node </div> 
+	    </td></tr>
+	    <tr><td>
+		<?=$comonode?>
+	    </td></tr>
+	    <tr><td>
+		<div class=title>Node Name</div> 
+	    </td> </tr>
+	    <tr><td>
+		<?= $node->nodename ?>
+	    </td></tr>
+            <tr><td>
+		<div class=title>Location</div> 
+	    </td></tr>
+	    <tr><td>
+		<?= $node->nodeplace ?>
+	    </td></tr>
+	    <tr><td>
+		<div class=title>Interface</div>
+	    </td></tr>
+	    <tr><td>
+		<?= $node->linkspeed ?>
+	    </td></tr>
+	    <tr><td>
+		<div class=title>Data Source</div>
+	    </td></tr>
+	    <tr><td>
+		<?= $node->comment ?>
+	    </td></tr>
+	    <tr><td>
+		<input type="submit" name=method value="Submit"> 
+	    </td></tr>
+	</table>
+	<input type=hidden name=comonode value="<?=$comonode?>">
+	<input type=hidden name=nodename value="<?=$node->nodename?>">
+	<input type=hidden name=nodeplace value="<?=$node->nodeplace?>">
+	<input type=hidden name=speed value="<?=$node->linkspeed?>">
+	<input type=hidden name=comment value="<?=$node->comment?>">
+    </form>
+ 
+	</td><td valign=top>
+	    <form action="nodeview.php" method="GET">
+	    <table border=0>
+		<tr><td>
+		    <div class=title>Add a new group name</div> 
+                </td></tr>
+		<tr><td>
+		    <input type=textbox name=groupname>
+		</td></tr>
+		<tr><td align=center>
+		    <input type=submit name=method value="Add Group">
+		    <input type=hidden name=comonode value="<?=$comonode?>">
+		</td></tr>
+	    </table>
+	    </form>
+	</td></tr></table>
+    </div>
+
+    <?= $footer ?>
+    </td></tr>
+</table>
