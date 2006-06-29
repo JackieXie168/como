@@ -1,7 +1,8 @@
-<!--  $Id$  -->
+/*  $Id$  */
 var xmlHttpMainMenu;
 
-function createXMLHttpRequestMainMenu() {
+function createXMLHttpRequestMainMenu() 
+{
     if (window.ActiveXObject) {
         xmlHttpMainMenu = new ActiveXObject("Microsoft.XMLHTTP");
     } else if (window.XMLHttpRequest) {
@@ -9,7 +10,8 @@ function createXMLHttpRequestMainMenu() {
     }
 }
 
-function startMenuRequest(val) {
+function startMenuRequest(val) 
+{
     var val;
     createXMLHttpRequestMainMenu();
     xmlHttpMainMenu.onreadystatechange = handleMenuStateChange;
@@ -17,7 +19,8 @@ function startMenuRequest(val) {
     xmlHttpMainMenu.send(null);
 }
 
-function handleMenuStateChange() {
+function handleMenuStateChange() 
+{
     if(xmlHttpMainMenu.readyState == 4 && xmlHttpMainMenu.status == 200)
         document.getElementById("results").innerHTML = xmlHttpMainMenu.responseText;
 }

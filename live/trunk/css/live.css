@@ -7,9 +7,9 @@
 /*  Setup defaults for page  */
 body,table,tr,td {
     font-family : "lucida sans unicode", verdana, arial, sans-serif;
-    font-size: 9pt;
-    padding:0;
-    background:#FFF;
+    font-size : 9pt;
+    padding : 0;
+    background : #FFF;
 }
 a,a:visited  {
     color: #475677;
@@ -105,6 +105,16 @@ img {
 }
 
 #rightcontenttext {
+<<<<<<< .mine
+    padding-left:9px;
+    background:#FFF;
+    top:0px;
+    width:95%;
+    height:20%;
+    border:1px 1px 1px 1px;
+    border-style:solid;
+    border-color:black;
+=======
     padding-left: 9px;
     background: #FFF;
     top: 0px;
@@ -113,6 +123,7 @@ img {
     border: 1px;
     border-style: solid;
     border-color: black;
+>>>>>>> .r672
 }
 
 #logo {

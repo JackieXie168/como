@@ -1,0 +1,27 @@
+.nodeselect {
+    width:40%;
+    text-align:center;
+    left:10px;
+    padding-left:5px;
+    padding-right:5px;
+}
+.leftmain {
+    width:70%;
+    vertical-align:top
+    padding:10px;
+}
+.grouphead {
+    font-size : 16px;
+    font-weight : bold;
+    background-color : #EEE;
+}
+.grouplink{
+    font-size : 10px;
+    display : inline;
+}
+.querygrouplink{
+    font-size : 10px;
+    display : inline;
+    text-align : right;
+}
+

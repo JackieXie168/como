@@ -14,6 +14,7 @@
     *   have a lst extension
     */
   
+    $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
     $dadir = $G['NODEDB'];
     $handle=opendir("$dadir");
     /**
@@ -26,188 +27,99 @@
      *       [0] => default.lst
      *       [1] => Como Nodes
      */ 
-    $allgroups=array();
-    $x=0;
+    $all_groups = array();
+    $node_array = array();
+    $n = $x = 0;
+    /*  Read the directory and populate node array  */
     while (false!==($filez= readdir($handle))) {
         if ($filez!= "." && $filez!= ".." && ereg (".*\.lst$", $filez)) {
 	    if (file_exists("{$G['NODEDB']}/$filez")) {
 	        $desc = file ("{$G['NODEDB']}/$filez");
-	        $allgroups[$x][0] = $filez;
-	        $allgroups[$x][1] = $desc[0];
-		$x++;
-	   }
-        }
-    }
-
-    print_header(1, null); 
-?>
-<script>
-    function clearText(thefield){
-    if (thefield.defaultValue==thefield.value)
-        thefield.value = ""
-    }
-</script>
-<style>
-    .nodeselect {
-	width:40%;
-	text-align:center;
-	left:10px;
-	padding-left:5px;
-	padding-right:5px;
-    }
-    .leftmain {
-	width:70%;
-	vertical-align:top
-	padding:10px;
-    }
-    .grouphead {
-        font-size : 16px;
-        font-weight : bold;
-        background-color : #EEE;
-    }
-    .grouplink{
-        font-size : 10px;
-        display : inline;
-    }
-    .querygrouplink{
-        font-size : 10px;
-        display : inline;
-        text-align : right;
-    }
-
-</style>
-<body>
-<table class=fence>
-  <tr>
-    <td class=leftmain>
-
-<?php
-/**  
- *  Organize the hosts by group and display 
- */
-$numgroup = count($allgroups);
-if ($numgroup < 1) {
-    print "<div class=grouphead>CoMo Nodes</div>";
-    print "no como nodes saved";
-} else { 
-    for ($i=0;$i<count($allgroups);$i++) {
-	$nodefile = "{$G['NODEDB']}/{$allgroups[$i][0]}";
-        /*  nomnodes is the number of como nodes minus the 2 desc lines  */
-        $numnodes = (count(file ("$nodefile"))-2);
-	/*  trim and urlencode the group name if any spaces exist  
-         *  Warning, you must use allgroups[$i][1] when you compare 
-         *  the strings.  */
-        $groupname = urlencode(trim($allgroups[$i][1]));
-        /*  If there is no node info, handle it  */
-        if ($numnodes < 1) {
-	    print "<div class=grouphead>{$allgroups[$i][1]}";
-	    print "<a href=managenode.php?action=groupdel";
-	    print "&group={$allgroups[$i][0]}";
-	    print "&comonode=blank:44444>";
-            if ($G['ALLOWCUSTOMIZE']) {
-		print "<div class=grouplink>Remove</a>";
-		print "</div>";
-            }
-
-            print "</div>";
-	    print "no como nodes saved";
-        /**
-          *  Print out heading and nodes related to the group
-          */
-        } else {
-            /*  Get the .lst file contents  */
-	    $nodefilecontents= file($nodefile);
-            /*  Get the comonode and port for the dist query  */
-            $distcomonode = "";
-            for ($k = 2; $k < count($nodefilecontents); $k++) {
-		list($name, $comonode, $loc, $iface, $comment) 
-		    = split(';;', $nodefilecontents[$k]);
-		$distcomonode .= $comonode;
-                if ($k+1 < count($nodefilecontents)) {
-		    $distcomonode .= ";;";
-                }
-            }
-	    print "<table cellpadding=0 cellspacing=2 border=0>";
-	    for ($j=0;$j<count($nodefilecontents);$j++) {
-		/*  Print group heading  */
-		if ($j == 0) {
-		    print "<div class=grouphead>{$allgroups[$i][1]}";
-		    if ($numnodes > 1) {
-		    /*  probably should make this link an icon  */
-			print "<a href=dashboard.php?";
-			print "comonode=$distcomonode>";
-#			print "module=distquery>";
-			print "<div class=querygrouplink> ";
-			print "[Query all nodes in this group] </a>";
-			print "</div>";
-                    }
-		    /*  If ALLOWCUSTOMIZE is set  */
-		    if ($G['ALLOWCUSTOMIZE']) {
-			print "<a href=managenode.php?action=groupdel";
-			print "&group={$allgroups[$i][0]}";
-			print "&comonode=blank:44444>";
-			print "<div class=grouplink> Remove</a>";
-			print "</div>";
-		    }
-		    print "</div>";
-		} 
-		/*  print the entries in the group  */
-		if ($j > 0) {
-		    list($name, $comonode, $loc, $iface, $comment) 
-			= split(';;', $nodefilecontents[$j]);
-		    list ($host, $port) = split (":", $comonode);
-		    print "<tr>";
-		    print "<td width=200 valign=top>";
-		    if ($name != "Name") {
-			print "<a href=dashboard.php?comonode=$comonode>";
-			print "$name</a>";
+                $group = trim($desc[0]);
+		$all_groups[$n++] = trim($desc[0]);
+		$nodes = array();
+		$x = 0;
+                /*  Start at 1 because the file has group info on line 1  */
+                for ($i = 1; $i < count($desc); $i++) {
+		    /*  There are nodes in this group  */
+                    if (count($desc) != 2) {
+			list($name, $comonode, $loc, $iface, $comment) 
+			    = split(';;', $desc[$i]);
+			list ($host, $port) = split (":", $comonode);
+			$nodes[$x]['comonode'] = $comonode;
+			$nodes[$x]['host'] = $host;
+			$nodes[$x]['port'] = $port;
+			$nodes[$x]['name'] = $name;
+			if ($name != "Name")
+			    $nodes[$x]['name'] = 
+			    "<a href=dashboard.php?comonode=$comonode>$name</a>";
+			$nodes[$x]['location'] = $loc;
+			$nodes[$x]['interface'] = $iface;
+			$nodes[$x]['comment'] = $comment;
+			$nodes[$x]['delnode'] = "";
+			if (($ALLOWCUSTOMIZE) && ($i != 1)) {
+			    /*  This is to delete the router  */
+			    $tmp = "";
+			    $tmp = "<a href=managenode.php?action=delete";
+			    $tmp = $tmp . "&group=$filez";
+			    $tmp = $tmp . "&comonode=$comonode>Remove</a>";
+			    $nodes[$x]['delnode'] = $tmp;
+			}
+			$x++;
 		    } else {
-			print "$name";
-		    }
-		    print "</td>";
-		    print "<td width=100 valign=top>$port</td>";
-		    print "<td width=150 valign=top>$loc</td>";
-		    print "<td width=150 valign=top>$iface</td>";
-		    print "<td width=500 valign=top>$comment</td>";
-		    if ($name != "Name" && $G['ALLOWCUSTOMIZE']) {
-			print "<td valign=top align=right>";
-			print "<a href=managenode.php?action=delete";
-			print "&comonode=$comonode";
-			print "&group={$allgroups[$i][0]}>";
-			print "Remove</a></td>";
-		    } 
-		    print "</tr>";
+			/*  There are no nodes defined in this group  */
+                        $mes = "No Como Nodes are defined";
+                        $mes = $mes . " in this group";
+                        $nodes[0]['name'] = $mes;
+			$nodes[$x]['host'] = "";
+			$nodes[$x]['port'] = "";
+			$nodes[$x]['location'] = "";
+			$nodes[$x]['interface'] = "";
+			$nodes[$x]['comment'] = "";
+			$nodes[$x]['delnode'] = "";
+                    }
+                    
 		}
-	    }
-	    print "</table>";
+		$node_array[$group]['nodes'] = $nodes;
+		$node_array[$group]['filename'] = $filez;
+		$node_array[$group]['delgroup'] = "";
+                if ($ALLOWCUSTOMIZE) {
+                    /*  This is to delete the group  */
+                    $tmp = "";
+                    $tmp = "<a class=grouplink href=managenode.php?";
+                    $tmp = $tmp . "action=groupdel&group=$filez>";
+                    $tmp = $tmp . "Remove</a>";
+		    $node_array[$group]['delgroup'] = $tmp;
+ 
+                }
+	    } 
         }
     }
-}
-    ?>
-    </td>
-    <td class=nodeselect valign=top>
-      Select node by IP address
-      <form align=middle action=dashboard.php method=get>
-	<input type=text name=comonode size=21 value="comonode:44444"
-         onFocus=clearText(this);>
-	<input type=image src=images/go.jpg>
-      </form>
 
-    <?  if ($G['ALLOWCUSTOMIZE']) { ?>
-      <br>
-      Add a new CoMo node
-      <form align=middle action=nodeview.php method=get>
-	<input type=text name=comonode size=21 value="comonode:44444"
-         onFocus=clearText(this);>
-	<input type=image src=images/go.jpg >
-      </form>
-    <? } ?>
-    </td>
-  </tr>
-</table>
-</body>
+    $header = do_header(NULL, 1); 
+    $footer = do_footer(NULL); 
+    /**  
+     *  Organize the hosts by group and display 
+     */
+    $numnodes = count($node_array);
+    /*  If there are no nodes defined, create a blank array with a message  */
+    if ($numnodes < 1) {
+	$all_groups[0] = "CoMo Nodes";
+	$mes = "No Como Nodes have been saved";
+	$nodes = array();
+	$node_array = array();
+	$nodes[0]['name'] = $mes;
+	$nodes[$x]['host'] = "";
+	$nodes[$x]['port'] = "";
+	$nodes[$x]['location'] = "";
+	$nodes[$x]['interface'] = "";
+	$nodes[$x]['comment'] = "";
+	$nodes[$x]['delnode'] = "";
+	$node_array[$all_groups[0]]['nodes'] = $nodes;
+	$node_array[$all_groups[0]]['delgroup'] = "";
+	$node_array[$all_groups[0]]['filename'] = "";
 
+    }
 
-<?php print_footer(); ?>
-
-
+    include ("html/nodelist.html");
+?>

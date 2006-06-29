@@ -1,10 +1,5 @@
 <?
-    /*  managenode.php 
-     * 
-     *  This file will require the comonode=host:port arg passed to it  
-     *
-     *  $Id$  
-     */
+     /*  $Id$  */
     require_once "comolive.conf";
     require_once "class/node.class.php";
     require_once "include/framing.php"; 
@@ -12,77 +7,83 @@
     $G = init_global();
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
     $NODEDB = $G['NODEDB'];
-    $ABSROOT = $G['$ABSROOT'];
+    $ABSROOT = $G['ABSROOT'];
+
+    $header = do_header(NULL, 1);
+    $footer = do_footer(NULL);
 
     /*  Don't allow entrace without customization priviledge  */
     if (!$ALLOWCUSTOMIZE) {
         header("Location: index.php");
         exit;
     }
+    /*  get the node hostname and port number */
+    $comonode = "";
+    if (isset($_GET['comonode']))
+	$comonode = $_GET['comonode'];
 
+    $group = "";
     if (isset ($_GET['group']))
         $group = $_GET['group'];
-    else
-        $group = "";
 
     $nodefile = "$group";
 
-    /*  get the node hostname and port number */
-    if (isset($_GET['comonode'])){
-	$comonode = $_GET['comonode'];
-    }else{
-	print "This file requires the comonode=host:port arg passed to it";
-	exit;
-    }
-
+    $action = "add";
     if (isset ($_GET['action']))
         $action = $_GET['action'];
-    else
-        $action = "add";
 
+    /*  Add a config file or just an entry  */
     if ($action == "add") {
         $node = new Node($comonode, $G);
-        if ($node->status == "FAIL"){
-    	/*
-    	 * query failed. write error message and exit
-    	 */
-	print_header(1, $comonode); 
-        ?>
-    	<div id=content>
-    	  <div class=graph">
-    	  <br><br><center>
-    	    Sorry but the requested CoMo node is not <br>
-    	    available at the moment. Please try another time.<br><br>
-    	  </div>
-    	</div>
-        <? print_footer(); 
-    	exit;
-        } else {
-	  if (!file_exists($NODEDB)) {
-	    /*  Attempt to create the db directory  */
+        if (!($node->status)){
+	    /*
+	     * query failed. write error message and exit
+	     */
+            include ("html/node_failure.html");
+	    exit;
+        } 
+       
+	/*  Attempt to create the db directory  */
+	if (!file_exists($NODEDB)) {
 	    if (!(system ("mkdir $ABSROOT/$NODEDB"))){
-	      print "Directory $NODEDB, as specified in comolive.conf, ";
-	      print "is not writable by webserver<br>";
-	      print "Please create this directory and make ";
-	      print "it writable by the webserver<br><br>";
-	      print "$ABSROOT/$NODEDB";
-	      exit;
+		$mes = "NOTICE<br>Directory $NODEDB, as specified ";
+                $mes = $mes . "in comolive.conf, ";
+		$mes = $mes . "is not writable by the webserver<br>";
+		$mes = $mes . "Please create this directory and make ";
+		$mes = $mes . "it writable by the webserver<br><br>";
+		$generic_message = $mes;
+		include ("html/generic_message.html");
+		exit;
 	    }
-	  }
-	  if (!(file_exists("$NODEDB/$nodefile"))) {
+	}
+        /*  Try to open the file for writing if it doesn't exist  */
+	if (!(file_exists("$NODEDB/$nodefile"))) {
+            /*  The file doesn't exist, create a message  */
 	    if (!($fh = fopen("$NODEDB/$nodefile", "w"))){
-	      print "Unable to open file $NODEDB/$nodefile<br>";
-	      exit;
+		$mes = "NOTICE<br>Unable to open file for writing";
+                $mes = $mes . "<br>$NODEDB/$nodefile<br>";
+		$mes = $mes . "Please check permissions<br>";
+		$mes = $mes . "on this directory and the file.<br>";
+		$generic_message = $mes;
+		include ("html/generic_message.html");
+		exit;
 	    }
-    
+            /*  Create the config file  */
 	    $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;\n";
-    	    if (fwrite ($fh, $tofile) === FALSE){
-    		print "$NODEDB/$nodefile not writable";
-    		exit;
-    	    }
-    	    fclose($fh);
-	  } else {
-    	    $fh = fopen("$NODEDB/$nodefile", "a");
+            /*  Write data to the file  */                               
+	    fwrite ($fh, $tofile);
+	    fclose($fh);
+	} else {
+            /*  The file does exist, append new data to it  */
+    	    if (($fh = fopen("$NODEDB/$nodefile", "a")) === FALSE) {
+		$mes = "NOTICE<br>Unable to open file for writing";
+                $mes = $mes . "<br>$NODEDB/$nodefile<br>";
+		$mes = $mes . "Please check permissions<br>";
+		$mes = $mes . "on this directory and the file.<br>";
+		$generic_message = $mes;
+		include ("html/generic_message.html");
+		exit;
+            }
 
     	    $tmp = $node -> nodename . ";;" ;
     	    $tmp = $tmp . $node -> comonode . ";;" ;
@@ -90,42 +91,43 @@
             $tmp = $tmp . $node -> linkspeed . ";;" ;
     	    $tmp = $tmp . $node -> comment. "\n" ;
     	    $tofile = $tmp;
-    	    if (fwrite ($fh, $tofile) === FALSE) {
-	      print "Unable to write to file $nodefile<br>";
-	      exit;
-    	    } else {
-	      fclose($fh);
-	      header("Location: index.php");
-    	    }
-	  }
-        } 
-      }
-      if ($action == "delete"){
+    	    fwrite ($fh, $tofile);
+	    fclose($fh);
+	    header("Location: index.php");
+        }
+    }
+    /*  Delete a entry in the config file matching comonode  */
+    if ($action == "delete") {
         $datafile = file ("$NODEDB/$nodefile");
         $tofile = "";
-        for ($i=0;$i<count($datafile);$i++){
-            if ($i==0) {
+        for ($i = 0; $i < count($datafile); $i++){
+            if ($i == 0) {
     	        $tofile = $tofile . $datafile[$i];
             } else {
 		$val = explode (";;", $datafile[$i]);
+
 		if ($comonode != $val[1]){
 		    $tofile = $tofile . $datafile[$i];
 		}
             }
         }
-	$fh = fopen("$NODEDB/$nodefile", "w+");
-        if (fwrite ($fh, $tofile) === FALSE) {
-	  print "Unable to write to file $nodefile<br>";
-	  exit;
-	} else {
-	  fclose($fh);
-	  header("Location: index.php");
-	}
-      }
-      if ($action == "groupdel"){
-          system ("rm -rf $NODEDB/$group");
-	  header("Location: index.php");
-      }
+	if (($fh = fopen("$NODEDB/$nodefile", "w+")) === FALSE) {
+	    $mes = "NOTICE<br>Unable to open file for writing";
+	    $mes = $mes . "<br>$NODEDB/$nodefile<br>";
+	    $mes = $mes . "Please check permissions<br>";
+	    $mes = $mes . "on this directory and the file.<br>";
+	    $generic_message = $mes;
+	    include ("html/generic_message.html");
+	    exit;
+        }
+        fwrite ($fh, $tofile);
+	fclose($fh);
+	header("Location: index.php");
+    }
+    if ($action == "groupdel"){
+	system ("rm -rf $NODEDB/$group");
+	header("Location: index.php");
+    }
     ?>
 
   </object>

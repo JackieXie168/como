@@ -1,9 +1,10 @@
-<!--  $Id$  -->
+/*  $Id$  */
 
 if (!document.getElementById)
     document.getElementById = function() { return null; }
 
-function initializeConfigMenu(module) {
+function initializeConfigMenu(module) 
+{
     var menuId = module + "MenuEdit";
     var triggerId = module + "TrigEdit";
     var menu = document.getElementById(menuId);
@@ -20,7 +21,8 @@ function initializeConfigMenu(module) {
     }
 }
 
-function readCookie(name) {
+function readCookie(name) 
+{
     var nameEQ = name + "=";
     var ca = document.cookie.split(';');
     for(var i=0;i < ca.length;i++) {
@@ -32,7 +34,8 @@ function readCookie(name) {
     return null;
 }
 
-function initializeMenu(module) {
+function initializeMenu(module) 
+{
     var menuId = module + "Menu";
     var triggerId = module + "Trig";
     var imageId = module + "Image"; 
