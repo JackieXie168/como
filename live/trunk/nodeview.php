@@ -32,8 +32,6 @@
         include ("html/generic_message.html");
         exit;
     }
-#    $comonode = "";
-#    if (isset($_GET['comonode'])) 
     $comonode = $_GET['comonode'];
 
 
@@ -42,13 +40,13 @@
 	if (isset($_GET['groupselect']))
 	    $groupselect = $_GET['groupselect'];
 	if (isset($_GET['nodename']))
-	    $nodename= $_GET['nodename'];
+	    $nodename= trim($_GET['nodename']);
 	if (isset($_GET['nodeplace']))
-	    $nodeplace = $_GET['nodeplace'];
+	    $nodeplace = trim($_GET['nodeplace']);
 	if (isset($_GET['speed']))
-	    $speed = $_GET['speed'];
+	    $speed = trim($_GET['speed']);
 	if (isset($_GET['comment']))
-	    $comment = $_GET['comment'];
+	    $comment = trim($_GET['comment']);
 
         /*  Create the default file  */
         if ($groupselect == "default") {
@@ -86,12 +84,17 @@
         break; 
 
     case "Add Group": 
+        if ($groupname == "default") {
+	    header("Location: nodeview.php?comonode=$comonode");
+            exit;
+        }
 	$groupfname = ereg_replace(" ", "_", $groupname);
+        $groupfname = $groupfname . ".lst";
         if (!file_exists("$NODEDB/$groupfname")) {
-	    if ($fh = fopen ("$NODEDB/$groupfname.lst", "w")) {
+	    if ($fh = fopen ("$NODEDB/$groupfname", "w")) {
 		$towrite = "$groupname\n";
 		fwrite ($fh, $towrite);
-		header ("Location: nodeview.php?comonode=$comonode");
+	#	header ("Location: nodeview.php?comonode=$comonode");
 	    } else {
 		$mes = "NOTICE<br>File $NODEDB/$groupselect ";
 		$mes = $mes . "is not writable by the webserver<br>";
@@ -124,20 +127,27 @@
 	    exit;
         }
 	$all_groups = array();
-        $x = 0;
-	while (false !== ($filez = readdir($handle))) {
-	   if ($filez!= "." && $filez!= ".." && ereg (".*\.lst$", $filez)) {
-               if (file_exists("$NODEDB/$filez")) {
-		   $desc = file ("$NODEDB/$filez");
-		   $all_groups[$x][0] = $filez;
-		   $all_groups[$x][1] = $desc[0];
-                   $x++;
-               }
-	   }
-	}
+        $all_groups = list_dir($handle, $NODEDB);
 	break;
     }
 
     include ("html/nodeview.html");
+
+
+function list_dir ($handle, $NODEDB) 
+{
+    $x = 0;
+    while (false !== ($filez = readdir($handle))) {
+       if ($filez!= "." && $filez!= ".." && ereg (".*\.lst$", $filez)) {
+	   if (file_exists("$NODEDB/$filez")) {
+	       $desc = file ("$NODEDB/$filez");
+	       $all_groups[$x][0] = $filez;
+	       $all_groups[$x][1] = $desc[0];
+	       $x++;
+	   }
+       }
+    }
+    return ($all_groups);
+}
 ?>
 
