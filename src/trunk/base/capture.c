@@ -128,7 +128,7 @@ create_table(module_t * mdl, timestamp_t ivl)
  * Called by capture_pkt() process when a timeslot is complete.
  * it flushes the flow table (if it exists and it is non-empty)
  * and all memory state of the module. The state is queued in the 
- * exp_tables list to be sent to EXPORT later.
+ * em_tables list to be sent to EXPORT later.
  * 
  * XXX we send both the pointer to the module state and the 
  *     capture table. this is going to change in the near future 
@@ -136,10 +136,10 @@ create_table(module_t * mdl, timestamp_t ivl)
  *
  */
 static void
-flush_state(module_t * mdl, tailq_t *exp_tables)
+flush_state(module_t * mdl, tailq_t *em_tables)
 {
     ctable_t *ct;
-    expiredmap_t *exp;
+    expiredmap_t *em;
 
     /* check if the table is there and if it is non-empty */
     ct = mdl->ca_hashtable;
@@ -173,14 +173,14 @@ flush_state(module_t * mdl, tailq_t *exp_tables)
     }
 #endif
 
-    exp = alc_malloc(&(mdl->alc), sizeof(expiredmap_t));
-    exp->next = NULL;
-    exp->ct = ct;
-    exp->mdl = mdl;
-    exp->fstate = mdl->fstate;
-    exp->shared_map = mdl->shared_map;
+    em = alc_malloc(&(mdl->alc), sizeof(expiredmap_t));
+    em->next = NULL;
+    em->ct = ct;
+    em->mdl = mdl;
+    em->fstate = mdl->fstate;
+    em->shared_map = mdl->shared_map;
     
-    TQ_APPEND(exp_tables, exp, next);
+    TQ_APPEND(em_tables, em, next);
     map.stats->table_queue++;
 
     /* reset the state of the module */
@@ -816,26 +816,26 @@ ca_ipc_freeze(procname_t sender, __unused int fd, __unused void * buf,
 static void
 ca_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 {
-    expiredmap_t *exp;
+    expiredmap_t *em;
     
     /* only EXPORT (sibling) should send this message */
     assert(sender == sibling(EXPORT));
     assert(len == sizeof(expiredmap_t *));
     
-    exp = *((expiredmap_t **) buf);
+    em = *((expiredmap_t **) buf);
     
-    while (exp) {
-	expiredmap_t *exp_next = exp->next;
+    while (em) {
+	expiredmap_t *em_next = em->next;
 	
 	/* ok, move freed memory into the main memory */
-	memmap_destroy(exp->shared_map);
+	memmap_destroy(em->shared_map);
 	
 	map.stats->table_queue--;
 	
-	/* NOTE: *exp was allocated inside exp->shared_map so memmap_destroy
-	 * will deallocate that too. That's why we use exp_next.
+	/* NOTE: *em was allocated inside em->shared_map so memmap_destroy
+	 * will deallocate that too. That's why we use em_next.
 	 */
-	exp = exp_next;
+	em = em_next;
     }
 }
 
