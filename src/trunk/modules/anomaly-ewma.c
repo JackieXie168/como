@@ -338,7 +338,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
             w = sprintf(config->urlstr, "%s?", url);
             for (k = 0; k < no_urlargs; k++)
                 w += sprintf(config->urlstr + w, "%s&", urlargs[k]);
-	    w += sprintf(config->urlstr + w, "stime=%%u&etime=%%u"); 
+	    w += sprintf(config->urlstr + w, "start=%%u&end=%%u"); 
         }
 
 	return config->str; 
