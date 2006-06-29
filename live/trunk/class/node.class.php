@@ -31,8 +31,9 @@ class Node {
      * and store all information about the node and the modules
      * that are currently running. 
      */
-    function Node($comonode, $G) {
-	$this->status = TRUE; 
+    function Node($comonode, $G) 
+    {
+	$this->status = 1; 
         $this->db_path = $G['ABSROOT'] . "/" . $G['NODEDB'];
 	$this->results = $G['ABSROOT'] . "/" . $G['RESULTS'];
 
@@ -46,7 +47,7 @@ class Node {
         $this->hostport = (count($hostarray) > 1)? $hostarray[1] : $hostarray; 
 
 	if (!is_numeric($this->hostport)) {
-	    $this->status = FALSE; 
+	    $this->status = 0; 
 	    return; 
         } 
 
@@ -56,7 +57,7 @@ class Node {
          */ 
 	$info = $this->getStatus();
 	if ($info == FALSE) {
-	    $this->status = FALSE; 
+	    $this->status = 0; 
 	    return; 
         } 
 
@@ -143,7 +144,8 @@ class Node {
      * name that contains the $needle. if no file is found 
      * return FALSE. 
      */ 
-    function queryDir($dadirname, $needle) {
+    function queryDir($dadirname, $needle) 
+    {
         $dh = opendir("$dadirname");
 
 	while (FALSE !== ($file = readdir($dh))) 
@@ -161,7 +163,8 @@ class Node {
      * future reference. return the contents of the file. 
      *
      */
-    private function getStatus() {
+    private function getStatus() 
+    {
         $statuslife = "600";
         $timenow = time();
 
@@ -195,32 +198,24 @@ class Node {
         return $info; 
     }
     
-    function removeFile($filename) {
+    function removeFile($filename)
+    {
 	system ("rm -f $this->results/$filename");
     }
 
-    function PrintDebug() {
-	print "<br>DEBUGING INFO<BR>";
-        print "nodename: $this->nodename<br>";
-        print "nodeplace: $this->nodeplace<br>";
-	print "comment: $this->comment<br>";
-	print "linkspeed: $this->linkspeed<br>";
-	print "version: $this->version<br>";
-	print "builddate: $this->builddate<br>";
-	print "firstpacket: $this->firstpacket<br>";
-	print "lastpacket: $this->lastpacket<br>";
 
-    }
-
-    function SetStarttime ($stime) {
+    function SetStarttime ($stime) 
+    {
         $this->stime = $stime;
     }
 
-    function SetEndtime ($etime) {
+    function SetEndtime ($etime) 
+    {
         $this->etime = $etime;
     }
 
-    function CheckFirstPacket($stime, $mod) {
+    function CheckFirstPacket($stime, $mod) 
+    {
         if ($stime < $this->modinfo[$mod]['stime']){
             $this->stime = $this->modinfo[$mod]['stime'];
         } else {
@@ -233,7 +228,8 @@ class Node {
      *  needle may be gnuplot, html, etc.  This info is captured
      *  on a per module basis.  
      */
-    function getModules($needle) {
+    function getModules($needle) 
+    {
         $keys = array_keys($this->modinfo);
         $modules = array();
         for ($i = 0; $i < count($keys); $i++) {
@@ -254,7 +250,8 @@ class Node {
      * names. 
      *
      */
-    private function parseConfig($config, $which) {
+    private function parseConfig($config, $which) 
+    {
 	/* 
 	 * search the config array for $which 
    	 */ 
@@ -282,7 +279,8 @@ class Node {
      * "main" for the main window and "secondary" for the right hand queries
      * 
      */
-    function getConfig($which) {
+    function getConfig($which) 
+    {
 	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
 	if (file_exists($filename) == false) { 
 	    /* create a default config file */ 
@@ -311,7 +309,8 @@ class Node {
      * if they support only html. 
      * 
      */ 
-    function saveConfig($mods) { 
+    function saveConfig($mods) 
+    { 
 	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
 	$mainline = "main"; 
 	$secline = "secondary"; 
