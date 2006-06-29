@@ -357,7 +357,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
             w = sprintf(urlstr, "%s?", url);
             for (k = 0; k < no_urlargs; k++)
                 w += sprintf(urlstr + w, "%s&", urlargs[k]);
-	    w += sprintf(urlstr + w, "stime=%%u&etime=%%u"); 
+	    w += sprintf(urlstr + w, "start=%%u&end=%%u"); 
         }
 
 	return s; 
