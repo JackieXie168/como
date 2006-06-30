@@ -32,6 +32,19 @@
 	include "html/node_failure.html"; 
 	exit;
     }
+    /*  Check if there are running modules that support CoMoLive  */
+    $nummods = count($node->getModules("gnuplot"));
+    if ($nummods == 0) {
+	$header = do_header(NULL, 0); 
+	$footer = do_footer(); 
+        $mes = "NOTICE<br>There are no running modules<br>";
+        $mes = $mes . "that support the CoMoLive interface<br>";
+        $mes = $mes . "Please check your modules.<br><br>";
+        $mes = $mes . "Host = $comonode.<br>";
+        $generic_message = $mes;
+        include ("html/generic_message.html");
+        exit;
+    }
 
     /* parse input variables */ 
     $iv = init_env($node);
