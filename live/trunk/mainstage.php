@@ -55,7 +55,7 @@
 <html>
   <head>
     <link rel="stylesheet" type="text/css" name="como" href="css/live.css">
-    <style type="text/css">
+<style type="text/css">
       #nav ul {
 	border-bottom: 1px solid; 
         padding:0px;
@@ -93,9 +93,7 @@
         border-style:none;
         background-color:#DDD;
       }
-    </style>
-  </head>
-  <body>
+</style>
     <object>
    
       <div id="nav">
@@ -118,7 +116,7 @@
                 if ($module == $allmods[$i]) {
 		    print "<li class=\"selected\">$allmods[$i]</li>";
                 } else {
-		    print "<li><a href=\"mainstage.php?";
+		    print "<li><a href=\"loadcontent.php?";
 #		    print "comonode=$node->comonode&module=$allmods[$i]&";
 		    print "comonode=$comonode&module=$allmods[$i]&";
 /*  Commenting this out because I don't know what it is...  */

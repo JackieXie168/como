@@ -22,7 +22,7 @@ if (isset($_GET['comonode']))
       &nbsp;&nbsp;&nbsp;List&nbsp;&nbsp;&nbsp;</a>
     </li>
     <li>
-      <a href=<?=$webroot?>>
+      <a href=<?=$webroot?>/worldview.php>
       &nbsp;&nbsp;&nbsp;Map&nbsp;&nbsp;&nbsp;</a>
     </li>
 <? } else if ($sub == "system") { ?>

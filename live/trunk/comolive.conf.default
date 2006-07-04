@@ -6,6 +6,11 @@
  */
 function init_global() {
     /* 
+     * CoMoLive! Version
+     */
+    $GLOBAL['VERSION'] = 1.0;
+    $GLOBAL['REV'] = ;
+    /* 
      * The default amount of time that CoMo should 
      * query initially (in seconds)
      */
