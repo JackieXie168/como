@@ -16,7 +16,7 @@ class Node {
     var $linkspeed;
     var $version;
     var $builddate;
-    var $modstart;
+    var $comostime;             /* Time como was started */
     var $curtime;
     var $modinfo;
     var $module;
@@ -78,7 +78,7 @@ class Node {
 		break;
 
 	    case "Start:":
-		$this->modstart = $args[0];
+		$this->comostime = $args[0];
 		break;
 
 	    case "Current:":
@@ -135,7 +135,6 @@ class Node {
 	$this->end -= $this->end % $G['TIMEBOUND'];
 
     }
-
 
     /* 
      * -- queryDir

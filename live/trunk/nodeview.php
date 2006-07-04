@@ -105,7 +105,12 @@
 		exit;
 	    }
 	}
-	break; 
+        /*  If we add a group, we need to go through the addnode
+         *  case.  I am commenting out the break and reassigning $method
+         *  And so let it be commentted :)
+         */
+        $method = "addnode";
+	/* break; */
 
     case "addnode": 
 
