@@ -1,6 +1,5 @@
-<!--  $Id$  -->
-
 <?php
+    /*  $Id$  */
     require_once "class/node.class.php";	/* Node class */
     require_once "include/framing.php"; 	/* header/footer functions */
     require_once "include/vcrbuttons.php";      /* zoom_in, zoom_out, etc. */

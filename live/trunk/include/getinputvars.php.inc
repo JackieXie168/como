@@ -1,6 +1,5 @@
-<!--  $Id$ -->
-
 <?php
+/*  $Id$  */
 
 /*  getinputvars.php.inc
  *
