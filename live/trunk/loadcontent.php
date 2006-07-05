@@ -11,19 +11,17 @@ if (isset($_SERVER['QUERY_STRING']))
         text-align : center;
         display : none;
     }
-    .content {
-
+    #content {
     }
 </style>
 
 <script language="JavaScript" src="js/loading.js"></script>
+</head>
+    <body onload="showLoading('mainstage.php?<?=$url?>')">
+    <div id=loading>
+	<img src=images/loading.gif>
+    </div>
 
-  </head>
-  <body onload="showLoading('mainstage.php?<?=$url?>')">
-<div id=loading>
-    <img src=images/loading.gif>
-</div>
-
-  </body>
-<div id=content> </div>
+    <div id=content> <div>
+    </body>
 </html>
