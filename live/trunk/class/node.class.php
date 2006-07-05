@@ -1,6 +1,5 @@
-<!--  $Id$  -->
-
 <?php
+/*  $Id$  */
 
 class Node {
     var $status; 		/* TRUE if initialization succeded */

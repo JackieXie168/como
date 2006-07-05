@@ -5,6 +5,8 @@ if (isset($_SERVER['QUERY_STRING']))
     $url = $_SERVER['QUERY_STRING'];
 
 ?>
+<html>
+<head>
 <style>
     #loading {
         font-size : 20px;
@@ -14,7 +16,8 @@ if (isset($_SERVER['QUERY_STRING']))
     #content {
     }
 </style>
-
+</head>
+<link rel="stylesheet" type="text/css" href="css/mainstage.css">
 <script language="JavaScript" src="js/loading.js"></script>
 </head>
     <body onload="showLoading('mainstage.php?<?=$url?>')">
