@@ -7,15 +7,6 @@ if (isset($_SERVER['QUERY_STRING']))
 ?>
 <html>
 <head>
-<style>
-    #loading {
-        font-size : 20px;
-        text-align : center;
-        display : none;
-    }
-    #content {
-    }
-</style>
 </head>
 <link rel="stylesheet" type="text/css" href="css/mainstage.css">
 <script language="JavaScript" src="js/loading.js"></script>
