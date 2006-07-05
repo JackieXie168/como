@@ -545,29 +545,40 @@ sflow_tag_ignore(SFTag * tag)
 	sf_skip_bytes(tag->dg, tag->len);
     } else {
 	uint32_t counters_type;
-	assert(tag->type == SFLCOUNTERS_SAMPLE);
+	if (tag->type != SFLCOUNTERS_SAMPLE) {
+	    sf_warning("Unexpected sample type %u... ignoring.\n", tag->type);
+	    tag->dg->err = SF_ABORT_DECODE_ERROR;
+	    return tag->dg->err;
+	}
 	/* skip sequence_number, source_id, sampling_interval */
 	sf_skip_bytes(tag->dg, 12);
 	counters_type = sf_read32(tag->dg);
 	switch (counters_type) {
-	case SFLCOUNTERS_GENERIC:
+	case 1: /* GENERIC */
+	case 4: /* FDDI */
+	case 6: /* WAN */
 	    sf_skip_bytes(tag->dg, sizeof(SFLIf_counters));
 	    break;
-	case SFLCOUNTERS_ETHERNET:
-	    sf_skip_bytes(tag->dg, sizeof(SFLEthernet_counters));
+	case 2: /* ETHERNET */
+	    sf_skip_bytes(tag->dg, sizeof(SFLIf_counters) +
+			  sizeof(SFLEthernet_counters));
 	    break;
-	case SFLCOUNTERS_TOKENRING:
-	    sf_skip_bytes(tag->dg, sizeof(SFLTokenring_counters));
+	case 3: /* TOKENRING */
+	    sf_skip_bytes(tag->dg, sizeof(SFLIf_counters) +
+			  sizeof(SFLTokenring_counters));
 	    break;
-	case SFLCOUNTERS_VG:
-	    sf_skip_bytes(tag->dg, sizeof(SFLVg_counters));
+	case 5: /* VG */
+	    sf_skip_bytes(tag->dg, sizeof(SFLIf_counters) +
+			  sizeof(SFLVg_counters));
 	    break;
-	case SFLCOUNTERS_VLAN:
+	case 7: /* VLAN */
 	    sf_skip_bytes(tag->dg, sizeof(SFLVlan_counters));
 	    break;
-	case SFLCOUNTERS_PROCESSOR:
-	    sf_skip_bytes(tag->dg, sizeof(SFLProcessor_counters));
-	    break;
+	default:
+	    sf_warning("Unexpected counters type %u... ignoring.\n",
+		       counters_type);
+	    tag->dg->err = SF_ABORT_DECODE_ERROR;
+	    return tag->dg->err;
 	}
     }
 
@@ -1122,7 +1133,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 	    /* unless every element was processed will add a positive number */
 	    src->drops += num_elements - eli;
 	} else {
-	    sflow_tag_ignore(&tag);
+	    if (sflow_tag_ignore(&tag) != SF_OK)
+		break;
 	}
     }
 
