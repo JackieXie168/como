@@ -141,7 +141,7 @@
 
         <? 
         /*   <img src="<?=$filename?>.jpg">  */
-          /*  This is where we print the image  */
+        /*  This is where we print the image  */
         $fullname = $query->getFullfilename($module) . ".jpg";
 	if (file_exists("$fullname")) {
 	    if ($G['USEFLASH'] == false || $module == "ports"){
@@ -154,7 +154,7 @@
 	    print "<img src=images/blankplot.jpg>";
         }
 
-
+        /*  The center is is needed twice to work properly???  */
         ?>
       </center>
       <center>
