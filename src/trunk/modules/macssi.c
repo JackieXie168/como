@@ -66,6 +66,13 @@ init(void * self, __unused char *args[])
     return MEASUREMENT_IVL;
 }
 
+static int
+check(__unused void * self, pkt_t *pkt)
+{
+    /* cannot handle CTRL packets */
+    return IEEE80211_BASE(fc_type) != IEEE80211TYPE_CTRL;
+}
+
 static uint32_t
 hash(__unused void * self, pkt_t *pkt)
 {
@@ -188,7 +195,7 @@ callbacks_t callbacks = {
     st_recordsize: sizeof(FLOWDESC),
     capabilities: {has_flexible_flush: 0, 0},
     init: init,
-    check: NULL,
+    check: check,
     hash: hash,
     match: match,
     update: update,
