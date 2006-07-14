@@ -104,6 +104,8 @@
 #define Tproto 7
 #define Tiface 8
 #define Texporter 9
+#define Tfromds   10
+#define Ttods     11
 
 struct _listnode
 {
@@ -257,6 +259,12 @@ tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
                      data->exaddr.ip);
             t->data->exaddr.ip = data->exaddr.ip;
             break;
+        case Tfromds:
+            asprintf(&(t->string), "from_ds");
+            t->data = NULL;
+        case Ttods:
+            asprintf(&(t->string), "to_ds");
+            t->data = NULL;
         }
     }
     t->right = right;
@@ -731,6 +739,18 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
                 break;
             }
             break;
+        case Tfromds:
+            if (COMO(type) == COMOTYPE_RADIO) {
+                if (IEEE80211_BASE(fc_from_ds))
+                    z = 1;
+            }
+            break;
+        case Ttods:
+            if (COMO(type) == COMOTYPE_RADIO) {
+                if (IEEE80211_BASE(fc_to_ds))
+                    z = 1;
+            }
+            break;
         }
     }
 
@@ -790,7 +810,7 @@ int evaluate(treenode_t *t, pkt_t *pkt)
 
 /* Data types and tokens used by the parser */
 
-%token NOT AND OR OPENBR CLOSEBR COLON ALL EXPORTER
+%token NOT AND OR OPENBR CLOSEBR COLON ALL EXPORTER FROMDS TODS
 %left NOT AND OR /* Order of precedence */
 %token <byte> DIR PORTDIR IFACE
 %token <word> LEVEL3 LEVEL4 NUMBER
@@ -860,6 +880,14 @@ expr: expr AND expr
     | exporter
       {
         $$ = tree_make(Tpred, Texporter, NULL, NULL, (nodedata_t *)&$1);
+      }
+    | FROMDS
+      {
+        $$ = tree_make(Tpred, Tfromds, NULL, NULL, NULL);
+      }
+    | TODS
+      {
+        $$ = tree_make(Tpred, Ttods, NULL, NULL, NULL);
       }
 ;
 ip: DIR IPADDR

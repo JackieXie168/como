@@ -135,9 +135,10 @@ not             { return(NOT); }
 \(              { return(OPENBR); }
 \)              { return(CLOSEBR); }
 ":"             { return(COLON); }
-
 all             { return(ALL); }
 exporter        { return(EXPORTER); }	
+to_ds           { return(TODS); }
+from_ds         { return(FROMDS); }
 
 [ \t\n]+
 
