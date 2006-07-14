@@ -23,6 +23,7 @@ MODULES= \
 	nfexlist.so \
 	macssi.so \
 	ipssi.so \
+	assoc.so \
 	apps.so	\
 	flowcount.so \
 	traffic.so \
