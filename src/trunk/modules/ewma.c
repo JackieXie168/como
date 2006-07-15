@@ -107,6 +107,7 @@ init(void * self, char *args[])
     cf->weight = 0.9;
     cf->change_thresh = (uint16_t) (256 * 3.0);		// fixed point 
     cf->max_connx = 2000000; 
+    uhash_initialize(&cf->hfunc);
 
     for (i = 0; args && args[i]; i++) {
 	char * wh = index(args[i], '=') + 1;
