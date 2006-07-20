@@ -292,7 +292,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
     "Date                     Mode           AP                pkts_down \
 Client              pkts_up\n"
 #define PRETTYFMT	"%.24s %14s %s %9u %s %9u\n"
-#define PLAINFMT	"%s %s %s %u %s %u\n" 
+#define PLAINFMT	"%d %s %s %u %s %u\n" 
 
 static char *
 print(__unused void * self, char *buf, size_t *len, char * const args[])
