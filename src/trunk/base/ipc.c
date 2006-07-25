@@ -461,6 +461,59 @@ ipc_wait_reply_with_fd(int fd, ipctype_t *type, void *data, size_t *sz)
     return IPC_OK;
 }
 
+
+int
+ipc_try_recv_with_fd(int fd, ipctype_t *type, void *data, size_t *sz,
+		     struct timeval *timeout)
+{
+    ipc_msg_t msg;
+    fd_set rs;
+    int r;
+    
+    FD_ZERO(&rs);
+    FD_SET(fd, &rs);
+
+    r = select(fd + 1, &rs, NULL, NULL, timeout);
+    if (r == 0) {
+	return IPC_EAGAIN;
+    }
+    
+    /* read the message header first */
+    r = como_read(fd, (char *) &msg, sizeof(msg)); 
+    if (r != sizeof(msg)) {
+    	ipc_dest_t * x;
+    	
+	if (r == 0)
+	    return IPC_EOF;
+    	
+	/* find the name for this destination */
+	for (x = ipc_dests; x && x->fd != fd; x = x->next)
+	    ;
+
+	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
+	       x ? getprocfullname(x->name) : "UNKNOWN",
+	       strerror(errno));
+	return IPC_ERR; 
+    } 
+    
+    *type = msg.type;
+	    
+    /* read the data part now */ 
+    if (msg.len > 0) {
+	if (msg.len <= (ssize_t) *sz) {
+	    como_read(fd, data, msg.len);
+	} else {
+	    char *t;
+	    como_read(fd, data, *sz);
+	    t = alloca(msg.len - *sz);
+	    como_read(fd, t, msg.len - *sz);
+	}
+	*sz = msg.len;
+    }
+    
+    return IPC_OK;
+}
+
 /* 
  * -- ipc_register
  * 
@@ -513,3 +566,26 @@ ipc_getfd(procname_t who)
     return x ? x->fd : IPC_ERR; 
 }
 
+
+/* 
+ * -- ipc_getdest
+ * 
+ * get the process name from a socket descriptor 
+ * 
+ */ 
+int 
+ipc_getdest(int fd, procname_t * who)
+{
+    ipc_dest_t * x; 
+
+    /* find the socket for this destination */
+    for (x = ipc_dests; x && x->fd != fd; x = x->next)
+	;
+
+    if (x != NULL) {
+	*who = x->name;
+	return IPC_OK;
+    }
+    
+    return IPC_ERR; 
+}

@@ -33,6 +33,8 @@
 #ifndef _COMO_IPC_H_
 #define _COMO_IPC_H_
 
+#include <sys/time.h>
+
 typedef enum _ipc_types		ipctype_t; 
 typedef void (*ipc_handler_fn)(procname_t who, int fd, void *buf, size_t len);
 
@@ -66,21 +68,27 @@ enum _ipc_types {
 #define IPC_OK		0
 #define IPC_ERR		-1
 #define IPC_EOF		-2
+#define IPC_EAGAIN	-3
 
 /* 
  * function prototypes 
  */
-int  ipc_listen();
-int  ipc_connect(procname_t name);
-void ipc_finish();
-int  ipc_send(procname_t name, ipctype_t type, const void *data, size_t sz);
-int  ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz);
-int  ipc_send_blocking(procname_t name, ipctype_t type, const void *data,
-		       size_t sz);
-int  ipc_handle(int fd);
-void ipc_register(ipctype_t type, ipc_handler_fn fn);
-void ipc_clear();
-int  ipc_getfd(procname_t who);
-int  ipc_wait_reply_with_fd(int fd, ipctype_t *type, void *data, size_t *sz);
+int  ipc_listen             ();
+int  ipc_connect            (procname_t name);
+void ipc_finish             ();
+int  ipc_send               (procname_t name, ipctype_t type, const void *data,
+			     size_t sz);
+int  ipc_send_with_fd       (int fd, ipctype_t type, const void *data,
+			     size_t sz);
+int  ipc_send_blocking      (procname_t name, ipctype_t type, const void *data,
+			     size_t sz);
+int  ipc_handle             (int fd);
+void ipc_register           (ipctype_t type, ipc_handler_fn fn);
+void ipc_clear              ();
+int  ipc_getfd              (procname_t who);
+int  ipc_getdest            (int fd, procname_t * who);
+int  ipc_wait_reply_with_fd (int fd, ipctype_t *type, void *data, size_t *sz);
+int  ipc_try_recv_with_fd   (int fd, ipctype_t *type, void *data, size_t *sz,
+			     struct timeval *timeout);
 
 #endif	/* _COMO_IPC_H_ */
