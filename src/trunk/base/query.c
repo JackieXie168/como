@@ -383,13 +383,10 @@ query(int client_fd, int supervisor_fd, int node_id)
      */
     setproctitle(getprocfullname(map.whoami));
 
-    if (map.debug) {
-	if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-	    logmsg(V_LOGWARN, "waiting 20s for the debugger to attach\n");
-	    sleep(20);
-	    logmsg(V_LOGWARN, "wakeup, ready to work\n");
-	}
-    }
+    /* 
+     * wait for the debugger to attach
+     */
+    DEBUGGER_WAIT_ATTACH(map);
 
     /* register handlers for IPC messages */
     ipc_clear();

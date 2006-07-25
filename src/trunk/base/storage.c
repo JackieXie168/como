@@ -1584,17 +1584,10 @@ storage_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     /* init data structures */
     bzero(&cs_state, sizeof(cs_state)); 
 
-    /*
-     * now that all sockets are ready we can wait for
-     * the debugger if needed.
+    /* 
+     * wait for the debugger to attach
      */
-    if (map.debug) {
-        if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-            logmsg(V_LOGWARN, "waiting 30s for the debugger to attach\n");
-            sleep(30);
-            logmsg(V_LOGWARN, "wakeup, ready to work\n");
-        }
-    }
+    DEBUGGER_WAIT_ATTACH(map);
  
     /*
      * The real main loop.

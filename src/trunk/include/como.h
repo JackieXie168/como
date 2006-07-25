@@ -106,7 +106,8 @@ struct _como {
     size_t maxfilesize; 	/* max file size in one bytestream */
     int maxqueries;
 
-    char *debug;		/* debug mode */
+    int debug;			/* debug mode */
+    int debug_sleep;		/* how many secs to sleep */
 	/*
 	 * here we simply store a malloced copy of the string
 	 * passed as -x from the command line, then each
@@ -174,6 +175,19 @@ struct _como {
 #define DEFAULT_QUERY_PORT	44444		/* query port */
 #define DEFAULT_CAPTURE_IVL	TIME2TS(1,0)    /* capture flush interval */
 #define DEFAULT_REPLAY_BUFSIZE	(1024*1024)	/* replay packet trace buffer */
+
+
+#define DEBUGCLASS(c)	(1 << ((c >> 16) - 1))
+
+#define DEBUGGER_WAIT_ATTACH(map) \
+    if (DEBUGCLASS(getprocclass(map.whoami)) & map.debug) { \
+	logmsg(V_LOGWARN, \
+	       "%s (%d): waiting %ds for the debugger to attach\n", \
+	       getprocfullname(map.whoami), getpid(), map.debug_sleep); \
+	sleep(map.debug_sleep); \
+	logmsg(V_LOGWARN, "wakeup, ready to work\n"); \
+    }
+
 
 /* The "memory" bit is a gcc-ism saying that any pending writes to
    memory presently held in registers need to be flushed, and any

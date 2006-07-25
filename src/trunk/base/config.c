@@ -964,7 +964,7 @@ typedef struct cli_args_t {
     int		query_port;
     size_t	mem_size;
     int		logflags;
-    char	*debug;
+    int		debug;
     runmodes_t  running; 
     char	*sniffer;
     char	*module;
@@ -1024,12 +1024,16 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 		MALLOC_OPTS = strdup(optarg+7);
 		break;
 	    }
-	    if (m->debug) {
-		char *old = m->debug;
-		asprintf(&m->debug, "%s %s", old, optarg);
-		free(old);
-	    } else
-		m->debug = safe_strdup(optarg);
+
+	    if (strstr(optarg, "su") != NULL) {
+		m->debug |= DEBUGCLASS(SUPERVISOR);
+	    } else if (strstr(optarg, "ca") != NULL) {
+		m->debug |= DEBUGCLASS(CAPTURE);
+	    } else if (strstr(optarg, "ex") != NULL) {
+		m->debug |= DEBUGCLASS(EXPORT);
+	    } else if (strstr(optarg, "qu") != NULL) {
+		m->debug |= DEBUGCLASS(QUERY);
+	    }
 	    break;
 
         case 'c':
@@ -1156,6 +1160,7 @@ init_map(struct _como * m)
     m->node->type = strdup("Unknown");
     m->node->query_port = DEFAULT_QUERY_PORT;
     m->node_count = 1;
+    m->debug_sleep = 20;
 }
 
 
