@@ -260,7 +260,6 @@ start_child(procname_t who, int mem_type, mainloop_fn mainloop,
     /* ok, fork a regular process and return pid to the caller. */
     pid = fork();
     if (pid == 0) {	/* child */
-	char *buf;
 	int out_fd, idx;
 	
 	signal(SIGHUP, SIG_IGN);        /* ignore SIGHUP */
@@ -306,9 +305,7 @@ start_child(procname_t who, int mem_type, mainloop_fn mainloop,
         out_fd = ipc_connect(map.parent);
         assert(out_fd > 0);
 
-	asprintf(&buf, "%s", getprocfullname(who));
-	setproctitle(buf);
-	free(buf);
+	setproctitle("%s", getprocfullname(who));
 
 	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
 	       getprocfullname(who), getpid()); 

@@ -72,7 +72,7 @@ main(int argc, char *argv[])
 
 #ifdef linux
     /* linux does not support setproctitle. we have our own. */
-    init_setproctitle(argc, argv);
+    setproctitle_init(argc, argv);
 #endif
 
     /* set default values */
@@ -138,6 +138,7 @@ main(int argc, char *argv[])
     /* move to the SUPERVISOR process (we don't fork here) */
     map.whoami = SUPERVISOR; 
     map.mem_type = COMO_SHARED_MEM; 
+    setproctitle("%s", getprocfullname(map.whoami));
     supervisor_mainloop(supervisor_fd);
     return EXIT_SUCCESS; 
 }

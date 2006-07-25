@@ -68,8 +68,8 @@
  * Please call init_setproctitle before calling setproctitle
  * for the first time.
  */
-void init_setproctitle (int argc, char** argv);
-int setproctitle (const char *fmt, ...);
+void setproctitle_init (int argc, char **argv);
+void setproctitle      (const char *format, ...);
 
 #endif /* linux */
 
