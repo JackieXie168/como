@@ -45,40 +45,46 @@
  */
 #define QSERV_PORT  	44444
 
+typedef enum qmode_t {
+    QMODE_MODULE,
+    QMODE_STATUS,
+    QMODE_SERVICE
+} qmode_t;
+
+typedef enum qformat_t {
+    QFORMAT_CUSTOM = 0,	/* any format (print() should know better) */
+    QFORMAT_RAW,	/* raw binary data */
+    QFORMAT_COMO,	/* output of replay() callback */
+    QFORMAT_HTML	/* print() with format=html */
+} qformat_t;
+
 /* 
  * query request message 
  */
-struct _query_req {
-    uint16_t len; 		/* message length */
+typedef struct qreq_t {
+    qmode_t mode;
     char * module;		/* module name */
     char * filter_str; 		/* filter string */
     char * filter_cmp;  	/* filter canonical form */
     uint32_t start;     	/* query starts at */
     uint32_t end;       	/* query ends at */
     int wait; 			/* set if query should wait for data */
-    uint format;        	/* query response format */
-#define Q_OTHER		154	/* any format (print() should know better) */
-#define Q_RAW		235	/* raw binary data */
-#define Q_COMO		324	/* output of dump() callback */
-#define Q_STATUS	542	/* node status, no module data */
-#define Q_HTML		334	/* print() with format=html */
+    qformat_t format;        	/* query response format */
 
     char * source;      	/* source module to read data from */
     char ** args; 		/* arguments to be passed to module */
 
     module_t * mdl;		/* module producing data -- using print() */
     module_t * src;		/* module retrieving data -- using load() */
-};
-
-typedef struct _query_req qreq_t;
+} qreq_t;
 
 /* 
  * prototypes 
  */
-void query(int client_fd, int, int node_id);
-qreq_t * qryrecv(int, timestamp_t); 
-void query_ondemand(int client, qreq_t * req, int node_id); 
-void send_status(int client_fd, int node_id); 
+void query          (int client_fd, int supervisor_fd, int node_id);
+int  query_recv     (qreq_t * q, int sd, timestamp_t now); 
+void query_ondemand (int client, qreq_t * req, int node_id); 
+void send_status    (int client_fd, int node_id); 
 
 
 #endif /* _COMO_QUERY_H */
