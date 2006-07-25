@@ -61,6 +61,10 @@ extern struct _como map;
 
 static int s_wait_for_modules = 1; 
 
+#define HTTP_RESPONSE_400 \
+"HTTP/1.0 400 Bad Request\r\n" \
+"Content-Type: text/plain\r\n\r\n"
+
 #define HTTP_RESPONSE_404 \
 "HTTP/1.0 404 Not Found\r\n" \
 "Content-Type: text/plain\r\n\r\n"
@@ -69,9 +73,12 @@ static int s_wait_for_modules = 1;
 "HTTP/1.0 405 Method Not Allowed\r\n" \
 "Content-Type: text/plain\r\n\r\n"
 
+#define HTTP_RESPONSE_500 \
+"HTTP/1.0 500 Internal Server Error\r\n" \
+"Content-Type: text/plain\r\n\r\n"
 
 /* 
- * -- validate_query
+ * -- query_validate
  * 
  * validates a query checking that the timestamps are correct, 
  * the module names are recognized and that the format of the entire
@@ -80,16 +87,16 @@ static int s_wait_for_modules = 1;
  *
  */
 static char * 
-validate_query(qreq_t * req, int node_id)
+query_validate(qreq_t * req, int node_id)
 {
-    static char httpstr[8192];
+    static char httpstr[256];
 
     if (req->module == NULL) {
         /*
          * no module defined. return warning message and exit
          */
         logmsg(LOGWARN, "query module not defined\n");
-	sprintf(httpstr, HTTP_RESPONSE_405
+	sprintf(httpstr, HTTP_RESPONSE_400
 		"Module name is missing\n"); 
         return httpstr;
     }
@@ -102,7 +109,7 @@ validate_query(qreq_t * req, int node_id)
                "query start time (%d) after end time (%d)\n", 
                req->start, req->end);
          
-	sprintf(httpstr, HTTP_RESPONSE_405
+	sprintf(httpstr, HTTP_RESPONSE_400
 		"Query start time after end time\n");
         return httpstr;
     }
@@ -143,17 +150,29 @@ validate_query(qreq_t * req, int node_id)
     } 
 
     if (!req->mdl->callbacks.print && 
-	 (req->format == Q_OTHER || req->format == Q_HTML)) {
+	(req->format == QFORMAT_CUSTOM || req->format == QFORMAT_HTML)) {
 	/*
 	 * the module exists but does not support printing records. 
 	 */
 	logmsg(LOGWARN, "module \"%s\" does not have print()\n", req->module);
-	sprintf(httpstr, HTTP_RESPONSE_405
+	sprintf(httpstr, HTTP_RESPONSE_500
                 "Module \"%s\" does not have print() callback\n", 
 		req->module);
 	return httpstr;
     } 
-	
+
+    if (!req->mdl->callbacks.replay &&
+	req->format == QFORMAT_COMO) {
+	/*	
+	 * the module does not have the replay() callback
+	 */
+        logmsg(LOGWARN, "module \"%s\" does not have replay()\n", req->module);
+	sprintf(httpstr, HTTP_RESPONSE_500
+		"Module \"%s\" does not have replay() callback\n", 
+		req->module);
+	return httpstr;
+    }
+
     /* 
      * there are two types of queries. the ones that just need to print or 
      * retrieve the data stored by a running instance of a module and the 
@@ -184,7 +203,7 @@ validate_query(qreq_t * req, int node_id)
 		   "module on-demand %s can't be queried without a source\n",
 		   req->mdl->name);
 	    
-	    sprintf(httpstr, HTTP_RESPONSE_405
+	    sprintf(httpstr, HTTP_RESPONSE_400
 		    "Module \"%s\" is running on-demand. A source is required "
 		    "to run it.\n", req->mdl->name);
 	    return httpstr;
@@ -247,7 +266,7 @@ validate_query(qreq_t * req, int node_id)
 	     */
             logmsg(LOGWARN, "source module \"%s\" does not support replay()\n",
 		   req->source);
-	    sprintf(httpstr, HTTP_RESPONSE_405
+	    sprintf(httpstr, HTTP_RESPONSE_500
 		    "Source module \"%s\" does not support replay()\n", 
 		    req->source); 
             return httpstr;
@@ -285,7 +304,7 @@ handle_db_eof(qreq_t * req, int client_fd)
     logmsg(V_LOGQUERY, "reached end of file %s\n", req->src->output);
 
     /* notify the end of stream to the module */
-    if (req->format == Q_OTHER || req->format == Q_HTML) {
+    if (req->format == QFORMAT_CUSTOM || req->format == QFORMAT_HTML) {
 	if (module_db_record_print(req->mdl, NULL, NULL, client_fd)) {
 	    handle_print_fail(req->mdl);
 	}
@@ -342,6 +361,13 @@ qu_ipc_start(procname_t sender, __unused int fd, __unused void * buf,
     s_wait_for_modules = 0;
 }
 
+static char *s_format_names[] = {
+    "custom",
+    "raw",
+    "como",
+    "html"
+};
+
 /*
  * -- query
  *
@@ -368,7 +394,7 @@ qu_ipc_start(procname_t sender, __unused int fd, __unused void * buf,
 void
 query(int client_fd, int supervisor_fd, int node_id)
 {
-    qreq_t *req;
+    qreq_t req;
     int storage_fd, file_fd;
     off_t ofs; 
     ssize_t len;
@@ -397,27 +423,28 @@ query(int client_fd, int supervisor_fd, int node_id)
     while (s_wait_for_modules) 
 	ipc_handle(supervisor_fd); 
  
-    req = (qreq_t *) qryrecv(client_fd, map.stats->ts); 
-    if (req == NULL) {
+    ret = query_recv(&req, client_fd, map.stats->ts); 
+    if (ret < 0) {
+    	if (ret != -1) {
+	    switch (ret) {
+	    case -400:
+		httpstr = HTTP_RESPONSE_400;
+		break;
+	    case -405:
+		httpstr = HTTP_RESPONSE_405;
+		break;
+	    }
+	    if (como_writen(client_fd, httpstr, strlen(httpstr)) < 0) {
+		err(EXIT_FAILURE, "sending data to the client [%d]",
+		    client_fd);
+	    }
+    	}
 	close(client_fd);
 	close(supervisor_fd);
 	return; 
     } 
 
-    logmsg(V_LOGQUERY,
-        "query (%d bytes); node: %d mdl: %s filter: %s\n",  
-        ntohs(req->len), node_id, req->module, req->filter_str); 
-    if (req->filter_str) 
-	logmsg(V_LOGQUERY, "    filter: %s\n", req->filter_str);
-    logmsg(V_LOGQUERY, "    from %d to %d\n", req->start, req->end); 
-    if (req->args != NULL) { 
-	int n; 
-
-        for (n = 0; req->args[n]; n++) 
-	    logmsg(V_LOGQUERY, "    args: %s\n", req->args[n]); 
-    } 
-
-    if (req->format == Q_STATUS) { 
+    if (req.mode == QMODE_STATUS) { 
 	/* 
 	 * status queries can always be answered. send 
 	 * back the information about this CoMo instance (i.e., name, 
@@ -429,21 +456,37 @@ query(int client_fd, int supervisor_fd, int node_id)
 	return; 
     }
 
+    logmsg(LOGQUERY, "query: node: %d module: %s\n",
+	   node_id, req.module, req.filter_str); 
+    if (req.filter_str)
+	logmsg(LOGQUERY, "       filter: %s\n", req.filter_str);
+    if (req.source)
+	logmsg(LOGQUERY, "       source: %s\n", req.source);
+    logmsg(LOGQUERY, "       format: %s\n", s_format_names[req.format]);
+    logmsg(LOGQUERY, "       from %d to %d, wait %s\n", req.start, req.end,
+	   req.wait ? "yes" : "no");
+    if (req.args != NULL) { 
+	int n; 
+
+        for (n = 0; req.args[n]; n++) 
+	    logmsg(V_LOGQUERY, "       args: %s\n", req.args[n]);
+    } 
+
     /* 
      * validate the query and find the relevant modules. 
      *
-     * req->mdl will contain a pointer to the module that has to 
+     * req.mdl will contain a pointer to the module that has to 
      * run the print() callback. 
      * 
-     * req->src will point to the module that has to run load() or 
+     * req.src will point to the module that has to run load() or 
      * replay() callback. 
      * 
-     * req->mdl and req->src are the same if load()/print() is all we 
+     * req.mdl and req.src are the same if load()/print() is all we 
      * need to do. they will be different for the load()/replay()/... 
      * cycle. 
      * 
      */
-    httpstr = validate_query(req, node_id);
+    httpstr = query_validate(&req, node_id);
     if (httpstr != NULL) { 
 	if (como_writen(client_fd, httpstr, strlen(httpstr)) < 0) 
 	    err(EXIT_FAILURE, "sending data to the client [%d]", client_fd); 
@@ -456,18 +499,20 @@ query(int client_fd, int supervisor_fd, int node_id)
      * initializations
      */
     httpstr = NULL;
-    switch (req->format) {
-    case Q_OTHER:
+    switch (req.format) {
+    case QFORMAT_CUSTOM:
         httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n";
 	break;
 
-    case Q_HTML:
+    case QFORMAT_HTML:
 	httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n";
 	break;
 
-    case Q_COMO:
+    case QFORMAT_COMO:
 	// httpstr = "HTTP/1.0 200 OK\r\n"
 	//	  "Content-Type: application/octet-stream\r\n\r\n";
+	break;
+    default:
 	break;
     }
     
@@ -485,38 +530,40 @@ query(int client_fd, int supervisor_fd, int node_id)
      * go to query_ondemand that will fork a new CAPTURE and EXPORT to 
      * execute this query.
      */
-    if (req->source) {
-	query_ondemand(client_fd, req, node_id); 
+    if (req.source) {
+	query_ondemand(client_fd, &req, node_id); 
 	assert_not_reached();
     }
 
-    switch (req->format) {
-    case Q_OTHER:
-    case Q_HTML:
-	/* first print callback. we need to make sure that req->args != NULL. 
+    switch (req.format) {
+    case QFORMAT_CUSTOM:
+    case QFORMAT_HTML:
+	/* first print callback. we need to make sure that req.args != NULL. 
 	 * if this is not the case we just make something up
 	 */
-	if (req->args == NULL) {
-	    req->args = null_args;
+	if (req.args == NULL) {
+	    req.args = null_args;
 	}
-	if (module_db_record_print(req->mdl, NULL, req->args, client_fd) < 0)
-	    handle_print_fail(req->mdl);
+	if (module_db_record_print(req.mdl, NULL, req.args, client_fd) < 0)
+	    handle_print_fail(req.mdl);
 	break;
-    case Q_COMO:
+    case QFORMAT_COMO:
 #if 0
 FIXME
         /*
          * transmit the output stream description
          */
-        ret = como_writen(client_fd, (char*) req->src->callbacks.outdesc,
+        ret = como_writen(client_fd, (char*) req.src->callbacks.outdesc,
                           sizeof(pktdesc_t));
         if (ret < 0)
             panic("could not send pktdesc");
 #endif
 	break;
+    default:
+	break;
     }
 
-    req->src = req->mdl; 	/* the source is the same as the module */
+    req.src = req.mdl; 	/* the source is the same as the module */
     
     /* 
      * connect to the storage process, open the module output file 
@@ -524,32 +571,32 @@ FIXME
      */
     storage_fd = ipc_connect(STORAGE);
 
-    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req->src->output); 
-    mode =  req->wait? CS_READER : CS_READER_NOBLOCK; 
-    file_fd = csopen(req->src->output, mode, 0, storage_fd); 
+    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req.src->output); 
+    mode =  req.wait ? CS_READER : CS_READER_NOBLOCK; 
+    file_fd = csopen(req.src->output, mode, 0, storage_fd); 
     if (file_fd < 0) 
-	panic("opening file %s", req->src->output);
+	panic("opening file %s", req.src->output);
 
 
     /* quickly seek the file from which to start the search */
-    ofs = module_db_seek_by_ts(req->src, file_fd, TIME2TS(req->start, 0));
+    ofs = module_db_seek_by_ts(req.src, file_fd, TIME2TS(req.start, 0));
     if (ofs == -1) {
-	panic("seeking file %s", req->src->output);
+	panic("seeking file %s", req.src->output);
     }
 
     for (;;) { 
 	timestamp_t ts;
 	char * ptr; 
 
-        len = req->src->callbacks.st_recordsize; 
-        ptr = module_db_record_get(file_fd, &ofs, req->src, &len, &ts);
+        len = req.src->callbacks.st_recordsize; 
+        ptr = module_db_record_get(file_fd, &ofs, req.src, &len, &ts);
         if (ptr == NULL) {	/* no data, but why ? */
 	    if (len == 0) { 
-		handle_db_eof(req, client_fd); 
+		handle_db_eof(&req, client_fd); 
 		break;
 	    }
 	    panic("reading from file %s ofs %lld len %d", 
-		  req->src->output, ofs, len); 
+		  req.src->output, ofs, len); 
 	}
 
 	/*
@@ -562,26 +609,26 @@ FIXME
 		/* no more data, notify the end of the 
 		 * stream to the module
 		 */ 
-		handle_db_eof(req, client_fd); 
+		handle_db_eof(&req, client_fd); 
                 break;
 	    } 
 	    logmsg(V_LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
-		req->src->output, ofs); 
+		req.src->output, ofs); 
 	    continue;
 	}
 
-    	if (ts < TIME2TS(req->start, 0))	/* before the required time. */
+    	if (ts < TIME2TS(req.start, 0))	/* before the required time. */
 	    continue;
-    	if (ts >= TIME2TS(req->end, 0)) {
+    	if (ts >= TIME2TS(req.end, 0)) {
 	    /* 
 	     * ask the module to send the message footer if it 
 	     * has any to send. 
 	     */  
-	    switch (req->format) { 
-	    case Q_OTHER:
-	    case Q_HTML:
-		if (module_db_record_print(req->mdl, NULL, NULL, client_fd))
-		    handle_print_fail(req->mdl);
+	    switch (req.format) { 
+	    case QFORMAT_CUSTOM:
+	    case QFORMAT_HTML:
+		if (module_db_record_print(req.mdl, NULL, NULL, client_fd))
+		    handle_print_fail(req.mdl);
 		break;
 #if 0
 	    /*
@@ -589,9 +636,9 @@ FIXME
 	     * module_db_record_replay should be called with NULL prt also
 	     * when the end of file is reached
 	     */
-	    case Q_COMO:
-		if (module_db_record_replay(req->src, NULL, client_fd))
-		    handle_replay_fail(req->src);
+	    case QFORMAT_COMO:
+		if (module_db_record_replay(req.src, NULL, client_fd))
+		    handle_replay_fail(req.src);
 		break;
 #endif
 	    default:
@@ -603,23 +650,25 @@ FIXME
 	    break;
 	}
 
-	switch (req->format) { 
-	case Q_COMO: 	
-	    if (module_db_record_replay(req->src, ptr, client_fd))
-		handle_replay_fail(req->src);
+	switch (req.format) { 
+	case QFORMAT_COMO: 	
+	    if (module_db_record_replay(req.src, ptr, client_fd))
+		handle_replay_fail(req.src);
 	    break; 
 
-	case Q_RAW: 
+	case QFORMAT_RAW: 
 	    /* send the data to the query client */
 	    ret = como_writen(client_fd, ptr, len);
 	    if (ret < 0) 
 		err(EXIT_FAILURE, "sending data to the client"); 
 	    break;
 		
-	case Q_OTHER: 
-	case Q_HTML:
-	    if (module_db_record_print(req->mdl, ptr, NULL, client_fd))
-		handle_print_fail(req->mdl);
+	case QFORMAT_CUSTOM: 
+	case QFORMAT_HTML:
+	    if (module_db_record_print(req.mdl, ptr, NULL, client_fd))
+		handle_print_fail(req.mdl);
+	    break;
+	default:
 	    break;
 	}
     }

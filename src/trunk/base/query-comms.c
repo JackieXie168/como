@@ -49,50 +49,167 @@
  * atomically even if they are sent over a TCP socket.
  */
 
-/*
- * urldecode() takes a string and decodes in-place the
- * url-encoded chars, initially %hh, in the future we might also
- * deal with some escape sequences &gt and the like.
- * The routine is not run often so we do not need to be efficient.
- */
-static char *
-urldecode(char *s)
-{
-    char c, *in, *out, **p;
-    static char * char_encodings[] = {
-	"<&lt;",
-	">&gt;",
-	NULL
-    };
-    static char hexdig[] = "0123456789abcdef";
+#define CR	'\r'
+#define LF	'\n'
+#define CRLF	"\r\n"
 
-    in = s;
-    out = s;
-    while ( (c = *in) != '\0') {
-	if (c == '%') {
-	    char *a = index(hexdig, in[1] | 0x20); /* convert to lowercase */
-	    char *b = index(hexdig, in[2] | 0x20); /* convert to lowercase */
-	    if (a != NULL && b != NULL) { /* valid digits */
-		*out++ = (a - hexdig)* 16 + (b - hexdig);
-		in += 3;
-		continue;
-	    }
+/*
+ *
+ * http_next_token, http_get_token, uri_unescape and uri_validate are taken
+ * from Abyss http server which comes with the following license:
+ *
+ * This file is part of the ABYSS Web server project.
+ *
+ * Copyright (C) 2000 by Moez Mahfoudh <mmoez@bigfoot.com>.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. The name of the author may not be used to endorse or promote products
+ *    derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+*/
+
+
+static void
+http_next_token(char **p)
+{
+    for (;;) {
+	switch (**p) {
+	case '\t':
+	case ' ':
+	    (*p)++;
+	    break;
+	default:
+	    return;
 	}
-	if (c == '&') {
-	    for (p = char_encodings; *p &&
-		    bcmp((*p)+1, in, strlen( (*p)+1)); p++)
-		;
-	    if (*p != NULL) {
-		*out++ = (*p)[0];
-		in += strlen((*p)+1);
-		continue;
-	    }
-	}
-	/* default */
-	*out++ = *in++;
     }
-    *out = '\0';
-    return s;
+}
+
+static char *
+http_get_token(char **p)
+{
+    char *p0 = *p;
+
+    for (;;) {
+	switch (**p) {
+	case '\t':
+	case ' ':
+	case CR:
+	case LF:
+	case '\0':
+	    if (p0 == *p)
+		return NULL;
+
+	    if (**p) {
+		**p = '\0';
+		(*p)++;
+	    };
+	    return p0;
+
+	default:
+	    (*p)++;
+	}
+    }
+}
+
+/**
+ * -- uri_unescape
+ * 
+ * Takes an URI and undecodes in-place the escaped charcters.
+ */
+static int
+uri_unescape(char *uri)
+{
+    char *x, *y, c, d;
+
+    x = y = uri;
+
+    while (1) {
+	switch (*x) {
+	case '\0':
+	    *y = '\0';
+	    return 0;
+
+	case '%':
+	    x++;
+	    c = (*x++) | 0x20;
+	    if ((c >= '0') && (c <= '9'))
+		c -= '0';
+	    else if ((c >= 'a') && (c <= 'f'))
+		c -= 'a' - 10;
+	    else
+		return -1;
+
+	    d = (*x++) | 0x20;
+	    if ((d >= '0') && (d <= '9'))
+		d -= '0';
+	    else if ((d >= 'a') && (d <= 'f'))
+		d -= 'a' - 10;
+	    else
+		return -1;
+
+	    *y++ = ((c << 4) | d);
+	    break;
+
+	case '+':
+	    x++;
+	    *y++ = ' ';
+	    break;
+
+	default:
+	    *y++ = *x++;
+	    break;
+	}
+    }
+}
+
+
+/**
+ * -- uri_validate
+ * 
+ * Validates the request URI.
+ */
+int
+uri_validate(char **uri)
+{
+    char *x, *p;
+    
+    x = *uri;
+
+    if (x == NULL)
+	return -1;
+
+    if (*x != '/') {
+	if (strncmp(x, "http://", 7) != 0)
+	    return -1;
+
+	x += 7;
+	p = strchr(x, '/');
+	if (!p)
+	    return -1;
+	x = p;
+	*uri = x;
+    }
+    return 0;
 }
 
 
@@ -115,7 +232,6 @@ parse_timestr(char * str, timestamp_t * base)
 {
     struct tm timeinfo; 
     time_t ts;
-    char * wh; 
     size_t len;
     int adding; 
 
@@ -126,8 +242,7 @@ parse_timestr(char * str, timestamp_t * base)
     gmtime_r(&ts, &timeinfo); 
 
     /* look if this is a start or end */
-    wh = index(str, ':'); 
-    len = (wh == NULL)? strlen(str) : (size_t) (wh - str); 
+    len = strlen(str); 
     adding = 0; 
 
     switch (str[0]) { 
@@ -219,15 +334,52 @@ parse_timestr(char * str, timestamp_t * base)
 /*
  * -- query_parse()
  * 
- * Takes an http-like request and formats a message in the standard format
- * GET ?module=xxx&start=xxx&end=xxx&other HTTP/1.x
+ * Parses an HTTP request into a como request.
+ * The HTTP requests is checked to be compliant with the RFC declaration:
+ * Method SP Request-URI SP HTTP-Version CRLF
+ * The only accepted method is GET.
+ * To query a module the Request-Line should look like:
+ * GET /<module name>?arguments HTTP/1.1
+ * Example:
+ * GET /traffic?time=-10s:0s&wait=no&format=html HTTP/1.1
+ * When querying a module the following arguments are understood by the core:
+ * - filter: the filter to identify the specific instance of a module
+ * - format: the format of the output data. The values understood by the core
+ *           are: raw, como, html
+ * - start:  a UNIX timestamp identifying the initial timestamp of the query
+ * - end:    a UNIX timestamp identifying the final timestamp of the query
+ * - time:   another way to specify the query's initial and final timestamps
+ * - source: the module to be used to feed the queried module
+ * - wait:   a boolean argument specifying whether the query should wait until
+ *           the final timestamp is reached (indefinitely if the final
+ *           timestamp is not given) or give up when the data is not
+ *           yet available
+ * To query the node's status the Request-Line is:
+ * GET /status HTTP/1.1
+ * To access a service the Request-Line comes in the format:
+ * GET /services/<service name> HTTP/1.1
+ * This functions returns 0 if the query is parsed successfully. A negative
+ * value is otherwise returned representing the HTTP response status that
+ * qualifies the error.
  */
-static qreq_t *
-query_parse(char *buf, timestamp_t now)
+static int
+query_parse(qreq_t * q, char * buf, timestamp_t now)
 {
-    static qreq_t q; 
     int max_args, nargs;
-    char *p, *p1, *end;
+    char *p, *t;
+    char *uri, *qs;
+
+    p = strchr(buf, '\n');
+    *p = '\0';
+    logmsg(V_LOGQUERY, "HTTP request: %s\n", buf);
+
+    /* provide some default values */
+    memset(q, 0, sizeof(qreq_t));
+    q->mode = QMODE_MODULE;
+    q->start = TS2SEC(now);
+    q->end = ~0;
+    q->format = QFORMAT_CUSTOM;
+    q->wait = 1;
 
     /* 
      * do a first pass to figure out how much space we need
@@ -244,127 +396,199 @@ query_parse(char *buf, timestamp_t now)
     } while (p != NULL && strlen(p) > 1);
 
     /* allocate a new request data structures */
-    q.args = safe_calloc(max_args, sizeof(char *)); 
+    q->args = safe_calloc(max_args, sizeof(char *)); 
     nargs = 0;
-
-    /* provide some default values */
-    q.len = sizeof(q);
-    q.start = TS2SEC(now);
-    q.end = ~0;
-    q.format = Q_OTHER; 
-    q.wait = 1;
-    q.source = NULL;
 
     /* 
      * check if the request is valid. look for GET and HTTP/1 
      * somewhere in the string. 
      */
-    if (strstr(buf, "GET") != buf) {
-	logmsg(LOGQUERY, "Malformed request %s\n", buf);
-	return NULL;
-    }
 
-    end = strstr(buf, "HTTP/1");  
-    if (end == NULL) {
-	logmsg(LOGQUERY, "Malformed request %s\n", buf);
-	return NULL;
+    p = buf;
+    /* jump over spaces */
+    http_next_token(&p);
+    t = http_get_token(&p);
+    if (t == NULL) {
+	return -400; /* Bad Request */
     }
     
-    /* mark the end of the useful string. walk backwards and 
-     * remove any space at the end of the HTTP request. 
-     */
-    *end = '\0';
-    for (; end > buf && index(" \t", *end) != NULL; end--)
-	*end = '\0';
-
-    /* after GET we expect whitespace then a string */
-    for (p = buf + 3; *p && index(" \t", *p) != NULL; p++)
-	;
-    if (p == buf+3 || *p == '\0') {
-	logmsg(LOGQUERY, "Malformed request %s\n", buf);
-	return NULL;
+    if (strcmp(t, "GET") != 0) {
+	return -405; /* Method Not Allowed */
     }
-    for (; *p > ' ' && *p != '?'; p++)
-	;
-    if (*p != '?') {
-	/* invalid module, but do not fail so we return a 'not found' */
-	logmsg(LOGQUERY, "Malformed request %s\n", buf);
-	return NULL; 
+    
+    /* URI decoding */
+    http_next_token(&p);
+    t = http_get_token(&p);
+    if (t == NULL) {
+	return -400; /* Bad Request */
     }
 
-    logmsg(LOGQUERY, "query: %s\n", p);
-    p = urldecode(p);
-    while ( (p1 = strsep(&p, "?&")) != NULL) {
-	logmsg(V_LOGQUERY, "Token %s %s\n", p1, p);
-	if (p == p1+1)	/* empty string */
-	    ;
-	else if (strstr(p1, "module=") == p1) {
-	    char * s = strchr(p1, '=');
-	    asprintf(&q.module, "%s", s + 1); 
-	} else if (strstr(p1, "filter=") == p1) {
-	    char * s = strchr(p1, '=');
-	    q.filter_str = strdup(s + 1);
-	    parse_filter(s + 1, NULL, &(q.filter_cmp));
-	} else if (strstr(p1, "start=") == p1) {
-	    q.start = atoi(p1+6);
-	} else if (strstr(p1, "end=") == p1) {
-	    q.end = atoi(p1+4);
-        } else if (strstr(p1, "format=raw") == p1) {
-	    q.format = Q_RAW;
-        } else if (strstr(p1, "format=como") == p1) {
-	    q.format = Q_COMO;
-        } else if (strstr(p1, "format=html") == p1) {
-	    q.format = Q_HTML;
-	    /* we forward this to the module */
-	    q.args[nargs] = strdup(p1); 
-	    nargs++;
-	    assert(nargs < max_args);
-        } else if (strstr(p1, "format=sidebox") == p1) {
-	    q.format = Q_HTML;
-	    /* we forward this to the module */
-	    q.args[nargs] = strdup(p1); 
-	    nargs++;
-	    assert(nargs < max_args);
-        } else if (strstr(p1, "wait=no") == p1) {
-	    q.wait = 0; 
-        } else if (strstr(p1, "status") == p1) {
-	    q.format = Q_STATUS;
-        } else if (strstr(p1, "time=") == p1) {
-	    timestamp_t current; 
-	    char * str; 
-	
-	    current = now; 
-            str = index(p1, '=') + 1; 
-	    q.start = parse_timestr(str, &current); 
+    uri = t;
+    t = strchr(t, '?');
+    if (t != NULL) {
+	*t = '\0';
+	qs = t + 1; /* query string */
+    }
+    
+    /* HTTP version decoding */
+    http_next_token(&p);
+    t = http_get_token(&p);
+    if (t != NULL) {
+	int vmaj, vmin;
+	if (sscanf(t, "HTTP/%d.%d", &vmaj, &vmin) != 2) {
+	    return -400; /* Bad Request */
+	}
+    } else {
+	return -400; /* Bad Request */
+    }
 
-	    str = index(p1, ':') + 1; 
-	    q.end = parse_timestr(str, &current);
-	} else if (strstr(p1, "source=") == p1) {
-            char * s = strchr(p1, '=');
-            q.source = strdup(s + 1);
-        } else {
-	    logmsg(V_LOGQUERY, "custom argument: %s\n", p1);
-	    q.args[nargs] = strdup(p1); 
-	    nargs++;
-	    assert(nargs < max_args);
+    /* Path decoding */
+    if (uri_validate(&uri) < 0 || uri_unescape(uri) < 0) {
+	return -400; /* Bad Request */
+    }
+    
+    if (strcmp(uri, "/status") == 0) {
+	q->mode = QMODE_STATUS;
+    } else if (strncmp(uri, "/services/", 10) == 0) {
+	q->mode = QMODE_SERVICE;
+    } else {
+    	q->module = uri + 1;
+    }
+    
+    /* Query string decoding */
+    if (qs != NULL) {
+	char *cp, *name, *value;
+	int copy_value;
+	cp = name = qs;
+	value = NULL;
+	for (;;) {
+	    if (*cp == '=' && value == NULL) {
+		/*
+		 * NOTE: value == NULL is need to be friendly with custom
+		 * arguments of type a=b=c. Even if not allowed they've been
+		 * introduced in live!
+		 */
+		*cp = '\0';
+		value = cp + 1;
+		uri_unescape(name);
+	    } else if (*cp == '&' || *cp == '\0') {
+		int done = (*cp == '\0');
+		/* copy the argument into query args by default */
+		copy_value = 1;
+		*cp = '\0';
+		if (value == cp) {
+		    name = cp + 1;
+		    continue;
+		}
+		if (value != NULL) {
+		    uri_unescape(value);
+		}
+		switch (*name) {
+		case 'm':
+		    /* module */
+		    /* backward compatible => uri == "/" */
+		    if (strcmp(name + 1, "odule") == 0 &&
+			uri[1] == '\0') {
+			q->module = strdup(value);
+			copy_value = 0;
+		    }
+		    break;
+		case 'f':
+		    /* filter */
+		    if (strcmp(name + 1, "ilter") == 0) {
+			q->filter_str = strdup(value);
+			parse_filter(value, NULL, &(q->filter_cmp));
+			copy_value = 0;
+		    /* format */
+		    } else if (strcmp(name + 1, "ormat") == 0) {
+			if (strcmp(value, "raw") == 0) {
+			    q->format = QFORMAT_RAW;
+			    copy_value = 0;
+			} else if (strcmp(value, "como") == 0) {
+			    q->format = QFORMAT_COMO;
+			    copy_value = 0;
+			} else if (strcmp(value, "html") == 0) {
+			    q->format = QFORMAT_HTML;
+			    /* copy_value = 1; */
+			}
+		    }
+		    break;
+		case 's':
+		    /* start */
+		    if (strcmp(name + 1, "tart") == 0) {
+			q->start = atoi(value);
+			copy_value = 0;
+		    /* source */
+		    } else if (strcmp(name + 1, "ource") == 0) {
+			q->source = strdup(value);
+			copy_value = 0;
+		    /* status */
+		    } else if (strcmp(name + 1, "tatus") == 0) {
+			q->mode = QMODE_STATUS;
+			copy_value = 0;
+		    }
+		    break;
+		case 'e':
+		    /* end */
+		    if (strcmp(name + 1, "nd") == 0) {
+			q->end = atoi(value);
+			copy_value = 0;
+		    }
+		    break;
+		case 'w':
+		    /* wait */
+		    if (strcmp(name + 1, "ait") == 0) {
+			if (strcmp(value, "no") == 0) {
+			    q->wait = 0;
+			}
+			copy_value = 0;
+		    }
+		    break;
+		case 't':
+		    /* time */
+		    if (strcmp(name + 1, "ime") == 0) {
+			timestamp_t current;
+			current = now;
+			t = strchr(value, ':');
+			if (t != NULL) {
+			    *t = '\0';
+			    q->start = parse_timestr(value, &current);
+			    q->end = parse_timestr(t + 1, &current);
+			    copy_value = 0;
+			}
+		    }
+		    break;
+		}
+		if (copy_value == 1 && value != NULL) {
+		    asprintf(&q->args[nargs], "%s=%s", name, value);
+		    nargs++;
+		    assert(nargs < max_args);
+		}
+		if (done) {
+		    break;
+		}
+		name = cp + 1;
+		value = NULL;
+	    }
+	    cp++;
 	}
     }
 
-    return &q;
+    return 0;
 }
 
 
 /* 
- * -- qryrecv
+ * -- query_recv
  * 
- * receives a query from a TCP connection making sure that
+ * Receives a query from a TCP connection making sure that
  * the message is complete.
  * The query is formatted as an HTTP request so it must end with
  * an empty line.
  *
  */
-qreq_t * 
-qryrecv(int sd, timestamp_t now) 
+int 
+query_recv(qreq_t * q, int sd, timestamp_t now) 
 {
     char buf[8*1024]; /* XXX large but arbitrary */
     int rd; 
@@ -379,15 +603,15 @@ qryrecv(int sd, timestamp_t now)
     for (;;) {
 	/* leave last byte unused, so we are sure to find a \0 there. */
 	rd = read(sd, buf + ofs, sizeof(buf) - ofs - 1);
-	logmsg(V_LOGQUERY, "qryrecv read returns %d\n", rd);
+	logmsg(V_LOGQUERY, "query_recv read returns %d\n", rd);
 	if (rd < 0)	/* other end closed connection ? */
-	    return NULL; 
+	    return -1; 
 	ofs += rd;
 
-	if (strstr(buf, "\n\n") != NULL || strstr(buf, "\n\r\n") != NULL)
-	    return query_parse(buf, now); 
+	if (strstr(buf, "\r\n\r\n") != NULL || strstr(buf, "\n\n") != NULL)
+	    return query_parse(q, buf, now); 
 	if (rd == 0 || buf[0] < ' ')  /* invalid string */
 	    break;
     }
-    return NULL;
+    return -1;
 }
