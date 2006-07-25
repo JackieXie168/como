@@ -763,17 +763,10 @@ export_mainloop(__unused int in_fd, int parent_fd, __unused int id)
     capture_fd = ipc_connect(sibling(CAPTURE)); 
     max_fd = add_fd(capture_fd, &rx, max_fd); 
 
-    /*
-     * now that all sockets are ready we can wait for
-     * the debugger if needed.
+    /* 
+     * wait for the debugger to attach
      */
-    if (map.debug) {
-        if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-            logmsg(V_LOGWARN, "waiting 20s for the debugger to attach\n");
-            sleep(20);
-            logmsg(V_LOGWARN, "wakeup, ready to work\n");
-        }
-    }
+    DEBUGGER_WAIT_ATTACH(map);
  
     /* allocate the timers */
     init_timers();

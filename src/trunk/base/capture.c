@@ -940,17 +940,10 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     max_fd = add_fd(accept_fd, &valid_fds, max_fd);
 
     /* 
-     * now that all sockets are ready we can wait for 
-     * the debugger if needed. 
-     */ 
-    if (map.debug) {
-	if (strstr(map.debug, getprocname(map.whoami)) != NULL) {
-	    logmsg(V_LOGWARN, "waiting 30s for the debugger to attach\n");
-	    sleep(30);
-	    logmsg(V_LOGWARN, "wakeup, ready to work\n");
-	}
-    }
-
+     * wait for the debugger to attach
+     */
+    DEBUGGER_WAIT_ATTACH(map);
+    
     /* initialize the timers */
     init_timers();
 
