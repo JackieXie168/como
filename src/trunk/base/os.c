@@ -53,9 +53,27 @@ char *strndup(const char *s, unsigned int n)
 #if defined(linux) || defined(__CYGWIN32__)
         
 /*
- * A trivial setproctitle(3) implementation for Linux is provided here.
- * It just replaces the contents of argv[0], without exceeding its
- * original length. Unfortunately, init_setproctitle should be called first.
+ * setproctitle & setproctitle_init come with the following license:
+ * 
+ * Copyright (c) 2004 by Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (c) 1991, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
+ *     2002, 2003 by The Internet Software Consortium and Rich Salz
+ * 
+ * This code is derived from software contributed to the Internet Software
+ * Consortium by Rich Salz.
+ * 
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
+ * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY
+ * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ * 
  */
 
 #include <stdarg.h>
@@ -63,60 +81,58 @@ char *strndup(const char *s, unsigned int n)
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>  /* _POSIX_PATH_MAX */
+#include <assert.h>
 
 #include "os.h"
 
-static int spt_argc = 0;
-static char** spt_argv = NULL;
+static char *title_start = NULL;
+static char *title_end = NULL;
 
-void 
-init_setproctitle(int argc, char** argv)
+void
+setproctitle_init(int argc, char **argv)
 {
-    spt_argc = argc;
-    spt_argv = argv;
+    title_start = argv[0];
+    title_end = argv[argc - 1] + strlen(argv[argc - 1]);
 }
 
-int 
-setproctitle(const char *fmt, ...)
+void
+setproctitle(const char *format, ...)
 {
-    int n;
-    va_list ap;
-    char buff[_POSIX_PATH_MAX + 1]; 
+    va_list args;
+    size_t length;
+    ssize_t delta;
+    char *title;
 
-    buff[_POSIX_PATH_MAX] = '\0';
-    if (spt_argc == 0)
-        return -1;
-    
-    buff[0] = 'c';
-    buff[3] = buff[1] = 'o';
-    buff[2] = 'm';
+    if (title_start == NULL || title_end == NULL) {
+    	assert(1);
+        return;
+    }
 
-    va_start(ap, fmt);
-    n = vsnprintf(buff + 4, _POSIX_PATH_MAX - 4, fmt, ap);
-    va_end(ap);
+    title = title_start;
+    length = title_end - title_start;
 
-    if (n < 0)
-        return -1;
-    
-    n += 4;
+    delta = snprintf(title, length, "como: ");
+    if (delta < 0 || (size_t) delta > length)
+        return;
+    if (delta > 0) {
+        title += delta;
+        length -= delta;
+    }
 
-    if (n > _POSIX_PATH_MAX)
-        n = _POSIX_PATH_MAX;
-
-    buff[n] = '\0';
-    n++; /* String length with trailing '\0' */
-
-    /*
-     * If we change argv[0], ps won't notice at all. Unfortunately,
-     * if we overwrite the string at address argv[0] instead, we are
-     * going to overwrite other arguments or the environment.
-     * Thus, it is UNSAFE to write beyond the original argv[0] length.
-     */
-    n = strlen(spt_argv[0]);
-    strncpy(spt_argv[0], buff, n);
-
-    return 0;
+    va_start(args, format);
+    delta = vsnprintf(title, length, format, args);
+    va_end(args);
+    if (delta < 0 || (size_t) delta > length)
+        return;
+    if (delta > 0) {
+        title += delta;
+        length -= delta;
+    }
+    for (; length > 1; length--, title++)
+        *title = ' ';
+    *title = '\0';
 }
+
 #endif /* linux */
 
 #if defined(__CYGWIN32__)
