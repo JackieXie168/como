@@ -111,6 +111,14 @@ _logmsg(const char * file, int line, int flags, const char *fmt, ...)
     static int last_line;
     static int seen_count;
 
+    /* fmt = NULL causes logmsg to clean some state */
+    if (fmt == NULL) {
+	last_file = NULL;
+	last_line = 0;
+	seen_count = 0;
+	return;
+    }
+
     if (flags)
         printit = (map.logflags & flags);
     if (!printit)

@@ -276,6 +276,9 @@ start_child(procname_t who, int mem_type, mainloop_fn mainloop,
 	map.parent = map.whoami;
 	map.whoami = who;
 	map.mem_type = mem_type;
+	
+	/* clean logging system state */
+	logmsg(0, NULL);
 
 	/*
 	 * remove all modules in the map (it will
