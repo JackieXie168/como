@@ -11,7 +11,6 @@ if (isset($_GET['webroot']))
 
 if (isset($_GET['comonode'])) 
     $comonode = $_GET['comonode'];
-
 ?>
 
 <div class=secmenubar>
@@ -22,7 +21,7 @@ if (isset($_GET['comonode']))
       &nbsp;&nbsp;&nbsp;List&nbsp;&nbsp;&nbsp;</a>
     </li>
     <li>
-      <a href=<?=$webroot?>/worldview.php>
+      <a href=worldview.php>
       &nbsp;&nbsp;&nbsp;Map&nbsp;&nbsp;&nbsp;</a>
     </li>
 <? } else if ($sub == "system") { ?>
