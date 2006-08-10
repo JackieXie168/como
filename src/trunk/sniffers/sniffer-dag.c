@@ -36,6 +36,8 @@
 #include "como.h"
 #include "sniffers.h"
 
+#include "capbuf.c"
+
 /*
  * SNIFFER  ---    Endace DAG card
  *
@@ -46,10 +48,59 @@
  */
 
 
-/* sniffer specific information */
-struct _snifferinfo { 
-    uint8_t * bottom; 	   	/* pointer to bottom of stream buffer */
+#define DAG_BUFSIZE	(me->sniff.max_pkts * sizeof(pkt_t))
+
+struct dag_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    const char *	device;		/* capture device */
+    const char *	args;		/* arguments */
+    uint8_t *		bottom;		/* pointer to bottom of stream mem */
+    capbuf_t		capbuf;
 };
+
+
+/*
+ * -- sniffer_init
+ * 
+ */
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
+{
+    struct dag_me *me;
+    
+    me = safe_calloc(1, sizeof(struct dag_me));
+
+    me->sniff.max_pkts = 8192;
+    me->sniff.flags = SNIFF_POLL;
+    me->sniff.polling = TIME2TS(0, 1000);
+    me->device = device;
+    me->args = args;
+
+    /* create the capture buffer */
+    if (capbuf_init(&me->capbuf, NULL, DAG_BUFSIZE, DAG_BUFSIZE) < 0)
+	goto error;    
+
+    return (sniffer_t *) me;
+error:
+    free(me);
+    return NULL;
+}
+
+
+static void
+sniffer_setup_metadesc(sniffer_t * s)
+{
+    metadesc_t *outmd;
+    pkt_t *pkt;
+
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(s, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
+}
 
 
 /*
@@ -62,28 +113,26 @@ struct _snifferinfo {
  * 
  */
 static int
-sniffer_start(source_t * src) 
+sniffer_start(sniffer_t * s)
 {
+    struct dag_me *me = (struct dag_me *) s;
     struct timeval tout, poll;
-    struct _snifferinfo * info;
-    int fd;
-    metadesc_t *outmd;
-    pkt_t *pkt;
 
     /* open DAG */
-    if ((fd = dag_open(src->device)) < 0)
+    me->sniff.fd = dag_open((char *) me->device);
+    if (me->sniff.fd < 0)
         return -1;  /* errno is set */
 
     /* configure DAG */ 
-    if (dag_configure(fd, src->args) < 0)
+    if (dag_configure(me->sniff.fd, (char *) me->args) < 0)
         return -1;  /* errno is set */
 
     /* attach to stream 0 */
-    if (dag_attach_stream(fd, 0, 0, 0) < 0)
+    if (dag_attach_stream(me->sniff.fd, 0, 0, 0) < 0)
         return -1;  /* errno is set */
 
     /* start capture on stream 0 */
-    if (dag_start_stream(fd, 0))
+    if (dag_start_stream(me->sniff.fd, 0))
         return -1;  /* errno is set */
 
     /* init DAG polling parameters to return immediately */
@@ -91,24 +140,8 @@ sniffer_start(source_t * src)
     tout.tv_usec = 0;   /* disable wait timeout */
     poll.tv_sec  = 0;
     poll.tv_usec = 0;   /* no sleep */
-    if (dag_set_stream_poll(fd, 0, 0, &tout, &poll) < 0)
+    if (dag_set_stream_poll(me->sniff.fd, 0, 0, &tout, &poll) < 0)
         return -1;      /* errno is set */
-
-    src->ptr = safe_malloc(sizeof(struct _snifferinfo));
-    info = (struct _snifferinfo *) src->ptr; 
-    info->bottom = NULL;
-
-    src->fd = fd; 
-    src->flags = SNIFF_TOUCHED|SNIFF_POLL; 
-    src->polling = TIME2TS(0, 1000); 
-
-    /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(src, 0);
-    
-    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
 
     return 0;		/* success */
 }
@@ -121,55 +154,53 @@ sniffer_start(source_t * src)
  * return the number of packets read. 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no,
-	     __unused timestamp_t max_ivl) 
+sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
+	     int * dropped_pkts) 
 {
-    struct _snifferinfo * info; /* sniffer information */
+    struct dag_me *me = (struct dag_me *) s;
     pkt_t *pkt;                 /* CoMo record structure */
     uint8_t *top;           	/* pointer to top of stream buffer */
     char *base;                 /* current position in stream */
     int npkts;			/* number of pkts processed */
 
-    info = (struct _snifferinfo *) src->ptr;
-
     /* read ERF records from stream 0 */
-    top = dag_advance_stream(src->fd, 0, &info->bottom); 
+    top = dag_advance_stream(me->sniff.fd, 0, &me->bottom); 
     if (top == NULL)
         return -1; /* errno is set */
 
     /* check if we read something */
-    if (top == info->bottom)
+    if (top == me->bottom)
         return 0;
 
-    base = (char *) info->bottom; 
-    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
+    *dropped_pkts = 0;
+    
+    base = (char *) me->bottom;
+    npkts = 0;
+    while (npkts < max_pkts) { 
 	dag_record_t *rec;          /* DAG record structure */ 
 	int len;                    /* total record length */
-        int l2type; 
+        int l2type;
+        int left;
+        
+        left = ((char *) top) - (base);
 
         /* access to packet record */
         rec = (dag_record_t *) base;
 
         /* check if there is one record */
-	if ((int) top - (int) base < dag_record_size)
+	if (left < dag_record_size)
 	    break; 
 
+	len = ntohs(rec->rlen);
         /* check if entire record is available */
-        if (ntohs(rec->rlen) > (int) top - (int) base) 
+        if (len > left) 
             break;
-    
-        /*
-         * ok, data is good now, copy the packet over
-         */
-	COMO(ts) = rec->ts;
-	COMO(len) = ntohs(rec->wlen);
-	COMO(type) = COMOTYPE_LINK;
 
 	/* 
 	 * skip the DAG header 
 	 */
 	base += dag_record_size; 
-        len = ntohs(rec->rlen) - dag_record_size;
+        len -= dag_record_size;
         
 	/* 
 	 * we need to figure out what interface we are monitoring. 
@@ -188,8 +219,8 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 
 	case TYPE_ETH: 
 	    l2type = LINKTYPE_ETH; 
-	    base += 2; 	/* DAG adds 4 bytes to Ethernet headers */
-	    len -= 2; 
+	    base += 2; 	/* DAG adds 2 bytes to Ethernet headers */
+	    len -= 2;
 	    break; 
 
 	default: 
@@ -197,6 +228,16 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
             base += len;
             continue;
 	} 
+
+	/* reserve the space in the buffer for the pkt_t */
+	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sizeof(pkt_t) + len);
+    
+        /*
+         * ok, data is good now, copy the packet over
+         */
+	COMO(ts) = rec->ts;
+	COMO(len) = ntohs(rec->wlen);
+	COMO(type) = COMOTYPE_LINK;
 
         /* 
          * copy the packet payload 
@@ -209,30 +250,49 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
          * this sniffer only runs on ethernet frames. 
          */
 	updateofs(pkt, L2, l2type);
+	npkts++;
+	ppbuf_capture(me->sniff.ppbuf, pkt);
 
 	/* move to next packet in the buffer */
         base += len; 
     }
 
-    info->bottom = (uint8_t *) base; 
-    return npkts;
+    me->bottom = (uint8_t *) base; 
+    return 0;
 }
 
 static void
-sniffer_stop(source_t * src)
+sniffer_stop(sniffer_t * s)
 {
+    struct dag_me *me = (struct dag_me *) s;
+    
     /* stop capture on stream 0 */
-    dag_stop_stream(src->fd, 0);
+    dag_stop_stream(me->sniff.fd, 0);
 
     /* detach from stream 0 */
-    dag_detach_stream(src->fd, 0);
+    dag_detach_stream(me->sniff.fd, 0);
 
     /* close DAG */
-    dag_close(src->fd);
-
-    free(src->ptr); 
+    dag_close(me->sniff.fd);
 }
 
-sniffer_t dag_sniffer = { 
-    "dag", sniffer_start, sniffer_next, sniffer_stop
+
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct dag_me *me = (struct dag_me *) s;
+
+    capbuf_finish(&me->capbuf);
+    free(me);
+}
+
+
+SNIFFER(dag) = {
+    name: "dag",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };

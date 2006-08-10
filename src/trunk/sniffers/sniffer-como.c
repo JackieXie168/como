@@ -36,12 +36,14 @@
 #include <sys/socket.h> /* socket */
 #include <netinet/in.h> /* struct sockaddr_in */
 #include <string.h>     /* strerror */
+#include <sys/mman.h>
 #include <errno.h>
 #include <assert.h>
 
 #include "como.h" 
 #include "sniffers.h" 
 
+#include "capbuf.c"
 
 
 /*
@@ -54,12 +56,57 @@
  */
 
 /* sniffer-specific information */
-#define BUFSIZE		(1024*1024)
-struct _snifferinfo { 
-    char buf[BUFSIZE]; 	     /* base of the capture buffer */
-    char * base; 	     /* pointer to first valid byte in buffer */
-    int nbytes; 	     /* valid bytes in buffer */
+#define COMO_DEFAULT_BUFSIZE	(1024 * 1024)
+#define COMO_MIN_BUFSIZE	(COMO_DEFAULT_BUFSIZE / 2)
+#define COMO_MAX_BUFSIZE	(COMO_DEFAULT_BUFSIZE * 2)
+#define COMO_DEFAULT_MIN_PROC_SIZE	(65536 * 2)
+#define COMO_DEFAULT_READ_SIZE	(me->capbuf.size / 2)
+
+struct como_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    const char *	device;
+    size_t		min_proc_size;
+    size_t		read_size;
+    size_t		avn;
+    char *		cur;
+    capbuf_t		capbuf;
 };
+
+/*
+ * -- sniffer_init
+ * 
+ */
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
+{
+    struct como_me *me;
+    
+    me = safe_calloc(1, sizeof(struct como_me));
+
+    me->sniff.max_pkts = 8192;
+    me->sniff.flags = SNIFF_SELECT;
+    me->device = device;
+    
+    /* create the capture buffer */
+    if (capbuf_init(&me->capbuf, args, COMO_MIN_BUFSIZE, COMO_MAX_BUFSIZE) < 0)
+	goto error;
+
+    me->read_size = me->capbuf.size / 2;
+    me->min_proc_size = COMO_DEFAULT_MIN_PROC_SIZE;
+    me->cur = me->capbuf.base;
+    
+    return (sniffer_t *) me;
+error:
+    free(me);
+    return NULL; 
+}
+
+
+static void
+sniffer_setup_metadesc(__unused sniffer_t * s)
+{
+}
+
 
 /**
  * -- sniffer_start
@@ -69,25 +116,27 @@ struct _snifferinfo {
  *
  */
 static int
-sniffer_start(source_t * src) 
+sniffer_start(sniffer_t * s) 
 {
-    int ret, sd;
-    char *msg, *local;
+    struct como_me *me = (struct como_me *) s;
+    int ret;
+    char *msg, *path = NULL;
     
-    sd = create_socket(src->device, &local);
-    if (sd < 0) { 
+    me->sniff.fd = create_socket(me->device, &path);
+    if (me->sniff.fd < 0) { 
         logmsg(LOGWARN, "sniffer-como: cannot create socket: %s\n", 
 	    strerror(errno)); 
-	return -1; 
+	goto error;
     } 
     
-    /* send the query string followed by "\n\n" */
-    asprintf(&msg, "GET %s HTTP/1.0\n\n", local);
-    ret = como_writen(sd, msg, strlen(msg));
+    /* build the HTTP request */
+    asprintf(&msg, "GET %s HTTP/1.0\r\n\r\n", path);
+    ret = como_writen(me->sniff.fd, msg, strlen(msg));
     free(msg);
+    free(path);
     if (ret < 0) {
         logmsg(LOGWARN, "sniffer-como: write error: %s\n", strerror(errno));
-	return -1;
+	goto error;
     } 
 
 #if 0
@@ -102,10 +151,11 @@ sniffer_start(source_t * src)
     } 
 #endif
 
-    src->fd = sd; 
-    src->flags = SNIFF_TOUCHED|SNIFF_SELECT; 	
-    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
-    return sd;
+   return 0;
+error:
+    close(me->sniff.fd);
+    free(path);
+    return -1;
 }
 
 
@@ -118,82 +168,77 @@ sniffer_start(source_t * src)
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
+sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
+	     int * dropped_pkts) 
 {
-    struct _snifferinfo * info; 
-    pkt_t * pkt; 
+    struct como_me *me = (struct como_me *) s;
     char * base;                /* current position in input buffer */
     int npkts;                  /* processed pkts */
-    int rd;
+    size_t avn;
     timestamp_t first_seen = 0;
 
-    assert(src->ptr != NULL); 
-
-    info = (struct _snifferinfo *) src->ptr; 
-
-    if (info->nbytes > 0) {
-	/*
-	 * NOTE: this assertion is here to catch the undesired situation in
-	 * which the input stream is wrong and this sniffer continues to
-	 * attempt to read packets.
-	 */
-	assert(info->buf != info->base);
-	memmove(info->buf, info->base, info->nbytes); 
+    *dropped_pkts = 0;
+    
+    avn = me->avn;
+    
+    if (avn >= me->min_proc_size) {
+	base = me->cur;
+    } else {
+	ssize_t rdn;
+	base = capbuf_reserve_space(&me->capbuf, me->read_size);
+	if (base == me->capbuf.base && avn > 0) {
+	    memmove(base, me->cur, avn);
+	}
+	/* read CoMo packets from stream */
+	rdn = read(me->sniff.fd, base + avn, me->read_size);
+	if (rdn < 0) {
+	    return -1;
+	}
+	avn += (size_t) rdn;
+	if (avn == 0) {
+	    return -1;
+	}
     }
 
-    /* read CoMo packets from stream */
-    rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes);
-    if (rd < 0)   
-        return rd; 
-
-    /* update number of bytes to read */
-    info->nbytes += rd;  
-    if (info->nbytes == 0)
-        return -1;      /* end of file, nothing left to do */
-
-    base = info->buf;
-    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
-	pkt_t * p = (pkt_t *) base; 
-	uint left = info->nbytes - (base - info->buf); 
+    for (npkts = 0; npkts < max_pkts; npkts++) {
+	size_t sz;
+	/* TODO: handle different endianness */
+	pkt_t *pkt = (pkt_t *) base;
 	
 	/* check if we have enough for a new packet record */
-	if (left < sizeof(pkt_t)) 
+	if (sizeof(pkt_t) > avn)
 	    break;
 
 	/* check if we have the payload as well */
-        if (left < p->caplen + sizeof(pkt_t)) 
+        if (sizeof(pkt_t) + COMO(caplen) > avn)
             break;
 
 	if (npkts > 0) {
-	    if (p->ts - first_seen > max_ivl) {
-		/* Never returns more than 1sec of traffic */
+	    if (COMO(ts) - first_seen > max_ivl) {
+		/* Never returns more than max_ivl of traffic */
 		break;
 	    }
 	} else {
-	    first_seen = p->ts;
+	    first_seen = COMO(ts);
 	}
+
+	/* the payload is just after the packet */
+	COMO(payload) = base + sizeof(pkt_t);
+
+	ppbuf_capture(me->sniff.ppbuf, pkt);
 	
-	/* ok, copy the packet header */
-	/* XXX we assume to receive packet in the same endianness 
-	 *     we are running in. we need to make the replay() callback
-	 *     operate in network-byte order or start having the 
- 	 *     COMO header always in network-byte order. 
-	 */     
-	bcopy(p, pkt, sizeof(pkt_t)); 
-
-	/* the payload is just after the packet. update 
-	 * the payload pointer. 
-	 */
-	COMO(payload) = base + sizeof(pkt_t); 
-
 	/* move forward */
-	base += COMO(caplen) + sizeof(pkt_t); 
+	sz = sizeof(pkt_t) + COMO(caplen) /* + TODO padding */;
+	base += sz;
+	avn -= sz;
     }
+    /* save the state */
+    me->avn = avn;
+    me->cur = base;
 
-    info->nbytes -= (base - info->buf);
-    info->base = base; 
-    return npkts;
+    return 0;
 }
+
 
 /*
  * -- sniffer_stop
@@ -201,12 +246,30 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
  * just close the socket
  */
 static void
-sniffer_stop(source_t * src) 
+sniffer_stop(sniffer_t * s) 
 {
-    free(src->ptr);
-    close(src->fd);
+    struct como_me *me = (struct como_me *) s;
+    
+    close(me->sniff.fd);
 }
 
-struct _sniffer como_sniffer = { 
-    "como", sniffer_start, sniffer_next, sniffer_stop
+
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct como_me *me = (struct como_me *) s;
+
+    capbuf_finish(&me->capbuf);
+    free(me);
+}
+
+
+SNIFFER(como) = {
+    name: "como",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };

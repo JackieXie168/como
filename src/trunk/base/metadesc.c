@@ -40,6 +40,9 @@
 #include "comopriv.h"
 #include "hash.h"
 
+/* global state */
+extern struct _como map;
+
 static metadesc_t *
 metadesc_new_va(allocator_t *alc, int pktmeta_count, va_list ap)
 {
@@ -145,15 +148,22 @@ metadesc_define_out(module_t *self, int pktmeta_count, ...)
 }
 
 metadesc_t *
-metadesc_define_sniffer_out(source_t *src, int pktmeta_count, ...)
+metadesc_define_sniffer_out(sniffer_t * s, int pktmeta_count, ...)
 {
     va_list ap;
     metadesc_t *md;
+    source_t *src;
     
     va_start(ap, pktmeta_count);
     md = metadesc_new_va(allocator_safe(), pktmeta_count, ap);
     va_end(ap);
     
+    /* find the source corresponding to s */
+    for (src = map.sources; src != NULL; src = src->next) {
+	if (src->sniff == s)
+		break;
+    }
+    assert(src != NULL);
     md->_next = src->outdesc;
     src->outdesc = md;
     

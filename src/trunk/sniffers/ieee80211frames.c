@@ -563,8 +563,8 @@ parse80211_beacon(struct _p80211info *pi)
  * structures to a como defined structure
  *
  */
-static int
-parse80211_mgmt_frame(const char *buf, int buf_len, char *dest)
+int
+ieee80211_process_mgmt_frame(const char *buf, int buf_len, char *dest)
 {
     struct _p80211info pi;
     struct _ieee80211_mgmt_hdr *h;
@@ -627,39 +627,4 @@ parse80211_mgmt_frame(const char *buf, int buf_len, char *dest)
     }
 
     return sizeof(struct _ieee80211_mgmt_hdr) + sizeof(struct _como_wlan_mgmt);
-}
-
-
-/*
- * -- ieee80211_capture_frame
- *
- * checks the frame type and in case of a management frame parses it
- * collecting all available header fields into a _como_wlan_mgmt
- * structure that is stored after the 802.11 header into memory pointed by
- * mgmt_buf.
- * returns the number of bytes written in dest
- */
-int
-ieee80211_capture_frame(const char *buf, int buf_len, char *dest)
-{
-    struct _ieee80211_base *h;
-
-    h = (struct _ieee80211_base *) buf;
-
-    switch (h->fc_type) {
-    case IEEE80211TYPE_MGMT:
-	/*
-	 * remaining packet length to parse, when zero the packet
-	 * parsing process is complete
-	 */
-	return parse80211_mgmt_frame(buf, buf_len, dest);
-	break;
-    case IEEE80211TYPE_CTRL:
-    case IEEE80211TYPE_DATA:
-	memcpy(dest, buf, buf_len);
-	return buf_len;
-    default:
-	break;
-    }
-    return 0;
 }

@@ -46,6 +46,7 @@
 #include <fcntl.h>		/* open */
 #include <unistd.h>		/* close */
 #include <string.h>		/* memset, memcpy */
+#include <sys/mman.h>
 #include <errno.h>		/* errno values */
 #include <assert.h>
 #include <sys/types.h>
@@ -53,14 +54,9 @@
 #include <stdio.h>
 #undef __unused			/* __unused is used in netdb.h */
 #include <netdb.h>
-
-#ifdef WIN32
-#include "winsock2.h"
-#else
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/time.h>
-#endif
 
 #include "sniffers.h"
 #include "como.h"
@@ -585,156 +581,122 @@ sflow_tag_ignore(SFTag * tag)
     return sf_check(tag->dg);
 }
 
- /*
-  * This data structure will be stored in the source_t structure and 
-  * used for successive callbacks.
-  */
-struct _snifferinfo {
-    uint16_t port;		/* socket port */
-    uint32_t last_sn;		/* last sample packet sequence number */
-    uint32_t first_sn;		/* first sample packet sequence number */
-    timestamp_t last_ts;	/* last datagram timestamp */
-    u_int32_t flow_type_tag;	/* SFLFlow_type_tag */
-#define BUFSIZE		65536	/* sflow is not going to give us more bytes
-				 * than 65K
-				 */
-    char pktbuf[BUFSIZE];	/* packet buffer */
+
+/* sniffer-specific information */
+#define SFLOW_DEFAULT_BUFSIZE	(1024 * 1024)
+#define SFLOW_MIN_BUFSIZE	(SFLOW_DEFAULT_BUFSIZE / 2)
+#define SFLOW_MAX_BUFSIZE	(SFLOW_DEFAULT_BUFSIZE * 2)
+
+
+struct sflow_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    uint16_t		port;		/* socket port */
+    const char *	device;
+    uint16_t		_reserved;	/* padding */
+    uint32_t		last_sn;	/* last sample packet seq number */
+    uint32_t		first_sn;	/* first sample packet seq number */
+    timestamp_t		last_ts;	/* last datagram timestamp */
+    u_int32_t		flow_type_tag;	/* SFLFlow_type_tag */
+    struct capbuf {
+	void *base;
+	void *end;
+	void *tail;
+	size_t size;
+    } capbuf;
 };
 
-/* 
- * -- sniffer_config
- * 
- * process config parameters 
- *
- */
-static void
-sniffer_config(char *args, struct _snifferinfo *info)
-{
-    char *wh;
-
-    if (args == NULL)
-	return;
-
-    /*
-     * "port". 
-     * sets the port to which the UDP socket will be bound.
-     */
-    wh = strstr(args, "port");
-    if (wh != NULL) {
-	char *x = index(wh, '=');
-
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-sflow: invalid argument %s\n", wh);
-	else
-	    info->port = atoi(x + 1);
-    }
-
-    /*
-     * "flow_type_tag". 
-     * sets the flow type tag the sflow agent is configured to send
-     */
-    wh = strstr(args, "flow_type_tag");
-    if (wh != NULL) {
-	char *x = index(wh, '=');
-
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-sflow: invalid argument %s\n", wh);
-	else {
-	    if (strcasecmp("HEADER", x + 1) == 0) {
-		info->flow_type_tag = SFLFLOW_HEADER;
-	    } else if (strcasecmp("ETHERNET", x + 1) == 0) {
-		info->flow_type_tag = SFLFLOW_ETHERNET;
-	    } else if (strcasecmp("IPV4", x + 1) == 0) {
-		info->flow_type_tag = SFLFLOW_IPV4;
-	    } else if (strcasecmp("IPV6", x + 1) == 0) {
-		info->flow_type_tag = SFLFLOW_IPV6;
-	    }
-	}
-
-    }
-}
 
 /*
- * -- sniffer_start
+ * -- sniffer_init
  * 
- * this sniffer opens a UDP socket and expects to receive
- * sflow sample datagrams over it.
- * It returns 0 in case of success, -1 in case of failure.
  */
-static int
-sniffer_start(source_t * src)
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
 {
-    struct _snifferinfo *info;
-    int fd;
-    struct sockaddr_in addr_in;
-    struct hostent *bindinfo;
+    struct sflow_me *me;
+    size_t capbuf;
+    
+    me = safe_calloc(1, sizeof(struct sflow_me));
+
+    me->sniff.max_pkts = 2400;
+    me->sniff.flags = SNIFF_SELECT;
+    me->device = device;
+    /* defult port as assigned by IANA */
+    me->port = SFL_DEFAULT_COLLECTOR_PORT;
+    me->first_sn = 0;
+    me->last_sn = 0xFFFFFFFF;
+    me->last_ts = 0;
+    me->flow_type_tag = SFLFLOW_HEADER;
+
+    capbuf = SFLOW_MIN_BUFSIZE;
+    
+    if (args) { 
+	/* process input arguments */
+	char *p; 
+
+	if ((p = strstr(args, "capbuf=")) != NULL) {
+	    capbuf = atoi(p + 7);
+	    capbuf = ROUND_32(capbuf);
+	    if (capbuf < SFLOW_MIN_BUFSIZE) {
+	    	capbuf = SFLOW_MIN_BUFSIZE;
+	    }
+	    if (capbuf > SFLOW_MAX_BUFSIZE) {
+		capbuf = SFLOW_MAX_BUFSIZE;
+	    }
+	}
+	/*
+	 * "port". 
+	 * sets the port to which the UDP socket will be bound.
+	 */
+	if ((p = strstr(args, "port=")) != NULL) {
+	    me->port = atoi(p + 5);
+	}
+	/*
+	 * "flow_type_tag". 
+	 * sets the flow type tag the sflow agent is configured to send
+	 */
+	if ((p = strstr(args, "flow_type_tag=")) != NULL) {
+	    p += 14;
+	    if (strcasecmp("HEADER", p) == 0) {
+		me->flow_type_tag = SFLFLOW_HEADER;
+	    } else if (strcasecmp("ETHERNET", p) == 0) {
+		me->flow_type_tag = SFLFLOW_ETHERNET;
+	    } else if (strcasecmp("IPV4", p) == 0) {
+		me->flow_type_tag = SFLFLOW_IPV4;
+	    /* IPv6 not supported
+	    } else if (strcasecmp("IPV6", p) == 0) {
+		me->flow_type_tag = SFLFLOW_IPV6;
+	    */
+	    }
+	}
+    }
+
+    /* create the capture buffer */
+    me->capbuf.size = (size_t) capbuf;
+    me->capbuf.base = mmap((void *) 0, me->capbuf.size, PROT_WRITE|PROT_READ,
+			    MAP_ANON|MAP_NOSYNC|MAP_SHARED, -1 /* fd */, 0);
+    if (me->capbuf.base == MAP_FAILED)
+	return NULL;
+    
+    me->capbuf.end = me->capbuf.base + me->capbuf.size;
+    me->capbuf.tail = me->capbuf.base;
+
+    return (sniffer_t *) me;
+}
+
+static void
+sniffer_setup_metadesc(sniffer_t * s)
+{
+    struct sflow_me *me = (struct sflow_me *) s;
     metadesc_t *outmd;
     pkt_t *pkt;
 
-    sf_log("sflow start\n");
-
-    assert(src->ptr == NULL);
-
-    /* 
-     * populate the sniffer specific information
-     */
-    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
-    info = (struct _snifferinfo *) src->ptr;
-    src->fd = -1;
-    /* defult port as assigned by IANA */
-    info->port = SFL_DEFAULT_COLLECTOR_PORT;
-    info->first_sn = 0;
-    info->last_sn = 0xFFFFFFFF;
-    info->last_ts = 0;
-    info->flow_type_tag = SFLFLOW_HEADER;
-
-    sniffer_config(src->args, info);
-
-    /* this sniffer operates on socket and uses a select()able descriptor */
-    src->flags = SNIFF_TOUCHED | SNIFF_SELECT;
-    src->polling = 0;
-
-    /* create a socket */
-    if ((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-	logmsg(LOGWARN, "sniffer-sflow: can't create socket: %s\n",
-	       strerror(errno));
-	goto error;
-    }
-    src->fd = fd;
-
-    memset((char *) &addr_in, 0, sizeof(struct sockaddr_in));
-    addr_in.sin_family = AF_INET;
-    addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr_in.sin_port = htons(info->port);
-
-    if (src->device && strlen(src->device) > 0) {
-	bindinfo = gethostbyname(src->device);
-	if (bindinfo) {
-	    addr_in.sin_addr = *((struct in_addr *) bindinfo->h_addr);
-	} else {
-	    logmsg(LOGWARN,
-		   "sniffer-sflow: unresolved ip address: %s: %s\n",
-		   src->device, strerror(h_errno));
-	    goto error;
-	}
-    }
-
-    /* CHECKME: do we need to set some socket options? */
-
-    /* bind the socket */
-    if (bind(fd, (struct sockaddr *) &addr_in, sizeof(struct sockaddr_in))
-	== -1) {
-	logmsg(LOGWARN, "sniffer-sflow: can't bind socket: %s\n",
-	       strerror(errno));
-	goto error;
-    }
-
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
+    outmd = metadesc_define_sniffer_out(s, 1, "sampling_rate");
 
     outmd->ts_resolution = TIME2TS(1, 0);
 
-    switch (info->flow_type_tag) {
+    switch (me->flow_type_tag) {
     case SFLFLOW_HEADER:
 	pkt = metadesc_tpl_add(outmd, "sflow:any:any:any");
 	COMO(caplen) = 0xffff;
@@ -754,7 +716,8 @@ sniffer_start(source_t * src)
 	N32(IP(dst_ip)) = 0xffffffff;
 
 	pkt = metadesc_tpl_add(outmd, "sflow:none:~ip:~tcp");
-	COMO(caplen) = sizeof(struct _como_iphdr) + sizeof(struct _como_tcphdr);
+	COMO(caplen) = sizeof(struct _como_iphdr) +
+		       sizeof(struct _como_tcphdr);
 	IP(tos) = 0xff;
 	N16(IP(len)) = 0xffff;
 	IP(proto) = 0xff;
@@ -783,22 +746,84 @@ sniffer_start(source_t * src)
 	N16(UDP(dst_port)) = 0xffff;
 	break;
     case SFLFLOW_IPV6:
-	/* TODO */
-	logmsg(LOGWARN, "IPV6 not supported\n");
-	goto error;
+	/* IPv6 not supported*/
+	assert_not_reached();
+	break;
+    }
+}
+
+/*
+ * -- sniffer_start
+ * 
+ * this sniffer opens a UDP socket and expects to receive
+ * sflow sample datagrams over it.
+ * It returns 0 in case of success, -1 in case of failure.
+ */
+static int
+sniffer_start(sniffer_t * s)
+{
+    struct sflow_me *me = (struct sflow_me *) s;
+    struct sockaddr_in addr_in;
+
+    sf_log("sflow start\n");
+
+    /* create a socket */
+    me->sniff.fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (me->sniff.fd == -1) {
+	logmsg(LOGWARN, "sniffer-sflow: can't create socket: %s\n",
+	       strerror(errno));
+	return -1;
+    }
+
+    memset((char *) &addr_in, 0, sizeof(struct sockaddr_in));
+    addr_in.sin_family = AF_INET;
+    addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr_in.sin_port = htons(me->port);
+
+    if (me->device && strlen(me->device) > 0) {
+	struct hostent *bindinfo;
+	bindinfo = gethostbyname(me->device);
+	if (bindinfo) {
+	    addr_in.sin_addr = *((struct in_addr *) bindinfo->h_addr);
+	} else {
+	    logmsg(LOGWARN,
+		   "sniffer-sflow: unresolved ip address %s: %s\n",
+		   me->device, strerror(h_errno));
+	    return -1;
+	}
+    }
+
+    /* CHECKME: do we need to set some socket options? */
+
+    /* bind the socket */
+    if (bind(me->sniff.fd, (struct sockaddr *) &addr_in, sizeof(addr_in))
+	== -1) {
+	logmsg(LOGWARN, "sniffer-sflow: can't bind socket: %s\n",
+	       strerror(errno));
+	return -1;
     }
 
     return 0;
-error:
-    if (src->fd != -1) {
-	close(src->fd);
-	src->fd = -1;
-    }
-    free(src->ptr);
-    src->ptr = NULL;
-
-    return -1;
 }
+
+
+static inline void *
+reserve_space(struct capbuf * capbuf, size_t s)
+{
+    void *end;
+    
+    s = ROUND_32(s);
+    assert(s > 0);
+    
+    end = capbuf->tail + s;
+    if (end > capbuf->end) {
+	end = capbuf->base + s;
+    }
+    capbuf->tail = end;
+
+    return capbuf->tail - s;
+}
+
 
 /*
  * -- sniffer_next
@@ -808,33 +833,14 @@ error:
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no,
-	     timestamp_t max_ivl)
+sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
+	     int * dropped_pkts)
 {
-/*
- * CHECKME: To be sure no packet loss happens max_no should be >= 2350.
- * Can we assume max_no is always greater than that?
- * Otherwise we need to keep packets in sniffer's pktbuf but that involves
- * more work and I don't believe it's necessary to have a pkt buffer manager
- * here that could anyway loss packets.
- * Plus capture is not going to call sniffer next unless a datagram is
- * received, so either the local pkt buffer becomes full and we lose packets or
- * we delay the new datagram avoiding the call to recvfrom. In the latter case
- * however it's the OS buffer that becomes full and the kernel start dropping
- * datagrams.
- * In the end it's better to process more packets and at the moment capture can
- * receive up to 8192 packets every sniffer.
- * So what's the need to keep packets here?
- * Obviously this must be retought if another design that involves different
- * packet consumption times is implemented.
- */
-    struct _snifferinfo *info;
-    pkt_t *pkt;
+    struct sflow_me *me = (struct sflow_me *) s;
     int npkts;			/* processed pkts */
 
-#define MAX_PKT_SIZ 65536
-    u_char buf[MAX_PKT_SIZ];
-    int nbytes = 0;
+#define MAX_PKT_SIZE 65536
+    u_char buf[MAX_PKT_SIZE];
     uint32_t t;			/* index for sflow samples */
     struct timeval now;
 
@@ -843,22 +849,17 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 
     struct _como_sflow como_sflow_hdr;
 
-    assert(src != NULL);
-    assert(src->ptr != NULL);
-    assert(out != NULL);
-    
     max_ivl = 0; /* just to avoid warning on unused max_ivl */
 
     sf_log("sflow next\n");
 
-    info = (struct _snifferinfo *) src->ptr;
 
     memset(&tag, 0, sizeof(tag));
     memset(&dg, 0, sizeof(dg));
     dg.buf = buf;
-    dg.buf_length = MAX_PKT_SIZ;
+    dg.buf_length = MAX_PKT_SIZE;
 
-    if (sflow_datagram_read(&dg, src->fd) != SF_OK) {
+    if (sflow_datagram_read(&dg, me->sniff.fd) != SF_OK) {
 	/* an error here cannot be ignored, return with -1 */
 	return -1;
     }
@@ -880,12 +881,12 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
      * last second and we set all packet timestamps to current system time
      */
     gettimeofday(&now, NULL);
-    info->last_ts = TIME2TS(now.tv_sec, now.tv_usec);
+    me->last_ts = TIME2TS(now.tv_sec, now.tv_usec);
 
-    if (info->first_sn == 0 && info->last_sn == 0xFFFFFFFF) {
-	info->first_sn = dg.hdr.sequence_number;
-    } else if (info->last_sn >= dg.hdr.sequence_number
-	       && dg.hdr.sequence_number > info->first_sn) {
+    if (me->first_sn == 0 && me->last_sn == 0xFFFFFFFF) {
+	me->first_sn = dg.hdr.sequence_number;
+    } else if (me->last_sn >= dg.hdr.sequence_number
+	       && dg.hdr.sequence_number > me->first_sn) {
 	logmsg(LOGWARN,
 	       "sniffer-sflow: received sflow datagram with a lower sequence "
 	       "number than expected\n");
@@ -893,13 +894,15 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
     }
 
     /* remember datagram sequence number */
-    info->last_sn = dg.hdr.sequence_number;
+    me->last_sn = dg.hdr.sequence_number;
 
-    if (info->last_sn < info->first_sn)
-	info->first_sn = info->last_sn;
+    if (me->last_sn < me->first_sn)
+	me->first_sn = me->last_sn;
 
-    for (t = 0, npkts = 0, pkt = out;
-	 t < dg.hdr.num_records && npkts < max_no; t++) {
+    *dropped_pkts = 0;
+    
+    for (t = 0, npkts = 0;
+	 t < dg.hdr.num_records && npkts < max_pkts; t++) {
 	uint32_t num_elements = 0;
 
 	if (sflow_datagram_next_tag(&dg, &tag) != SF_OK)
@@ -947,6 +950,9 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 	    uint32_t eli;
 
 	    for (eli = 0; eli < num_elements; eli++) {
+		pkt_t *pkt;
+		size_t sz;
+		
 		if (sflow_tag_next_flow_sample(&tag, &el) != SF_OK)
 		    break;
 
@@ -959,11 +965,30 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 		    el.tag != SFLFLOW_IPV4 && el.tag != SFLFLOW_IPV6)
 		    continue;
 
+		/* compute packet size */
+		sz = sizeof(pkt_t) + sizeof(struct _como_sflow);
+		switch (el.tag) {
+		case SFLFLOW_HEADER:
+		    sz += el.flowType.header.header_length;
+		    break;
+		case SFLFLOW_ETHERNET:
+		    sz += sizeof(struct _como_eth);
+		    break;
+		case SFLFLOW_IPV4:
+		    sz += sizeof(struct _como_iphdr);
+		    break;
+		case SFLFLOW_IPV6:
+		    sz += 40;	/* IPv6 header length */
+		    break;
+		}
+		/* reserve the space in the buffer for the packet */
+		pkt = (pkt_t *) reserve_space(&me->capbuf, sz);
+		
 		/* point the packet payload to next packet */
-		COMO(payload) = info->pktbuf + nbytes;
+		COMO(payload) = (char *) (pkt + 1);
 
 		/* set the timestamp */
-		COMO(ts) = info->last_ts;
+		COMO(ts) = me->last_ts;
 
 		/* set packet type */
 		COMO(type) = COMOTYPE_SFLOW;
@@ -1122,54 +1147,65 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
 		    break;
 		    updateofs(pkt, L3, ETHERTYPE_IPV6);
 		}
+		/* TODO
 		COMO(pktmetas) = COMO(payload) + COMO(caplen);
 		pktmeta_set(pkt, "sampling_rate", &como_sflow_hdr.sampling_rate,
 			    sizeof(uint32_t));
-		
-		nbytes += COMO(caplen) + COMO(pktmetaslen);
+		*/
 		npkts++;
-		pkt++;
+		
+		ppbuf_capture(me->sniff.ppbuf, pkt);
 	    }
 	    /* unless every element was processed will add a positive number */
-	    src->drops += num_elements - eli;
+	    *dropped_pkts += num_elements - eli;
 	} else {
 	    if (sflow_tag_ignore(&tag) != SF_OK)
 		break;
 	}
     }
 
-    if (t < dg.hdr.num_records && npkts == max_no) {
+    if (t < dg.hdr.num_records && npkts == max_pkts) {
 	/*
 	 * the count is not really accurate
 	 */
-	src->drops += dg.hdr.num_records - t;
+	*dropped_pkts += dg.hdr.num_records - t;
     }
 
-    return npkts;
+    return 0;
 }
+
 
 /*
  * sniffer_stop
  */
 static void
-sniffer_stop(source_t * src)
+sniffer_stop(sniffer_t * s)
 {
-    struct _snifferinfo *info;
-
-    assert(src->ptr != NULL);
+    struct sflow_me *me = (struct sflow_me *) s;
 
     sf_log("sflow stop\n");
 
-    info = (struct _snifferinfo *) src->ptr;
-
-    if (src->fd > 0) {
-	/* close the socket */
-	close(src->fd);
-    }
-
-    free(src->ptr);
+    /* close the socket */
+    close(me->sniff.fd);
 }
 
-sniffer_t sflow_sniffer = {
-    "sflow", sniffer_start, sniffer_next, sniffer_stop
+
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct sflow_me *me = (struct sflow_me *) s;
+
+    munmap(me->capbuf.base, me->capbuf.size);
+    me->capbuf.base = NULL;
+}
+
+
+SNIFFER(sflow) = {
+    name: "sflow",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };

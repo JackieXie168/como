@@ -40,6 +40,8 @@
 #include "comofunc.h"
 #include "sniffers.h"
 
+#define ROUND_32(n) (((n) + 3) & ~3)
+
 /* 
  * this structure contains the node specific 
  * information (name, location, etc.). It is a 

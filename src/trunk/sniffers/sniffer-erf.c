@@ -36,32 +36,119 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <errno.h>
 #include <string.h>     /* bcopy */
 
 #include "como.h"
 #include "sniffers.h"
 
+#include "capbuf.c"
 
 /*
  * SNIFFER  ---    Endace ERF file 
  *
  * Endace ERF trace format. 
  *
- * XXX  This sniffer is reading a trace from disk. Reads are not 
- *      optimized although it is sequential and some prefetching 
- *      could help as well as using mmap() instead of read(). 
  */
 
 
 /* sniffer specific information */
-#define BUFSIZE 	(1024*1024) 
-struct _snifferinfo { 
-    char buf[BUFSIZE];          /* temporary packet buffer */
-    char *base;			/* pointer to first valid byte in buffer */
-    int nbytes; 	        /* valid bytes in buffer */
+#define ERF_MIN_BUFSIZE		(me->sniff.max_pkts * sizeof(pkt_t))
+#define ERF_MAX_BUFSIZE		(ERF_MIN_BUFSIZE + (2*1024*1024))
+#define ERF_DEFAULT_MAPSIZE	(16*1024*1024)	// 16 MB
+#define ERF_MIN_MAPSIZE		(1*1024*1024)	// 1 MB
+#define ERF_MAX_MAPSIZE		(32*1024*1024)	// 32 MB
+
+struct erf_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    size_t		file_size;	/* size fo trace file */
+    size_t		nread;
+    size_t		map_size;	/* size of mmap */
+    char *		base;		/* mmap addres */
+    off_t		off;
+    off_t		remap_sz;
+    off_t		remap;
+    capbuf_t		capbuf;
 };
 
+
+/*
+ * -- sniffer_init
+ * 
+ */
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
+{
+    struct erf_me *me;
+    struct stat trace_stat;
+    
+    me = safe_calloc(1, sizeof(struct erf_me));
+
+    me->sniff.max_pkts = 8192;
+    me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
+    me->map_size = ERF_DEFAULT_MAPSIZE;
+
+    if (args) { 
+	/* process input arguments */
+	char *p;
+
+	if ((p = strstr(args, "mapsize=")) != NULL) {
+	    me->map_size = atoi(p + 8);
+	    me->map_size = ROUND_32(me->map_size);
+	    if (me->map_size < ERF_MIN_MAPSIZE) {
+	    	me->map_size = ERF_MIN_MAPSIZE;
+	    }
+	    if (me->map_size > ERF_MAX_MAPSIZE) {
+		me->map_size = ERF_MAX_MAPSIZE;
+	    }
+	}
+    }
+
+    /* open the trace file */
+    me->sniff.fd = open(device, O_RDONLY);
+    if (me->sniff.fd < 0) {
+	logmsg(LOGWARN, "sniffer-erf: error while opening file %s: %s\n",
+	       device, strerror(errno));
+	goto error;
+    }
+    
+    /* get the trace file size */
+    if (fstat(me->sniff.fd, &trace_stat) < 0) {
+	logmsg(LOGWARN, "sniffer-erf: failed to stat file %s: %s\n",
+	       device, strerror(errno));
+	goto error;
+    }
+    me->file_size = trace_stat.st_size;
+
+    /* create the capture buffer */
+    if (capbuf_init(&me->capbuf, args, ERF_MIN_BUFSIZE, ERF_MAX_BUFSIZE) < 0)
+	goto error;
+
+    return (sniffer_t *) me;
+error:
+    if (me->sniff.fd >= 0) {
+	close(me->sniff.fd);
+    }
+    free(me);
+    return NULL;
+}
+
+
+static void
+sniffer_setup_metadesc(sniffer_t * s)
+{
+    metadesc_t *outmd;
+    pkt_t *pkt;
+
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(s, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
+}
 
 /*
  * -- sniffer_start
@@ -71,29 +158,37 @@ struct _snifferinfo {
  * of success, -1 in case of failure.
  */
 static int
-sniffer_start(source_t * src) 
+sniffer_start(sniffer_t * s) 
 {
-    metadesc_t *outmd;
-    pkt_t *pkt;
+    struct erf_me *me = (struct erf_me *) s;
+    int ps, mp; /* page size, maximum packet size */
+    int r;
     
-    /* open the ERF trace file */
-    src->fd = open(src->device, O_RDONLY); 
-    if (src->fd < 0)
-        return -1; 
-
-    src->flags = SNIFF_FILE|SNIFF_SELECT|SNIFF_TOUCHED; 
-    src->polling = 0; 
-    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
-
-    /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(src, 0);
+    /* mmap the trace file */
+    me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
+			     me->sniff.fd, 0);
+    if (me->base == MAP_FAILED) {
+	logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
+	       strerror(errno));
+	close(me->sniff.fd);
+	return -1;
+    }
+    me->nread = me->off = 0;
     
-    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
-
-    return 0;		/* success */
+    /*
+     * compute remap offset using the system pagesize and the maximum
+     * packet length.
+     */
+    ps = getpagesize();
+    mp = 65535;
+    r = (mp / ps) * ps;
+    if (mp % ps > 0) {
+	r += ps;
+    }
+    me->remap_sz = (off_t) (me->map_size - r);
+    me->remap = me->remap_sz;
+    
+    return 0;
 }
 
 
@@ -106,67 +201,65 @@ sniffer_start(source_t * src)
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t *out, int max_no, timestamp_t max_ivl)
+sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
+	     int * dropped_pkts) 
 {
-    struct _snifferinfo * info; /* sniffer specific information */
+    struct erf_me *me = (struct erf_me *) s;
     pkt_t *pkt;                 /* packet records */
-    char * base; 	 	/* current position in input buffer */
     int npkts;                  /* processed pkts */
-    int rd;
     timestamp_t first_seen = 0;
 
-    info = (struct _snifferinfo *) src->ptr; 
+    /* TODO: handle truncated traces */
+    if (me->nread >= me->file_size)
+        return -1;       /* end of file, nothing left to do */
 
-    if (info->nbytes > 0) {
-	memmove(info->buf, info->base, info->nbytes);
-    }
+    *dropped_pkts = 0;
     
-    /* read ERF records from fd */
-    rd = read(src->fd, info->buf + info->nbytes, BUFSIZE - info->nbytes); 
-    if (rd < 0) 
-	return rd; 
+    npkts = 0;
 
-    /* update number of bytes to read */ 
-    info->nbytes += rd;
-    if (info->nbytes == 0) 
-	return -1; 	/* end of file, nothing left to do */
+    while (npkts < max_pkts) {
+	dag_record_t *rec;	/* DAG record structure */
+	int len;		/* total record length */
+	int l2type;		/* interface type */
+	size_t rs;
+	size_t left = me->file_size - me->nread;
+	char *base = me->base + me->off;
 
-    base = info->buf; 
-    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
-	dag_record_t * rec;         /* DAG record structure */
-	int len;                    /* total record length */
-	int l2type; 		    /* interface type */
+	if (me->nread > me->remap) {
+    	    /* we've read all the packets that fit in the mmaped memory, now
+    	     * mmap the next area of the trace file */
+    	    munmap(me->base, me->map_size);
+	    me->base = (char *) mmap(NULL, me->map_size,
+				      PROT_READ, MAP_PRIVATE,
+				      me->sniff.fd, me->remap);
+	    if (me->base == MAP_FAILED) {
+		logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
+		       strerror(errno));
+		return -1;
+	    }
+	    me->off = me->nread - me->remap;
+	    me->remap += me->remap_sz;
+	    break;
+	}
 
 	/* see if we have a record */
-	if (info->nbytes - (base - info->buf) < dag_record_size)  
+	if (left < dag_record_size)  
 	    break; 
 
         /* access to packet record */
         rec = (dag_record_t *) base;
-        len = ntohs(rec->rlen) - dag_record_size;
+        len = ntohs(rec->rlen);
+        
+        rs = len;
 
         /* check if entire record is available */
-        if (len > info->nbytes - (int) (base - info->buf)) 
+        if (left < (size_t) len) 
 	    break; 
-
-        /* 
-	 * ok, data is good now, copy the packet over 
-	 */
-	COMO(ts) = rec->ts;
-	if (npkts > 0) {
-	    if (COMO(ts) - first_seen > max_ivl) {
-		/* Never returns more than 1sec of traffic */
-		break;
-	    }
-	} else {
-	    first_seen = COMO(ts);
-	}
-	COMO(len) = (uint32_t) ntohs(rec->wlen);
-	COMO(type) = COMOTYPE_LINK;
 
 	/* skip DAG header */
 	base += dag_record_size; 
-
+        len -= dag_record_size;
+        
         /*
          * we need to figure out what interface we are monitoring.
          * some information is in the DAG record but for example Cisco
@@ -184,8 +277,8 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, timestamp_t max_ivl)
 
         case TYPE_ETH:
             l2type = LINKTYPE_ETH;
-	    base += 2; 		/* ethernet frames have padding */
-	    len -= 2; 
+	    base += 2; /* ethernet frames have padding */
+	    len -= 2;
             break;
 
         default:
@@ -193,6 +286,24 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, timestamp_t max_ivl)
             base += len;
             continue;
         }
+        
+        /* reserve the space in the buffer for the pkt_t */
+	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sizeof(pkt_t) + len);
+        
+        /* 
+	 * ok, data is good now, copy the packet over 
+	 */
+	COMO(ts) = rec->ts;
+	if (npkts > 0) {
+	    if (COMO(ts) - first_seen > max_ivl) {
+		/* Never returns more than max_ivl of traffic */
+		break;
+	    }
+	} else {
+	    first_seen = COMO(ts);
+	}
+	COMO(len) = (uint32_t) ntohs(rec->wlen);
+	COMO(type) = COMOTYPE_LINK;
 
 	/*
 	 * point to the packet payload
@@ -205,13 +316,16 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, timestamp_t max_ivl)
 	 * this sniffer only runs on ethernet frames.
 	 */
 	updateofs(pkt, L2, l2type);
-
+	
         /* increment the number of processed packets */
-	base += len; 
+	npkts++;
+	ppbuf_capture(me->sniff.ppbuf, pkt);
+	
+	me->off += rs;
+	me->nread += rs;
     }
-    info->nbytes -= (base - info->buf);
-    info->base = base;
-    return npkts;
+
+    return 0;
 }
 
 
@@ -221,12 +335,33 @@ sniffer_next(source_t * src, pkt_t *out, int max_no, timestamp_t max_ivl)
  * close the file descriptor. 
  */
 static void
-sniffer_stop(source_t * src)
+sniffer_stop(sniffer_t * s)
 {
-    close(src->fd);
-    free(src->ptr);
+    struct erf_me *me = (struct erf_me *) s;
+    
+    if (me->base) {
+    	munmap(me->base, me->map_size);
+    }
+    close(me->sniff.fd);
 }
 
-sniffer_t erf_sniffer = { 
-    "erf", sniffer_start, sniffer_next, sniffer_stop
+
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct erf_me *me = (struct erf_me *) s;
+
+    capbuf_finish(&me->capbuf);
+    free(me);
+}
+
+
+SNIFFER(erf) = {
+    name: "erf",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };

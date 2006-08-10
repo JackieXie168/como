@@ -37,8 +37,15 @@
 #include "comotypes.h"
 
 /* sniffer-related typedefs */
-typedef struct _source          source_t;
-typedef struct _sniffer 	sniffer_t;
+typedef struct source		source_t;
+typedef struct sniffer_cb	sniffer_cb_t;
+typedef struct sniffer		sniffer_t;
+
+#define SNIFFER(name) sniffer_cb_t como_ ## name ## _sniffer
+
+typedef struct ppbuf ppbuf_t;
+
+void ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt);
 
 /*
  * A sniffer is in charge of delivering packets to CoMo from a given
@@ -71,16 +78,33 @@ typedef struct _sniffer 	sniffer_t;
  */
 
 /* sniffer callbacks */
-typedef int (start_fn)(source_t *src);
-typedef int (next_fn)(source_t *src, pkt_t *pkts, int max_no,
-		      timestamp_t max_ivl);
-typedef void (stop_fn)(source_t *src);
+typedef sniffer_t * (*sniffer_init_fn)    (const char * device,
+					   const char * args);
+typedef void (*sniffer_finish_fn)         (sniffer_t * s);
+typedef void (*sniffer_setup_metadesc_fn) (sniffer_t * s);
+typedef int  (*sniffer_start_fn)          (sniffer_t * s);
+typedef int  (*sniffer_next_fn)           (sniffer_t * s,
+					   int max_pkts, timestamp_t max_ivl,
+					   int * dropped_pkts);
+typedef void (*sniffer_stop_fn)           (sniffer_t * s);
 
-struct _sniffer {
-    char const * name;
-    start_fn * sniffer_start;   /* start the sniffer */
-    next_fn * sniffer_next;     /* get next packet */
-    stop_fn * sniffer_stop;     /* stop the sniffer */
+struct sniffer_cb {
+    char const *		name;
+    sniffer_init_fn		init;     /* initialize the sniffer */
+    sniffer_finish_fn		finish;   /* finalize the sniffer */
+    sniffer_setup_metadesc_fn	setup_metadesc; /* setup the out metadesc */
+    sniffer_start_fn		start;    /* start the sniffer */
+    sniffer_next_fn		next;     /* get next packet */
+    sniffer_stop_fn		stop;     /* stop the sniffer */
+};
+
+struct sniffer {
+    int		fd;		/* file descriptor we are using */
+    uint32_t	flags;		/* sniffer flags */
+    int		max_pkts;	/* maximum number of pkts captured for each
+				   call to sniffer_next_fn() */
+    timestamp_t	polling;	/* polling interval, if needed */
+    ppbuf_t *	ppbuf;		/* ring buffer of pkt pointers */
 };
 
 /*
@@ -89,18 +113,17 @@ struct _sniffer {
  * used to keep state between successive calls of the sniffer
  * callbacks.
  */
-struct _source {
-    struct _source *next;
-    sniffer_t *cb;              /* callbacks */
-    int fd;                     /* file descriptor we are using */
-    char *device;		/* device name */
-    char *args;			/* optional arguments */
+struct source {
+    source_t *	next;
+    sniffer_cb_t *cb;		/* callbacks */
+    sniffer_t *	sniff;		/* sniffer state */
+    char *	device;		/* device name */
+    char *	args;		/* optional arguments */
     metadesc_t *outdesc;	/* offered output metadesc list */
-    void *ptr;			/* sniffer-dependent information */ 
-    uint32_t flags;		/* sniffer flags */
-    timestamp_t polling; 	/* polling interval, if needed */
-    uint32_t drops;		/* packets dropped by sniffer */
+    uint64_t	tot_cap_pkts;	/* packets captured by the sniffer */
+    uint64_t	tot_dropped_pkts; /* packets dropped by the sniffer */
 };
+
 
 #define SNIFF_TOUCHED	0x8000	/* set if the the flags have changed */
 #define	SNIFF_SELECT	0x0001	/* device supports select() */
@@ -114,7 +137,7 @@ struct _source {
 void updateofs(pkt_t * pkt, layer_t l, int type);
 
 /* function used by sniffer-*.c to parse the 802.11 frames */
-int ieee80211_capture_frame(const char *buf, int buf_len, char *dest);
+int ieee80211_process_mgmt_frame(const char *buf, int buf_len, char *dest);
 
 typedef int (*to_como_radio_fn)(const char *, struct _como_radio *);
 
@@ -129,6 +152,6 @@ int radiotap_header_to_como_radio(const char *buf, struct _como_radio *r);
 /*
  * metadesc.c
  */
-metadesc_t * metadesc_define_sniffer_out(source_t *src, int pktopt_count, ...);
+metadesc_t * metadesc_define_sniffer_out(sniffer_t *s, int pktopt_count, ...);
 
 #endif /* _COMO_SNIFFERS_H */

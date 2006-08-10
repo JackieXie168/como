@@ -47,7 +47,7 @@
 #include "sniffers.h"
 
 /* get the sniffers list */
-extern sniffer_t *__sniffers[];
+extern sniffer_cb_t *__sniffers[];
 
 /*
  * tokens used in the dictionary
@@ -321,7 +321,6 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
 	    s->cb = __sniffers[i];
 	    s->device = strdup(device);
 	    s->args = args ? strdup(args) : NULL;
-	    s->fd = -1;	/* still closed */
 	    m->sources = s;
 	    break;
 	}
