@@ -664,7 +664,7 @@ module_lookup(const char *name, int node)
  * -- module_db_seek_by_ts
  * 
  * This function looks into the first record of each file until it 
- * find the one with the closest start time to the requested one. 
+ * finds the one with the closest start time to the requested one. 
  * We do a linear search (instead of a faster binary search) because
  * right now csseek only supports CS_SEEK_FILE_PREV and CS_SEEK_FILE_NEXT. 
  * The function returns the offset of the file to be read or -1 in case
@@ -678,8 +678,8 @@ module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
     off_t ofs; 
     int found;
 
-    ld = mdl->callbacks.load; 
-    len = mdl->callbacks.st_recordsize; 
+    ld = mdl->callbacks.load;
+    len = mdl->callbacks.st_recordsize;
     ofs = csgetofs(fd);
     found = 0;
     while (!found) { 
@@ -710,6 +710,36 @@ module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
 	if (ofs == -1) {
 	    ofs = csgetofs(fd);
 	    found = 1;
+	}
+    }
+
+    for (;;) {
+	timestamp_t ts;
+	void * ptr;
+	
+	len = mdl->callbacks.st_recordsize;
+	ptr = module_db_record_get(fd, &ofs, mdl, &len, &ts);
+	if (ptr == NULL) {
+	    if (len != 0) {
+		logmsg(LOGWARN, "error reading file %s: %s\n",
+		       mdl->output, strerror(errno));
+	    }
+	    /* there's no data */
+	    ofs = -1;
+	    break;
+	}
+	/*
+	 * Now we have either good data or GR_LOSTSYNC.
+	 * If lost sync, move to the next file and try again. 
+	 */
+	if (ptr == GR_LOSTSYNC) {
+	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
+	    continue;
+	}
+	
+	if (ts >= start) {
+	    ofs -= len;
+	    break;
 	}
     }
 

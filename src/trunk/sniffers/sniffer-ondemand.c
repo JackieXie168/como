@@ -45,6 +45,7 @@
 #include "storage.h"
 #include "ipc.h"
 
+#include "capbuf.c"
 
 /*
  * SNIFFER  ---	ondemand
@@ -54,182 +55,144 @@
  */
 
 /* sniffer-specific information */
-#define BUFSIZE		(1024*1024)
-struct _snifferinfo { 
-    char buf[BUFSIZE];	/* the capture buffer */
-    int fd;		/* storage file descriptor */
-    int storage_fd;
-    module_t *mdl;
-    int node;
-    timestamp_t start;
-    timestamp_t end;
-    int has_end;
-    off_t resume_ofs;
-    int done;
+#define ONDEMAND_MIN_BUFSIZE	(me->sniff.max_pkts * sizeof(pkt_t))
+#define ONDEMAND_MAX_BUFSIZE	(ONDEMAND_MIN_BUFSIZE + (2*1024*1024))
+
+struct ondemand_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    const char *	device;		/* source module name */
+    int			fd;		/* cs file descriptor */
+    int			storage_fd;     /* ipc socket */
+    module_t *		mdl;		/* source module */
+    int			node;		/* node id */
+    timestamp_t		start;		/* start timestamp */
+    timestamp_t		end;		/* end timestamp */
+    int			has_end;	/* end timestamp valid flag */
+    off_t		resume_ofs;	/* offset to resume at */
+    int			done;		/* done flag */
+    capbuf_t		capbuf;
 };
 
-/**
- * -- sniffer_config
+
+/*
+ * -- sniffer_init
  * 
- * process config parameters 
- *
  */
-static void
-sniffer_config(char *args, struct _snifferinfo *info)
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
 {
-    char *wh;
+    struct ondemand_me *me;
+    
+    me = safe_calloc(1, sizeof(struct ondemand_me));
 
-    if (args == NULL)
-	return;
+    me->sniff.max_pkts = 8192;
+    me->sniff.flags = SNIFF_POLL | SNIFF_FILE;
+    me->device = device;
+    
+    if (args) { 
+	/* process input arguments */
+	char *p;
 
-    /*
-     * "node". 
-     * sets the node to which the module belongs.
-     */
-    wh = strstr(args, "node");
-    if (wh != NULL) {
-	char *x = index(wh, '=');
-
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-ondemand: invalid argument %s\n", wh);
-	else
-	    info->node = atoi(x + 1);
-    }
-
-    /*
-     * "start". 
-     * sets the start timestamp.
-     */
-    wh = strstr(args, "start");
-    if (wh != NULL) {
-	char *x = index(wh, '=');
-
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-ondemand: invalid argument %s\n", wh);
-	else
-	    info->start = strtoll(x + 1, (char **)NULL, 10);
-    }
-
-    /*
-     * "end". 
-     * sets the start timestamp.
-     */
-    wh = strstr(args, "end");
-    if (wh != NULL) {
-	char *x = index(wh, '=');
-
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-ondemand: invalid argument %s\n", wh);
-	else {
-	    info->end = strtoll(x + 1, (char **)NULL, 10);
-	    info->has_end = 1;
+	/*
+	 * "node".
+	 * sets the node to which the module belongs.
+	 */
+	if ((p = strstr(args, "node=")) != NULL) {
+	    me->node = atoi(p + 5);
+	}
+	/*
+	 * "start".
+	 * sets the start timestamp.
+	 */
+	if ((p = strstr(args, "start=")) != NULL) {
+	    me->start = strtoll(p + 6, (char **) NULL, 10);
+	}
+	/*
+	 * "start".
+	 * sets the end timestamp.
+	 */
+	if ((p = strstr(args, "end=")) != NULL) {
+	    me->end = strtoll(p + 4, (char **) NULL, 10);
+	    me->has_end = 1;
 	}
     }
+
+    if (me->device == NULL || strlen(me->device) == 0) {
+	logmsg(LOGWARN, "sniffer-ondemand: "
+	       "device must contain a valid module\n");
+	goto error;
+    }
+
+    /* create the capture buffer */
+    if (capbuf_init(&me->capbuf, args, ONDEMAND_MIN_BUFSIZE,
+		    ONDEMAND_MAX_BUFSIZE) < 0)
+	goto error;
+
+    return (sniffer_t *) me;
+error:
+    free(me);
+    return NULL;
 }
+
+
+static void
+sniffer_setup_metadesc(__unused sniffer_t * s)
+{
+}
+
 
 /**
  * -- sniffer_start
  * 
- * This function sends the query (via HTTP) to the destination 
- * and receives back the packet description. 
+ * This function connects to storage and creates a storage client for the
+ * module used as data source. 
  *
  */
 static int
-sniffer_start(source_t * src) 
+sniffer_start(sniffer_t * s) 
 {
-    struct _snifferinfo *info;
-    off_t ofs;
-    
-    if (src->device == NULL) {
-	logmsg(LOGWARN, "sniffer-ondemand: "
-	       "device must contain a valid module\n");
-    }
-    
-    src->flags = SNIFF_POLL | SNIFF_FILE;
-    src->polling = 0;
-    
-    /* 
-     * populate the sniffer specific information
-     */
-    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
-    info = (struct _snifferinfo *) src->ptr;
-    src->fd = info->fd = -1;
-    
-    sniffer_config(src->args, info);
+    struct ondemand_me *me = (struct ondemand_me *) s;
     
     /* 
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
-    info->storage_fd = ipc_connect(STORAGE);
-    if (info->storage_fd == IPC_ERR)
+    me->storage_fd = ipc_connect(STORAGE);
+    if (me->storage_fd == IPC_ERR)
 	goto error;
     
     /* find the module */
-    info->mdl = module_lookup(src->device, info->node);
-    if (info->mdl == NULL) {
+    me->mdl = module_lookup(me->device, me->node);
+    if (me->mdl == NULL) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
-	       "module \"%s\" not found\n", src->device);
+	       "module \"%s\" not found\n", me->device);
 	goto error;
     }
     
-    logmsg(V_LOGSNIFFER, "opening file for reading (%s)\n", info->mdl->output);
-    info->fd = csopen(info->mdl->output, CS_READER_NOBLOCK, 0, info->storage_fd); 
-    if (info->fd < 0) {
+    logmsg(V_LOGSNIFFER, "opening file for reading (%s)\n", me->mdl->output);
+    me->sniff.fd = csopen(me->mdl->output, CS_READER_NOBLOCK, 0, me->storage_fd); 
+    if (me->sniff.fd < 0) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
-	       "error while opening file %s\n", info->mdl->output);
+	       "error while opening file %s\n", me->mdl->output);
 	goto error;
     }
     
-    /* quickly seek the file from which to start the search */
-    ofs = module_db_seek_by_ts(info->mdl, info->fd, info->start);
-    if (ofs < 0) {
+    /* seek on the first record */
+    me->resume_ofs = module_db_seek_by_ts(me->mdl, me->sniff.fd, me->start);
+    if (me->resume_ofs < 0) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
-	       "error while seeking file %s\n", info->mdl->output);
+	       "error while seeking file %s\n", me->mdl->output);
 	goto error;
     }
-    
-    for (;;) {
-	void * ptr;
-	timestamp_t ts;
-	ssize_t len;
-	
-	len = info->mdl->callbacks.st_recordsize;
-	
-	ptr = module_db_record_get(info->fd, &ofs, info->mdl, &len, &ts);
-	if (ptr == NULL) {
-	    if (len != 0) {
-		logmsg(LOGWARN, "error reading file %s: %s\n",
-		       info->mdl->output, strerror(errno));
-	    }
-	    /* there's no data */
-	    goto error;
-	}
-	/*
-	 * Now we have either good data or GR_LOSTSYNC.
-	 * If lost sync, move to the next file and try again. 
-	 */
-	if (ptr == GR_LOSTSYNC) {
-	    ofs = csseek(info->fd, CS_SEEK_FILE_NEXT);
-	    logmsg(LOGSNIFFER, "lost sync, trying next file %s/%016llx\n", 
-		   info->mdl->output, ofs);
-	    continue;
-	}
-	
-	if (ts >= info->start) {
-	    info->resume_ofs = ofs - len;
-	    break;
-	}
-    }
-    
+       
     return 0;
     
 error:
-    if (info->fd != -1) {
-	csclose(info->fd, 0);
+    if (me->sniff.fd != -1) {
+	csclose(me->sniff.fd, 0);
     }
-    if (info->storage_fd) {
-    	close(info->storage_fd);
+    if (me->storage_fd != -1) {
+    	close(me->storage_fd);
     }
     return -1;
 }
@@ -244,59 +207,58 @@ error:
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
+sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
+	     int * dropped_pkts) 
 {
-    struct _snifferinfo * info;
-    pkt_t * pkt;
-    char * base;		/* current position in input buffer */
+    struct ondemand_me *me = (struct ondemand_me *) s;
+    
     int npkts;			/* processed pkts */
     timestamp_t first_seen = 0;
     off_t ofs;
-    ssize_t len, buf_size;
+    ssize_t len;
+    size_t replayed_size = 0, max_size;
     void * ptr;
+    int left = 0;
 
-    assert(src->ptr != NULL);
-
-    info = (struct _snifferinfo *) src->ptr;
-    base = info->buf;
-    buf_size = BUFSIZE;
-    
-    if (info->done)
+    if (me->done)
 	return -1;
     
-    ofs = info->resume_ofs;
+    max_size = (me->capbuf.size - 65536);
     
-    for (npkts = 0, pkt = out; npkts < max_no && buf_size > 65535; ) {
-	int left = 0;
+    ofs = me->resume_ofs;
+    
+    npkts = 0;
+    
+    while (npkts < max_pkts && replayed_size < max_size) {
 	timestamp_t ts;
 	
-	len = info->mdl->callbacks.st_recordsize;
+	len = me->mdl->callbacks.st_recordsize;
 	
-	ptr = module_db_record_get(info->fd, &ofs, info->mdl, &len, &ts);
+	ptr = module_db_record_get(me->fd, &ofs, me->mdl, &len, &ts);
 	if (ptr == NULL) {
 	    if (len != 0) {
 		logmsg(LOGWARN, "error reading file %s: %s\n",
-		       info->mdl->output, strerror(errno));
+		       me->mdl->output, strerror(errno));
 		/* error */
 		return -1;
 	    }
 	    /* we're finished */
-	    info->done = 1;
-	    return (npkts > 0) ? npkts : -1;
+	    me->done = 1;
+	    return (npkts > 0) ? 0 : -1;
 	}
 	/*
 	 * Now we have either good data or GR_LOSTSYNC.
 	 * If lost sync, move to the next file and try again. 
 	 */
 	if (ptr == GR_LOSTSYNC) {
-	    ofs = csseek(info->fd, CS_SEEK_FILE_NEXT);
+	    ofs = csseek(me->fd, CS_SEEK_FILE_NEXT);
 	    logmsg(LOGSNIFFER, "lost sync, trying next file %s/%016llx\n", 
-		   info->mdl->output, ofs);
+		   me->mdl->output, ofs);
 	    continue;
 	}
-	if (ts > info->end) {
+	if (ts >= me->end) {
 	    /* we're finished */
-	    info->done = 1;
+	    me->done = 1;
 	    return (npkts > 0) ? npkts : -1;
 	}
 	
@@ -304,44 +266,41 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	    if (ts > first_seen && ts - first_seen > max_ivl) {
 		/* Never returns more than max_ivl of traffic */
 		/* NOTE: need to restart from this record */
-		info->resume_ofs = ofs - len;
+		ofs -= len;
 		break;
 	    }
 	} else {
 	    first_seen = ts;
 	}
 	
+	left = 0;
 	do {
-	    size_t l = buf_size;
-	    left = info->mdl->callbacks.replay(info->mdl, ptr, base, &l, left);
+	    size_t l = sizeof(pkt_t) + 65536;
+	    pkt_t *pkt;
+	    
+	    /* reserve the space in the buffer for the pkt_t */
+	    pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, l);
+	    
+	    left = me->mdl->callbacks.replay(me->mdl, ptr, (char *) pkt,
+					     &l, left);
 	    if (left < 0) {
 		errno = ENODATA;
 		return -1;
 	    }
-	    if (len == 0)
-		break; /* done with this record */
-	    buf_size -= l;
-	    /* ok, copy the packet header */
-	    bcopy(base, pkt, sizeof(pkt_t));
-	    /* the payload is just after the packet. update 
-	     * the payload pointer. 
-	     */
-	    COMO(payload) = base + sizeof(pkt_t);
 	    
-	    /* move forward */
-	    base += COMO(caplen) + sizeof(pkt_t);
-	    npkts++;
-	    if (npkts == max_no) {
-	    	/* out of pkt_ts, simplest solution drop left packets */
-		src->drops = left;
-		break;
-	    }
-	    pkt++;
-	} while (left > 0 && buf_size > 65535);
-    }
-    info->resume_ofs = ofs;
+	    if (l == 0)
+		break; /* done with this record */
 
-    return npkts;
+	    replayed_size += l;
+	    npkts++;
+
+	} while (left > 0 && npkts < max_pkts && replayed_size < max_size);
+    }
+
+    *dropped_pkts = left;
+    me->resume_ofs = ofs;
+
+    return 0;
 }
 
 /*
@@ -350,20 +309,30 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
  * just close the storage file
  */
 static void
-sniffer_stop(source_t * src) 
+sniffer_stop(sniffer_t * s)
 {
-    if (src->ptr) {
-	struct _snifferinfo * info;
-	info = (struct _snifferinfo *) src->ptr;
-	if (info->fd != -1) {
-	    csclose(info->fd, 0);
-	    info->fd = -1;
-	}
-    }
-    free(src->ptr);
-    src->ptr = NULL;
+    struct ondemand_me *me = (struct ondemand_me *) s;
+    
+    csclose(me->sniff.fd, 0);
 }
 
-struct _sniffer ondemand_sniffer = { 
-    "ondemand", sniffer_start, sniffer_next, sniffer_stop
+
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct ondemand_me *me = (struct ondemand_me *) s;
+
+    capbuf_finish(&me->capbuf);
+    free(me);
+}
+
+
+SNIFFER(ondemand) = {
+    name: "ondemand",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };

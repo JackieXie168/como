@@ -298,19 +298,6 @@ handle_replay_fail(module_t *mdl)
     }
 }
 
-inline static void
-handle_db_eof(qreq_t * req, int client_fd) 
-{
-    logmsg(V_LOGQUERY, "reached end of file %s\n", req->src->output);
-
-    /* notify the end of stream to the module */
-    if (req->format == QFORMAT_CUSTOM || req->format == QFORMAT_HTML) {
-	if (module_db_record_print(req->mdl, NULL, NULL, client_fd)) {
-	    handle_print_fail(req->mdl);
-	}
-    }
-}
-
 
 /*
  * -- qu_ipc_module_add
@@ -399,8 +386,9 @@ query(int client_fd, int supervisor_fd, int node_id)
     off_t ofs; 
     ssize_t len;
     int mode, ret;
-    char * httpstr;
+    char *httpstr;
     char *null_args[] = {NULL};
+    timestamp_t ts, end_ts;
 
     /* 
      * every new process has to set its name, specify the type of memory
@@ -578,100 +566,78 @@ FIXME
 	panic("opening file %s", req.src->output);
 
 
-    /* quickly seek the file from which to start the search */
-    ofs = module_db_seek_by_ts(req.src, file_fd, TIME2TS(req.start, 0));
-    if (ofs == -1) {
-	panic("seeking file %s", req.src->output);
-    }
-
-    for (;;) { 
-	timestamp_t ts;
-	char * ptr; 
-
-        len = req.src->callbacks.st_recordsize; 
-        ptr = module_db_record_get(file_fd, &ofs, req.src, &len, &ts);
-        if (ptr == NULL) {	/* no data, but why ? */
-	    if (len == 0) { 
-		handle_db_eof(&req, client_fd); 
+    /* seek on the first record */
+    ts = TIME2TS(req.start, 0);
+    end_ts = TIME2TS(req.end, 0);
+    ofs = module_db_seek_by_ts(req.src, file_fd, ts);
+    if (ofs >= 0) {
+	for (;;) { 
+	    char * ptr;
+	    len = req.src->callbacks.st_recordsize;
+	    ptr = module_db_record_get(file_fd, &ofs, req.src, &len, &ts);
+	    if (ptr == NULL) {
+		/* no data, but why ? */
+		if (len == 0) {
+		    break;
+		}
+		panic("reading from file %s ofs %lld len %d",
+		      req.src->output, ofs, len);
+	    }
+	    /*
+	     * Now we have either good data or GR_LOSTSYNC.
+	     * If lost sync, move to the next file and try again. 
+	     */
+	    if (ptr == GR_LOSTSYNC) {
+		ofs = csseek(file_fd, CS_SEEK_FILE_NEXT);
+		if (ofs == -1) { 
+		    /* no more data, notify the end of the 
+		     * stream to the module
+		     */ 
+		    logmsg(V_LOGQUERY, "reached end of file %s\n",
+			   req.src->output);
+		    break;
+		}
+		logmsg(V_LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
+		       req.src->output, ofs); 
+		continue;
+	    }
+	    
+	    if (ts >= end_ts) {
 		break;
 	    }
-	    panic("reading from file %s ofs %lld len %d", 
-		  req.src->output, ofs, len); 
-	}
-
-	/*
-	 * Now we have either good data or GR_LOSTSYNC.
-	 * If lost sync, move to the next file and try again. 
-	 */
-	if (ptr == GR_LOSTSYNC) {
-	    ofs = csseek(file_fd, CS_SEEK_FILE_NEXT);
-	    if (ofs == -1) { 
-		/* no more data, notify the end of the 
-		 * stream to the module
-		 */ 
-		handle_db_eof(&req, client_fd); 
-                break;
-	    } 
-	    logmsg(V_LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
-		req.src->output, ofs); 
-	    continue;
-	}
-
-    	if (ts < TIME2TS(req.start, 0))	/* before the required time. */
-	    continue;
-    	if (ts >= TIME2TS(req.end, 0)) {
-	    /* 
-	     * ask the module to send the message footer if it 
-	     * has any to send. 
-	     */  
-	    switch (req.format) { 
-	    case QFORMAT_CUSTOM:
-	    case QFORMAT_HTML:
-		if (module_db_record_print(req.mdl, NULL, NULL, client_fd))
-		    handle_print_fail(req.mdl);
-		break;
-#if 0
-	    /*
-	     * DISABLED and UNUSED and BROKEN: broken because
-	     * module_db_record_replay should be called with NULL prt also
-	     * when the end of file is reached
-	     */
-	    case QFORMAT_COMO:
-		if (module_db_record_replay(req.src, NULL, client_fd))
+	    
+	    switch (req.format) {
+	    case QFORMAT_COMO: 	
+		if (module_db_record_replay(req.src, ptr, client_fd))
 		    handle_replay_fail(req.src);
 		break;
-#endif
+
+	    case QFORMAT_RAW: 
+		/* send the data to the query client */
+		ret = como_writen(client_fd, ptr, len);
+		if (ret < 0) 
+		     err(EXIT_FAILURE, "sending data to the client"); 
+		break;
+
+	    case QFORMAT_CUSTOM: 
+	    case QFORMAT_HTML:
+		if (module_db_record_print(req.mdl, ptr, NULL, client_fd))
+		    handle_print_fail(req.mdl);
+		break;
 	    default:
 		break;
-	    } 
-
-	    logmsg(LOGQUERY, "query completed\n"); 
-	    
-	    break;
-	}
-
-	switch (req.format) { 
-	case QFORMAT_COMO: 	
-	    if (module_db_record_replay(req.src, ptr, client_fd))
-		handle_replay_fail(req.src);
-	    break; 
-
-	case QFORMAT_RAW: 
-	    /* send the data to the query client */
-	    ret = como_writen(client_fd, ptr, len);
-	    if (ret < 0) 
-		err(EXIT_FAILURE, "sending data to the client"); 
-	    break;
-		
-	case QFORMAT_CUSTOM: 
-	case QFORMAT_HTML:
-	    if (module_db_record_print(req.mdl, ptr, NULL, client_fd))
-		handle_print_fail(req.mdl);
-	    break;
-	default:
-	    break;
+	    }
 	}
     }
+    /* notify the end of stream to the module */
+    if (req.format == QFORMAT_CUSTOM || req.format == QFORMAT_HTML) {
+	/* print the footer */
+	if (module_db_record_print(req.mdl, NULL, NULL, client_fd)) {
+	    handle_print_fail(req.mdl);
+	}
+    }
+
+    logmsg(LOGQUERY, "query completed\n"); 
     
     /* close the file with STORAGE */
     csclose(file_fd, 0);

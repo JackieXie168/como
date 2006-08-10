@@ -36,6 +36,7 @@
 #include <string.h>		/* memset */
 #include <errno.h>
 #include <dlfcn.h>		/* dlopen */
+#include <sys/mman.h>   /* mmap.h */
 
 #include <sys/ioctl.h>		/* ioctl for monitor mode */
 #include <sys/socket.h>		/* socket for monitor mode */
@@ -67,34 +68,48 @@ typedef struct {
 /* 
  * default values for libpcap 
  */
-#define LIBPCAP_DEFAULT_SNAPLEN 1500	/* packet capture */
-#define LIBPCAP_DEFAULT_TIMEOUT 0	/* timeout to serve packets */
+#define RADIO_DEFAULT_SNAPLEN 1500	/* packet capture */
+#define RADIO_DEFAULT_TIMEOUT 0	/* timeout to serve packets */
+#define RADIO_DEFAULT_BUFSIZE	(1024 * 1024)
+#define RADIO_MIN_BUFSIZE	(RADIO_DEFAULT_BUFSIZE / 2)
+#define RADIO_MAX_BUFSIZE	(RADIO_DEFAULT_BUFSIZE * 2)
 
 /* 
  * functions that we need from libpcap.so 
  */
-typedef int (*pcap_dispatch_fn) (pcap_t *, int, pcap_handler, u_char *);
-typedef pcap_t *(*pcap_open_fn) (const char *, int, int, int, char *);
-typedef void (*pcap_close_fn) (pcap_t *);
-typedef int (*pcap_noblock_fn) (pcap_t *, int, char *);
-typedef int (*pcap_fileno_fn) (pcap_t *);
-typedef int (*pcap_datalink_fn) (pcap_t *);
+typedef int (*pcap_dispatch_fn)(pcap_t *, int, pcap_handler, u_char *); 
+typedef pcap_t * (*pcap_open_live_fn)(const char *, int, int, int, char *);
+typedef void (*pcap_close_fn)(pcap_t *); 
+typedef int (*pcap_setnonblock_fn)(pcap_t *, int, char *); 
+typedef int (*pcap_fileno_fn)(pcap_t *); 
+typedef int (*pcap_datalink_fn)(pcap_t *); 
 
 /*
  * This data structure will be stored in the source_t structure and 
  * used for successive callbacks.
  */
-#define BUFSIZE		(1024 * 1024)
-struct _snifferinfo {
-    void *handle;		/* handle to libpcap.so */
-    uint32_t type;
-    pcap_dispatch_fn dispatch;	/* ptr to pcap_dispatch function */
-    pcap_t *pcap;		/* pcap handle */
-    uint snaplen;		/* capture length */
-    char pktbuf[BUFSIZE];	/* packet buffer */
-    char errbuf[PCAP_ERRBUF_SIZE + 1];	/* error buffer for libpcap */
-    monitor_t *mon;		/* monitor capable device */
-    to_como_radio_fn fallback_to_como_radio;
+
+struct radio_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    void *		handle;		/* handle to libpcap.so */
+    pcap_dispatch_fn	sp_dispatch;	/* ptr to pcap_dispatch function */
+    pcap_close_fn	sp_close;	/* ptr to pcap_close function */
+    pcap_t *		pcap;		/* pcap handle */
+    enum COMOTYPE	type;		/* como layer type */
+    const char *	device;		/* capture device */
+    int			channel;	/* monitored channel */
+    int			snaplen; 	/* capture length */
+    int			timeout;	/* capture timeout */
+    char		errbuf[PCAP_ERRBUF_SIZE + 1]; /* error buffer */
+    monitor_t *		mon;		/* monitor capable device */
+    to_como_radio_fn	fallback_to_como_radio;
+    int			dropped_pkts;
+    struct capbuf {
+	void *base;
+	void *end;
+	void *tail;
+	size_t size;
+    } capbuf;
 };
 
 
@@ -586,7 +601,7 @@ none_close(__unused const char *dev, __unused void *data)
 {
 }
 
-static monitor_t monitors[] = {
+static monitor_t s_monitors[] = {
     {"none", none_open, none_close, NULL, NULL},
     {"orinoco", orinoco_open, orinoco_close, avs_or_prism2_header_to_como_radio, NULL},
     {"wlext", wlext_open, wlext_close, NULL, NULL},
@@ -594,7 +609,127 @@ static monitor_t monitors[] = {
     {NULL, NULL, NULL, NULL, NULL}
 };
 
-static char s_protos[32];
+
+/*
+ * -- sniffer_init
+ * 
+ */
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
+{
+    struct radio_me *me;
+    int capbuf = RADIO_DEFAULT_BUFSIZE;
+
+    me = safe_calloc(1, sizeof(struct radio_me));
+    
+    me->sniff.max_pkts = 128;
+    me->sniff.flags = SNIFF_SELECT;
+    me->snaplen = RADIO_DEFAULT_SNAPLEN;
+    me->timeout = RADIO_DEFAULT_TIMEOUT;
+    me->device = device;
+    me->mon = &s_monitors[0];
+
+    if (args) { 
+	/* process input arguments */
+	char *p; 
+
+	if ((p = strstr(args, "snaplen=")) != NULL) {
+	    me->snaplen = atoi(p + 8);
+	    if (me->snaplen < 1 || me->snaplen > 65536) {
+		logmsg(LOGWARN,
+		       "sniffer-libpcap: invalid snaplen %d, using %d\n",
+		       me->snaplen, RADIO_DEFAULT_SNAPLEN);
+		me->snaplen = RADIO_DEFAULT_SNAPLEN;
+	    }
+	}
+	if ((p = strstr(args, "timeout=")) != NULL) {
+	    me->timeout = atoi(p + 8);
+	}
+	if ((p = strstr(args, "channel=")) != NULL) {
+	    /* frequency channel to monitor */
+	    me->channel = atoi(p + 8);
+	    if (me->channel < 1) {
+		me->channel = 1;
+	    } else if (me->channel > 14) {
+		me->channel = 14;
+	    }
+	}
+	if ((p = strstr(args, "monitor=")) != NULL) {
+	    /* monitor device type */
+	    monitor_t *mon;
+	    for (mon = s_monitors; mon->name != NULL; mon++) {
+		if (strncmp(mon->name, p + 8, strlen(mon->name)) == 0)
+		    break;
+	    }
+	    if (mon->name) {
+		me->mon = mon;
+	    } else {
+		logmsg(LOGWARN, "sniffer-radio: unrecognized monitor device");
+	    }
+	}
+	if ((p = strstr(args, "capbuf=")) != NULL) {
+	    capbuf = atoi(p + 7);
+	    capbuf = ROUND_32(capbuf);
+	    if (capbuf < RADIO_MIN_BUFSIZE ||
+		capbuf > RADIO_MAX_BUFSIZE) {
+		capbuf = RADIO_DEFAULT_BUFSIZE;
+	    }
+	}
+    }
+
+    logmsg(V_LOGSNIFFER,
+	   "sniffer-radio: snaplen %d, timeout %d, channel %d\n",
+	   me->snaplen, me->timeout, me->channel);
+
+    /* link the libpcap library */
+    me->handle = dlopen("libpcap.so", RTLD_NOW);
+    if (me->handle == NULL) { 
+	logmsg(LOGWARN, "sniffer-libpcap: error opening libpcap.so: %s\n",
+	       dlerror());
+	return NULL;
+    } 
+
+    /* find all the symbols that we will need */
+#define SYMBOL(name) dlsym(me->handle, name)
+
+    me->sp_close = (pcap_close_fn) SYMBOL("pcap_close"); 
+    me->sp_dispatch = (pcap_dispatch_fn) SYMBOL("pcap_dispatch");
+
+    /* create the capture buffer */
+    me->capbuf.size = (size_t) capbuf;
+    me->capbuf.base = mmap((void *) 0, me->capbuf.size, PROT_WRITE|PROT_READ,
+			    MAP_ANON|MAP_NOSYNC|MAP_SHARED, -1 /* fd */, 0);
+    if (me->capbuf.base == MAP_FAILED)
+	return NULL;
+    
+    me->capbuf.end = me->capbuf.base + me->capbuf.size;
+    me->capbuf.tail = me->capbuf.base;
+
+    
+    return (sniffer_t *) me;
+}
+
+
+static void
+sniffer_setup_metadesc(sniffer_t * s)
+{
+    struct radio_me *me = (struct radio_me *) s;
+    metadesc_t *outmd;
+    pkt_t *pkt;
+    const headerinfo_t *lchi;
+    char protos[32]; /* protos string of metadesc template */
+
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(s, 0);
+    
+    lchi = headerinfo_lookup_with_type_and_layer(me->type, LCOMO);
+    assert(lchi);
+    
+    snprintf(protos, 32, "%s:802.11:any:any", lchi->name);
+    pkt = metadesc_tpl_add(outmd, protos);
+    COMO(caplen) = me->snaplen;
+}
+
 
 /*
  * -- sniffer_start
@@ -605,183 +740,94 @@ static char s_protos[32];
  * 
  */
 static int
-sniffer_start(source_t * src)
+sniffer_start(sniffer_t * s)
 {
-    struct _snifferinfo *info = NULL;
-    uint snaplen = LIBPCAP_DEFAULT_SNAPLEN;
-    uint timeout = LIBPCAP_DEFAULT_TIMEOUT;
-    uint channel = 1;
-    pcap_open_fn sp_open;
+    struct radio_me *me = (struct radio_me *) s;
+    pcap_open_live_fn sp_open_live;
+    pcap_setnonblock_fn sp_setnonblock;
+    pcap_datalink_fn sp_datalink;
     pcap_fileno_fn sp_fileno;
-    pcap_noblock_fn sp_noblock;
-    pcap_datalink_fn sp_link;
-    pcap_close_fn sp_close = NULL;
-    char *mon_name = MONITOR_NAME_DEFAULT;
-    monitor_t *mon;
-    metadesc_t *outmd;
-    pkt_t *pkt;
-    const headerinfo_t *lchi;
-
-    if (src->args) {
-	/* process input arguments */
-	char *p;
-	char *val;
-
-	if ((p = strstr(src->args, "snaplen")) != NULL) {
-	    /* number of bytes to read from packet */
-	    val = index(p, '=') + 1;
-	    snaplen = atoi(val);
-	}
-	if ((p = strstr(src->args, "timeout")) != NULL) {
-	    /* timeout to regulate reception of packets */
-	    val = index(p, '=') + 1;
-	    timeout = atoi(val);
-	}
-	if ((p = strstr(src->args, "channel")) != NULL) {
-	    /* frequency channel to monitor */
-	    val = index(p, '=') + 1;
-	    channel = atoi(val);
-	    if (channel < 1)
-		channel = 1;
-	    else if (channel > 14)
-		channel = 14;
-	}
-	if ((p = strstr(src->args, "monitor")) != NULL) {
-	    /* monitor device type */
-	    val = index(p, '=') + 1;
-	    if (val) {
-		char *val2;
-		val2 = index(val, ' ');
-		if (val2)
-		    *val2 = '\0';
-		mon_name = val;
-	    }
-	}
-    }
-
-    logmsg(V_LOGSNIFFER,
-	   "sniffer-radio: snaplen %d, timeout %d, channel %d\n",
-	   snaplen, timeout, channel);
-
-    /* 
-     * set the interface in monitor mode
-     */
-    for (mon = monitors; mon->name != NULL; mon++)
-	if (strcmp(mon->name, mon_name) == 0)
-	    break;
-
-    if (!mon->name) {
-	logmsg(LOGWARN, "sniffer-radio: monitor device not supported: %s\n",
-	       mon_name);
-	return -1;
-    }
-
-    if (mon->open(src->device, channel, &mon->data) < 0)
-	return -1;
-
-    /* 
-     * allocate the _snifferinfo and link it to the 
-     * source_t data structure
-     */
-    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo));
-    info = (struct _snifferinfo *) src->ptr;
-    info->pcap = NULL;
-
-    info->mon = mon;
-
-    /* link the libpcap library */
-    info->handle = dlopen("libpcap.so", RTLD_NOW);
-    if (info->handle == NULL) {
-	logmsg(LOGWARN, "sniffer-radio: error while opening libpcap.so: %s\n",
-	       strerror(errno));
-	goto error;
-    }
 
     /* find all the symbols that we will need */
-    sp_open = (pcap_open_fn) dlsym(info->handle, "pcap_open_live");
-    sp_noblock = (pcap_noblock_fn) dlsym(info->handle, "pcap_setnonblock");
-    sp_link = (pcap_datalink_fn) dlsym(info->handle, "pcap_datalink");
-    sp_fileno = (pcap_fileno_fn) dlsym(info->handle, "pcap_fileno");
-    sp_close = (pcap_close_fn) dlsym(info->handle, "pcap_close");
-    info->dispatch = (pcap_dispatch_fn) dlsym(info->handle, "pcap_dispatch");
+    sp_open_live = (pcap_open_live_fn) SYMBOL("pcap_open_live");  
+    sp_setnonblock = (pcap_setnonblock_fn) SYMBOL("pcap_setnonblock"); 
+    sp_datalink = (pcap_datalink_fn) SYMBOL("pcap_datalink"); 
+    sp_fileno = (pcap_fileno_fn) SYMBOL("pcap_fileno"); 
+
+    /* put the device in monitor mode */
+    if (me->mon->open(me->device, me->channel, &me->mon->data) < 0) {
+	return -1;
+    }
 
     /* initialize the pcap handle */
-    info->pcap = sp_open(src->device, snaplen, 0, timeout, info->errbuf);
-    info->snaplen = snaplen;
-
+    me->pcap = sp_open_live(me->device, me->snaplen, 0,
+			    me->timeout, me->errbuf);
+    
     /* check for initialization errors */
-    if (info->pcap == NULL) {
-	logmsg(LOGWARN, "sniffer-radio: libpcap open failed: %s\n",
-	       info->errbuf);
-	goto error;
+    if (me->pcap == NULL) {
+	logmsg(LOGWARN, "sniffer-libpcap: error: %s\n", me->errbuf);
+	return -1;
     }
-    if (info->errbuf[0] != '\0')
-	logmsg(LOGWARN, "sniffer-radio: libcap reports error: %s\n",
-	       info->errbuf);
-
+    if (me->errbuf[0] != '\0') {
+	logmsg(LOGWARN, "sniffer-libpcap: %s\n", me->errbuf);
+    }
+    
     /*
      * It is very important to set pcap in non-blocking mode, otherwise
      * sniffer_next() will try to fill the entire buffer before returning.
      */
-    if (sp_noblock(info->pcap, 1, info->errbuf) < 0) {
-	logmsg(LOGWARN, "sniffer-radio: can't set non blocking mode: %s\n",
-	       info->errbuf);
-	goto error;
+    if (sp_setnonblock(me->pcap, 1, me->errbuf) < 0) {
+        logmsg(LOGWARN, "%s\n", me->errbuf);
+        return -1;
     }
-
+    
     /* check datalink type.  support 802.11 DLT_ values */
-    switch (sp_link(info->pcap)) {
+    switch (sp_datalink(me->pcap)) {
     case DLT_PRISM_HEADER:
-	info->type = COMOTYPE_RADIO;
-	info->fallback_to_como_radio = avs_or_prism2_header_to_como_radio;
+	me->type = COMOTYPE_RADIO;
+	me->fallback_to_como_radio = avs_or_prism2_header_to_como_radio;
 	break;
     case DLT_IEEE802_11_RADIO:
-        info->type = COMOTYPE_RADIO;
-        info->fallback_to_como_radio = radiotap_header_to_como_radio;
+        me->type = COMOTYPE_RADIO;
+        me->fallback_to_como_radio = radiotap_header_to_como_radio;
         break;
     case DLT_IEEE802_11_RADIO_AVS:
-	info->type = COMOTYPE_RADIO;
-	info->fallback_to_como_radio = avs_header_to_como_radio;
+	me->type = COMOTYPE_RADIO;
+	me->fallback_to_como_radio = avs_header_to_como_radio;
 	break;
     case DLT_IEEE802_11:
-	info->type = COMOTYPE_LINK;
-	info->fallback_to_como_radio = NULL;
+	me->type = COMOTYPE_LINK;
+	me->fallback_to_como_radio = NULL;
 	break;
     default:
 	logmsg(LOGWARN, "sniffer-radio: unrecognized datalink format\n");
-	goto error;
+	me->sp_close(me->pcap);
+	return -1;
     }
 
-    src->fd = sp_fileno(info->pcap);
-    src->flags = SNIFF_TOUCHED | SNIFF_SELECT;
-    src->polling = 0;
-    
-    /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(src, 0);
-    
-    lchi = headerinfo_lookup_with_type_and_layer(info->type, LCOMO);
-    assert(lchi);
-    
-    snprintf(s_protos, 32, "%s:802.11:any:any", lchi->name);
-    pkt = metadesc_tpl_add(outmd, s_protos);
-    COMO(caplen) = snaplen;
-    
-    return 0;			/* success */
-  error:
-    if (info && info->pcap) {
-	sp_close(info->pcap);
-	info->pcap = NULL;
-    }
-    mon->close(src->device, mon->data);
-    free(src->ptr);
-    return -1;
+    me->sniff.fd = sp_fileno(me->pcap);
+
+    return 0; 		/* success */
 }
 
-typedef struct {
-    pkt_t *pkt;
-    struct _snifferinfo *info;
-    int res_drop;
-} processpkt_data_t;
+
+static inline void *
+reserve_space(struct capbuf * capbuf, size_t s)
+{
+    void *end;
+    
+    s = ROUND_32(s);
+    assert(s > 0);
+    
+    end = capbuf->tail + s;
+    if (end > capbuf->end) {
+	end = capbuf->base + s;
+    }
+    capbuf->tail = end;
+
+    return capbuf->tail - s;
+}
+
 
 /* 
  * -- processpkt
@@ -793,43 +839,82 @@ typedef struct {
 static void
 processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
 {
-    processpkt_data_t *pdata = (processpkt_data_t *) data;
-    pkt_t *pkt = pdata->pkt;
+    size_t sz;
+    const size_t mgmt_sz = sizeof(struct _ieee80211_mgmt_hdr) +
+			   sizeof(struct _como_wlan_mgmt);
+    pkt_t *pkt;
+    struct radio_me *me = (struct radio_me *) data;
     char *dest;
-    int info_len = 0;
     int len;
+    struct _ieee80211_base *hdr;
 
-    dest = COMO(payload);
-    COMO(caplen) = 0;
-
-    if (pdata->info->type == COMOTYPE_RADIO) {
-	struct _como_radio *radio;
-	radio = (struct _como_radio *) dest;
-	if (pdata->info->mon->to_como_radio)
-	    info_len = pdata->info->mon->to_como_radio((const char *) buf,
-						       radio);
-	else
-	    info_len = pdata->info->fallback_to_como_radio((const char *) buf,
-							   radio);
-
-	buf += info_len;	/* buf points to 802.11 fixed header */
-	dest += sizeof(struct _como_radio);
-
-	COMO(caplen) = sizeof(struct _como_radio);
+    sz = sizeof(pkt_t);
+    if (me->type == COMOTYPE_RADIO) {
+	sz += sizeof(struct _como_radio);
     }
+    sz += MAX((size_t) h->caplen, mgmt_sz);
+    
+    /* reserve the space in the buffer for the packet */
+    pkt = (pkt_t *) reserve_space(&me->capbuf, sz);
+    assert((void *) pkt >= me->capbuf.base &&
+	   (void *) pkt < me->capbuf.end);
 
-    len = ieee80211_capture_frame((const char *) buf, h->caplen - info_len,
-				  dest);
-    if (len == 0) {
-	pdata->res_drop = 1;
-	return;
-    }
-
+    /* the payload points to the end of the pkt_t structure */
+    COMO(payload) = (char *) (pkt + 1);
+    assert((void *) COMO(payload) >= me->capbuf.base &&
+	   (void *) COMO(payload) < me->capbuf.end);
+    
     COMO(ts) = TIME2TS(h->ts.tv_sec, h->ts.tv_usec);
-    COMO(caplen) += len;
     COMO(len) = h->len;
+    COMO(type) = me->type;
+    COMO(caplen) = 0;
+    
+    len = h->caplen;
 
+    if (me->type == COMOTYPE_RADIO) {
+	struct _como_radio *radio;
+	int info_len;
+	
+	radio = (struct _como_radio *) COMO(payload);
+	/* process the radio info header */
+	if (me->mon->to_como_radio) {
+	    info_len = me->mon->to_como_radio((const char *) buf, radio);
+	} else {
+	    info_len = me->fallback_to_como_radio((const char *) buf, radio);
+	}
+	assert(info_len > 0);
+	/* so far caplen is sizeof(struct _como_radio) */
+	COMO(caplen) = sizeof(struct _como_radio);
+	/* point to the beginning of 802.11 frame */
+	buf += info_len;
+	len -= info_len;
+    }
+
+    hdr = (struct _ieee80211_base *) buf;
+    dest = COMO(payload) + COMO(caplen);
+    if (hdr->fc_type == IEEE80211TYPE_MGMT) {
+	int mgmt_len;
+	/* process the mgmt frame */
+	mgmt_len = ieee80211_process_mgmt_frame((const char *) buf, len, dest);
+	if (mgmt_len > 0) {
+	    COMO(caplen) += mgmt_len;
+	} else {
+	    me->dropped_pkts++;
+	    return;
+	}
+    } else {
+	/* copy the mgmt frame */
+	memcpy(dest, buf, len);
+	COMO(caplen) += len;
+    }
+	
+    /*
+     * update layer2 information and offsets of layer 3 and above.
+     * this sniffer only runs on ethernet frames.
+     */
     updateofs(pkt, L2, LINKTYPE_80211);
+
+    ppbuf_capture(me->sniff.ppbuf, pkt);
 }
 
 
@@ -848,52 +933,21 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
  * 
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no,
-	     __unused timestamp_t max_ivl)
+sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
+	     int * dropped_pkts)
 {
-    struct _snifferinfo *info = (struct _snifferinfo *) src->ptr;
-    pkt_t *pkt = out;
-    int npkts = 0;		/* processed packets */
-    int nbytes = 0;
-    processpkt_data_t pdata;
-
-    pdata.info = info;
-
-    while (npkts < max_no) {
-	int count;
-	assert(nbytes < BUFSIZE);
-	/* point the packet payload to next packet */
-	COMO(payload) = info->pktbuf + nbytes;
-	/* specify como type */
-	COMO(type) = info->type;
-
-	pdata.pkt = pkt;
-	pdata.res_drop = 0;
-
-	/*
-	 * we use pcap_dispatch() because pcap_next() is assumed unaffected
-	 * by the pcap_setnonblock() call. (it doesn't seem that this is 
-	 * actually the case, but we still believe the man page.) 
-	 * 
-	 * we retrieve one packet at a time for simplicity. 
-	 * XXX check the cost of processing one packet at a time... 
-	 * 
-	 */
-
-	count = info->dispatch(info->pcap, 1, processpkt, (u_char *) & pdata);
-	if (count == 0)
-	    break;
-
-	if (pdata.res_drop == 0) {
-	    nbytes += COMO(caplen);
-	    npkts++;
-	    pkt++;
-	} else {
-	    src->drops++;
-	}
+    struct radio_me *me = (struct radio_me *) s;
+    int count, x;
+    
+    for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
+	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
+			   (u_char *) me);
     }
-
-    return npkts;
+    
+    *dropped_pkts = me->dropped_pkts;
+    me->dropped_pkts = 0;
+    
+    return (x >= 0) ? 0 : -1;
 }
 
 
@@ -904,18 +958,32 @@ sniffer_next(source_t * src, pkt_t * out, int max_no,
  * list of pcap devices. 
  */
 static void
-sniffer_stop(source_t * src)
+sniffer_stop(sniffer_t * s) 
 {
-    struct _snifferinfo *info = (struct _snifferinfo *) src->ptr;
-    pcap_close_fn sp_close;
+    struct radio_me *me = (struct radio_me *) s;
+    
+    me->sp_close(me->pcap);
+    me->mon->close(me->device, me->mon->data);
 
-    close(src->fd);
-    sp_close = (pcap_close_fn) dlsym(info->handle, "pcap_close");
-    sp_close(info->pcap);
-    info->mon->close(src->device, info->mon->data);
-    free(src->ptr);
 }
 
-struct _sniffer radio_sniffer = {
-    "radio", sniffer_start, sniffer_next, sniffer_stop
+
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct radio_me *me = (struct radio_me *) s;
+    
+    munmap(me->capbuf.base, me->capbuf.size);
+    me->capbuf.base = NULL;
+}
+
+
+SNIFFER(radio) = {
+    name: "radio",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };

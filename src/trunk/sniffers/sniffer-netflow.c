@@ -39,13 +39,9 @@
 #undef __unused			/* __unused is used in netdb.h */
 #include <netdb.h>
 
-#ifdef WIN32
-#include "winsock2.h"
-#else
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/time.h>
-#endif
 
 #include "sniffers.h"
 #include "como.h"
@@ -54,6 +50,8 @@
 #include "comopriv.h"
 #include "heap.h"
 #include "hash.h"
+
+#include "capbuf.c"
 
 #include <ftlib.h>      /* flow-tools stuff 
 			 * NOTE: this .h must be included last 
@@ -77,23 +75,29 @@
  * This data structure will be stored in the source_t structure and 
  * used for successive callbacks.
  */
-#define BUFSIZE		(1024*1024)
-struct _snifferinfo {
-    timestamp_t window; 	/* lookahead window */
-    timestamp_t timescale; 	/* timestamp resolution */ 
-    uint16_t port;		/* socket port */
-    char buf[BUFSIZE];		/* buffer used between sniffer-next calls */
-    uint nbytes; 		/* bytes used in the buffer */
-    uint16_t sampling; 		/* scaling pkts/bytes for sampled Netflow */
-    uint16_t iface; 		/* interface of interest (SNMP index) */
-    uint32_t exporter; 		/* exporter address to be processed */
-    int flags; 			/* options */
-    hash_t *ftch;		/* hash table for demuxing exporters */
-}; 
+
+#define NETFLOW_MIN_BUFSIZE	(1024 * 1024)
+#define NETFLOW_MAX_BUFSIZE	(NETFLOW_MIN_BUFSIZE * 2)
+
+struct netflow_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    const char *	device;
+    timestamp_t		window;		/* lookahead window */
+    timestamp_t		timescale;	/* timestamp resolution */ 
+    uint16_t		port;		/* socket port */
+    uint16_t		sampling;	/* scaling pkts/bytes for sampled
+					   Netflow */
+    uint16_t		iface;		/* interface of interest (SNMP
+					   index) */
+    uint32_t		exporter;	/* exporter address to be processed */
+    int			flags;		/* options */
+    hash_t *		ftch;		/* hash table for demuxing exporters */
+    capbuf_t		capbuf;
+};
 
 
 /* sniffer options */
-#define FLOWTOOLS_COMPACT	0x02	/* just one packet per flow */
+#define NETFLOW_COMPACT	0x02	/* just one packet per flow */
 
 #define NF_PAYLOAD			\
     (sizeof(struct _como_nf) + 		\
@@ -139,7 +143,7 @@ netflow2ts(struct fts3rec_v5 * f, uint32_t ms)
  * -- update_flowvalues
  * 
  * set the timestamp for the next packet. this function is called
- * only when running in FLOWTOOLS_COMPACT mode for which we need to 
+ * only when running in NETFLOW_COMPACT mode for which we need to 
  * split a flow in multiple pieces according to the value of 
  * info->timescale (i.e. if the flow is 5 minute long but the timescale
  * is just 60secs we will split it in 5 flows 60 second long and assume
@@ -260,29 +264,30 @@ cookpkt(struct fts3rec_v5 * f, struct _flowinfo * flow, uint16_t sampling)
  * 
  */ 
 static void
-update_pkt(struct _flowinfo * flow, struct _snifferinfo * info,
-	   ftche_t *ftche) 
+update_pkt(struct _flowinfo * flow, struct netflow_me * me,
+	   ftche_t * ftche) 
 {
-    pkt_t * pkt = &flow->pkt; 
+    pkt_t *pkt = &flow->pkt;
 
     /* 
      * update the flow counters and destroy this 
      * flow if there are no packets left 
      */
-    flow->pkts_left -= H32(NF(pktcount)); 
-    flow->bytes_left -= (H32(NF(pktcount)) * COMO(len)); 
+    flow->pkts_left -= H32(NF(pktcount));
+    flow->bytes_left -= (H32(NF(pktcount)) * COMO(len));
     if (flow->pkts_left == 0) {
-	assert(flow->bytes_left == 0); 
-	free(flow); 
-	return; 	/* we are done! */ 
+	assert(flow->bytes_left == 0);
+	free(flow);
+	return; 	/* we are done! */
     } 
 
-    COMO(ts) += H32(NF(pktcount)) * flow->increment; 
-    COMO(len) = flow->bytes_left / flow->pkts_left; 
-    if (info->flags & FLOWTOOLS_COMPACT)
-	update_flowvalues(pkt, flow, info->timescale); 
+    COMO(ts) += H32(NF(pktcount)) * flow->increment;
+    COMO(len) = flow->bytes_left / flow->pkts_left;
+    if (me->flags & NETFLOW_COMPACT) {
+	update_flowvalues(pkt, flow, me->timescale);
+    }
     
-    heap_insert(ftche->heap, flow); 
+    heap_insert(ftche->heap, flow);
 } 
 
 
@@ -295,8 +300,8 @@ update_pkt(struct _flowinfo * flow, struct _snifferinfo * info,
  * 
  */ 
 timestamp_t 
-process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info,
-	       ftche_t *ftche)
+process_record(struct fts3rec_v5 * fr, struct netflow_me * me,
+	       ftche_t * ftche)
 { 
     struct _flowinfo *flow; 
 
@@ -304,7 +309,7 @@ process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info,
      * filter out flows that do not cross the interface 
      * of interest. if iface is 0, all flows are of interest. 
      */
-    if (info->iface && (info->iface != fr->input && info->iface != fr->output))
+    if (me->iface && (me->iface != fr->input && me->iface != fr->output))
 	return netflow2ts(fr, fr->Last);
 
     /* 
@@ -312,7 +317,7 @@ process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info,
      */ 
     if (fr->dPkts == 0 || fr->dOctets == 0) { 
 	logmsg(V_LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
-	    fr->dPkts, fr->dOctets); 
+	       fr->dPkts, fr->dOctets); 
 	return netflow2ts(fr, fr->Last);
     }
 
@@ -322,18 +327,21 @@ process_record(struct fts3rec_v5 *fr, struct _snifferinfo *info,
     flow->bytes_left = fr->dOctets; 
     flow->increment = netflow2ts(fr, fr->Last) - netflow2ts(fr, fr->First);
     flow->increment /= flow->pkts_left; 
-    cookpkt(fr, flow, info->sampling); 
-    if (info->flags & FLOWTOOLS_COMPACT)
-	update_flowvalues(&flow->pkt, flow, info->timescale); 
+    cookpkt(fr, flow, me->sampling); 
+    if (me->flags & NETFLOW_COMPACT) {
+	update_flowvalues(&flow->pkt, flow, me->timescale);
+    }
 
     /* insert in the heap */
     heap_insert(ftche->heap, flow);
 
     /* update the max and min timestamps in the heap */
-    if (flow->pkt.ts > ftche->max_ts) 
-	ftche->max_ts = flow->pkt.ts; 
-    if (flow->pkt.ts < ftche->min_ts) 
-	ftche->min_ts = flow->pkt.ts; 
+    if (flow->pkt.ts > ftche->max_ts) {
+	ftche->max_ts = flow->pkt.ts;
+    }
+    if (flow->pkt.ts < ftche->min_ts) {
+	ftche->min_ts = flow->pkt.ts;
+    }
 
     return flow->pkt.ts; 
 }
@@ -378,7 +386,7 @@ ftche_destroy(ftche_t * ftche)
  * Receive and process a NetFlow PDU. 
  */
 static int
-process_ftpdu(int fd, struct _snifferinfo *info, ftche_t **ftche_out)
+process_ftpdu(struct netflow_me * me, ftche_t ** ftche_out)
 {
     struct sockaddr_in agent;
     socklen_t addr_len;
@@ -391,9 +399,9 @@ process_ftpdu(int fd, struct _snifferinfo *info, ftche_t **ftche_out)
     
     addr_len = sizeof(agent);
     memset(&agent, 0, sizeof(agent));
-    ftpdu.bused = recvfrom(fd, ftpdu.buf, sizeof(ftpdu.buf),
-			    MSG_DONTWAIT,
-			    (struct sockaddr *) &agent, &addr_len);
+    ftpdu.bused = recvfrom(me->sniff.fd, ftpdu.buf, sizeof(ftpdu.buf),
+			   MSG_DONTWAIT,
+			   (struct sockaddr *) &agent, &addr_len);
     if (ftpdu.bused <= 0) {
     	if (errno != EAGAIN) {
 	    logmsg(LOGWARN, "sniffer-netflow: recvfrom: %s\n",
@@ -414,15 +422,15 @@ process_ftpdu(int fd, struct _snifferinfo *info, ftche_t **ftche_out)
     }
 
     /* if exporter src IP has been configured then make sure it matches */
-    if (info->exporter && (info->exporter != agent.sin_addr.s_addr)) {
+    if (me->exporter && (me->exporter != agent.sin_addr.s_addr)) {
 	/* ignore PDU */
 	return 0;
     }
     
-    ftche = hash_lookup_ulong(info->ftch, agent.sin_addr.s_addr);
+    ftche = hash_lookup_ulong(me->ftch, agent.sin_addr.s_addr);
     if (ftche == NULL) {
 	ftche = ftche_new();
-    	hash_insert_ulong(info->ftch, agent.sin_addr.s_addr, ftche);
+    	hash_insert_ulong(me->ftch, agent.sin_addr.s_addr, ftche);
     }
 
     /* verify sequence number */
@@ -445,7 +453,7 @@ process_ftpdu(int fd, struct _snifferinfo *info, ftche_t **ftche_out)
     /* write decoded flows */
     for (i = 0, offset = 0; i < n; ++i, offset += ftpdu.ftd.rec_size) {
 	fr = (struct fts3rec_v5 *) (ftpdu.ftd.buf + offset);
-	process_record(fr, info, ftche);
+	process_record(fr, me, ftche);
     }
     
     *ftche_out = ftche;
@@ -453,109 +461,145 @@ process_ftpdu(int fd, struct _snifferinfo *info, ftche_t **ftche_out)
 }
 
 
-/* 
- * -- configsniffer
+/*
+ * -- sniffer_init
  * 
- * process config parameters 
- *
  */
-static void 
-configsniffer(char * args, struct _snifferinfo * info) 
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
 {
-    char * wh; 
+    struct netflow_me *me;
 
-    if (args == NULL) 
-	return; 
+    me = safe_calloc(1, sizeof(struct netflow_me));
 
-    /*
-     * "port". 
-     * sets the port to which the UDP socket will be bound.
-     */
-    wh = strstr(args, "port");
-    if (wh != NULL) {
-	char *x = index(wh, '=');
+    me->sniff.max_pkts = 8192;
+    me->sniff.flags = SNIFF_SELECT;
+    me->device = device;
+    me->window = TIME2TS(300,0); 	/* default window is 5 minutes */
+    me->timescale = me->window; 	/* default timescale is window */
+    me->sampling = 1;			/* default no sampling */
+    me->port = FT_PORT;
 
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
-	else
-	    info->port = atoi(x + 1);
+    if (args) { 
+	/* process input arguments */
+	char *p;
+
+	/*
+	 * "port". 
+	 * sets the port to which the UDP socket will be bound.
+	 */
+	if ((p = strstr(args, "port=")) != NULL) {
+	    me->port = atoi(p + 5);
+	}
+	/*
+	 * "window". 
+	 * sets how much ahead in the flow records we need to read 
+	 * before replaying packets to make sure that no out-of-order 
+	 * packets will be sent.
+	 */
+	if ((p = strstr(args, "window=")) != NULL) {
+	    me->window = atoi(p + 7);
+	}
+	/*
+	 * "timescale". 
+	 * resolution for timestamps in packets. flows with longer durations
+	 * are split with an equal number of packets in each "timescale"
+	 * interval. 
+	 */
+	if ((p = strstr(args, "timescale=")) != NULL) {
+	    me->timescale = atoi(p + 10);
+	}
+	/* 
+	 * "sampling". 
+	 * for sampled netflow we need to know the sampling rate applied 
+	 * in order to include this information on the packet headers. 
+	 * we expect a number that is actually the inverse of the sampling 
+	 * rate (i.e., if sampling 1/1000, the value should be 1000). 
+	 */
+	if ((p = strstr(args, "sampling=")) != NULL) {
+	    me->sampling = atoi(p + 9);
+	}
+	/*
+	 * "iface".
+	 * select the interface we are interested to process.
+	 */
+	if ((p = strstr(args, "iface=")) != NULL) {
+	    me->iface = atoi(p + 6);
+	}
+	 /* 
+	 * "compact" 
+	 * compact mode. generate just the first packet of each flow. 
+	 */
+	if ((p = strstr(args, "compact")) != NULL) {
+	    me->flags |= NETFLOW_COMPACT;
+	}
+	/* 
+	 * "exporter"
+	 * select the NetFlow exporter we are listening to. 
+	 */ 
+	if ((p = strstr(args, "exporter=")) != NULL) {
+	    me->exporter = inet_addr(p + 9);
+	}
     }
 
-    /*
-     * "window". 
-     * sets how much ahead in the flow records we need to read 
-     * before replaying packets to make sure that no out-of-order 
-     * packets will be sent.
-     */
-    wh = strstr(args, "window");
-    if (wh != NULL) {
-	char * x = index(wh, '=');      
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
-	info->window = TIME2TS(atoi(x + 1), 0);
-    }
+    /* create the capture buffer */
+    if (capbuf_init(&me->capbuf, args, NETFLOW_MIN_BUFSIZE,
+		    NETFLOW_MAX_BUFSIZE) < 0)
+	goto error;
 
-    /*
-     * "timescale". 
-     * resolution for timestamps in packets. flows with longer durations
-     * are split with an equal number of packets in each "timescale"
-     * interval. 
-     */
-    wh = strstr(args, "timescale");
-    if (wh != NULL) {
-	char * x = index(wh, '=');      
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
-	info->timescale = TIME2TS(atoi(x + 1), 0);
-    }
+    return (sniffer_t *) me;
+error:
+    free(me);
+    return NULL;
+}
 
-    /* 
-     * "sampling". 
-     * for sampled netflow we need to know the sampling rate applied 
-     * in order to include this information on the packet headers. 
-     * we expect a number that is actually the inverse of the sampling 
-     * rate (i.e., if sampling 1/1000, the value should be 1000). 
-     */
-    wh = strstr(args, "sampling");
-    if (wh != NULL) {
-	char * x = index(wh, '=');
-	if (x == NULL) 
-	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
-	info->sampling = atoi(x + 1);
-    }
 
-    /*
-     * "iface".
-     * for sampled netflow set the scaling factor we need to apply
-     * to the packet and byte count present in the flow record.
-     */
-    wh = strstr(args, "iface");
-    if (wh != NULL) {
-	char * x = index(wh, '=');
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
-	info->iface = atoi(x + 1);
-    }
+static void
+sniffer_setup_metadesc(sniffer_t * s)
+{
+    struct netflow_me *me = (struct netflow_me *) s;
+    metadesc_t *outmd;
+    pkt_t *pkt;
 
-    /* 
-     * "compact" 
-     * compact mode. generate just the first packet of each flow. 
-     */
-    wh = strstr(args, "compact");
-    if (wh != NULL) 
-	info->flags |= FLOWTOOLS_COMPACT; 
-
-    /* 
-     * "exporter"
-     * select the NetFlow exporter we are listening to. 
-     */ 
-    wh = strstr(args, "exporter"); 
-    if (wh != NULL) {
-	char * x = index(wh, '=');
-	if (x == NULL)
-	    logmsg(LOGWARN, "sniffer-netflow: invalid argument %s\n", wh);
-	info->exporter = inet_addr(x + 1);
-    }
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(s, 0);
+    //outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
+    
+    outmd->ts_resolution = TIME2TS(me->timescale, 0);
+    outmd->flags = META_PKT_LENS_ARE_AVERAGED;
+    if (me->flags & NETFLOW_COMPACT) 
+	outmd->flags |= META_PKTS_ARE_FLOWS;
+    
+    /* NOTE: templates defined from more generic to more restrictive */
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:none");
+    COMO(caplen) = sizeof(struct _como_nf) +
+		   sizeof(struct _como_iphdr);
+    N16(IP(len)) = 0xffff;
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~tcp");
+    COMO(caplen) = sizeof(struct _como_nf) +
+		   sizeof(struct _como_iphdr) +
+		   sizeof(struct _como_tcphdr);
+    N16(IP(len)) = 0xffff;
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(TCP(src_port)) = 0xffff;
+    N16(TCP(dst_port)) = 0xffff;
+    
+    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~udp");
+    COMO(caplen) = sizeof(struct _como_nf) +
+		   sizeof(struct _como_iphdr) +
+		   sizeof(struct _como_udphdr);
+    N16(IP(len)) = 0xffff;
+    IP(proto) = 0xff;
+    N32(IP(src_ip)) = 0xffffffff;
+    N32(IP(dst_ip)) = 0xffffffff;
+    N16(UDP(src_port)) = 0xffff;
+    N16(UDP(dst_port)) = 0xffff;
 }
 
 
@@ -569,130 +613,54 @@ configsniffer(char * args, struct _snifferinfo * info)
  * It returns 0 in case of success, -1 in case of failure.
  */
 static int
-sniffer_start(source_t * src) 
+sniffer_start(sniffer_t * s) 
 {
-    struct _snifferinfo * info;
-    metadesc_t *outmd;
-    pkt_t *pkt;
-    int fd;
+    struct netflow_me *me = (struct netflow_me *) s;
     struct sockaddr_in loc_addr;
 
-    /* 
-     * populate the sniffer specific information
-     */
-    src->ptr = safe_calloc(1, sizeof(struct _snifferinfo)); 
-    info = (struct _snifferinfo *) src->ptr; 
-    info->window = TIME2TS(300,0); 	/* default window is 5 minutes */
-    info->timescale = info->window; 	/* default timescale is window */
-    info->sampling = 1;			/* default no sampling */
-    info->port = FT_PORT;
-
-    src->fd = -1;
-    
-    /* 
-     * set the config values 
-     */
-    configsniffer(src->args, info);
-
-    /* this sniffer operates on socket and uses a select()able descriptor */
-    src->flags = SNIFF_TOUCHED | SNIFF_SELECT; 
-    src->polling = 0; 
-    
     /* create a socket */
-    if ((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+    me->sniff.fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (me->sniff.fd < 0) {
 	logmsg(LOGWARN, "sniffer-netflow: can't create socket: %s\n",
 	       strerror(errno));
 	goto error;
     }
-    src->fd = fd;
 
-    /* set socket buffer size */
-    /*
-    if (bigsockbuf(fd, SO_RCVBUF, FT_SO_RCV_BUFSIZE) < 0) {
-	logmsg(LOGWARN, "sniffer-netflow: can't set socket buffer size: %s\n",
-	       strerror(errno));
-	goto error;
-    }
-    */
-
-    memset((char *) &loc_addr, 0, sizeof(struct sockaddr_in));
+    memset((char *) &loc_addr, 0, sizeof(loc_addr));
     loc_addr.sin_family = AF_INET;
     loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    loc_addr.sin_port = htons(info->port);
+    loc_addr.sin_port = htons(me->port);
 
-    if (src->device && strlen(src->device) > 0) {
+    if (me->device && strlen(me->device) > 0) {
 	struct hostent *bindinfo;
-	bindinfo = gethostbyname(src->device);
+	bindinfo = gethostbyname(me->device);
 	if (bindinfo) {
 	    loc_addr.sin_addr = *((struct in_addr *) bindinfo->h_addr);
 	} else {
 	    logmsg(LOGWARN,
-		   "sniffer-sflow: unresolved ip address: %s: %s\n",
-		   src->device, strerror(h_errno));
+		   "sniffer-netflow: unresolved ip address %s: %s\n",
+		   me->device, strerror(h_errno));
 	    goto error;
 	}
     }
 
     /* unicast bind -- no multicast support */
-    if (bind(fd, (struct sockaddr*) &loc_addr, sizeof(loc_addr)) < 0) {
+    if (bind(me->sniff.fd, (struct sockaddr *) &loc_addr,
+	sizeof(loc_addr)) < 0) {
 	logmsg(LOGWARN, "sniffer-netflow: can't bind socket: %s\n",
 	       strerror(errno));
 	goto error;
     }
     
     /* initialize the hash table for demuxing exporters */
-    info->ftch = hash_new_full(allocator_safe(), HASHKEYS_ULONG, NULL, NULL,
-			       NULL, (destroy_notify_fn) ftche_destroy);
+    me->ftch = hash_new_full(allocator_safe(), HASHKEYS_ULONG, NULL, NULL,
+			     NULL, (destroy_notify_fn) ftche_destroy);
 
-    /*  
-     * given that the output stream is not a plain packet 
-     * stream, describe it in the source_t data structure 
-     */ 
-    outmd = metadesc_define_sniffer_out(src, 0);
-    //outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
-    
-    outmd->ts_resolution = TIME2TS(info->timescale, 0);
-    outmd->flags = META_PKT_LENS_ARE_AVERAGED;
-    if (info->flags & FLOWTOOLS_COMPACT) 
-	outmd->flags |= META_PKTS_ARE_FLOWS;
-    
-    /* NOTE: templates defined from more generic to more restrictive */
-    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:none");
-    COMO(caplen) = sizeof(struct _como_iphdr);
-    N16(IP(len)) = 0xffff;
-    IP(proto) = 0xff;
-    N32(IP(src_ip)) = 0xffffffff;
-    N32(IP(dst_ip)) = 0xffffffff;
-    
-    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~tcp");
-    COMO(caplen) = sizeof(struct _como_iphdr) +
-		   sizeof(struct _como_tcphdr);
-    N16(IP(len)) = 0xffff;
-    IP(proto) = 0xff;
-    N32(IP(src_ip)) = 0xffffffff;
-    N32(IP(dst_ip)) = 0xffffffff;
-    N16(TCP(src_port)) = 0xffff;
-    N16(TCP(dst_port)) = 0xffff;
-    
-    pkt = metadesc_tpl_add(outmd, "nf:none:~ip:~udp");
-    COMO(caplen) = sizeof(struct _como_iphdr) +
-		   sizeof(struct _como_udphdr);
-    N16(IP(len)) = 0xffff;
-    IP(proto) = 0xff;
-    N32(IP(src_ip)) = 0xffffffff;
-    N32(IP(dst_ip)) = 0xffffffff;
-    N16(UDP(src_port)) = 0xffff;
-    N16(UDP(dst_port)) = 0xffff;
-    
     return 0;
 error:
-    if (src->fd != -1) {
-	close(src->fd);
-	src->fd = -1;
+    if (me->sniff.fd >= 0) {
+	close(me->sniff.fd);
     }
-    free(src->ptr);
-    src->ptr = NULL;
-
     return -1;
 }
 
@@ -705,37 +673,35 @@ error:
  *
  */
 static int
-sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl) 
+sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
+	     int * dropped_pkts)
 {
-    struct _snifferinfo * info; 
-    pkt_t * pkt; 
+    struct netflow_me *me = (struct netflow_me *) s;
     int npkts;                 /* processed pkts */
     int r;
     timestamp_t first_seen;
     ftche_t *ftche;
     
-    assert(src != NULL);
-    assert(src->ptr != NULL);
-    assert(out != NULL);
-
-    info = (struct _snifferinfo *) src->ptr;
-    info->nbytes = 0;
-
     /* receive and process a NetFlow PDU */
-    r = process_ftpdu(src->fd, info, &ftche);
+    r = process_ftpdu(me, &ftche);
     if (r <= 0) {
     	return r;
     }
-    
-    for (npkts = 0, pkt = out; npkts < max_no;) {
-	struct _flowinfo * flow; 
+
+    *dropped_pkts = 0;
+
+    npkts = 0;
+
+    while (npkts < max_pkts) {
+	struct _flowinfo *flow; 
+	pkt_t *pkt; 
 
 	/* 
 	 * check if we have a full info->window of flows in the heap.
 	 */ 
-	if (ftche == NULL || (ftche->max_ts - ftche->min_ts < info->window)) {
+	if (ftche == NULL || (ftche->max_ts - ftche->min_ts < me->window)) {
 	    /* try to get more data if available */
-	    if (process_ftpdu(src->fd, info, &ftche) == -1) {
+	    if (process_ftpdu(me, &ftche) == -1) {
 		/* break on error, probably EAGAIN */
 		break;
 	    }
@@ -749,24 +715,23 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	/* get the first flow from the heap */
 	heap_extract(ftche->heap, (void **) &flow); 
 
-	/* 
-	 * check if we have enough space in the packet buffer 
-	 */
-	if (BUFSIZE - info->nbytes < flow->pkt.caplen) 
-	    break; 
-
+	/* reserve the space in the buffer for the packet */
+	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf,
+				      sizeof(pkt_t) + flow->pkt.caplen);
+	
 	/* copy the first packet of the flow and update 
 	 * the pkt template. note that we cannot just point to the 
 	 * packet template because that is due to change (e.g., the 
 	 * length of the last packet may be different from all the 
 	 * others. 
 	 */
-	*pkt = flow->pkt; 
-	bcopy(COMO(payload), info->buf + info->nbytes, COMO(caplen)); 
-	COMO(payload) = info->buf + info->nbytes; 
-	info->nbytes += COMO(caplen); 
+	*pkt = flow->pkt;
+	COMO(payload) = (char *) (pkt + 1);
+	memcpy(COMO(payload), flow->pkt.payload, COMO(caplen));
 
-	update_pkt(flow, info, ftche);
+	update_pkt(flow, me, ftche);
+	
+	ppbuf_capture(me->sniff.ppbuf, pkt);
 
 	/* update the minimum timestamp from the root of the heap */
 	flow = heap_root(ftche->heap);
@@ -787,11 +752,11 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
 	}
 
 	npkts++;
-	pkt++;
     }
 
-    return npkts;
+    return 0;
 }
+
 
 /*
  * sniffer_stop
@@ -799,22 +764,31 @@ sniffer_next(source_t * src, pkt_t * out, int max_no, timestamp_t max_ivl)
  * free the heap structure and all sniffer data structure. 
  */
 static void
-sniffer_stop(source_t * src)
+sniffer_stop(sniffer_t * s)
 {
-    struct _snifferinfo * info = (struct _snifferinfo *) src->ptr; 
+    struct netflow_me *me = (struct netflow_me *) s;
     
-    assert(src->ptr != NULL);
-    assert(info->ftch != NULL);
-    
-    hash_destroy(info->ftch);
-    
-    if (src->fd > 0) { 
-	close(src->fd); 
-    } 
-    free(src->ptr);
+    hash_destroy(me->ftch);
+    close(me->sniff.fd); 
 }
 
 
-sniffer_t netflow_sniffer = { 
-    "netflow", sniffer_start, sniffer_next, sniffer_stop
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct netflow_me *me = (struct netflow_me *) s;
+
+    capbuf_finish(&me->capbuf);
+    free(me);
+}
+
+
+SNIFFER(netflow) = {
+    name: "netflow",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };

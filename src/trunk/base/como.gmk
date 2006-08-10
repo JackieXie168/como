@@ -133,11 +133,11 @@ sniffer-list.h: como.gmk
 	@( \
 	echo "/* generated file, do not edit */" ;		\
 	for i in $(SNIFFERS); do  				\
-		echo "extern sniffer_t $${i}_sniffer;" ;	\
+		echo "extern sniffer_cb_t como_$${i}_sniffer;" ;\
 	done  ;							\
-	echo "sniffer_t *__sniffers[] = {" ;			\
+	echo "sniffer_cb_t *__sniffers[] = {" ;			\
 	for i in $(SNIFFERS); do  				\
-		echo "	&$${i}_sniffer," ;			\
+		echo "	&como_$${i}_sniffer," ;			\
 	done  ;							\
 	echo "	NULL };" ;					\
 	) > sniffer-list.h
