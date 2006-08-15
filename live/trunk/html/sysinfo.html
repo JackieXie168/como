@@ -2,15 +2,15 @@
 
 <html> 
   <head> 
-    <title>System properties: <?= $nodename ?></title> 
+    <title>System properties: <?php echo $nodename ?></title> 
   </head>
   <body>
 
   <div class=title>System Information</div>
-  Software: <?= $version ?><br>
-  Built: <?= $builddate ?><br>
-  Online Since: <?= $online_str ?><br>  
-  <?= $comment ?>
+  Software: <?php echo $version ?><br>
+  Built: <?php echo $builddate ?><br>
+  Online Since: <?php echo $online_str ?><br>  
+  <?php echo $comment ?>
 
   </body>
 </html>

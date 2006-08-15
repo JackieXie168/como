@@ -1,10 +1,9 @@
 <!--  $Id$  -->
 <?php 
 
+$sub = "none";
 if (isset($_GET['sub'])) 
     $sub = $_GET['sub'];
-else
-    $sub = "none";
 
 if (isset($_GET['webroot'])) 
     $webroot = $_GET['webroot'];
@@ -14,35 +13,41 @@ if (isset($_GET['comonode']))
 ?>
 
 <div class=secmenubar>
-  <ul>
-<? if ($sub == "view") { ?>
+    <ul>
+    <?php if ($sub == "view") { ?>
     <li>
-      <a href=<?=$webroot?>>
-      &nbsp;&nbsp;&nbsp;List&nbsp;&nbsp;&nbsp;</a>
+        <a href=<?php echo $webroot?>>
+        &nbsp;&nbsp;&nbsp;List&nbsp;&nbsp;&nbsp;</a>
     </li>
     <li>
-      <a href=worldview.php>
-      &nbsp;&nbsp;&nbsp;Map&nbsp;&nbsp;&nbsp;</a>
+        <a href=worldview.php>
+        &nbsp;&nbsp;&nbsp;Map&nbsp;&nbsp;&nbsp;</a>
     </li>
-<? } else if ($sub == "system") { ?>
+    <?php
+        if (isset ($_GET['customize'])) {
+            $custom_link = "<a href=# onClick=\"return customize=window.open('customize.php?comonode=$comonode','customize','width=700,height=450,status=no,scrollbars=yes'); return false;\">&nbsp;&nbsp;&nbsp;Customize&nbsp;&nbsp;&nbsp;</a>";
+        } else {
+            $custom_link = "&nbsp;&nbsp;&nbsp;Customize&nbsp;&nbsp;&nbsp;";
+        }
+        echo $custom_link;
+
+    } else if ($sub == "system") { 
+    ?>
     <li>
-      <a href=sysinfo.php/?comonode=<?=$comonode?> target=new> 
-      &nbsp;&nbsp;&nbsp;Properties&nbsp;&nbsp;&nbsp;</a>
+        <a href=sysinfo.php/?comonode=<?php echo $comonode?> target=new> 
+        &nbsp;&nbsp;&nbsp;Properties&nbsp;&nbsp;&nbsp;</a>
     </li>
     <li>
-<?php
-    if (isset ($_GET['customize'])) 
-	$custom_link = "<a href=# onClick=\"return customize=window.open('customize.php?comonode=$comonode','customize','width=700,height=450,status=no,scrollbars=yes'); return false;\">&nbsp;&nbsp;&nbsp;Customize&nbsp;&nbsp;&nbsp;</a>";
-    else
-	$custom_link = "&nbsp;&nbsp;&nbsp;Customize&nbsp;&nbsp;&nbsp;";
-?>
-      <?=$custom_link?>
+    <?php 
+    }
+    ?>
     </li>
-<? } if ($sub == "help") { ?>
+    <?php  
+    if ($sub == "help") { ?>
     <li>
-      <a href=http://como.intel-research.net>
-      &nbsp;&nbsp;&nbsp;About CoMo&nbsp;&nbsp;&nbsp;</a>
+        <a href=http://como.intel-research.net>
+        &nbsp;&nbsp;&nbsp;About CoMo&nbsp;&nbsp;&nbsp;</a>
     </li>
-<? } ?>
-  </ul>
+    <?php } ?>
+    </ul>
 </div>

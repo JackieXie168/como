@@ -12,41 +12,41 @@
   <script language="JavaScript" src="js/utils.js"></script>
 
   <body>
-    <?= $header ?>
+  <?php echo $header ?>
 
 <body>
 <table class=fence>
   <tr>
     <td class=leftmain>
-    <?  for ($i = 0; $i < count($all_groups); $i++) { ?>
+    <?php for ($i = 0; $i < count($all_groups); $i++) { ?>
 
-	<div class=grouphead><?=$all_groups[$i]?>
-        <?= $node_array[$all_groups[$i]]['delgroup'] ?>
+	<div class=grouphead><?php echo $all_groups[$i]?>
+        <?php echo $node_array[$all_groups[$i]]['delgroup'] ?>
 	<table cellpadding=0 cellspacing=2 border=0>
-	<?  for ($j = 0; $j < count($node_array[$all_groups[$i]]['nodes']); $j++) { ?>
+	<?php for ($j = 0; $j < count($node_array[$all_groups[$i]]['nodes']); $j++) { ?>
 	  <tr>
 	    <td width=100 valign=top>
-		<?=$node_array[$all_groups[$i]]['nodes'][$j]['name']?>
+		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['name']?>
             </td>
 	    <td width=50 valign=top>
-                <?=$node_array[$all_groups[$i]]['nodes'][$j]['port']?>
+                <?php echo $node_array[$all_groups[$i]]['nodes'][$j]['port']?>
             </td>
 	    <td width=100 valign=top>
-		<?=$node_array[$all_groups[$i]]['nodes'][$j]['location']?>
+		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['location']?>
 	    </td>
 	    <td width=100 valign=top>
-		<?=$node_array[$all_groups[$i]]['nodes'][$j]['interface']?>
+		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['interface']?>
 	    </td>
 	    <td width=300 valign=top>
-		<?=$node_array[$all_groups[$i]]['nodes'][$j]['comment']?>
+		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['comment']?>
 	    </td>
 	    <td width=50 valign=top>
-		<?=$node_array[$all_groups[$i]]['nodes'][$j]['delnode']?>
+		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['delnode']?>
 	    </td>
 	  </tr>
-        <? } ?>
+        <?php } ?>
 	</table>               
-    <? } ?>
+    <?php } ?>
     </td>
     <td class=nodeselect valign=top>
       Select node by IP address
@@ -56,7 +56,7 @@
 	<input type=image src=images/go.jpg>
       </form>
 
-    <?  if ($G['ALLOWCUSTOMIZE']) { ?>
+    <?php  if ($G['ALLOWCUSTOMIZE']) { ?>
       <br>
       Add a new CoMo node
       <form align=middle action=nodeview.php method=get>
@@ -64,9 +64,9 @@
          onFocus=clearText(this);>
 	<input type=image src=images/go.jpg >
       </form>
-    <? } ?>
+    <?php } ?>
     </td>
 </table>               
-    <?= $footer ?>
+    <?php echo $footer ?>
 
 </body>

@@ -15,13 +15,13 @@
   <script language="JavaScript" src="js/loading.js"></script> 
   <script type="text/javascript">
     window.onload = function() {
-	<?= $window_onload ?>
+	<?php echo $window_onload ?>
     }
   </script>
 
   <body>
 
-    <?= $header ?>
+    <?php echo $header ?>
 
     <table class=fence border=0 cellpadding=0 cellspacing=0>
       <tr> 
@@ -31,33 +31,33 @@
 	      <td valign=top>
 		<div class=infobar>
 		  <div class=title>Location</div>
-		  <?=$node->nodename ?><br>
-		  <?=$node->nodeplace ?><br>
+		  <?php echo $node->nodename ?><br>
+		  <?php echo $node->nodeplace ?><br>
 		</div>
 	      </td>
 	      <td valign=top class=separator>
 		<div class=infobar>
 		  <div class=title>Time interval (UTC)</div>
-		  &nbsp; <?= $startstr ?><br>
-		  &nbsp; <?= $endstr ?><br>
-		  &nbsp; [<?=$days?>d <?=$hours?>h <?=$mins?>m <?=$secs?>s]
+		  &nbsp; <?php echo $startstr ?><br>
+		  &nbsp; <?php echo $endstr ?><br>
+		  &nbsp; [<?php echo $days?>d <?php echo $hours?>h <?php echo $mins?>m <?php echo $secs?>s]
 		</div>
 	      </td>
 	      <td valign=top class=separator width=50%>
 		<div class=title>Controls</div>
-		<?= $zoomin ?> 
-		<?= $zoomout ?> 
-		<?= $bwd ?> 
-		<?= $fwd ?> 
-		<?= $fwd_now ?>
-		<?= $details ?> 
+		<?php echo $zoomin ?> 
+		<?php echo $zoomout ?> 
+		<?php echo $bwd ?> 
+		<?php echo $fwd ?> 
+		<?php echo $fwd_now ?>
+		<?php echo $details ?> 
 		&nbsp;&nbsp;View: 
-		<a href=<?= $query_15m ?>> 15min</a> | 
-		<a href=<?= $query_1h ?>> 1hr</a> | 
-		<a href=<?= $query_6h ?>> 6hr</a> | 
-		<a href=<?= $query_1d ?>> 1day</a> 
+		<a href=<?php echo $query_15m ?>> 15min</a> | 
+		<a href=<?php echo $query_1h ?>> 1hr</a> | 
+		<a href=<?php echo $query_6h ?>> 6hr</a> | 
+		<a href=<?php echo $query_1d ?>> 1day</a> 
 		<form method="POST" target=new class=search 
-		      action="<?=$searchquery ?>"> 
+		      action="<?php echo $searchquery ?>"> 
 		  <input type="text" name="filter" size="45"/>
 		  <input type="submit" value="search" name="search"/>
 		</form>
@@ -69,50 +69,50 @@
       <tr>
 	<td class=leftcontent>
 	  <iframe width=620 height=520 frameborder=0
-		  src=loadcontent.php?<?=$_SERVER['QUERY_STRING']?>>
+		  src=loadcontent.php?<?php echo $_SERVER['QUERY_STRING']?>>
 	  </iframe>
 	</td>
 	<td class=rightcontent>
 	  <br>
-	  <? for ($i = 0; $i < $sideboxes; $i++) { ?>
-	    <form target="frame<?= $i ?>" name="box_<?= $module[$i] ?>"
-		  action="<?= $query[$i] ?>" method=POST>
+	  <?php for ($i = 0; $i < $sideboxes; $i++) { ?>
+	    <form target="frame<?php echo $i ?>" name="box_<?php echo $module[$i] ?>"
+		  action="<?php echo $query[$i] ?>" method=POST>
 
                 <table class=sidebox_bar border=0 cellspacing=0 cellpadding=0>
                 <tr><td>
-		<a href=# id="<?= $module[$i] ?>Trig" class=sidebox_name>
+		<a href=# id="<?php echo $module[$i] ?>Trig" class=sidebox_name>
 		  <img src="images/plus.gif"
-		       id="<?= $module[$i] ?>Image" class="sidebox_image">
-                  <?=$name[$i]?>
+		       id="<?php echo $module[$i] ?>Image" class="sidebox_image">
+                  <?php echo $name[$i]?>
 		</a>
                 </td>
                 <td>
-		<a href=# id="<?= $module[$i] ?>TrigEdit" class=sidebox_edit>
+		<a href=# id="<?php echo $module[$i] ?>TrigEdit" class=sidebox_edit>
 		  [edit]
 		</a>
                 </td></tr>
                 </table>
                  
 
-	      <div id=<?= $module[$i] ?>MenuEdit>
+	      <div id=<?php echo $module[$i] ?>MenuEdit>
 		Show 
-		<input type=text size=1 name="topn<?= $module[$i] ?>">
+		<input type=text size=1 name="topn<?php echo $module[$i] ?>">
 		items 
 		<input type=submit value=Save>
 	      </div>
 
-	      <div id=<?=$module[$i]?>Menu class=sidebox_content>
-		<iframe width=100% frameborder=0 name=frame<?= $i ?>
-			src="<?= $query[$i] ?>">
+	      <div id=<?php echo $module[$i]?>Menu class=sidebox_content>
+		<iframe width=100% frameborder=0 name=frame<?php echo $i ?>
+			src="<?php echo $query[$i] ?>">
 		</iframe>
 	      </div>
 	    </form>
-	  <? } ?>
+	  <?php } ?>
 	</td>
       </tr>
     </table>
 
-    <?= $footer ?>
+    <?php echo $footer ?>
 
   </body>
 </html>

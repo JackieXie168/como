@@ -10,7 +10,7 @@
   </head>
 
   <body>
-    <?= $header ?>
+    <?php echo $header ?>
 
 <body>
 <table class=fence>
@@ -28,51 +28,52 @@
 	    <tr><td> 
 	    <select size=1 name=groupselect>
 	        <option value=default selected>Group
-	    <?  for ($i = 0; $i < count($all_groups); $i++) { ?>
-		<option value=<?=$all_groups[$i][0]?>>
-		<?=$all_groups[$i][1]?>
-	    <? } ?>
+	    <?php 
+            for ($i = 0; $i < count($all_groups); $i++) { ?>
+                <option value=<?php echo $all_groups[$i]['filename']?>>
+                <?php echo $all_groups[$i]['desc']?>
+            <?php } ?>
 	    </select>
 	    </td></tr>
 	    <tr><td>  
 		<div class=title>Como Node </div> 
 	    </td></tr>
 	    <tr><td>
-		<?=$comonode?>
+		<?php echo $comonode?>
 	    </td></tr>
 	    <tr><td>
 		<div class=title>Node Name</div> 
 	    </td> </tr>
 	    <tr><td>
-		<?= $node->nodename ?>
+		<?php echo $node->nodename ?>
 	    </td></tr>
             <tr><td>
 		<div class=title>Location</div> 
 	    </td></tr>
 	    <tr><td>
-		<?= $node->nodeplace ?>
+		<?php echo $node->nodeplace ?>
 	    </td></tr>
 	    <tr><td>
 		<div class=title>Interface</div>
 	    </td></tr>
 	    <tr><td>
-		<?= $node->linkspeed ?>
+		<?php echo $node->linkspeed ?>
 	    </td></tr>
 	    <tr><td>
 		<div class=title>Data Source</div>
 	    </td></tr>
 	    <tr><td>
-		<?= $node->comment ?>
+		<?php echo $node->comment ?>
 	    </td></tr>
 	    <tr><td>
 		<input type="submit" name=method value="Submit"> 
 	    </td></tr>
 	</table>
-	<input type=hidden name=comonode value="<?=$comonode?>">
-	<input type=hidden name=nodename value="<?=$node->nodename?>">
-	<input type=hidden name=nodeplace value="<?=$node->nodeplace?>">
-	<input type=hidden name=speed value="<?=$node->linkspeed?>">
-	<input type=hidden name=comment value="<?=$node->comment?>">
+	<input type=hidden name=comonode value="<?php echo $comonode?>">
+	<input type=hidden name=nodename value="<?php echo $node->nodename?>">
+	<input type=hidden name=nodeplace value="<?php echo $node->nodeplace?>">
+	<input type=hidden name=speed value="<?php echo $node->linkspeed?>">
+	<input type=hidden name=comment value="<?php echo $node->comment?>">
     </form>
  
 	</td><td valign=top>
@@ -86,13 +87,13 @@
 		</td></tr>
 		<tr><td align=center>
 		    <input type=submit name=method value="Add Group">
-		    <input type=hidden name=comonode value="<?=$comonode?>">
+		    <input type=hidden name=comonode value="<?php echo $comonode?>">
 		</td></tr>
 	    </table>
 	    </form>
 	</td></tr></table>
     </div>
 
-    <?= $footer ?>
+    <?php echo $footer ?>
     </td></tr>
 </table>

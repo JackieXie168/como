@@ -33,9 +33,9 @@
     $builddate = $node->builddate;
 
     if (isset($node->comment) && (!is_null($node->comment)))
-	$comment = $node->comment; 
+        $comment = $node->comment; 
     else 
-	$comment = ""; 
+        $comment = ""; 
 
     include "html/sysinfo.html";
 ?>

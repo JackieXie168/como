@@ -22,11 +22,10 @@
     $comonode = $_GET['comonode'];
 
     $G = init_global(); 
-
     $node = new Node($comonode, $G);
     if ($node->status == false) { 
 	/* cannot connect to node, fail with error */
-	$header = do_header(NULL, 0); 
+	$header = do_header(NULL, $G); 
 	$footer = do_footer(); 
 	include "html/node_failure.html"; 
 	exit;
@@ -34,7 +33,7 @@
     /*  Check if there are running modules that support CoMoLive  */
     $nummods = count($node->getModules("gnuplot"));
     if ($nummods == 0) {
-	$header = do_header(NULL, 0); 
+	$header = do_header(NULL, $G); 
 	$footer = do_footer(); 
         $mes = "NOTICE<br>There are no running modules<br>";
         $mes = $mes . "that support the CoMoLive interface<br>";
@@ -126,7 +125,7 @@
     } 
 
     // prepare header and footer 
-    $header = do_header($comonode, $G['ALLOWCUSTOMIZE']); 
+    $header = do_header($comonode, $G); 
     $footer = do_footer(); 
 
     // include the HTML template 

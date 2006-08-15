@@ -96,7 +96,7 @@
 </style>
       <div id="nav">
 	<ul>
-            <?
+            <?php
             /*  This is the number of buttons per row  */
             $NUMLINKS = 6;
 /*  commenting out to find what breaks  */
@@ -139,8 +139,8 @@
       </div>
       <center>
 
-        <? 
-        /*   <img src="<?=$filename?>.jpg">  */
+        <?php 
+        /*   <img src="<?php echo $filename?>.jpg">  */
         /*  This is where we print the image  */
         $fullname = $query->getFullfilename($module) . ".jpg";
 	if (file_exists("$fullname")) {
@@ -158,8 +158,8 @@
         ?>
       </center>
       <center>
-      Download: [<a href=<?=$filename?>.jpg>JPG</a>]
-                [<a href=<?=$filename?>.eps>EPS</a>]
+      Download: [<a href=<?php echo $filename?>.jpg>JPG</a>]
+                [<a href=<?php echo $filename?>.eps>EPS</a>]
       </center>
   </body>
 </html>

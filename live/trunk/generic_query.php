@@ -48,7 +48,7 @@
     if (isset($input_vars['ip'])) {
         $var = explode ("&", $http_query_string); 
         $http_query_string = "";
-        for ($i=0;$i<count($var);$i++) {
+        for ($i = 0; $i < count($var); $i++) {
             if (strstr($var[$i],"filter=")) {
                 $tmp_filter = explode ("=", $var[$i]);
             } else if (strstr($var[$i], "ip=")) {
