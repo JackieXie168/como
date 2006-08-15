@@ -37,8 +37,8 @@
     $varname = "topn" . $module; 
     if (isset($_POST[$varname])) {
         $items = $_POST[$varname]; 
-	setcookie($varname, $items);
-	$http_query_string = ereg_replace("topn=[0-9]*", "topn=$items", $http_query_string);
+        setcookie($varname, $items);
+        $http_query_string = ereg_replace("topn=[0-9]*", "topn=$items", $http_query_string);
     } 
 
     /*  This we catch if ip=addr is passed back from the
