@@ -356,10 +356,11 @@ class Node {
         case "topsrc": 
 	    $cookiename = "topn" . $name; 
 	    if (!(isset($_COOKIE[$cookiename]))) {
-		setcookie($cookiename, "5");
-		$items = 5;
-	    } else
-		$items = $_COOKIE[$cookiename];
+            setcookie($cookiename, "5");
+            $items = 5;
+	    } else {
+            $items = $_COOKIE[$cookiename];
+        }
 
 	    $modargs = $modargs . "source=tuple&";
 	    $modargs = $modargs . "interval=$interval&";
@@ -382,10 +383,11 @@ class Node {
 	case "topports":
 	    $cookiename = "topn" . $name; 
 	    if (!(isset($_COOKIE[$cookiename]))) {
-		setcookie($cookiename, "5");
-		$items = 5;
-	    } else
-		$items = $_COOKIE[$cookiename];
+            setcookie($cookiename, "5");
+            $items = 5;
+	    } else {
+            $items = $_COOKIE[$cookiename];
+        }
 
 	    $modargs = $modargs . "topn=$items&";
 	    $modargs = $modargs . "align-to=$start&";

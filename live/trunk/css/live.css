@@ -1,7 +1,7 @@
 /*
  * live.css
  * 
- * $Id$
+ * $Id : live.css 682 2006-06-30 12 : 43 : 06Z iannak1 $
  */
 
 /*  Setup defaults for page  */
@@ -12,155 +12,155 @@ body,table,tr,td {
     background : #FFF;
 }
 a,a:visited  {
-    color: #475677;
-    text-decoration: none;
+    color : #475677;
+    text-decoration : none;
 }
 
 a:hover {
-    text-decoration: underline;
+    text-decoration : underline;
 }
 
 img {
-    border: 0;
-    padding: 0;
-    margin: 0;
-    text-align:center;
+    border : 0;
+    padding : 0;
+    margin : 0;
+    text-align : center;
 }
 
 /* all pages will use this as well */
 #header {
-    margin-bottom: 5px;
+    margin-bottom : 5px;
 }
 
 #footer {
-    width:100%;
-    height:20px;
-    background-color: #DDD;
-    border-bottom: 1px solid gray;
+    width : 100%;
+    height : 20px;
+    background-color : #DDD;
+    border-bottom : 1px solid gray;
     font-family : "lucida sans unicode", verdana, arial, sans-serif;
-    font-size: 8pt;
-    text-align: center;
+    font-size : 8pt;
+    text-align : center;
     margin-top : 10px;
 
 }
 
 .fence {
-    border-width:0px;
-    width: 100%;
+    border-width : 0px;
+    width : 100%;
 }
 
-.topcontent{
-    width:100%;
-    vertical-align:top;
+.topcontent {
+    width : 100%;
+    vertical-align : top;
 }
 
-.leftcontent{
-    width:60%;
-    vertical-align:top;
-    padding:10px;
+.leftcontent {
+    width : 60%;
+    vertical-align : top;
+    padding : 10px;
 }
 
-.centercontent{
-    width:100%;
-    vertical-align:top;
+.centercontent {
+    width : 100%;
+    vertical-align : top;
     text-align : center;
 }
 
-.rightcontent{
-    width:40%;
-    text-align:left;
+.rightcontent {
+    width : 40%;
+    text-align : left;
     vertical-align : top;
-    left:10px;
-    padding-left:0px;
-    padding-right:0px;
+    left : 10px;
+    padding-left : 0px;
+    padding-right : 0px;
 }
 
 /* specific to list.php */
 
 #areatitle {   		
-    font-weight: bold;
-    font-size: 11pt;
-    border-bottom: 1px dashed #ddd;
-    padding-top: 12px;
-    padding-bottom: 3px;
-    padding-left: 3px;
-    color: #475677;
-    margin-right: 30px;
+    font-weight : bold;
+    font-size : 11pt;
+    border-bottom : 1px dashed #ddd;
+    padding-top : 12px;
+    padding-bottom : 3px;
+    padding-left : 3px;
+    color : #475677;
+    margin-right : 30px;
 }
 
 #leftcontent {
-    background:#FC0;
-    width:100%;
+    background : #FC0;
+    width : 100%;
 }
 #leftcontenttext {
-    position:absolute;
-    top:150px;
-    left:19px;
+    position : absolute;
+    top : 150px;
+    left : 19px;
 }
 
 #rightcontent {
-    margin-left:60%;
-    padding-left:9px;
-    background:#FDF;
+    margin-left : 60%;
+    padding-left : 9px;
+    background : #FDF;
 }
 
 #rightcontenttext {
-    padding-left: 9px;
-    background: #FFF;
-    top: 0px;
-    width: 95%;
-    height: 20%;
-    border: 1px;
-    border-style: solid;
-    border-color: black;
+    padding-left : 9px;
+    background : #FFF;
+    top : 0px;
+    width : 95%;
+    height : 20%;
+    border : 1px;
+    border-style : solid;
+    border-color : black;
 }
 
 #logo {
-    text-align:center;
-    padding:10px;
-    text-align:center;
+    text-align : center;
+    padding : 10px;
+    text-align : center;
 }
 
 .map {
-    position: relative;
-    width: 650px;
-    top: 0px;
-    left: 0px;
-    margin: 0;
-    padding-top: 5px;
-    padding-bottom: 10px;
-    padding-left: 1px;
-    padding-right: 1px;
+    position : relative;
+    width : 650px;
+    top : 0px;
+    left : 0px;
+    margin : 0;
+    padding-top : 5px;
+    padding-bottom : 10px;
+    padding-left : 1px;
+    padding-right : 1px;
 }
 
 .graph {
-    position: relative;
-    width: 600px;
-    height: 480px;
-    top: 0px;
-    left: 0px;
-    margin: 0;
-    padding-top: 5px;
-    padding-bottom: 10px;
-    padding-left: 1px;
-    padding-right: 1px;
-    border-right: 1px dashed; 
+    position : relative;
+    width : 600px;
+    height : 480px;
+    top : 0px;
+    left : 0px;
+    margin : 0;
+    padding-top : 5px;
+    padding-bottom : 10px;
+    padding-left : 1px;
+    padding-right : 1px;
+    border-right : 1px dashed; 
 }
 
 #menubar {
-    position: absolute;
-    top: 45px;
-    left: 5px;
+    position : absolute;
+    top : 45px;
+    left : 5px;
     width : 700px;
-    margin-right: 3px;
-    margin-left: 3px;
-    border-bottom: 1px solid #ddd;
-    color: #AAA;
+    margin-right : 3px;
+    margin-left : 3px;
+    border-bottom : 1px solid #ddd;
+    color : #AAA;
 }
 
 #menubar a {
-    font-family: "lucida sans unicode", verdana, arial;
-    color: #475677;
+    font-family : "lucida sans unicode", verdana, arial;
+    color : #475677;
     text-decoration : none;
 }
 
@@ -177,18 +177,18 @@ img {
     display : inline;
 }
 
-#menubar a:hover {
+#menubar a : hover {
     background-color : #DDD;
     text-decoration : none;
 }
 
 .secmenubar {
-    position: absolute;
-    top: 23px;
-    left: 0px;
+    position : absolute;
+    top : 23px;
+    left : 0px;
     width : 730px;
-    margin: 0px;
-    border-bottom: 1px solid #ddd;
+    margin : 0px;
+    border-bottom : 1px solid #ddd;
 }
 
 .secmenubar ul {
@@ -201,7 +201,7 @@ img {
     display : inline;
 }
 
-.secmenubar ul li a:hover {
+.secmenubar ul li a : hover {
     text-decoration : none;
 }
 
