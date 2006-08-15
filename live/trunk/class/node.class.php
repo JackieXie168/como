@@ -356,17 +356,19 @@ class Node {
         case "topsrc": 
 	    $cookiename = "topn" . $name; 
 	    if (!(isset($_COOKIE[$cookiename]))) {
-            setcookie($cookiename, "5");
-            $items = 5;
+                setcookie($cookiename, "5");
+                $items = 5;
 	    } else {
-            $items = $_COOKIE[$cookiename];
-        }
+                $items = $_COOKIE[$cookiename];
+            }
 
 	    $modargs = $modargs . "source=tuple&";
 	    $modargs = $modargs . "interval=$interval&";
 	    $modargs = $modargs . "align-to=$start&";
 	    $modargs = $modargs . "topn=$items&";
 	    $modargs = $modargs . "url=generic_query.php&";
+	    $modargs = $modargs . "urlargs=comonode=";
+            $modargs = $modargs . "{$this->hostaddr}:{$this->hostport}&";
 	    $modargs = $modargs . "urlargs=start=$start&";
 	    $modargs = $modargs . "urlargs=end=$end&";
 	    $modargs = $modargs . "urlargs=interval=$interval&";

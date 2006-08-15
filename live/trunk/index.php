@@ -96,7 +96,7 @@
         }
     }
 
-    $header = do_header(NULL, 1); 
+    $header = do_header(NULL, $G); 
     $footer = do_footer(NULL); 
     /**  
      *  Organize the hosts by group and display 

@@ -1,8 +1,9 @@
-<?
-/*  $Id:$  */
+<?php
+/*  $Id$  */
 $url = "";
-if (isset($_SERVER['QUERY_STRING']))
+if (isset($_SERVER['QUERY_STRING'])) {
     $url = $_SERVER['QUERY_STRING'];
+}
 
 ?>
 <html>
@@ -11,7 +12,7 @@ if (isset($_SERVER['QUERY_STRING']))
 <link rel="stylesheet" type="text/css" href="css/mainstage.css">
 <script language="JavaScript" src="js/loading.js"></script>
 </head>
-    <body onload="showLoading('mainstage.php?<?=$url?>')">
+    <body onload="showLoading('mainstage.php?<?php echo $url ?>')">
     <div id=loading>
 	<img src=images/loading.gif>
     </div>

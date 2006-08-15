@@ -7,9 +7,11 @@
  * javascript code for the submenus. 
  *
  */ 
-function do_header($comonode, $customize) 
+function do_header($comonode, $G) 
 { 
-    $webroot = dirname($_SERVER['SCRIPT_NAME']);
+    $webroot = $G['WEBROOT'];
+    $customize = $G['ALLOWCUSTOMIZE'];
+
     $header = "<script language=\"JavaScript\" src=js/mainmenu.js></script>\n" .
 	      "<div id=header><a href=\"$webroot\">" . 
 	      "<img src=images/comolive-smooth.png></a></div>\n";
@@ -84,7 +86,8 @@ function do_footer()
 	"<a href=\"http://www.intel.com/sites/corporate/tradmarx.htm\">" . 
 	"Legal Information</a> and \n" .
 	"<a href=\"http://www.intel.com/sites/corporate/privacy.htm\">\n" .
-	"Privacy Policy</a></div>\n";
+	"Privacy Policy</a></div>\n" . 
+        "</body></html>\n";
 
     return $footer; 
 }
