@@ -86,7 +86,7 @@ endif
 
 # bpf, but Linux does not have bpf
 ifeq ($(shell uname),FreeBSD)
-	SNIFFERS += pcap libpcap bpf
+	SNIFFERS += pcap libpcap #bpf
 endif
 
 # Endace DAG cards.
