@@ -44,6 +44,8 @@
 #include "sniffers.h"
 #include "como.h"
 
+#include "capbuf.c"
+
 /*
  * SNIFFER  ---    Berkeley Packet Filter
  *
@@ -52,11 +54,72 @@
  *
  */
 
-/* sniffer specific information */
-#define BUFSIZE (500*1024) 	/* NOTE: bpf max buffersize is 0x80000 */
-struct _snifferinfo { 
-    char buf[BUFSIZE]; 
+/* sniffer-specific information */
+#define BPF_DEFAULT_MIN_PROC_SIZE	(65536 * 2)
+#define BPF_DEFAULT_READ_SIZE		(500 * 1024) /* NOTE: bpf max buffer
+							size is 0x80000 */
+#define BPF_MIN_BUFSIZE			(BPF_DEFAULT_READ_SIZE * 2)
+#define BPF_MAX_BUFSIZE			(BPF_MIN_BUFSIZE * 2)
+#define BPF_MIN_PKTBUFSIZE		(me->sniff.max_pkts * sizeof(pkt_t))
+#define BPF_MAX_PKTBUFSIZE		(BPF_MIN_PKTBUFSIZE * 2)
+
+struct bpf_me {
+    sniffer_t		sniff;		/* common fields, must be the first */
+    const char *	device;
+    size_t		min_proc_size;
+    size_t		read_size;
+    capbuf_t		capbuf;		/* payload capture buffer */
+    capbuf_t		pktbuf;		/* pkt_t buffer */
 };
+
+/*
+ * -- sniffer_init
+ * 
+ */
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
+{
+    struct bpf_me *me;
+    
+    me = safe_calloc(1, sizeof(struct bpf_me));
+
+    me->sniff.max_pkts = 8192;
+    me->sniff.flags = SNIFF_SELECT;
+    me->device = device;
+    
+    /* create the capture buffer */
+    if (capbuf_init(&me->capbuf, args, NULL, BPF_MIN_BUFSIZE,
+		    BPF_MAX_BUFSIZE) < 0)
+	goto error;
+
+    /* create the pkt_t buffer */
+    if (capbuf_init(&me->pktbuf, args, "pktbuf=", BPF_MIN_PKTBUFSIZE,
+		    BPF_MAX_PKTBUFSIZE) < 0)
+	goto error;
+
+    me->read_size = me->capbuf.size / 2;
+    me->min_proc_size = BPF_DEFAULT_MIN_PROC_SIZE;
+    
+    return (sniffer_t *) me;
+error:
+    free(me);
+    return NULL; 
+}
+
+
+static void
+sniffer_setup_metadesc(__unused sniffer_t * s)
+{
+    metadesc_t *outmd;
+    pkt_t *pkt;
+
+    /* setup output descriptor */
+    outmd = metadesc_define_sniffer_out(s, 0);
+    
+    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
+    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+}
 
 
 /*
@@ -66,19 +129,18 @@ struct _snifferinfo {
  * up accordingly. It returns 0 on success and -1 on failure.
  */
 static int
-sniffer_start(source_t *src) 
+sniffer_start(sniffer_t * s)
 {
-    char bpfdev[sizeof("/dev/bpf000")];
-    int bufsize = BUFSIZE;
+    struct bpf_me *me = (struct bpf_me *) s;
+    char bpfdev[PATH_MAX];
     struct ifreq ifr;
     int fd = -1;
     int n;
-    metadesc_t *outmd;
-    pkt_t *pkt;
 
-    if (strlen(src->device)+1 > sizeof(ifr.ifr_name)) {
+    if (strlen(me->device) + 1 > sizeof(ifr.ifr_name)) {
         errno = EINVAL;
-        return -1;
+        logmsg(LOGWARN, "sniffer-bpf: invalid device name\n");
+        goto error;
     }
 
     for (n = 0; n < 32 ; n++) {	/* XXX at most 32 devices */
@@ -100,74 +162,61 @@ sniffer_start(source_t *src)
 
     if (fd < 0) {
 	logmsg(LOGWARN, "sniffer-bpf: cannot find a usable bpf device: %s\n",
-	    strerror(errno));
-        return -1;
+	       strerror(errno));
+        goto error;
     }
 
     /* setting the buffer size for next read calls */
-    if (ioctl(fd, BIOCSBLEN, &bufsize)) {
+    n = me->read_size;
+    if (ioctl(fd, BIOCSBLEN, &n)) {
 	logmsg(LOGWARN, "sniffer-bpf: BIOCSBLEN failed\n");
-        close(fd);
-        return -1;
+        goto error;
     }
 
     /* read packets as soon as they are received */
     n = 1;
     if (ioctl(fd, BIOCIMMEDIATE, &n) < 0) {
 	logmsg(LOGWARN, "sniffer-bpf: BIOCIMMEDIATE failed\n");
-        close(fd);
-        return -1;
+        goto error;
     }
 
     /* no timeout on read requests */
     n = 0;
     if (ioctl(fd, BIOCSRTIMEOUT, &n) < 0) {
 	logmsg(LOGWARN, "sniffer-bpf: BIOCSRTIMEOUT failed\n");
-        close(fd);
-        return -1;
+        goto error;
     }
 
     /* interface we capture packets from */
-    strncpy(ifr.ifr_name, src->device, sizeof(ifr.ifr_name));
+    strncpy(ifr.ifr_name, me->device, sizeof(ifr.ifr_name));
     if (ioctl(fd, BIOCSETIF, &ifr)) {
 	logmsg(LOGWARN, "sniffer-bpf: BIOCSETIF failed\n");
-        close(fd);
-        return -1;
+        goto error;
     }
 
     /* set the interface in promiscous mode */
     if (ioctl(fd, BIOCPROMISC) < 0) {
 	logmsg(LOGWARN, "sniffer-bpf: BIOCPROMISC failed\n");
-        close(fd);
-        return -1;
+        goto error;
     }
 
     /* check the type of frames, we only support Ethernet */
     if (ioctl(fd, BIOCGDLT, &n) < 0) {
 	logmsg(LOGWARN, "sniffer-bpf: BIOCGDLT failed\n");
-        close(fd);
-        return -1;
+        goto error;
     }
 
     if (n != DLT_EN10MB) {
-        logmsg(LOGWARN, "bpf sniffer: unrecognized type (%d)\n", n);
-        close(fd);
-        return -1;
+        logmsg(LOGWARN, "bpf sniffer: unrecognized link type (%d)\n", n);
+        goto error;
     }
 
-    src->fd = fd; 
-    src->flags = SNIFF_SELECT|SNIFF_TOUCHED; 
-    src->polling = 0; 
-    src->ptr = safe_malloc(sizeof(struct _snifferinfo)); 
-    
-    /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(src, 0);
-    
-    pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
-    pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
+    me->sniff.fd = fd;
 
     return 0;		/* success */
+error:
+    close(fd);
+    return -1;
 }
 
 
@@ -185,46 +234,50 @@ sniffer_start(source_t *src)
  *                                      plus alignment padding)
  */
 static int
-sniffer_next(source_t *src, pkt_t *out, int max_no,
-	     __unused timestamp_t max_ivl)
+sniffer_next(sniffer_t * s, int max_pkts, timestamp_t __unused max_ivl,
+	     int * dropped_pkts)
 {
-    struct _snifferinfo * info; /* sniffer specific information */
-    pkt_t * pkt; 		/* CoMo packet structure */
-    char * wh;                  /* where to copy from */
+    struct bpf_me *me = (struct bpf_me *) s;
+    char * base;                /* current position in input buffer */
     int npkts;                  /* processed pkts */
-    int nbytes; 		/* valid bytes in buffer */
+    size_t avn;
+    ssize_t rdn;
 
-    info = (struct _snifferinfo *) src->ptr; 
+    *dropped_pkts = 0;
+    
+    base = capbuf_reserve_space(&me->capbuf, me->read_size);
+    /* read packets */
+    rdn = read(me->sniff.fd, base, me->read_size);
+    if (rdn <= 0) {
+	return -1;
+    }
+    avn = BPF_WORDALIGN((size_t) rdn);
+    if (avn < me->read_size) {
+	capbuf_truncate(&me->capbuf, base + avn);
+    }
 
-    /* read next batch of packets */
-    nbytes = read(src->fd, info->buf, BUFSIZE);
-    if (nbytes < 0)   
-        return nbytes;
+    for (npkts = 0; npkts < max_pkts; npkts++) {
+	size_t sz;
+	pkt_t *pkt;
+	struct bpf_hdr *bh; /* BPF record structure */
+        
+	/* check if we have enough for a new packet record */
+	if (sizeof(struct bpf_hdr) > avn)
+	    break;
 
-    wh = info->buf;
-    for (npkts = 0, pkt = out; npkts < max_no; npkts++, pkt++) { 
-        struct bpf_hdr * bh;        /* BPF record structure */
-        int left; 
- 
-        bh = (struct bpf_hdr *) wh; 
-	left = nbytes - (int) (wh - info->buf); 
-
-	/* check if there is a full bpf header */
-	if (left < (int) sizeof(struct bpf_hdr)) 
-	    break; 
-
-        /* check if entire record is available */
-        if (left < (int) (bh->bh_hdrlen + bh->bh_caplen)) 
+	bh = (struct bpf_hdr *) base;
+	
+	/* check if we have the payload as well */
+        if (bh->bh_hdrlen + bh->bh_caplen > avn)
             break;
 
-        /*
-         * Now we have a packet: start filling a new pkt_t struct
-         * (beware that it could be discarded later on)
-         */
+	/* reserve the space in the buffer for the pkt_t */
+	pkt = (pkt_t *) capbuf_reserve_space(&me->pktbuf, sizeof(pkt_t));
+
 	COMO(ts) = TIME2TS(bh->bh_tstamp.tv_sec, bh->bh_tstamp.tv_usec);
 	COMO(len) = bh->bh_datalen;
 	COMO(caplen) = bh->bh_caplen;
-	COMO(payload) = wh + bh->bh_hdrlen;
+	COMO(payload) = base + bh->bh_hdrlen;
 	COMO(type) = COMOTYPE_LINK;
 
 	/* 
@@ -233,12 +286,16 @@ sniffer_next(source_t *src, pkt_t *out, int max_no,
 	 */
 	updateofs(pkt, L2, LINKTYPE_ETH);
 
+	ppbuf_capture(me->sniff.ppbuf, pkt);
+
 	/* bpf aligns packets to long word */
-	wh += BPF_WORDALIGN(bh->bh_caplen + bh->bh_hdrlen); 
+	sz = BPF_WORDALIGN(bh->bh_caplen + bh->bh_hdrlen);
+	/* move forward */
+	base += sz;
+	avn -= sz;
     }
 
-    /* return the number of copied packets */
-    return npkts;
+    return 0;
 }
 
 
@@ -248,12 +305,31 @@ sniffer_next(source_t *src, pkt_t *out, int max_no,
  * close file descriptor.
  */
 static void
-sniffer_stop(source_t * src)
+sniffer_stop(sniffer_t * s) 
 {
-    free(src->ptr); 
-    close(src->fd);
+    struct bpf_me *me = (struct bpf_me *) s;
+    
+    close(me->sniff.fd);
 }
 
-struct _sniffer bpf_sniffer = {
-    "bpf", sniffer_start, sniffer_next, sniffer_stop
+
+static void
+sniffer_finish(sniffer_t * s)
+{
+    struct bpf_me *me = (struct bpf_me *) s;
+
+    capbuf_finish(&me->capbuf);
+    capbuf_finish(&me->pktbuf);
+    free(me);
+}
+
+
+SNIFFER(bpf) = {
+    name: "bpf",
+    init: sniffer_init,
+    finish: sniffer_finish,
+    setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
 };
