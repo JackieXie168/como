@@ -1369,7 +1369,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	for (src = map.sources, bc = 0, pc = 0; src; src = src->next) {
 	    int res;
 	    int max_no;		/* max number of packets to capture */
-	    int drops;
+	    int drops = 0;
 
 	    if (src->sniff->flags & (SNIFF_INACTIVE | SNIFF_FROZEN))
 		continue;	/* inactive/frozen devices */
