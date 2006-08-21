@@ -235,7 +235,8 @@ sniffer_init(const char * device, const char * args)
     }
 
     /* create the capture buffer */
-    if (capbuf_init(&me->capbuf, args, PCAP_MIN_BUFSIZE, PCAP_MAX_BUFSIZE) < 0)
+    if (capbuf_init(&me->capbuf, args, NULL, PCAP_MIN_BUFSIZE,
+		    PCAP_MAX_BUFSIZE) < 0)
 	goto error;
 
     return (sniffer_t *) me;

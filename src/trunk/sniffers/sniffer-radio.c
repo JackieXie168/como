@@ -51,6 +51,8 @@
 #include "sniffers.h"
 #include "pcap.h"
 
+#include "capbuf.c"
+
 typedef int (*monitor_open_fn) (const char *, int, void **);
 typedef void (*monitor_close_fn) (const char *, void *);
 
@@ -70,9 +72,8 @@ typedef struct {
  */
 #define RADIO_DEFAULT_SNAPLEN 1500	/* packet capture */
 #define RADIO_DEFAULT_TIMEOUT 0	/* timeout to serve packets */
-#define RADIO_DEFAULT_BUFSIZE	(1024 * 1024)
-#define RADIO_MIN_BUFSIZE	(RADIO_DEFAULT_BUFSIZE / 2)
-#define RADIO_MAX_BUFSIZE	(RADIO_DEFAULT_BUFSIZE * 2)
+#define RADIO_MIN_BUFSIZE	(1024 * 1024)
+#define RADIO_MAX_BUFSIZE	(RADIO_MIN_BUFSIZE * 2)
 
 /* 
  * functions that we need from libpcap.so 
@@ -104,12 +105,7 @@ struct radio_me {
     monitor_t *		mon;		/* monitor capable device */
     to_como_radio_fn	fallback_to_como_radio;
     int			dropped_pkts;
-    struct capbuf {
-	void *base;
-	void *end;
-	void *tail;
-	size_t size;
-    } capbuf;
+    capbuf_t		capbuf;
 };
 
 
@@ -618,7 +614,6 @@ static sniffer_t *
 sniffer_init(const char * device, const char * args)
 {
     struct radio_me *me;
-    int capbuf = RADIO_DEFAULT_BUFSIZE;
 
     me = safe_calloc(1, sizeof(struct radio_me));
     
@@ -667,14 +662,6 @@ sniffer_init(const char * device, const char * args)
 		logmsg(LOGWARN, "sniffer-radio: unrecognized monitor device");
 	    }
 	}
-	if ((p = strstr(args, "capbuf=")) != NULL) {
-	    capbuf = atoi(p + 7);
-	    capbuf = ROUND_32(capbuf);
-	    if (capbuf < RADIO_MIN_BUFSIZE ||
-		capbuf > RADIO_MAX_BUFSIZE) {
-		capbuf = RADIO_DEFAULT_BUFSIZE;
-	    }
-	}
     }
 
     logmsg(V_LOGSNIFFER,
@@ -686,7 +673,7 @@ sniffer_init(const char * device, const char * args)
     if (me->handle == NULL) { 
 	logmsg(LOGWARN, "sniffer-libpcap: error opening libpcap.so: %s\n",
 	       dlerror());
-	return NULL;
+	goto error;
     } 
 
     /* find all the symbols that we will need */
@@ -696,17 +683,17 @@ sniffer_init(const char * device, const char * args)
     me->sp_dispatch = (pcap_dispatch_fn) SYMBOL("pcap_dispatch");
 
     /* create the capture buffer */
-    me->capbuf.size = (size_t) capbuf;
-    me->capbuf.base = mmap((void *) 0, me->capbuf.size, PROT_WRITE|PROT_READ,
-			    MAP_ANON|MAP_NOSYNC|MAP_SHARED, -1 /* fd */, 0);
-    if (me->capbuf.base == MAP_FAILED)
-	return NULL;
-    
-    me->capbuf.end = me->capbuf.base + me->capbuf.size;
-    me->capbuf.tail = me->capbuf.base;
+    if (capbuf_init(&me->capbuf, args, NULL, RADIO_MIN_BUFSIZE,
+		    RADIO_MAX_BUFSIZE) < 0)
+	goto error;
 
-    
     return (sniffer_t *) me;
+error:
+    if (me->handle) {
+	dlclose(me->handle);
+    }
+    free(me);
+    return NULL;
 }
 
 
@@ -811,24 +798,6 @@ sniffer_start(sniffer_t * s)
 }
 
 
-static inline void *
-reserve_space(struct capbuf * capbuf, size_t s)
-{
-    void *end;
-    
-    s = ROUND_32(s);
-    assert(s > 0);
-    
-    end = capbuf->tail + s;
-    if (end > capbuf->end) {
-	end = capbuf->base + s;
-    }
-    capbuf->tail = end;
-
-    return capbuf->tail - s;
-}
-
-
 /* 
  * -- processpkt
  * 
@@ -855,7 +824,7 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
     sz += MAX((size_t) h->caplen, mgmt_sz);
     
     /* reserve the space in the buffer for the packet */
-    pkt = (pkt_t *) reserve_space(&me->capbuf, sz);
+    pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sz);
     assert((void *) pkt >= me->capbuf.base &&
 	   (void *) pkt < me->capbuf.end);
 
@@ -973,8 +942,8 @@ sniffer_finish(sniffer_t * s)
 {
     struct radio_me *me = (struct radio_me *) s;
     
-    munmap(me->capbuf.base, me->capbuf.size);
-    me->capbuf.base = NULL;
+    capbuf_finish(&me->capbuf);
+    free(me);
 }
 
 

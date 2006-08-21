@@ -141,7 +141,7 @@ sniffer_init(const char * device, const char * args)
     me->sp_dispatch = (pcap_dispatch_fn) SYMBOL("pcap_dispatch");
 
     /* create the capture buffer */
-    if (capbuf_init(&me->capbuf, args, LIBPCAP_MIN_BUFSIZE,
+    if (capbuf_init(&me->capbuf, args, NULL, LIBPCAP_MIN_BUFSIZE,
 		    LIBPCAP_MAX_BUFSIZE) < 0)
 	goto error;
 
