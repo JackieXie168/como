@@ -126,3 +126,17 @@ capbuf_reserve_space(struct capbuf * capbuf, size_t s)
 
     return capbuf->tail - s;
 }
+
+
+/*
+ * -- capbuf_truncate
+ *
+ * Truncates the space that was reserved with capbuf_reserve_space.
+ * 
+ */
+static inline void
+capbuf_truncate(struct capbuf * capbuf, void * x)
+{
+    x = (void *) ROUND_32((uint32_t) x);
+    capbuf->tail = x;
+}
