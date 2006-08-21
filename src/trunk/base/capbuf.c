@@ -49,14 +49,17 @@ typedef struct capbuf {
  * 
  */
 static int
-capbuf_init(struct capbuf * capbuf, const char * args,
+capbuf_init(struct capbuf * capbuf, const char * args, const char * arg,
 	    size_t min_size, size_t max_size)
 {
     size_t sz = min_size;
+    if (arg == NULL) {
+	arg = "capbuf=";
+    }
 
     if (args) {
 	char *p;
-	if ((p = strstr(args, "capbuf=")) != NULL) {
+	if ((p = strstr(args, arg)) != NULL) {
 	    sz = atoi(p + 7);
 	    sz = ROUND_32(sz);
 	    if (sz < min_size) {

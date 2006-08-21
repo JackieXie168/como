@@ -64,6 +64,8 @@
 
 #include "sflow.h"		/* sFlow */
 
+#include "capbuf.c"
+
 enum sf_err {
     SF_OK = 0,
     SF_ABORT_EOS = 1,
@@ -583,9 +585,8 @@ sflow_tag_ignore(SFTag * tag)
 
 
 /* sniffer-specific information */
-#define SFLOW_DEFAULT_BUFSIZE	(1024 * 1024)
-#define SFLOW_MIN_BUFSIZE	(SFLOW_DEFAULT_BUFSIZE / 2)
-#define SFLOW_MAX_BUFSIZE	(SFLOW_DEFAULT_BUFSIZE * 2)
+#define SFLOW_MIN_BUFSIZE	(1024 * 1024)
+#define SFLOW_MAX_BUFSIZE	(SFLOW_MIN_BUFSIZE * 2)
 
 
 struct sflow_me {
@@ -597,12 +598,7 @@ struct sflow_me {
     uint32_t		first_sn;	/* first sample packet seq number */
     timestamp_t		last_ts;	/* last datagram timestamp */
     u_int32_t		flow_type_tag;	/* SFLFlow_type_tag */
-    struct capbuf {
-	void *base;
-	void *end;
-	void *tail;
-	size_t size;
-    } capbuf;
+    capbuf_t		capbuf;
 };
 
 
@@ -614,7 +610,6 @@ static sniffer_t *
 sniffer_init(const char * device, const char * args)
 {
     struct sflow_me *me;
-    size_t capbuf;
     
     me = safe_calloc(1, sizeof(struct sflow_me));
 
@@ -628,22 +623,10 @@ sniffer_init(const char * device, const char * args)
     me->last_ts = 0;
     me->flow_type_tag = SFLFLOW_HEADER;
 
-    capbuf = SFLOW_MIN_BUFSIZE;
-    
     if (args) { 
 	/* process input arguments */
 	char *p; 
 
-	if ((p = strstr(args, "capbuf=")) != NULL) {
-	    capbuf = atoi(p + 7);
-	    capbuf = ROUND_32(capbuf);
-	    if (capbuf < SFLOW_MIN_BUFSIZE) {
-	    	capbuf = SFLOW_MIN_BUFSIZE;
-	    }
-	    if (capbuf > SFLOW_MAX_BUFSIZE) {
-		capbuf = SFLOW_MAX_BUFSIZE;
-	    }
-	}
 	/*
 	 * "port". 
 	 * sets the port to which the UDP socket will be bound.
@@ -672,16 +655,14 @@ sniffer_init(const char * device, const char * args)
     }
 
     /* create the capture buffer */
-    me->capbuf.size = (size_t) capbuf;
-    me->capbuf.base = mmap((void *) 0, me->capbuf.size, PROT_WRITE|PROT_READ,
-			    MAP_ANON|MAP_NOSYNC|MAP_SHARED, -1 /* fd */, 0);
-    if (me->capbuf.base == MAP_FAILED)
-	return NULL;
-    
-    me->capbuf.end = me->capbuf.base + me->capbuf.size;
-    me->capbuf.tail = me->capbuf.base;
+    if (capbuf_init(&me->capbuf, args, NULL, SFLOW_MIN_BUFSIZE,
+		    SFLOW_MAX_BUFSIZE) < 0)
+	goto error;
 
     return (sniffer_t *) me;
+error:
+    free(me);
+    return NULL;
 }
 
 static void
@@ -804,24 +785,6 @@ sniffer_start(sniffer_t * s)
     }
 
     return 0;
-}
-
-
-static inline void *
-reserve_space(struct capbuf * capbuf, size_t s)
-{
-    void *end;
-    
-    s = ROUND_32(s);
-    assert(s > 0);
-    
-    end = capbuf->tail + s;
-    if (end > capbuf->end) {
-	end = capbuf->base + s;
-    }
-    capbuf->tail = end;
-
-    return capbuf->tail - s;
 }
 
 
@@ -982,7 +945,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 		    break;
 		}
 		/* reserve the space in the buffer for the packet */
-		pkt = (pkt_t *) reserve_space(&me->capbuf, sz);
+		pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sz);
 		
 		/* point the packet payload to next packet */
 		COMO(payload) = (char *) (pkt + 1);
@@ -1195,8 +1158,8 @@ sniffer_finish(sniffer_t * s)
 {
     struct sflow_me *me = (struct sflow_me *) s;
 
-    munmap(me->capbuf.base, me->capbuf.size);
-    me->capbuf.base = NULL;
+    capbuf_finish(&me->capbuf);
+    free(me);
 }
 
 

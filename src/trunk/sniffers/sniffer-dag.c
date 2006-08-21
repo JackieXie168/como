@@ -77,7 +77,7 @@ sniffer_init(const char * device, const char * args)
     me->args = args;
 
     /* create the capture buffer */
-    if (capbuf_init(&me->capbuf, NULL, DAG_BUFSIZE, DAG_BUFSIZE) < 0)
+    if (capbuf_init(&me->capbuf, NULL, NULL, DAG_BUFSIZE, DAG_BUFSIZE) < 0)
 	goto error;    
 
     return (sniffer_t *) me;

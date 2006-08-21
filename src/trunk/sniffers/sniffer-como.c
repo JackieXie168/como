@@ -56,9 +56,8 @@
  */
 
 /* sniffer-specific information */
-#define COMO_DEFAULT_BUFSIZE	(1024 * 1024)
-#define COMO_MIN_BUFSIZE	(COMO_DEFAULT_BUFSIZE / 2)
-#define COMO_MAX_BUFSIZE	(COMO_DEFAULT_BUFSIZE * 2)
+#define COMO_MIN_BUFSIZE	(1024 * 1024)
+#define COMO_MAX_BUFSIZE	(COMO_MIN_BUFSIZE * 2)
 #define COMO_DEFAULT_MIN_PROC_SIZE	(65536 * 2)
 #define COMO_DEFAULT_READ_SIZE	(me->capbuf.size / 2)
 
@@ -88,7 +87,8 @@ sniffer_init(const char * device, const char * args)
     me->device = device;
     
     /* create the capture buffer */
-    if (capbuf_init(&me->capbuf, args, COMO_MIN_BUFSIZE, COMO_MAX_BUFSIZE) < 0)
+    if (capbuf_init(&me->capbuf, args, NULL, COMO_MIN_BUFSIZE,
+		    COMO_MAX_BUFSIZE) < 0)
 	goto error;
 
     me->read_size = me->capbuf.size / 2;

@@ -122,7 +122,8 @@ sniffer_init(const char * device, const char * args)
     me->file_size = trace_stat.st_size;
 
     /* create the capture buffer */
-    if (capbuf_init(&me->capbuf, args, ERF_MIN_BUFSIZE, ERF_MAX_BUFSIZE) < 0)
+    if (capbuf_init(&me->capbuf, args, NULL, ERF_MIN_BUFSIZE,
+		    ERF_MAX_BUFSIZE) < 0)
 	goto error;
 
     return (sniffer_t *) me;
