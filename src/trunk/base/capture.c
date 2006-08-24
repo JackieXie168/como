@@ -1429,39 +1429,41 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		map.stats->first_ts = map.stats->ts;
 
 
-	    /* 
-	     * we check the memory usage and stop any sniffer that is 
-	     * running from file if the usage is above the FREEZE_THRESHOLD. 
-	     * this will give EXPORT some time to process the tables and free
-	     * memory. we resume as soon as memory usage goes below the 
-	     * threshold. 
-	     * 
-	     */
-	    map.stats->mem_usage_cur = memory_usage();
-	    map.stats->mem_usage_peak = memory_peak();
-	    if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size)) {
-		for (src = map.sources; src; src = src->next) {
-		    if (src->sniff->flags & SNIFF_INACTIVE)
-			continue;
+	}
 
-		    if (src->sniff->flags & SNIFF_FILE)
-			src->sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
-		}
-	    } else {
-		/* 
-		 * memory is now below threshold. unfreeze any source
-		 */
-		for (src = map.sources; src; src = src->next) {
-		    if (src->sniff->flags & SNIFF_FROZEN) {
-			src->sniff->flags &= ~SNIFF_FROZEN;
-			src->sniff->flags |= SNIFF_TOUCHED;
-		    }
+	/* 
+	 * we check the memory usage and stop any sniffer that is 
+	 * running from file if the usage is above the FREEZE_THRESHOLD. 
+	 * this will give EXPORT some time to process the tables and free
+	 * memory. we resume as soon as memory usage goes below the 
+	 * threshold. 
+	 * 
+	 */
+	map.stats->mem_usage_cur = memory_usage();
+	map.stats->mem_usage_peak = memory_peak();
+	if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size)) {
+	    for (src = map.sources; src; src = src->next) {
+		if (src->sniff->flags & SNIFF_INACTIVE)
+		    continue;
+
+		if (src->sniff->flags & SNIFF_FILE)
+		    src->sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
+	    }
+	} else {
+	    /* 
+	     * memory is now below threshold. unfreeze any source
+	     */
+	    for (src = map.sources; src; src = src->next) {
+		if (src->sniff->flags & SNIFF_FROZEN) {
+		    src->sniff->flags &= ~SNIFF_FROZEN;
+		    src->sniff->flags |= SNIFF_TOUCHED;
 		}
 	    }
-
-	    end_tsctimer(map.stats->ca_loop_timer);
-	    end_tsctimer(map.stats->ca_full_timer);
 	}
+
+	end_tsctimer(map.stats->ca_loop_timer);
+	end_tsctimer(map.stats->ca_full_timer);
+	
 #if 0
 	XXX this part of the code does not apply to the current code
 	    anymore.if (table_sent) {
