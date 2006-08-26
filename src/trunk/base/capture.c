@@ -1232,6 +1232,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     /* 
      * browse the list of sniffers and start them
      */
+    active_sniffers = 0;
     for (src = map.sources; src; src = src->next) {
 	if (src->cb->start(src->sniff) < 0) {
 	    src->sniff->flags |= SNIFF_INACTIVE;
@@ -1240,14 +1241,20 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		   src->cb->name, src->device, strerror(errno));
 	    continue;
 	}
+
+	active_sniffers++;
+
 	/* setup the sniffer metadesc */
 	src->cb->setup_metadesc(src->sniff);
 	/* create the ppbuf */
 	src->sniff->ppbuf = ppbuf_new(src->sniff->max_pkts);
+	
 	if (src->sniff->flags & SNIFF_TOUCHED) {
 	    src->sniff->flags &= ~SNIFF_TOUCHED;
 	}
     }
+
+    cap_ppbufs = safe_malloc(sizeof(ppbuf_t *) * active_sniffers);
     active_sniffers = 0;
 
     /*
