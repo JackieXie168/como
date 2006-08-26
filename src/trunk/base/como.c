@@ -69,7 +69,6 @@ main(int argc, char *argv[])
 {
     pid_t pid;
     int supervisor_fd, capture_fd, storage_fd;
-    source_t *src, *psrc = NULL;
 
 #ifdef linux
     /* linux does not support setproctitle. we have our own. */
@@ -114,25 +113,6 @@ main(int argc, char *argv[])
     map.stats = mem_calloc(1, sizeof(stats_t)); 
     gettimeofday(&map.stats->start, NULL); 
     map.stats->first_ts = ~0;
-
-    /* 
-     * browse the list of sniffers and initialize them
-     */
-    for (src = map.sources; src; src = src->next) {
-	src->sniff = src->cb->init(src->device, src->args);
-	if (src->sniff == NULL) {
-	    logmsg(LOGWARN,
-		   "sniffer-%s (%s): %s\n",
-		   src->cb->name, src->device, strerror(errno));
-	    if (psrc) {
-		psrc->next = src->next;
-	    } else {
-	    	map.sources = src->next;
-	    }
-	    continue;
-	}
-	psrc = src;
-    }
 
     /* prepare the SUPERVISOR. STORAGE and CAPTURE sockets */
     supervisor_fd = ipc_listen(SUPERVISOR); 
