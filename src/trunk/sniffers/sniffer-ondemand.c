@@ -86,8 +86,14 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct ondemand_me));
 
     me->sniff.max_pkts = 8192;
-    me->sniff.flags = SNIFF_POLL | SNIFF_FILE;
+    me->sniff.flags = SNIFF_POLL | SNIFF_FILE | SNIFF_TOUCHED;
     me->device = device;
+
+    if (me->device == NULL || strlen(me->device) == 0) {
+	logmsg(LOGWARN, "sniffer-ondemand: "
+	       "device must contain a valid module\n");
+	goto error;
+    }
     
     if (args) { 
 	/* process input arguments */
@@ -117,11 +123,6 @@ sniffer_init(const char * device, const char * args)
 	}
     }
 
-    if (me->device == NULL || strlen(me->device) == 0) {
-	logmsg(LOGWARN, "sniffer-ondemand: "
-	       "device must contain a valid module\n");
-	goto error;
-    }
 
     /* create the capture buffer */
     if (capbuf_init(&me->capbuf, args, NULL, ONDEMAND_MIN_BUFSIZE,
@@ -293,7 +294,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
 	    replayed_size += l;
 	    npkts++;
-
+	    ppbuf_capture(me->sniff.ppbuf, pkt);
 	} while (left > 0 && npkts < max_pkts && replayed_size < max_size);
     }
 
