@@ -343,8 +343,8 @@ flowtools_next(struct flowtools_me * me)
  * 
  * Read from next flow record from flowtools files and
  * store the flow record in the heap. 
- * Returns the start timestsamp of the flow or 0 if no 
- * more flows are available.
+ * Returns the start timestsamp of the flow, 0 if no 
+ * more records are available.  
  * 
  */ 
 timestamp_t 
@@ -356,40 +356,55 @@ flowtools_read(struct flowtools_me * me)
     /* get next flow record */
     if (me->fd >= 0) 
 	fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);
-    while (fr == NULL) {
-	if (flowtools_next(me) < 0) 
-	    return 0; 
-
-	me->sniff.fd = me->fd;
-	fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
+    for (;;) { 
 	if (fr == NULL) {
-	    logmsg(LOGWARN, "error reading flowtools file: %s\n"
-		   "moving to next file in the directory\n",
-		   strerror(errno));
-	}
-    }
+	    if (flowtools_next(me) < 0) 
+		return 0; 
 
-    /* 
-     * filter out flows that do not cross the interface 
-     * of interest. if iface is 0, all flows are of interest. 
-     */
-    if (me->iface && (me->iface != fr->input && me->iface != fr->output))
-	return netflow2ts(fr, fr->Last);
+	    me->sniff.fd = me->fd;
+	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
+	    if (fr == NULL) {
+		logmsg(LOGWARN, "error reading flowtools file: %s\n"
+		       "moving to next file in the directory\n",
+		       strerror(errno));
+	    }
+	} 
 
-    /* 
-     * filter out flows that do not cross the interface 
-     * of interest. if iface is 0, all flows are of interest. 
-     */
-    if (me->exporter && fr->exaddr != me->exporter) 
-	return netflow2ts(fr, fr->Last);
+	/* 
+	 * filter out flows that do not cross the interface 
+	 * of interest. if iface is 0, all flows are of interest. 
+	 */
+	if (me->iface && (me->iface != fr->input && me->iface != fr->output)) {
+	    logmsg(LOGSNIFFER, "filtering out by interface\n"); 
+	    /* read next record and try again */ 
+	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
+	    continue; 
+	} 
 
-    /* 
-     * check that the information in the flow record is valid 
-     */ 
-    if (fr->dPkts == 0 || fr->dOctets == 0) { 
-	logmsg(LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
-	       fr->dPkts, fr->dOctets);
-	return netflow2ts(fr, fr->Last);
+	/* 
+	 * filter out flows that do not cross the interface 
+	 * of interest. if iface is 0, all flows are of interest. 
+	 */
+	if (me->exporter && fr->exaddr != me->exporter) {
+	    logmsg(LOGSNIFFER, "filtering out by exporter\n");
+	    /* read next record and try again */ 
+	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
+	    continue; 
+	} 
+
+	/* 
+	 * check that the information in the flow record is valid 
+	 */ 
+	if (fr->dPkts == 0 || fr->dOctets == 0) { 
+	    logmsg(LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
+		   fr->dPkts, fr->dOctets);
+	    /* read next record and try again */ 
+	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
+	    continue; 
+	} 
+
+	/* we passed all the test, move on */
+	break;
     }
     
     /* build a new flow record */
@@ -515,7 +530,7 @@ sniffer_init(const char * device, const char * args)
 	 * select the NetFlow exporter we are listening to. 
 	 */ 
 	if ((p = strstr(args, "exporter=")) != NULL) {
-	    me->exporter = inet_addr(p + 9);
+	    me->exporter = ntohl(inet_addr(p + 9));
 	}
     }
 
@@ -628,7 +643,8 @@ sniffer_start(sniffer_t * s)
      */
     me->min_ts = ~0;
     me->max_ts = 0;
-    flowtools_read(me);
+    if (!flowtools_read(me)) 
+	return -1;
    
     return 0;
 }
