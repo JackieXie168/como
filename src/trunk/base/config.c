@@ -321,10 +321,21 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
 	    s->cb = __sniffers[i];
 	    s->device = strdup(device);
 	    s->args = args ? strdup(args) : NULL;
+
+            /* initialize the sniffer */
+            s->sniff = s->cb->init(s->device, s->args);
+            if (s->sniff == NULL) {
+                logmsg(LOGWARN, "sniffer-%s (%s): %s\n",
+                       s->cb->name, s->device, strerror(errno));
+                free(s); 
+                return; 
+            }
+
 	    m->sources = s;
 	    break;
 	}
     }
+
     if (__sniffers[i] == NULL) {
 	logmsg(LOGWARN, "sniffer %s %s not found, ignoring\n", want, device);
 	return; 
