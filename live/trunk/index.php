@@ -5,19 +5,44 @@
      * this is the entry page to the CoMolive! site. show the banner
      * and add the usual html header stuff. 
      */
-    require_once ("comolive.conf");
-    require_once("include/framing.php");
+
+    /* 
+     * look for comolive.conf. it is a required file but cannot use
+     * require_once directly because it causes a warning on the screen 
+     * and nothing else. First we check if the file exists. If not we 
+     * write a message on the screen and terminate. 
+     * 
+     * XXX note that this check is only required in index.php given 
+     *     that we can safely assume that is the file people will 
+     *     access first. A better option would be to define default 
+     *     configuration values somewhere else and then use comolive.conf
+     *     just to change the default values.
+     * 
+     */ 
+    if (!file_exists("comolive.conf")) {
+	echo "Please create and update file comolive.conf in the<br>"; 
+        echo "comolive root directory. <br>You can find a sample";
+        echo "configuration in comolive.conf.default"; 
+	exit; 
+    }
+
+    require_once "comolive.conf";
+    require_once "include/framing.php";
+
     if (!(isset ($G)))
 	$G = init_global();
-    /** get the all the groups that have been created  
-    *   They should be located in the db directory and 
-    *   have a lst extension
-    */
+
+    /* 
+     * get the all the groups that have been created  
+     * They should be located in the db directory and 
+     * have a lst extension
+     */
   
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
     $dadir = $G['NODEDB'];
     $handle=opendir("$dadir");
-    /**
+
+    /*
      *  $allgroups is a 2d array containing 
      *  array[n][x] where x is 
      *  [0] acutal filename of the group file, e.g. default.lst
