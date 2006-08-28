@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <err.h>
+#include <assert.h>
 
 #include "como.h"
 #include "comopriv.h"
@@ -69,10 +70,8 @@ send_status(int client_fd, int node_id)
     int i;
 
     /* first find the node */ 
-    for (node = map.node; node && node->id != node_id; node = node->next)
-	; 
-    if (node == NULL)
-	panicx("cannot find virtual node %d", node_id); 
+    assert(node_id < map.node_count); 
+    node = &map.node[node_id];
 
     /* send HTTP header */
     httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n";
@@ -137,18 +136,17 @@ send_status(int client_fd, int node_id)
      * are virtual nodes, send the list of virtual nodes as well
      */ 
     if (node_id == 0) { 
-	for (node = map.node; node; node = node->next) {
-	    if (node->id == 0) 
-		continue; 
+	for (i = 1; i < map.node_count; i++) {
+	    node_t * nd = &map.node[i];
 
 	    len = sprintf(buf, "Virtual: %s | %s | %s | ", 
-			  node->name, node->location, node->type);
+			  nd->name, nd->location, nd->type);
 
 	    if (node->comment != NULL) 		/* add comments if any */
-		len += sprintf(buf + len, "%s | ", node->comment); 
+		len += sprintf(buf + len, "%s | ", nd->comment); 
 
 	    len += sprintf(buf + len, "%d | %s\n", 
-			node->query_port, node->filter_str); 
+			nd->query_port, nd->filter_str); 
 
 	    ret = como_writen(client_fd, buf, len);
 	    if (ret < 0)

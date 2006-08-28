@@ -230,7 +230,8 @@ apply_map_changes(struct _como * x)
 		ipc_send(STORAGE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
             }
 
-	    if (map.modules[i].status == MDL_ACTIVE) { 
+	    if (map.modules[i].status == MDL_ACTIVE && 
+		map.modules[i].running != RUNNING_ON_DEMAND) { 
 		map.stats->modules_active--; 
 	    }
 	    
@@ -286,11 +287,11 @@ apply_map_changes(struct _como * x)
 	    ipc_send(CAPTURE, IPC_MODULE_ADD, pack, sz); 
 	    ipc_send(EXPORT, IPC_MODULE_ADD, pack, sz); 
 	    ipc_send(STORAGE, IPC_MODULE_ADD, pack, sz); 
-	    
+	    map.stats->modules_active++; 
+
 	    free(pack);
 	}
 
-	map.stats->modules_active++; 
     }
 }
 
@@ -336,7 +337,6 @@ void
 supervisor_mainloop(int accept_fd)
 {
     fd_set valid_fds;
-    node_t * node;
     int * external_fd;	/* for http queries */
     int max_fd;
     int i; 
@@ -372,14 +372,14 @@ supervisor_mainloop(int accept_fd)
      * they are queries that can be destined to any of the virtual nodes. 
      */
     external_fd = safe_calloc(map.node_count, sizeof(int));
-    for (node = map.node; node; node = node->next) { 
+    for (i = 0; i < map.node_count; i++) { 
 	char *buf;
 
-	asprintf(&buf, "S:http://localhost:%d/", node->query_port);
-	external_fd[node->id] = create_socket(buf, NULL);
-	if (external_fd[node->id] < 0)
+	asprintf(&buf, "S:http://localhost:%d/", map.node[i].query_port);
+	external_fd[i] = create_socket(buf, NULL);
+	if (external_fd[i] < 0)
 	    panic("creating the socket %s", buf);
-	max_fd = add_fd(external_fd[node->id], &valid_fds, max_fd);
+	max_fd = add_fd(external_fd[i], &valid_fds, max_fd);
 	free(buf);
     }
 
@@ -402,7 +402,8 @@ supervisor_mainloop(int accept_fd)
 	    continue; 
   	} 
 
-	map.stats->modules_active++;
+	if (mdl->running != RUNNING_ON_DEMAND) 
+	    map.stats->modules_active++;
     } 
 
     /* initialize resource management */

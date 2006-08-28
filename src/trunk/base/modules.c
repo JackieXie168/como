@@ -629,7 +629,7 @@ match_module(module_t * a, module_t * b)
 }
 
 /*
- * -- module_lookup_with_name_and_node
+ * -- module_lookup
  * 
  * lookup a module from the map given its name and node identifier,
  * return the pointer to the module if the lookup succeeded or

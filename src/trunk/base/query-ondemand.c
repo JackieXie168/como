@@ -36,6 +36,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <err.h>
+#include <errno.h>
 
 #include "como.h"
 #include "comopriv.h"
@@ -157,14 +158,17 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 
     /* inline mode */
     map.running = INLINE;
+
     /* 
      * store the output file descriptor in a the map in order to make it
      * accessible to EXPORT
      */
     map.inline_fd = fd;
 
+    node = &map.node[node_id];
+
     /* disable all modules */
-    for (idx = 0; idx < map.module_max; idx++)
+    for (idx = 0; idx < map.module_last; idx++)
 	if (map.modules[idx].status == MDL_ACTIVE)
 	    map.modules[idx].status = MDL_DISABLED;
     /* enable the source module for record replaying */
@@ -196,9 +200,6 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 	free(src); 
     } 
 
-    /* find the virtual node this query refers to */
-    for (node = map.node; node && node->id != node_id; node = node->next) 
-	;
 //#define REMOTE_QUERY
 #ifdef REMOTE_QUERY
     /* now configure a new sniffer-como */
@@ -219,10 +220,15 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 #else
     /* now configure a new sniffer-ondemand */
     nargs = 0;
-    len = snprintf(sniffstr, sizeof(sniffstr), "node=%d start=%lld end=%lld",
-		   node_id, TIME2TS(req->start, 0), TIME2TS(req->end, 0));
+
+    /* XXX we always go for the master node. virtual nodes are currently
+     *     not saving anything to disk and always queried on demand.  
+     */ 
+    len = snprintf(sniffstr, sizeof(sniffstr), "node=0 start=%lld end=%lld",
+		   TIME2TS(req->start, 0), TIME2TS(req->end, 0));
     add_sniffer(&map, "ondemand", req->source, sniffstr);
 #endif
+
     map.stats = mem_calloc(1, sizeof(stats_t)); 
     gettimeofday(&map.stats->start, NULL); 
     map.stats->first_ts = ~0;
@@ -295,6 +301,8 @@ query_ondemand(int fd, qreq_t * req, int node_id)
         }
     }
 }
+
+
 
 
 

@@ -135,7 +135,7 @@ keyword_t keywords[] = {
     { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL },
     { "output",      TOK_OUTPUT,      2, CTX_MODULE },
     { "hashsize",    TOK_HASHSIZE,    2, CTX_MODULE },
-    { "source",      TOK_SOURCE,      2, CTX_MODULE },
+    { "source",      TOK_SOURCE,      2, CTX_MODULE|CTX_VIRTUAL },
     { "filter",      TOK_FILTER,      2, CTX_GLOBAL|CTX_VIRTUAL|CTX_MODULE },
     { "description", TOK_DESCRIPTION, 2, CTX_MODULE|CTX_ALIAS },
     { "end",         TOK_END,         1, CTX_ANY }, 
@@ -387,7 +387,7 @@ parse_size(const char *arg)
 }
 
 static char ** 
-copy_multiple_args(char ** x, char ** argv, int argc) 
+copy_args(char ** x, char ** argv, int argc) 
 {
     int j,i; 
 
@@ -418,7 +418,7 @@ copy_multiple_args(char ** x, char ** argv, int argc)
 }
 
 static char ** 
-copy_multiple_args_from_file(char ** x, char * file, int * count) 
+copy_args_from_file(char ** x, char * file, int * count) 
 {
     FILE *auxfp;
     char line[512];
@@ -474,6 +474,7 @@ do_config(struct _como * m, int argc, char *argv[])
     static char errstr[1024]; 
     static int scope = CTX_GLOBAL;      	/* scope of current keyword */
     static module_t * mdl = NULL;       	/* module currently open */
+    static int node_id = 0; 			/* current node */
     static alias_t * alias = NULL;       	/* alias currently open */
     keyword_t *t;
 
@@ -510,7 +511,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	break;
 
     case TOK_QUERYPORT:
-	m->node->query_port = atoi(argv[1]);
+	m->node[node_id].query_port = atoi(argv[1]);
 	break;
 
     case TOK_DESCRIPTION:
@@ -544,22 +545,10 @@ do_config(struct _como * m, int argc, char *argv[])
 		   mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
         } else if (scope == CTX_VIRTUAL) { 
 	    /* 
-	     * we are done with this virtual node. let's recover
-	     * the master node (associated with the global context)
+	     * we are done with this virtual node. let's go back to 
+	     * the master node (i.e. node_id == 0)
 	     */
-	    node_t *p, *q;
-
-	    for (p = m->node, q = NULL; p->id != 0; q = p, p = p->next)
-		; 
-
-	    if (q) {
-		/* the master node is not at the head of the list. 
-		 * move it there. 
-		 */
-		q->next = p->next; 
-		p->next = m->node; 
-		m->node = p;
-	    } 
+	    node_id = 0; 
 	}
 	scope = CTX_GLOBAL; 
 	break;
@@ -568,7 +557,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	if (scope == CTX_MODULE) 
             safe_dup(&mdl->filter_str, argv[1]);
         else if (scope == CTX_VIRTUAL) 
-	    safe_dup(&m->node->filter_str, argv[1]);
+	    safe_dup(&m->node[node_id].filter_str, argv[1]);
 	break;
 
     case TOK_HASHSIZE:
@@ -576,7 +565,11 @@ do_config(struct _como * m, int argc, char *argv[])
         break;
 
     case TOK_SOURCE:
-	safe_dup(&mdl->source, argv[1]);
+	if (scope == CTX_MODULE) { 
+	    safe_dup(&mdl->source, argv[1]);
+	} else { 
+	    safe_dup(&m->node[node_id].source, argv[1]);
+	} 
 	break;
 
     case TOK_LIBRARYDIR:
@@ -629,26 +622,29 @@ do_config(struct _como * m, int argc, char *argv[])
 	break;
 
     case TOK_ARGS: 
+	/* copy the arguments. one line may have multiple arguments 
+ 	 * starting from argv[1]. that's why we pass the pointer to 
+	 * argv[1] and reduce argc by one. 
+	 */
 	if (scope == CTX_MODULE) 
-	    mdl->args = copy_multiple_args(mdl->args, argv, argc); 
+	    mdl->args = copy_args(mdl->args, &argv[1], argc - 1); 
 	else if (scope == CTX_VIRTUAL) 
-	    m->node->args = copy_multiple_args(m->node->args, argv, argc); 
+	    m->node[node_id].args = copy_args(m->node->args, &argv[1], argc-1); 
         else if (scope == CTX_ALIAS) {
-	    alias->args = copy_multiple_args(alias->args, argv, argc); 
-	    alias->ac += argc; 
+	    alias->args = copy_args(alias->args, &argv[1], argc - 1); 
+	    alias->ac += argc - 1; 
 	} 
 	break;
 
     case TOK_ARGSFILE: 
 	if (scope == CTX_MODULE) {
-	    mdl->args = copy_multiple_args_from_file(mdl->args, argv[1], NULL); 
+	    mdl->args = copy_args_from_file(mdl->args, argv[1], NULL); 
 	} else if (scope == CTX_VIRTUAL) {
-	    m->node->args = 
-		copy_multiple_args_from_file(m->node->args, argv[1], NULL); 
+	    m->node[node_id].args = 
+		copy_args_from_file(m->node[node_id].args, argv[1], NULL); 
         } else if (scope == CTX_ALIAS) {
 	    int count; 
-	    alias->args = 
-		copy_multiple_args_from_file(alias->args, argv[1], &count); 
+	    alias->args = copy_args_from_file(alias->args, argv[1], &count); 
 	    alias->ac += count; 
 	} 
 	break; 
@@ -663,32 +659,28 @@ do_config(struct _como * m, int argc, char *argv[])
 	break; 
 
     case TOK_NAME: 
-        safe_dup(&m->node->name, argv[1]);
+        safe_dup(&m->node[node_id].name, argv[1]);
 	break; 
 
     case TOK_LOCATION:
-        safe_dup(&m->node->location, argv[1]);
+        safe_dup(&m->node[node_id].location, argv[1]);
 	break; 
 
     case TOK_TYPE:
-        safe_dup(&m->node->type, argv[1]);
+        safe_dup(&m->node[node_id].type, argv[1]);
 	break; 
 
     case TOK_COMMENT: 
-        safe_dup(&m->node->comment, argv[1]);
+        safe_dup(&m->node[node_id].comment, argv[1]);
 	break; 
 
     case TOK_VIRTUAL: 
-	do { 
-	    node_t * node; 
-	    node = safe_calloc(1, sizeof(node_t)); 
-	    node->id = m->node_count; 
-	    safe_dup(&node->name, argv[1]);
-	    node->next = m->node;
-	    m->node = node; 
-	    m->node_count++;
-	    scope = CTX_VIRTUAL; 
-	} while (0);
+	m->node = safe_realloc(m->node, (m->node_count + 1) * sizeof(node_t)); 
+	node_id = m->node_count; 
+	bzero(&m->node[node_id], sizeof(node_t)); 
+	safe_dup(&m->node[node_id].name, argv[1]);
+	m->node_count++;
+	scope = CTX_VIRTUAL; 
 	break;
 
     case TOK_ALIAS: 
@@ -755,7 +747,7 @@ parse_cfgline(struct _como * m, const char *line)
 	state = IN_BLANK;
     }
     logmsg(V_LOGCONFIG, "parse [%3d] [%s]\n", linenum, line);
-    for (i=0; i < srclen && state != DONE ; i++) {
+    for (i = 0; i < srclen && state != DONE ; i++) {
 	char c = line[i];
 	int copy = 0;		/* must copy this character */
 	int end_token = 0;	/* and also this is the end of a token */
@@ -1164,11 +1156,10 @@ init_map(struct _como * m)
     m->dbdir = strdup(DEFAULT_DBDIR);
     m->libdir = strdup(DEFAULT_LIBDIR);
     m->node = safe_calloc(1, sizeof(node_t)); 
-    m->node->id = 0;
-    m->node->name = strdup("CoMo Node");
-    m->node->location = strdup("Unknown");
-    m->node->type = strdup("Unknown");
-    m->node->query_port = DEFAULT_QUERY_PORT;
+    m->node[0].name = strdup("CoMo Node");
+    m->node[0].location = strdup("Unknown");
+    m->node[0].type = strdup("Unknown");
+    m->node[0].query_port = DEFAULT_QUERY_PORT;
     m->node_count = 1;
     m->debug_sleep = 20;
 }
@@ -1219,7 +1210,7 @@ configure(struct _como * m, int argc, char ** argv)
     if (cli_args.libdir != NULL)
 	safe_dup(&m->libdir, cli_args.libdir);
     if (cli_args.query_port != -1)
-	m->node->query_port = cli_args.query_port;
+	m->node[0].query_port = cli_args.query_port;
     if (cli_args.mem_size != 0)
 	m->mem_size = cli_args.mem_size;
     m->debug = cli_args.debug;
@@ -1259,21 +1250,25 @@ configure(struct _como * m, int argc, char ** argv)
      * these new modules will have the same name but will be 
      * running the additional filter associated with the virtual 
      * node and save data in the virtual node dbdir.  
+     * 
+     * XXX all virtual nodes will be running on demand and 
+     *     the source is defined in the configuration (or assumed to 
+     *     be a trace module). later there shouldn't be a need 
+     *     for defining the source module anyway...
+     *
      */
     for (i = 0, j = m->module_last; i <= j; i++) { 
-	node_t * node; 
 	module_t * orig; 
+	int node_id; 
 
 	orig = &m->modules[i]; 
-	for (node = m->node; node; node = node->next) { 
+	for (node_id = 1; node_id < m->node_count; node_id++) { 
 	    module_t * mdl; 
 	    char * nm; 
 
-	    if (node->id == 0) 
-		continue; 	/* master node. nothing to do */
-
 	    /* create a new module and copy it from  new module */
-	    mdl = copy_module(m, orig, node->id, -1, node->args);
+	    mdl = copy_module(m, orig, node_id, -1, m->node[node_id].args);
+	    mdl->running = RUNNING_ON_DEMAND; 
 	    
 	    /* append node id to module's output file */
 	    asprintf(&nm, "%s-%d", mdl->output, mdl->node); 
@@ -1281,14 +1276,28 @@ configure(struct _como * m, int argc, char ** argv)
 	    free(nm); 
 	    
 	    /* add the node filter to the module filter */
-	    if (node->filter_str) {
+	    if (m->node[node_id].filter_str) {
 		char * flt;
 		if (!strcmp(mdl->filter_str, "all"))
-		    asprintf(&flt, "%s", node->filter_str);
+		    asprintf(&flt, "%s", m->node[node_id].filter_str);
 		else 
 		    asprintf(&flt,"(%s) and (%s)", 
-				node->filter_str, mdl->filter_str);
+			m->node[node_id].filter_str, mdl->filter_str);
 		mdl->filter_str = flt; /* FIXME: possible leak */
+	    } 
+
+	    /* add the node arguments to the module arguments */ 
+	    if (m->node[node_id].args) { 
+		int k; 
+
+	 	for (k = 0; m->node[node_id].args[k]; k++) {
+		    /* 
+		     * XXX we copy one argument at a time to avoid 
+		     *     having to count them first. FIX THIS
+		     */ 
+		    mdl->args = 
+			copy_args(mdl->args, &m->node[node_id].args[k], 1); 
+		}
 	    } 
 
             logmsg(LOGUI, "... module%s %s [%d][%d] ",
