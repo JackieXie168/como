@@ -84,7 +84,8 @@ sniffer_init(const char * device, const char * args)
     struct ondemand_me *me;
     
     me = safe_calloc(1, sizeof(struct ondemand_me));
-
+    me->storage_fd = -1; 
+    me->sniff.fd = -1; 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_POLL | SNIFF_FILE | SNIFF_TOUCHED;
     me->device = device;
@@ -166,7 +167,7 @@ sniffer_start(sniffer_t * s)
     me->mdl = module_lookup(me->device, me->node);
     if (me->mdl == NULL) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
-	       "module \"%s\" not found\n", me->device);
+	       "module \"%s\" [%d] not found\n", me->device, me->node);
 	goto error;
     }
     
