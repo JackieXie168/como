@@ -683,12 +683,18 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
     if (t != NULL) {
         switch(t->pred_type) {
         case Tip:
-            if (!isIP) return 0;
-            if (t->data->ipaddr.direction == 0)
+            if (!isIP) 
+		return 0;
+            if (t->data->ipaddr.direction == 0)			/* src */
                 z = ((N32(IP(src_ip)) & t->data->ipaddr.nm) ==
                      t->data->ipaddr.ip);
-            else
+            else if (t->data->ipaddr.direction == 1)		/* dst */
                 z = ((N32(IP(dst_ip)) & t->data->ipaddr.nm) ==
+                     t->data->ipaddr.ip);
+            else 						/* addr */
+                z = ((N32(IP(dst_ip)) & t->data->ipaddr.nm) ==
+                     t->data->ipaddr.ip) || 
+                    ((N32(IP(src_ip)) & t->data->ipaddr.nm) ==
                      t->data->ipaddr.ip);
             break;
         case Tport:

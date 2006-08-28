@@ -52,7 +52,7 @@
 
 DIGIT           [0-9]
 ALFANUMERIC     [a-zA-Z0-9]
-DIR             src|dst
+DIR             src|dst|addr|host
 PORTDIR         sport|dport
 IPADDR          ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
 NETMASK         "/"({DIGIT}){1,2}
@@ -89,8 +89,10 @@ IFACE		input|output
 {DIR}           {
                 if (!strcmp(yytext, "src"))
                     yflval.byte = 0;
-                else /* dst */
+                if (!strcmp(yytext, "dst"))
                     yflval.byte = 1;
+                else 		/* host or addr */
+                    yflval.byte = -1;
                 return(DIR);
                 }
 {PORTDIR}       {
