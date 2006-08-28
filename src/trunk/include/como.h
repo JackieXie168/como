@@ -52,15 +52,14 @@
  * all packets before the module process them. 
  */
 struct _node { 
-    int id;			/* virtual node id (starts from 1) */
     char * name; 
     char * location; 
     char * type; 
     char * comment;
     int query_port;		/* port for incoming queries */
+    char * source;		/* source module for all virtual modules */
     char * filter_str;          /* filter expression */
     char ** args;               /* parameters for the modules */
-    struct _node * next; 	/* next node */
 };
 
 typedef struct _node	node_t; 

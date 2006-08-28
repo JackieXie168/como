@@ -174,6 +174,31 @@ query_validate(qreq_t * req, int node_id)
     }
 
     /* 
+     * virtual nodes require some additional manipolation of 
+     * the query string. 
+     */ 
+    if (node_id > 0) {	/* virtual node */
+        /*
+         * set the source to whatever it is configured to be.
+         * we also need to add the virtual node filter to filter_str;
+         *
+         * XXX this code assumes that query-ondemand sets the sniffer
+         *     always only for the master node modules.
+         */ 
+        node_t * node = &map.node[node_id];
+        
+        if (req->source == NULL)
+            req->source = safe_strdup(node->source);
+        if (req->filter_str != NULL) {
+            char * k = req->filter_str;
+            asprintf(&req->filter_str, "(%s) and (%s)", node->filter_str, k);
+            free(k);   
+        } else {
+            req->filter_str = req->mdl->filter_str;
+        }
+    }
+
+    /* 
      * there are two types of queries. the ones that just need to print or 
      * retrieve the data stored by a running instance of a module and the 
      * ones that require to process the output data of a different module 
@@ -244,8 +269,10 @@ query_validate(qreq_t * req, int node_id)
 	 * XXX we are assuming that whoever posts the query is aware 
 	 *     of the filtering that the source module could have done
 	 *     on the data and we don't do any checks on that.
+	 * 
+	 * XXX the source is always a module running in the master node. 
 	 */
-	req->src = module_lookup(req->source, node_id);
+	req->src = module_lookup(req->source, 0);
 	if (req->src == NULL) {
             /* No source module found,
              * return an error message to the client and finish
@@ -376,7 +403,7 @@ static char *s_format_names[] = {
  *     if "source" is defined then that module replay() callback is used. 
  *     in the future, query should independently pick the most appropriate
  *     source of data.
- *
+ * 
  */
 void
 query(int client_fd, int supervisor_fd, int node_id)
@@ -443,6 +470,7 @@ query(int client_fd, int supervisor_fd, int node_id)
 	close(supervisor_fd);
 	return; 
     }
+
 
     logmsg(LOGQUERY, "query: node: %d module: %s\n",
 	   node_id, req.module, req.filter_str); 
