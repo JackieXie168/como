@@ -1195,6 +1195,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     /* register handlers for signals */
     signal(SIGPIPE, exit);
     signal(SIGINT, exit);
+    signal(SIGTERM, exit);
     signal(SIGHUP, SIG_IGN);
     atexit(cleanup);
 
@@ -1288,6 +1289,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 					      active_sniffers);
 		} else if (map.running == NORMAL) {
 		    logmsg(LOGWARN, "no sniffers left. waiting for queries\n");
+		    print_timers();
 		}
 		break;
 	    }
@@ -1327,8 +1329,12 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	r = valid_fds;
 	t = tout;
 	n_ready = select(max_fd, &r, NULL, NULL, active_sniffers ? &t : NULL);
-	if (n_ready < 0)
+	if (n_ready < 0) {
+	    if (errno == EINTR) {
+		continue;
+	    }
 	    panic("select");
+	}
 
 	start_tsctimer(map.stats->ca_loop_timer);
 

@@ -1563,6 +1563,7 @@ storage_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 
     signal(SIGINT, exit);
+    signal(SIGTERM, exit);
     /* ignore SIGHUP */ 
     signal(SIGHUP, SIG_IGN); 
     
@@ -1588,7 +1589,7 @@ storage_mainloop(int accept_fd, int supervisor_fd, __unused int id)
      * wait for the debugger to attach
      */
     DEBUGGER_WAIT_ATTACH(map);
- 
+
     /*
      * The real main loop.
      */
@@ -1610,8 +1611,12 @@ storage_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
 	gettimeofday(&last, 0); 
 	n_ready = select(max_fd, &r, NULL, NULL, pto); 
-	if (n_ready < 0) 
-	    panic("waiting for select (%s)\n", strerror(errno)); 
+	if (n_ready < 0) {
+	    if (errno == EINTR) {
+		continue;
+	    }
+	    panic("waiting for select (%s)\n", strerror(errno));
+	}
 
 	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 
