@@ -208,7 +208,7 @@ print(char *buf, size_t *len, char * const args[])
 };
 
 
-callbacks_t callbacks = {
+MODULE(topAS) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     indesc: NULL,

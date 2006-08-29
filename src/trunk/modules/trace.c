@@ -640,7 +640,7 @@ replay(__unused void * self, char *buf, char *out, size_t * len,
 }
 
 
-callbacks_t callbacks = {
+MODULE(trace) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: sizeof(FLOWDESC),

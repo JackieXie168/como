@@ -506,7 +506,7 @@ dump(char *buf, pkt_t *out, uint maxpkts) {
     return npkts += reb_emit_pkts(f, out + npkts, 0, maxpkts - npkts);
 }
 
-callbacks_t callbacks = {
+MODULE(netflow) = {
     sizeof(FLOWDESC), 
     sizeof(EFLOWDESC), 
 

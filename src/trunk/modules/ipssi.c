@@ -162,7 +162,7 @@ print(__unused void *self, char *buf, size_t *len, __unused char *const args[])
     return output;
 }
 
-callbacks_t callbacks = {
+MODULE(ipssi) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),

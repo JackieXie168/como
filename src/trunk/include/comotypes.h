@@ -46,6 +46,7 @@ typedef struct _module          module_t;       /* module package */
 typedef struct _alias           alias_t;        /* aliases */
 typedef uint32_t		procname_t;	/* process names */
 typedef struct _callbacks       callbacks_t;    /* callbacks */
+typedef struct _callbacks       module_cb_t;    /* callbacks */
 typedef struct _flushmsg        flushmsg_t;     /* message capture/export */
 
 typedef struct memmap_t         memmap_t;      /* opaque, memory manager */

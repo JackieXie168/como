@@ -43,6 +43,12 @@
  * Some useful macros to write modules
  */
 
+#ifdef ENABLE_SHARED_MODULES
+#  define MODULE(name)	module_cb_t callbacks
+#else
+#  define MODULE(name)	module_cb_t g_ ## name ## _module
+#endif
+
 /*
  * FLOWDESC/EFLOWDESC are supposed to be defined by individual
  * modules as the type to be used for flow descriptors. If so,

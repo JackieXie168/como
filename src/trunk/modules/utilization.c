@@ -279,7 +279,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     return s;
 }
 
-callbacks_t callbacks = {
+MODULE(utilization) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),

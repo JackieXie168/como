@@ -264,7 +264,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     return s;
 }
 
-callbacks_t callbacks = {
+MODULE(traffic) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),

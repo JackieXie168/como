@@ -475,7 +475,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     return s;
 }
 
-callbacks_t callbacks = {
+MODULE(apps) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: sizeof(uint32_t) + MAX_CLASSES * sizeof(app_t),

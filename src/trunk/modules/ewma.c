@@ -52,7 +52,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <assert.h>
-#include "como.h"
 #include "module.h"
 #include "bitmap.h"
 #include "uhash.h"
@@ -411,7 +410,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     return s;
 }
 
-callbacks_t callbacks = {
+MODULE(ewma) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(struct alert_record), 
