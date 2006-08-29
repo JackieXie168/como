@@ -55,7 +55,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <assert.h>
-#include "como.h"
 #include "module.h"
 
 #define FLOWDESC	struct _ports
@@ -394,7 +393,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     return config->str;
 }
 
-callbacks_t callbacks = {
+MODULE(anomaly_ewma) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: 2*sizeof(struct alert_record), 

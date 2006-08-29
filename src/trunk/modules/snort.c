@@ -1695,7 +1695,7 @@ print(char *buf, size_t *len, char * const args[])
     }
 }
 
-callbacks_t callbacks = {
+MODULE(snort) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: ETH_MTU + sizeof(pktinfo_t),

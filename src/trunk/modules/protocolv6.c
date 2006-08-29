@@ -202,7 +202,7 @@ print(char *buf, size_t *len, __unused char * const args[])
 };
 
 
-callbacks_t callbacks = {
+MODULE(protocolv6) = {
     sizeof(FLOWDESC),
     0,
     NULL,

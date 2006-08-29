@@ -35,7 +35,6 @@
 #include <string.h>	/* strdup, strerror */
 #include <errno.h>
 #include <assert.h>
-#include <dlfcn.h>	/* dlopen, dlclose, etc. */
 
 #include "como.h"
 #include "comopriv.h"
@@ -44,6 +43,10 @@
 
 /* global state */
 extern struct _como map;
+
+#ifdef ENABLE_SHARED_MODULES
+
+#include <dlfcn.h>	/* dlopen, dlclose, etc. */
 
 /*
  * -- load_object
@@ -75,6 +78,24 @@ load_object(char * base_name, char * symbol, void ** handle)
     return (void *) sym;
 }
 
+#else
+
+#include "modules-list.h"
+
+static module_cb_t *
+lookup_builtin_module(const char *name)
+{
+    builtin_module_t *bm;
+    for (bm = g_como_builtin_modules; bm->name != NULL; bm++) {
+	if (strcmp(name, bm->name) == 0) {
+	    return bm->cb;
+	}
+    }
+    logmsg(LOGWARN, "module %s is not built in\n", name);
+    return NULL;
+}
+
+#endif
 
 /*
  * -- activate_module
@@ -87,9 +108,10 @@ load_object(char * base_name, char * symbol, void ** handle)
  * 
  */
 int
-activate_module(module_t * mdl, char * libdir)
+activate_module(module_t * mdl, __unused char * libdir)
 {
     callbacks_t * cb;
+#ifdef ENABLE_SHARED_MODULES
     char * filename;
     void * handle;
 
@@ -99,33 +121,40 @@ activate_module(module_t * mdl, char * libdir)
     else
         asprintf(&filename, "%s/%s", libdir, mdl->source);
     cb = load_object(filename, "callbacks", &handle);
-
+    free(filename);
+#else
+    char *cname;
+    char *ext;
+    cname = strdup(mdl->source);
+    /* strip the extension */
+    ext = strstr(mdl->source, ".so");
+    if (ext) {
+	*ext = '\0';
+    }
+    cb = lookup_builtin_module(mdl->source);
+    free(cname);
+#endif
     /* perform some checks on the callbacks */
 
     if (cb == NULL) {
-        logmsg(LOGWARN, "cannot load %s: %s\n", filename, strerror(errno));
-        free(filename);
-        return 1;
+        logmsg(LOGWARN, "cannot activate module %s\n", mdl->name, strerror(errno));
+        goto error;
     }
-    free(filename);
 
     /* update(), store() and load() should definitely be there */
     if (cb->update == NULL) {
 	logmsg(LOGWARN, "module %s misses update()\n", mdl->name);
-	dlclose(handle);
-        return 1;
+	goto error;
     }
 
     if (cb->store == NULL) {
 	logmsg(LOGWARN, "module %s misses store()\n", mdl->name);
-	dlclose(handle);
-        return 1;
+	goto error;
     }
 
     if (cb->load == NULL) {
 	logmsg(LOGWARN, "module %s misses load()\n", mdl->name);
-	dlclose(handle);
-        return 1;
+	goto error;
     }
 
     /* 
@@ -143,15 +172,13 @@ activate_module(module_t * mdl, char * libdir)
 			cb->ematch ? "ematch() " : "",
 			cb->compare ? "compare() " : ""
 		);
-	    dlclose(handle);
-            return 1;
+	    goto error;
         }
     } else {
 	if (cb->action == NULL) { /* export() requires action() too */
 	    logmsg(LOGWARN, "module %s has export() w/out action()\n", 
 		mdl->name);
-	    dlclose(handle);
-            return 1;
+	    goto error;
         }
     }
 
@@ -170,9 +197,18 @@ activate_module(module_t * mdl, char * libdir)
     
     /* store the callbacks */
     mdl->callbacks = *cb;
-    mdl->cb_handle = handle;
     mdl->status = MDL_ACTIVE; 
+#ifdef ENABLE_SHARED_MODULES
+    mdl->cb_handle = handle;
+#endif
     return 0;
+error:
+#ifdef ENABLE_SHARED_MODULES
+    if (handle) {
+	dlclose(handle);
+    }
+#endif
+    return 1;
 }
 
 
@@ -379,10 +415,12 @@ remove_module(como_t * m, module_t *mdl)
     /* free in process memory */
     clean_module(mdl);
 
+#ifdef ENABLE_SHARED_MODULES
     /* unlink the shared library */ 
     if (mdl->cb_handle) {
         dlclose(mdl->cb_handle);
     }
+#endif
 
     /* zero out all the rest and mark the module as free */
     bzero(mdl, sizeof(module_t));

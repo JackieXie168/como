@@ -296,7 +296,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     return s;
 };
 
-callbacks_t callbacks = {
+MODULE(flowcount) = {
     ca_recordsize: sizeof(FLOWDESC),
     st_recordsize: sizeof(RECORD), 
     capabilities: {has_flexible_flush: 0, 0},

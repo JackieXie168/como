@@ -69,7 +69,7 @@ CONFIGDESC {
     uint32_t mask;
 };
 
-callbacks_t callbacks;
+MODULE(trace_nf);
 
 static timestamp_t
 init(void * self, char *args[])
@@ -415,7 +415,7 @@ replay(__unused void * self, char *buf, char *out, size_t * len,
     return 0; 
 }
 
-callbacks_t callbacks = {
+MODULE(trace_nf) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC), 

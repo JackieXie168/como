@@ -423,7 +423,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 }
 
 
-callbacks_t callbacks = {
+MODULE(unknown_ports) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: 256 * sizeof(struct info) + 5, 

@@ -366,7 +366,7 @@ print(char *buf, size_t *len, char * const args[])
 };
 
 
-callbacks_t callbacks = {
+MODULE(interarrival) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
