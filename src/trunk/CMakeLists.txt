@@ -64,8 +64,7 @@ ENDIF(NOT CMAKE_BUILD_TYPE_HANDLED)
 
 IF(ENABLE_DEBUG)
   ADD_DEFINITIONS(-DDEBUG)
-  ADD_DEFINITIONS(-g -W -Wall -Wshadow -Wcast-align)
-#  ADD_DEFINITIONS(-g -W -Wall -Werror -Wshadow -Wcast-align)
+  ADD_DEFINITIONS(-g -W -Wall -Werror -Wshadow -Wcast-align)
 ENDIF(ENABLE_DEBUG)
 
 IF(ENABLE_PROFILING)
