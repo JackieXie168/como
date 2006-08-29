@@ -41,6 +41,7 @@
 
 extern struct _como map;		/* global state */
 
+
 /*  
  * -- init_timers
  * 
@@ -51,8 +52,8 @@ extern struct _como map;		/* global state */
 void
 init_timers() 
 {
-    switch (map.procname[0]) { 
-    case 'c': 
+    switch (getprocclass(map.whoami)) {
+    case CAPTURE: 
 	map.stats->ca_full_timer = new_tsctimer("full");
 	map.stats->ca_loop_timer = new_tsctimer("loop");
 	map.stats->ca_pkts_timer = new_tsctimer("pkts");
@@ -62,7 +63,7 @@ init_timers()
 	map.stats->ca_sniff_timer = new_tsctimer("sniffer");
 	break;
 
-    case 'e':
+    case EXPORT:
 	map.stats->ex_full_timer = new_tsctimer("full");
 	map.stats->ex_loop_timer = new_tsctimer("loop");
 	map.stats->ex_table_timer = new_tsctimer("table");
@@ -83,8 +84,8 @@ init_timers()
 void
 print_timers() 
 {
-    switch (map.procname[0]) { 
-    case 'c': 
+    switch (getprocclass(map.whoami)) {
+    case CAPTURE: 
 	logmsg(LOGTIMER, "timing after %llu packets\n", map.stats->pkts);
 	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_full_timer));
 	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_loop_timer));
@@ -95,7 +96,7 @@ print_timers()
 	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_updatecb_timer));
 	break; 
 
-    case 'e':
+    case EXPORT:
         logmsg(LOGTIMER, "\t%s\n", print_tsctimer(map.stats->ex_full_timer));
         logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_loop_timer));
         logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_table_timer));
@@ -116,8 +117,8 @@ print_timers()
 void
 reset_timers() 
 {
-    switch (map.procname[0]) { 
-    case 'c': 
+    switch (getprocclass(map.whoami)) {
+    case CAPTURE: 
 	reset_tsctimer(map.stats->ca_full_timer);
 	reset_tsctimer(map.stats->ca_loop_timer);
 	reset_tsctimer(map.stats->ca_sniff_timer);
@@ -127,7 +128,7 @@ reset_timers()
 	reset_tsctimer(map.stats->ca_updatecb_timer);
 	break;
 
-    case 'e':
+    case EXPORT:
         reset_tsctimer(map.stats->ex_full_timer);
         reset_tsctimer(map.stats->ex_loop_timer);
         reset_tsctimer(map.stats->ex_table_timer);

@@ -179,7 +179,7 @@ void _sdup(char ** dst, char * src, const char * file, const int line);
 /* 
  * util-timers.c
  */
-#ifdef DO_PROFILING 
+#ifdef ENABLE_PROFILING 
 
 tsc_t * new_tsctimer(char *);
 void destroy_tsctimer(tsc_t *);
@@ -226,7 +226,7 @@ void schedule();
 /* 
  * profiling.c 
  */
-#ifdef DO_PROFILING 
+#ifdef ENABLE_PROFILING 
 
 void init_timers(void); 
 void print_timers(void); 
