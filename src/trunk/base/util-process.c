@@ -36,13 +36,14 @@
 #include <unistd.h> 	/* fork */
 #include <sys/types.h>  /* fork */
 #include <sys/wait.h>	/* wait3() */
-#ifdef ENABLE_PROFILING
-#include <sys/gmon.h>
-#endif
 
 #include "como.h"
 #include "comopriv.h"
 #include "ipc.h"
+
+#ifdef ENABLE_PROFILING
+#include <sys/gmon.h>
+#endif
 
 /* global state */
 extern como_t map; 
