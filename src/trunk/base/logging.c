@@ -116,6 +116,7 @@ _logmsg(const char * file, int line, int flags, const char *fmt, ...)
 	last_file = NULL;
 	last_line = 0;
 	seen_count = 0;
+	printit = 0;
 	return;
     }
 
