@@ -1,27 +1,27 @@
 #
 # $Id$
 #
-# Makefile for como. Actually, this is a fake Makefile.
-# See como.gmk and build.sh for information about the
-# actual build system.
+# A convenience Makefile for como that creates a build directory
+# and calls CMake to produce the real Makefiles
 
-.PHONY: clean all
+.PHONY: all install clean distclean
 
-varfile=config_vars
-varfile_default=$(varfile).default
-varfile_local=$(varfile).local
+all: build/Makefile
+	cd build && make all
 
-all:	$(varfile_local)
-	sh ./build.sh -f `pwd`/$(varfile_local) $(.MAKEFLAGS) all
+build:
+	if [ ! -d build ]; then mkdir build; fi
 
-install:
-	sh ./build.sh -f `pwd`/$(varfile_local) $(.MAKEFLAGS) install
+cmake: build
+	cd build && cmake .. $(MAKEFLAGS)
 
-clean:  $(varfile_local)
-	sh ./build.sh -f `pwd`/$(varfile_local) clean
+build/Makefile: cmake
 
-dist-clean: clean
-	rm -f $(varfile_local)
+install: build/Makefile
+	cd build && make install
 
-$(varfile_local):
-	cp $(varfile_default) $(varfile_local)
+clean: build/Makefile
+	cd build && make clean
+
+distclean:
+	rm -rf build

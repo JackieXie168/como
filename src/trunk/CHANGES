@@ -23,12 +23,15 @@ $Id$
 
 . Minor optimizations and bug fixes
 
-  Reduced used of IPC calls. 
+. Reduced used of IPC calls. 
 
 . New filter keyword "exporter"
 
-. 
+. Major rewrite of sniffers to provide a ring buffer allocated in shared
+  memory
 
+. Migrated to CMAKE as build system
+ 
 -------------------------------------
 ---- CoMo v1.0 (May 14th, 2006) 
 --
