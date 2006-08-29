@@ -507,11 +507,15 @@ do_config(struct _como * m, int argc, char *argv[])
      */
     switch (t->action) {
     case TOK_DBDIR:
-	safe_dup(&m->dbdir, argv[1]);
+	if (m->cli_args.dbdir_set == 0) {
+	    safe_dup(&m->dbdir, argv[1]);
+	}
 	break;
 
     case TOK_QUERYPORT:
-	m->node[node_id].query_port = atoi(argv[1]);
+	if (m->cli_args.query_port_set == 0 || node_id > 0) {
+	    m->node[node_id].query_port = atoi(argv[1]);
+	}
 	break;
 
     case TOK_DESCRIPTION:
@@ -573,17 +577,23 @@ do_config(struct _como * m, int argc, char *argv[])
 	break;
 
     case TOK_LIBRARYDIR:
-        safe_dup(&m->libdir, argv[1]);
-        break;
+	if (m->cli_args.libdir_set == 0) {
+	    safe_dup(&m->libdir, argv[1]);
+	}
+	break;
 
     case TOK_LOGFLAGS:
-        m->logflags = set_flags(0, argv[1]);
-        break;
+	if (m->cli_args.logflags_set == 0) {
+	    m->logflags = set_flags(0, argv[1]);
+	}
+	break;
 
     case TOK_MEMSIZE:
-        /* this keyword can be used in two contexts */
-	m->mem_size = atoi(argv[1]);
-        break;
+	/* this keyword can be used in two contexts */
+	if (m->cli_args.mem_size_set == 0) {
+	    m->mem_size = atoi(argv[1]);
+	}
+	break;
 
     case TOK_MODULE:
 	if (scope == CTX_GLOBAL) { 
@@ -1006,6 +1016,8 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
     /* flag to be set if we parsed a configuration file */
     static const char *opts = "hc:D:L:p:m:v:x:s:";
     
+    memset(m, 0, sizeof(cli_args_t));
+    
     m->query_port = -1;
     m->mem_size = 0;
     m->logflags = -1;
@@ -1178,19 +1190,40 @@ init_map(struct _como * m)
 void
 configure(struct _como * m, int argc, char ** argv)
 {
-    static cli_args_t cli_args;
+    cli_args_t cli_args;
     int config_file_exists;
     int c, i, j;
     DIR *d;
     
-    if (cli_args.done == 0) {
+    if (m->cli_args.done_flag == 0) {
 	parse_cmdline(&cli_args, argc, argv);
+
+	if (cli_args.logflags != -1) {
+	    m->logflags = cli_args.logflags;
+	    m->cli_args.logflags_set = 1;
+	}
+	if (cli_args.dbdir != NULL) {
+	    safe_dup(&m->dbdir, cli_args.dbdir);
+	    m->cli_args.dbdir_set = 1;
+	}
+	if (cli_args.libdir != NULL) {
+	    safe_dup(&m->libdir, cli_args.libdir);
+	    m->cli_args.libdir_set = 1;
+	}
+	if (cli_args.query_port != -1) {
+	    m->node->query_port = cli_args.query_port;
+	    m->cli_args.query_port_set = 1;
+	}
+	if (cli_args.mem_size != 0) {
+	    m->mem_size = cli_args.mem_size;
+	    m->cli_args.mem_size_set = 1;
+	}
     }
     
     m->running = cli_args.running;
     m->inline_fd = (m->running == INLINE) ? 1 /* stdout */ : -1; 
-    if (cli_args.logflags != -1)
-	m->logflags = cli_args.logflags;
+    
+    m->debug = cli_args.debug;
 
     /*
      * build list of config files
@@ -1204,17 +1237,6 @@ configure(struct _como * m, int argc, char ** argv)
     if (!config_file_exists && m->running == NORMAL) 
         parse_cfgfile(m, DEFAULT_CFGFILE);	/* add default config file */
 
-    /* use cli args to override cfg file settings */
-    if (cli_args.dbdir != NULL)
-	safe_dup(&m->dbdir, cli_args.dbdir);
-    if (cli_args.libdir != NULL)
-	safe_dup(&m->libdir, cli_args.libdir);
-    if (cli_args.query_port != -1)
-	m->node[0].query_port = cli_args.query_port;
-    if (cli_args.mem_size != 0)
-	m->mem_size = cli_args.mem_size;
-    m->debug = cli_args.debug;
-    
     if (m->running == INLINE) {
 	char *conf_argv[2];
 	
