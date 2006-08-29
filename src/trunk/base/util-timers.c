@@ -39,8 +39,6 @@
 
 #include "como.h"
 
-#ifdef DO_PROFILING
-
 /* 
  * -- rdtsc()
  * 
@@ -191,5 +189,4 @@ print_tsctimer(tsc_t *t)
 
     return str; 
 }
- 
-#endif 		/* DO_PROFILING */
+
