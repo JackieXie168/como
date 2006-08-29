@@ -310,6 +310,7 @@ reconfigure(__unused int si_code)
     struct _como tmp_map;
 
     init_map(&tmp_map);
+    tmp_map.cli_args = map.cli_args;
     configure(&tmp_map, map.ac, map.av);
     apply_map_changes(&tmp_map);
 }
@@ -343,8 +344,10 @@ supervisor_mainloop(int accept_fd)
     
     /* catch some signals */
     signal(SIGINT, exit);               /* catch SIGINT to clean up */
-    signal(SIGHUP, reconfigure);        /* catch SIGHUP to update config */
+    signal(SIGTERM, exit);              /* catch SIGTERM to clean up */
     signal(SIGCHLD, defchld);		/* catch SIGCHLD (defunct children) */
+    if (map.running == NORMAL)
+	signal(SIGHUP, reconfigure);    /* catch SIGHUP to update config */
 
     /* register a handler for exit */
     atexit(cleanup);
