@@ -25,7 +25,12 @@ $Id$
 
 . Reduced used of IPC calls. 
 
-. New filter keyword "exporter"
+. New filter keyword "exporter", "addr" and "host"
+
+. Introduced new query syntax:
+  http://<como node>/<module name>?<arguments> to query a module
+  http://<como node>/status to get status information
+  http://<como node>/services/<service name>?<arguments> to access a service
 
 . Major rewrite of sniffers to provide a ring buffer allocated in shared
   memory
