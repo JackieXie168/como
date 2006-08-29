@@ -4,23 +4,33 @@ CoMo is open source and is released under terms of the BSD License.
 CoMo has been tested under Linux 2.4, 2.6 and FreeBSD 4.x and 5.x. It 
 also compiles for gcc 2.9.5 and any more recent releases. 
 
-In order to install CoMo follow these steps:
+Compiling CoMo
+==================
 
-# tar -xvzf como-1.0.tar.gz
-# cd como-1.0
+CoMo requires CMake 2.2-patch 3 or higher to compile.
+Visit http://www.cmake.org to get cmake.
+Use a separate build dir to build CoMo, not the source dir (example below).
+
+To get debugging, pass -DCMAKE_BUILD_TYPE=debug
+To get release, pass -DCMAKE_BUILD_TYPE=release
+
+Short example:
+
+# tar -xvzf como-x.y.tar.gz
+# mkdir build-como
+# cd build-como
+# cmake -DCMAKE_INSTALL_PREFIX=/usr/local/como ../como-x.y
 # make
 
-It is also possible to install the CoMo binary, the plug-in modules 
-and the man page using: 
+Installing CoMo
+=================
+
+It is also possible to install the CoMo using:
 
 # make install
 
-CoMo requires gmake v3.80 or higher to compile correctly. It is possible to 
-set a few configuration options to build a customized CoMo binary. The 
-options can be found in config_var.default. Rename that file to 
-config_var.local to customize your release. 
-
-An example configuration file can be found in base/example.conf. 
+This will install the CoMo binary, the plug-in modules and the man page.
+An example configuration file is created in `/usr/local/como/etc/como/como.conf`.
 
 --------------------------------------------------------------------------
 Copyright (c) 2004-2006 Intel Corporation

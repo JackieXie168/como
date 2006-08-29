@@ -36,6 +36,9 @@
 #include <unistd.h> 	/* fork */
 #include <sys/types.h>  /* fork */
 #include <sys/wait.h>	/* wait3() */
+#ifdef ENABLE_PROFILING
+#include <sys/gmon.h>
+#endif
 
 #include "como.h"
 #include "comopriv.h"
@@ -262,6 +265,10 @@ start_child(procname_t who, int mem_type, mainloop_fn mainloop,
     if (pid == 0) {	/* child */
 	int out_fd, idx;
 	
+#ifdef ENABLE_PROFILING
+	extern void _start (void), etext (void);
+	monstartup ((u_long) &_start, (u_long) &etext);
+#endif
 	signal(SIGHUP, SIG_IGN);        /* ignore SIGHUP */
 
 	/* XXX TODO: close unneeded sockets */

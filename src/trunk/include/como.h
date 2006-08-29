@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <sys/time.h>   /* struct timeval */
 
+#include "como-build.h"
 #include "comotypes.h"
 #include "comofunc.h"
 #include "sniffers.h"
