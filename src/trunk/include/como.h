@@ -120,6 +120,14 @@ struct _como {
 				 * mode
 				 */
     int inline_fd;		/* fd of inline client */
+    struct {
+	int	done_flag:1;
+	int	dbdir_set:1;
+	int	libdir_set:1;
+	int	query_port_set:1;
+	int	mem_size_set:1;
+	int	logflags_set:1;
+    } cli_args;
 };
 
 
