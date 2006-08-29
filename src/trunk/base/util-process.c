@@ -266,6 +266,11 @@ start_child(procname_t who, int mem_type, mainloop_fn mainloop,
 	int out_fd, idx;
 	
 #ifdef ENABLE_PROFILING
+	/* To get timing information after fork() the child has to call
+	 * monstartup().
+	 * 
+	 * http://gcc.gnu.org/ml/gcc-bugs/2001-09/msg00156.html
+	 */
 	extern void _start (void), etext (void);
 	monstartup ((u_long) &_start, (u_long) &etext);
 #endif
