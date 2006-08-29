@@ -742,6 +742,7 @@ export_mainloop(__unused int in_fd, int parent_fd, __unused int id)
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 
     signal(SIGINT, exit);
+    signal(SIGTERM, exit);
     /* ignore SIGHUP */
     signal(SIGHUP, SIG_IGN); 
 
@@ -785,8 +786,12 @@ export_mainloop(__unused int in_fd, int parent_fd, __unused int id)
 	start_tsctimer(map.stats->ex_full_timer); 
 
 	n_ready = select(max_fd + 1, &r, NULL, NULL, NULL);
-	if (n_ready < 0 && errno != EINTR) 
-	    panic("error in the select (%s)\n", strerror(errno)); 
+	if (n_ready < 0) {
+	    if (errno == EINTR) {
+		continue;
+	    }
+	    panic("error in the select (%s)\n", strerror(errno));
+	}
 
 	start_tsctimer(map.stats->ex_loop_timer); 
 
