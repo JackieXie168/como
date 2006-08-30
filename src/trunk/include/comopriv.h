@@ -99,5 +99,45 @@ int        module_db_record_replay(module_t * mdl, char * ptr, int client_fd);
 
 #define	GR_LOSTSYNC	((void *) module_db_record_get)
 
+/*
+ * capture.c
+ */
+
+/*
+ * A batch holds the packets to be processed.
+ */
+typedef struct batch {
+    struct batch *	next;	/* next batch in the cabuf */
+    int			woff;	/* write offset in cabuf */
+    int			reserved; /* number of cabuf items reserved for this
+				     batch */
+    int			count;	/* number of items in the batch */
+    int			pkts0_len; /* number of items in pkts0 */
+    int			pkts1_len; /* number of items in pkts1 */
+    pkt_t **		pkts0;	/* pointer to the first array of pkt_ts */
+    pkt_t **		pkts1;	/* pointer to the second array of pkt_ts.
+				   this is used to handle wrapping in cabuf.
+				   it might be NULL */
+    timestamp_t		last_pkt_ts; /* timestamp of last pkt in the batch */
+    uint64_t		ref_mask; /* mask of capture clients referencing this
+				     batch */
+} batch_t;
+
+typedef union ccamsg_t {
+    struct {
+	int		id;
+    } open_res;
+    struct {
+	int		id;
+	batch_t *	batch;
+    } new_batch;
+    struct {
+	int		id;
+	batch_t *	batch;
+    } ack_batch;
+    struct {
+	int		id;
+    } close;
+} ccamsg_t;
 
 #endif /*COMOPRIV_H_*/

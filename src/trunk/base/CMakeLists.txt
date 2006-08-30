@@ -23,6 +23,7 @@ SET(COMO_SRCS
   pktmeta.c
   headerinfo.c
   capture.c
+  capture-client.c
   export.c
   supervisor.c
   storage.c

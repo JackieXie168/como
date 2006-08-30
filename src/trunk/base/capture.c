@@ -62,6 +62,9 @@
 /* global state */
 extern struct _como map;
 
+static fd_set s_valid_fds;
+static int s_max_fd;
+
 /* sniffer list and callbacks */
 extern sniffer_cb_t *__sniffers[];
 
@@ -71,22 +74,12 @@ static timestamp_t s_min_flush_ivl = 0;
 
 static int s_active_modules = 0;
 
-/*
- * A batch holds the packets to be processed.
- */
-typedef struct batch {
-    int woff;			/* write offset in cabuf */
-    int reserved;		/* number of cabuf items reserved for this
-				   batch */
-    int count;			/* number of items in the batch */
-    int pkts0_len;		/* number of items in pkts0 */
-    int pkts1_len;		/* number of items in pkts1 */
-    pkt_t **pkts0;		/* pointer to the first array of pkt_ts */
-    pkt_t **pkts1;		/* pointer to the second array of pkt_ts.
-				   this is used to handle wrapping in cabuf.
-				   it might be NULL */
-    timestamp_t last_pkt_ts;	/* timestamp of last pkt in the batch */
-} batch_t;
+#define CA_MAXCLIENTS 64
+
+typedef struct cabuf_cl {
+    int fd;
+    uint64_t ref_mask;
+} cabuf_cl_t;
 
 /*
  * The cabuf is a ring buffer containing pointers to captured packets.
@@ -95,8 +88,17 @@ static struct {
     int tail;
     int size;
     pkt_t **pp;
+    tailq_t batches;
+    int clients_count;
+    cabuf_cl_t *clients[CA_MAXCLIENTS];
+    fd_set clients_fds;
 } s_cabuf;
 
+
+static inline void capture_loop_add_fd(int fd);
+static inline void capture_loop_del_fd(int fd);
+
+static inline void batch_free(batch_t *batch);
 
 /*
  * -- cleanup
@@ -637,7 +639,7 @@ batch_process(batch_t * batch)
  * 
  */
 static int
-setup_sniffers(source_t * src, fd_set * fds, int *max_fd, struct timeval *tout)
+setup_sniffers(source_t * src, struct timeval *tout)
 {
     source_t *p;
     sniffer_t *s;
@@ -656,7 +658,8 @@ setup_sniffers(source_t * src, fd_set * fds, int *max_fd, struct timeval *tout)
 	 * it is a valid one or not. we will add it later if needed. 
 	 * del_fd() deals with invalid fd. 
 	 */
-	*max_fd = del_fd(s->fd, fds, *max_fd);
+	capture_loop_del_fd(s->fd);
+	
 
 	if (s->flags & SNIFF_INACTIVE)
 	    continue;		/* go to next one */
@@ -688,7 +691,7 @@ setup_sniffers(source_t * src, fd_set * fds, int *max_fd, struct timeval *tout)
 	 * to the list of file descriptors. 
 	 */
 	if (s->flags & SNIFF_SELECT)
-	    *max_fd = add_fd(s->fd, fds, *max_fd);
+	    capture_loop_add_fd(s->fd);
     }
 
     return active;
@@ -943,6 +946,168 @@ ca_ipc_exit(procname_t sender, __unused int fd, __unused void *buf,
 }
 
 
+/**
+ * -- cabuf_cl_destroy
+ * 
+ * Actually performs client state destruction.
+ */
+static void
+cabuf_cl_destroy(int id, cabuf_cl_t * cl)
+{
+    batch_t *bi, *bn;
+    
+    /* update s_capbuf */
+    s_cabuf.clients[id] = NULL;
+    s_cabuf.clients_count--;
+    capture_loop_del_fd(cl->fd);
+    FD_CLR(cl->fd, &s_cabuf.clients_fds);
+
+    close(cl->fd);
+
+    bi = TQ_HEAD(&s_cabuf.batches);
+    while (bi) {
+	bn = bi->next;
+	bi->ref_mask &= ~cl->ref_mask;
+	if (bi->ref_mask == 0) {
+	    TQ_POP(&s_cabuf.batches, bi, next);
+	    batch_free(bi);
+	}
+	bi = bn;
+    }
+
+    free(cl);
+    
+    map.stats->ca_clients = s_cabuf.clients_count;
+}
+
+
+/**
+ * -- cabuf_cl_handle_failure
+ * 
+ * Handles a client failure by logging a message and destroying its state.
+ */
+static void
+cabuf_cl_handle_failure(int id, cabuf_cl_t * cl)
+{
+    logmsg(LOGWARN, "sending message to capture client (%d): %s\n",
+	   id, strerror(errno));
+    cabuf_cl_destroy(id, cl);
+}
+
+
+/**
+ * -- cabuf_cl_handle_gone
+ * 
+ * Handles a client gone by logging a message and destroying its state.
+ */
+static void
+cabuf_cl_handle_gone(int fd)
+{
+    int id;
+    
+    /* iterate over the clients */
+    for (id = 0; id < s_cabuf.clients_count; id++) {
+	cabuf_cl_t *cl;
+	
+	cl = s_cabuf.clients[id];
+	/* skip unwanted clients */
+	if (cl == NULL || cl->fd != fd)
+	    continue;
+	
+	logmsg(LOGWARN, "capture client is gone (id: `%d`, fd: `%d`)\n",
+	       id, fd);
+	cabuf_cl_destroy(id, cl);
+	break;
+    }
+}
+
+
+/**
+ * -- ca_ipc_cca_open
+ * 
+ * Handles a CCA_OPEN message. Accepts the new capture client if possible
+ * and allocates a new cabuf_cl_t structure. Sends a response message
+ * to the client.
+ * If it's not possible to accept the new client replies with a CCA_ERROR
+ * message.
+ */
+static void
+ca_ipc_cca_open(__unused procname_t sender, int fd, __unused void * buf,
+		__unused size_t len)
+{
+    ccamsg_t m;
+    cabuf_cl_t *cl;
+    size_t sz;
+    int id;
+    
+    if (s_cabuf.clients_count == CA_MAXCLIENTS) {
+	logmsg(LOGWARN, "rejecting capture-client: too many clients\n");
+	ipc_send_with_fd(fd, CCA_ERROR, NULL, 0);
+	close(fd);
+	capture_loop_del_fd(fd);
+	return;
+    }
+    
+    /* look for an empty slot */
+    for (id = 0; id < CA_MAXCLIENTS && s_cabuf.clients[id] != NULL; id++)
+	;
+    
+    assert(id < CA_MAXCLIENTS);
+    cl = safe_calloc(1, sizeof(cabuf_cl_t));
+    cl->fd = fd;
+    cl->ref_mask = (1LL << (uint64_t) id);
+    
+    s_cabuf.clients[id] = cl;
+    s_cabuf.clients_count++;
+    FD_SET(fd, &s_cabuf.clients_fds);
+    
+    m.open_res.id = id;
+    sz = sizeof(m.open_res);
+    
+    if (ipc_send_with_fd(fd, CCA_OPEN_RES, &m, sz) != IPC_OK) {
+	cabuf_cl_handle_failure(id, cl);
+    }
+    
+    map.stats->ca_clients = s_cabuf.clients_count;
+}
+
+
+/**
+ * -- ca_ipc_cca_ack_batch
+ * 
+ * Handles a CCA_ACK_BATCH message. Updates the client state and the s_cabuf
+ * state.
+ */
+static void
+ca_ipc_cca_ack_batch(__unused procname_t sender, __unused int fd, void * buf,
+		     __unused size_t len)
+{
+    ccamsg_t *m = (ccamsg_t *) buf;
+    cabuf_cl_t *cl;
+    batch_t *batch;
+
+    cl = s_cabuf.clients[m->ack_batch.id];
+    assert(cl != NULL);
+
+    batch = TQ_HEAD(&s_cabuf.batches);
+    while (batch) {
+	if (batch == m->ack_batch.batch) {
+	    break;
+	}
+	batch = batch->next;
+    }
+    assert(batch != NULL);
+    batch->ref_mask &= ~cl->ref_mask;
+
+    if (batch->ref_mask == 0) {
+	assert(batch == TQ_HEAD(&s_cabuf.batches));
+	TQ_POP(&s_cabuf.batches, batch, next);
+	map.stats->batch_queue--;
+	batch_free(batch);
+    }
+}
+
+
 /*
  * -- cabuf_init
  * 
@@ -1027,15 +1192,21 @@ cabuf_complete(batch_t * batch)
 static inline batch_t *
 batch_new(int reserved)
 {
-    static batch_t batch;
+    batch_t *batch;
 
-    memset(&batch, 0, sizeof(batch_t));
+    batch = mem_calloc(1, sizeof(batch_t));
+
     /* reserve the pkt pointers for this batch */
-    cabuf_reserve(&batch, reserved);
+    cabuf_reserve(batch, reserved);
 
-    return &batch;
+    return batch;
 }
 
+static inline void
+batch_free(batch_t *batch)
+{
+    mem_free(batch);
+}
 
 /*
  * -- batch_done
@@ -1168,6 +1339,64 @@ batch_create(int pc, int bc, ppbuf_t ** ppbufs)
 }
 
 
+/**
+ * -- batch_export
+ * 
+ * Exports a batch to capture clients. The batch is queued to s_cabuf.batches
+ * and a CCA_NEW_BATCH is sent to all clients.
+ * If currently there're no clients or the batch is empty it is discarded.
+ */
+static inline void
+batch_export(batch_t * batch)
+{
+    int id;
+    
+    if (s_cabuf.clients_count == 0 || batch->count == 0) {
+	return;
+    }
+    /* append the batch to the queue of active batches */
+    TQ_APPEND(&s_cabuf.batches, batch, next);
+    map.stats->batch_queue++;
+    
+    /* iterate over clients */
+    for (id = 0; id < s_cabuf.clients_count; id++) {
+	cabuf_cl_t *cl;
+	ccamsg_t m;
+	size_t sz;
+	
+	cl = s_cabuf.clients[id];
+	/* skip NULL clients */
+	if (cl == NULL) {
+	    continue;
+	}
+	
+	/* prepare the message */
+	m.new_batch.id = id;
+	m.new_batch.batch = batch;
+	sz = sizeof(m.new_batch);
+	
+	/* send the message */
+	if (ipc_send_with_fd(cl->fd, CCA_NEW_BATCH, &m, sz) != IPC_OK) {
+	    cabuf_cl_handle_failure(id, cl);
+	    continue;
+	}
+	
+	batch->ref_mask |= cl->ref_mask;
+    }
+}
+
+static inline void
+capture_loop_add_fd(int fd)
+{
+    s_max_fd = add_fd(fd, &s_valid_fds, s_max_fd);
+}
+
+static inline void
+capture_loop_del_fd(int fd)
+{
+    s_max_fd = del_fd(fd, &s_valid_fds, s_max_fd);
+}
+
 /*
  * -- capture_mainloop
  *
@@ -1186,11 +1415,15 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     source_t *src;
     ppbuf_t **cap_ppbufs = NULL;	/* array of pointers to the ppbuf of
 					   each active sniffer */
-    fd_set valid_fds, export_fds;
+    fd_set ipc_fds;
     int i;
-    int max_fd;
     int idx;
     int done_msg_sent = 0;
+
+    /* 
+     * wait for the debugger to attach
+     */
+    DEBUGGER_WAIT_ATTACH(map);
 
     /* register handlers for signals */
     signal(SIGPIPE, exit);
@@ -1207,25 +1440,23 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     ipc_register(IPC_FLUSH, (ipc_handler_fn) ca_ipc_flush);
     ipc_register(IPC_FREEZE, ca_ipc_freeze);
     ipc_register(IPC_EXIT, ca_ipc_exit);
+    ipc_register(CCA_OPEN, ca_ipc_cca_open);
+    ipc_register(CCA_ACK_BATCH, ca_ipc_cca_ack_batch);
 
     /* initialize the capture buffer */
     cabuf_init();
 
     /* initialize select()able file descriptors */
-    max_fd = 0;
-    FD_ZERO(&valid_fds);
-    FD_ZERO(&export_fds);
+    s_max_fd = 0;
+    FD_ZERO(&s_valid_fds);
+    FD_ZERO(&ipc_fds);
 
     /* wait for messages from SUPERVISOR */
-    max_fd = add_fd(supervisor_fd, &valid_fds, max_fd);
+    capture_loop_add_fd(supervisor_fd);
+    FD_SET(supervisor_fd, &ipc_fds);
 
     /* accept connections from EXPORT process(es) */
-    max_fd = add_fd(accept_fd, &valid_fds, max_fd);
-
-    /* 
-     * wait for the debugger to attach
-     */
-    DEBUGGER_WAIT_ATTACH(map);
+    capture_loop_add_fd(accept_fd);
 
     /* initialize the timers */
     init_timers();
@@ -1282,8 +1513,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	 */
 	for (src = map.sources; src; src = src->next) {
 	    if (src->sniff->flags & SNIFF_TOUCHED) {
-		active_sniffers = setup_sniffers(map.sources, &valid_fds,
-						 &max_fd, &tout);
+		active_sniffers = setup_sniffers(map.sources, &tout);
 		if (active_sniffers > 0) {
 		    cap_ppbufs = safe_realloc(cap_ppbufs, sizeof(ppbuf_t *) *
 					      active_sniffers);
@@ -1326,9 +1556,10 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	}
 
 	/* wait for messages, sniffers or up to the polling interval */
-	r = valid_fds;
+	r = s_valid_fds;
 	t = tout;
-	n_ready = select(max_fd, &r, NULL, NULL, active_sniffers ? &t : NULL);
+	n_ready = select(s_max_fd, &r, NULL, NULL,
+			 active_sniffers ? &t : NULL);
 	if (n_ready < 0) {
 	    if (errno == EINTR) {
 		continue;
@@ -1338,7 +1569,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
 	start_tsctimer(map.stats->ca_loop_timer);
 
-	for (i = 0; n_ready > 0 && i < max_fd; i++) {
+	for (i = 0; n_ready > 0 && i < s_max_fd; i++) {
 	    if (!FD_ISSET(i, &r))
 		continue;
 
@@ -1347,21 +1578,28 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
 		/* an EXPORT process wants to connect */
 		fd = accept(accept_fd, NULL, NULL);
-		if (fd < 0)
+		if (fd < 0) {
 		    panic("accepting export process");
-		max_fd = add_fd(fd, &valid_fds, max_fd);
-		FD_SET(fd, &export_fds);
+		}
+		capture_loop_add_fd(fd);
+		FD_SET(fd, &ipc_fds);
 
 		n_ready--;
 	    }
 
-	    if (i == supervisor_fd || FD_ISSET(i, &export_fds)) {
+	    if (FD_ISSET(i, &ipc_fds)) {
 		int ipcr = ipc_handle(i);
 		if (ipcr != IPC_OK) {
-		    /* an error. close the socket */
-		    logmsg(LOGWARN, "error on IPC handle from %d (%d)\n", i,
-			   ipcr);
-		    exit(EXIT_FAILURE);
+		    if (FD_ISSET(i, &s_cabuf.clients_fds)) {
+			/* handle capture client gone */
+			cabuf_cl_handle_gone(i);
+			FD_CLR(i, &ipc_fds);
+		    } else {
+			/* an error. close the socket */
+			logmsg(LOGWARN, "error on IPC handle from %d (%d)\n",
+			       i, ipcr);
+			exit(EXIT_FAILURE);
+		    }
 		}
 
 		n_ready--;
@@ -1429,6 +1667,8 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    batch_t *batch;
 	    /* create a new batch containing all captured packets */
 	    batch = batch_create(pc, bc, cap_ppbufs);
+	    
+	    batch_export(batch);
 
 	    /* process the batch */
 	    start_tsctimer(map.stats->ca_pkts_timer);
