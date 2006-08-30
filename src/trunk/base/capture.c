@@ -44,7 +44,6 @@
 #include "como.h"
 #include "comopriv.h"
 #include "sniffers.h"
-#include "sniffer-list.h"
 #include "ipc.h"
 
 #include "ppbuf.c"
@@ -64,9 +63,6 @@ extern struct _como map;
 
 static fd_set s_valid_fds;
 static int s_max_fd;
-
-/* sniffer list and callbacks */
-extern sniffer_cb_t *__sniffers[];
 
 static int wait_for_modules = 2;
 

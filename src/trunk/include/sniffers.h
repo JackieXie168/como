@@ -133,6 +133,8 @@ struct source {
 #define SNIFF_FROZEN	0x0010	/* frozen to slow down (only for SNIFF_FILE) */
 #define SNIFF_COMPLETE  0x0020  /* complete, i.e. finish the buffer */
 
+sniffer_cb_t * sniffer_cb_lookup(const char *name);
+
 /* generic function used by sniffer-*.c */
 void updateofs(pkt_t * pkt, layer_t l, int type);
 

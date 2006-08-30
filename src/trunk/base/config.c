@@ -46,8 +46,6 @@
 #include "comopriv.h"
 #include "sniffers.h"
 
-/* get the sniffers list */
-extern sniffer_cb_t *__sniffers[];
 
 /*
  * tokens used in the dictionary
@@ -292,7 +290,8 @@ add_char(char *buf, int c, uint *dst, uint *len)
 void
 add_sniffer(como_t * m, char *want, char *device, char *args)
 {
-    int i;
+    sniffer_cb_t *cb;
+    source_t *s;
 
     if (device == NULL && args == NULL) {
 	device = index(want, ':');
@@ -312,37 +311,30 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
         return;
     }
 
-    for (i = 0; __sniffers[i]; i++) {
-	const char *name = __sniffers[i]->name;
-	if (strcmp(name, want) == 0) {
-	    source_t *s = safe_calloc(1, sizeof(*s));
-
-	    s->next = m->sources; 
-	    s->cb = __sniffers[i];
-	    s->device = strdup(device);
-	    s->args = args ? strdup(args) : NULL;
-
-            /* initialize the sniffer */
-            s->sniff = s->cb->init(s->device, s->args);
-            if (s->sniff == NULL) {
-                logmsg(LOGWARN, "sniffer-%s (%s): %s\n",
-                       s->cb->name, s->device, strerror(errno));
-                free(s); 
-                return; 
-            }
-
-	    m->sources = s;
-	    break;
-	}
-    }
-
-    if (__sniffers[i] == NULL) {
+    cb = sniffer_cb_lookup(want);
+    if (cb == NULL) {
 	logmsg(LOGWARN, "sniffer %s %s not found, ignoring\n", want, device);
 	return; 
     }
+    
+    s = safe_calloc(1, sizeof(source_t));
+    s->next = m->sources;
+    s->cb = cb;
+    s->device = strdup(device);
+    s->args = args ? strdup(args) : NULL;
+    
+    /* initialize the sniffer */
+    s->sniff = s->cb->init(s->device, s->args);
+    if (s->sniff == NULL) {
+	logmsg(LOGWARN, "sniffer-%s (%s): %s\n",
+	       s->cb->name, s->device, strerror(errno));
+	free(s); 
+	return; 
+    }
+    
+    m->sources = s;
 
-    logmsg(LOGUI, "... sniffer [%s] %s\n", 
-	m->sources->cb->name, m->sources->device);
+    logmsg(LOGUI, "... sniffer [%s] %s\n", cb->name, s->device);
 }
 
 
