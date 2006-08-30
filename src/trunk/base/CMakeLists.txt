@@ -28,9 +28,9 @@ SET(COMO_SRCS
   supervisor.c
   storage.c
   storage-client.c
-  ${COMO_SOURCE_DIR}/sniffers/sniffers.c
-  ${COMO_SOURCE_DIR}/sniffers/ieee80211frames.c
-  ${COMO_SOURCE_DIR}/sniffers/radio.c
+  sniffers.c
+  ieee80211frames.c
+  radio.c
   ${COMO_SOURCE_DIR}/lib/bitmap.c
   ${COMO_SOURCE_DIR}/lib/hash.c
   ${COMO_SOURCE_DIR}/lib/heap.c
@@ -44,96 +44,6 @@ IF(ENABLE_PROFILING)
     util-timers.c
   )
 ENDIF(ENABLE_PROFILING)
-
-#
-# Sniffers always compiled
-#
-SET(SNIFFERS
-  como
-  ondemand
-  pcap
-  sflow
-)
-
-#
-# Sniffers specific to UNIX
-#
-IF(UNIX)
-# libpcap support
-  IF(PCAP_FOUND)
-    SET(SNIFFERS
-      ${SNIFFERS}
-      libpcap
-    )
-    INCLUDE_DIRECTORIES(${PCAP_INCLUDE_DIR})
-  ENDIF(PCAP_FOUND)
-  
-# flow-tools support
-  IF(FTLIB_FOUND)
-    SET(SNIFFERS
-      ${SNIFFERS}
-      flowtools
-      netflow
-    )
-    INCLUDE_DIRECTORIES(${FTLIB_INCLUDE_DIR})
-  ENDIF(FTLIB_FOUND)
-
-# DAG support
-  IF(DAG_FOUND)
-    SET(SNIFFERS
-      ${SNIFFERS}
-      erf
-      dag
-    )
-    INCLUDE_DIRECTORIES(${DAG_INCLUDE_DIR})
-  ENDIF(DAG_FOUND)
-
-ENDIF(UNIX)
-
-#
-# Sniffers specific to Linux
-#
-IF(LINUX)
-  SET(SNIFFERS
-    ${SNIFFERS}
-    radio
-  )
-ENDIF(LINUX)
-
-#
-# Sniffers specific to FreeBSD
-#
-IF(FREEBSD)
-  SET(SNIFFERS
-    ${SNIFFERS}
-    bpf
-  )
-ENDIF(FREEBSD)
-
-#
-# Add sniffer sources to COMO_SRCS
-#
-FOREACH(sniffer ${SNIFFERS})
-  SET(COMO_SRCS ${COMO_SRCS} ${COMO_SOURCE_DIR}/sniffers/sniffer-${sniffer}.c)
-ENDFOREACH(sniffer)
-
-#
-# Write sniffer-list.h
-#
-SET(SNIFFER_LIST ${COMO_BINARY_DIR}/include/sniffer-list.h)
-WRITE_FILE(${SNIFFER_LIST} "/* generated file, do not edit */")
-
-FOREACH(sniffer ${SNIFFERS})
-  WRITE_FILE(${SNIFFER_LIST} "extern sniffer_cb_t como_${sniffer}_sniffer;" APPEND)
-ENDFOREACH(sniffer)
-
-WRITE_FILE(${SNIFFER_LIST} "sniffer_cb_t *__sniffers[] = {" APPEND)
-
-FOREACH(sniffer ${SNIFFERS})
-  WRITE_FILE(${SNIFFER_LIST} "    &como_${sniffer}_sniffer," APPEND)
-ENDFOREACH(sniffer)
-
-WRITE_FILE(${SNIFFER_LIST} "    NULL };" APPEND)
 
 #
 # Create target for the filter parser
@@ -210,6 +120,8 @@ ENDIF(ENABLE_PROFILING)
 IF(NOT ENABLE_SHARED_MODULES)
   TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/modules/libmodules.a)
 ENDIF(NOT ENABLE_SHARED_MODULES)
+
+TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/sniffers/libsniffers.a)
 
 TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
 
