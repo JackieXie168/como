@@ -448,9 +448,11 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
     }
     
     if (strcmp(uri, "/status") == 0) {
-	q->mode = QMODE_STATUS;
+	q->mode = QMODE_SERVICE;
+	q->service = "status";
     } else if (strncmp(uri, "/services/", 10) == 0) {
 	q->mode = QMODE_SERVICE;
+	q->service = uri + 10;
     } else {
     	q->module = uri + 1;
     }
@@ -524,7 +526,8 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 			copy_value = 0;
 		    /* status */
 		    } else if (strcmp(name + 1, "tatus") == 0) {
-			q->mode = QMODE_STATUS;
+			q->mode = QMODE_SERVICE;
+			q->service = "status";
 			copy_value = 0;
 		    }
 		    break;

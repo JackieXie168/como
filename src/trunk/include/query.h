@@ -47,7 +47,6 @@
 
 typedef enum qmode_t {
     QMODE_MODULE,
-    QMODE_STATUS,
     QMODE_SERVICE
 } qmode_t;
 
@@ -62,29 +61,35 @@ typedef enum qformat_t {
  * query request message 
  */
 typedef struct qreq_t {
-    qmode_t mode;
-    char * module;		/* module name */
-    char * filter_str; 		/* filter string */
-    char * filter_cmp;  	/* filter canonical form */
-    uint32_t start;     	/* query starts at */
-    uint32_t end;       	/* query ends at */
-    int wait; 			/* set if query should wait for data */
-    qformat_t format;        	/* query response format */
+    qmode_t	mode;		/* query request mode */
+    char *	module;		/* module name */
+    char *	service;	/* service name */
+    char *	filter_str;	/* filter string */
+    char *	filter_cmp;	/* filter canonical form */
+    uint32_t	start;		/* query starts at */
+    uint32_t	end;		/* query ends at */
+    int		wait;		/* set if query should wait for data */
+    qformat_t	format;		/* query response format */
 
-    char * source;      	/* source module to read data from */
-    char ** args; 		/* arguments to be passed to module */
+    char *	source;		/* source module to read data from */
+    char **	args;		/* arguments to be passed to module */
 
-    module_t * mdl;		/* module producing data -- using print() */
-    module_t * src;		/* module retrieving data -- using load() */
+    module_t *	mdl;		/* module producing data -- using print() */
+    module_t *	src;		/* module retrieving data -- using load() */
 } qreq_t;
 
 /* 
  * prototypes 
  */
 void query          (int client_fd, int supervisor_fd, int node_id);
-int  query_recv     (qreq_t * q, int sd, timestamp_t now); 
-void query_ondemand (int client, qreq_t * req, int node_id); 
-void send_status    (int client_fd, int node_id); 
+int  query_recv     (qreq_t * q, int sd, timestamp_t now);
+void query_ondemand (int client, qreq_t * req, int node_id);
 
+/*
+ * services
+ */
+typedef int (*service_fn) (int client_fd, int node_id);
+
+service_fn service_lookup(const char *name);
 
 #endif /* _COMO_QUERY_H */
