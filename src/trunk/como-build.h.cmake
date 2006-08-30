@@ -1,3 +1,6 @@
+#ifndef COMO_BUILD_H_
+#define COMO_BUILD_H_
+
 #define COMO_VERSION	"@COMO_VERSION@"
 
 #define DEFAULT_LIBDIR	"@DEFAULT_LIBDIR@"
@@ -9,3 +12,5 @@
 #cmakedefine ENABLE_SHARED_MODULES
 
 #cmakedefine ENABLE_PROFILING
+
+#endif /*COMO_BUILD_H_*/
