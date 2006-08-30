@@ -462,7 +462,7 @@ query(int client_fd, int supervisor_fd, int node_id)
     if (req.mode == QMODE_SERVICE) {
 	service_fn service = service_lookup(req.service);
 	if (service) {
-	    service(client_fd, node_id);
+	    service(client_fd, node_id, &req);
 	}
 	close(client_fd);
 	close(supervisor_fd);

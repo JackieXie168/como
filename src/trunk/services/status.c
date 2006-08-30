@@ -40,6 +40,7 @@
 #include "comopriv.h"
 #include "storage.h"
 #include "ipc.h"
+#include "query.h"
 
 
 /* global state */
@@ -53,8 +54,8 @@ extern struct _como map;
  * include node name, location, software version, link speed, data source, 
  * and some load information (memory usage, no. of modules, average traffic). 
  */
-void
-service_status(int client_fd, int node_id) 
+int
+service_status(int client_fd, int node_id, __unused qreq_t * qreq) 
 {
     char buf[2048]; 
     char datebuf[30];
@@ -236,4 +237,6 @@ service_status(int client_fd, int node_id)
 	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
     close(storage_fd);
+    
+    return 0;
 }
