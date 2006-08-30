@@ -1,0 +1,41 @@
+INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
+
+SET(SERVICES
+  status
+)
+
+#
+# Write services-list.h
+#
+SET(SERVICES_LIST ${COMO_BINARY_DIR}/include/services-list.h)
+WRITE_FILE(${SERVICES_LIST}
+"/* generated file, do not edit */
+
+typedef struct builtin_service {
+    const char *	name;
+    service_fn		service;
+} builtin_service_t;
+
+")
+
+FOREACH(service ${SERVICES})
+  # Replace - with _ in the C service name
+  STRING(REPLACE "-" "_" _cservice ${service})
+  WRITE_FILE(${SERVICES_LIST}
+"extern int service_${_cservice}(int client_fd, int node_id);" APPEND)
+ENDFOREACH(service)
+
+WRITE_FILE(${SERVICES_LIST}
+"builtin_service_t g_como_builtin_services[] = {" APPEND)
+
+FOREACH(service ${SERVICES})
+  # Replace - with _ in the C service name
+  STRING(REPLACE "-" "_" _cservice ${service})
+  WRITE_FILE(${SERVICES_LIST}
+"    { \"${service}\", service_${_cservice} }," APPEND)
+ENDFOREACH(service)
+
+WRITE_FILE(${SERVICES_LIST}
+"    { NULL, NULL } };" APPEND)
+
+ADD_LIBRARY(services STATIC ${SERVICES})

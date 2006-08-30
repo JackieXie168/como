@@ -2,31 +2,31 @@ INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/base)
 
 SET(COMO_SRCS
-  capture.c
   como.c
-  config.c
-  memory.c
-  inline.c
-  export.c
-  supervisor.c
   logging.c
-  storage.c
-  storage-client.c
-  modules.c
+  memory.c
+  config.c
+  inline.c
   os.c
-  ipc.c
-  metadesc.c
-  pktmeta.c
-  headerinfo.c
   util-io.c
   util-safe.c
   util-misc.c
   util-socket.c
   util-process.c
+  ipc.c
+  modules.c
   query.c
   query-comms.c
   query-ondemand.c
-  status.c
+  services.c
+  metadesc.c
+  pktmeta.c
+  headerinfo.c
+  capture.c
+  export.c
+  supervisor.c
+  storage.c
+  storage-client.c
   ${COMO_SOURCE_DIR}/sniffers/sniffers.c
   ${COMO_SOURCE_DIR}/sniffers/ieee80211frames.c
   ${COMO_SOURCE_DIR}/sniffers/radio.c
@@ -209,6 +209,8 @@ ENDIF(ENABLE_PROFILING)
 IF(NOT ENABLE_SHARED_MODULES)
   TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/modules/libmodules.a)
 ENDIF(NOT ENABLE_SHARED_MODULES)
+
+TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
 
 TARGET_LINK_LIBRARIES(como m)
 

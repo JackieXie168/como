@@ -459,18 +459,15 @@ query(int client_fd, int supervisor_fd, int node_id)
 	return; 
     } 
 
-    if (req.mode == QMODE_STATUS) { 
-	/* 
-	 * status queries can always be answered. send 
-	 * back the information about this CoMo instance (i.e., name, 
-	 * location, version, etc.) 
-	 */
-	send_status(client_fd, node_id);
+    if (req.mode == QMODE_SERVICE) {
+	service_fn service = service_lookup(req.service);
+	if (service) {
+	    service(client_fd, node_id);
+	}
 	close(client_fd);
 	close(supervisor_fd);
-	return; 
+	return;
     }
-
 
     logmsg(LOGQUERY, "query: node: %d module: %s\n",
 	   node_id, req.module, req.filter_str); 
