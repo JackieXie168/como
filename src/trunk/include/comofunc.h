@@ -87,6 +87,13 @@ void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
 void capture_mainloop();
 
 /*
+ * capture-client.c
+ */
+cca_t * cca_open     (int cd);
+void	cca_destroy  (cca_t * cca);
+pkt_t * cca_next_pkt (cca_t * cca);
+
+/*
  * export.c
  */
 void export_mainloop();

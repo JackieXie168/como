@@ -67,6 +67,8 @@ typedef struct _como_headerinfo headerinfo_t;
 
 typedef struct _como_allocator  allocator_t;
 
+typedef struct cca		cca_t;
+
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
 typedef enum runmodes_t { 
@@ -524,6 +526,8 @@ struct _statistics {
     timestamp_t first_ts; 	/* timestamp first processed batch */
     int modules_active;		/* no. of modules processing packets */
     int table_queue; 		/* expired tables in capture->export queue */
+    int batch_queue;		/* pending batches */
+    int ca_clients;		/* capture clients */
     size_t mem_usage_cur; 	/* current shared memory usage */
     size_t mem_usage_peak; 	/* peak shared memory usage */
     uint64_t pkts; 		/* sniffed packets so far */
@@ -613,6 +617,18 @@ typedef struct tailq_t {
             q->__head = e;                              \
         q->__tail = e;                                  \
         e->link_field = NULL;                           \
+    } while (0);
+
+#define TQ_POP(queue, entry, link_field)		\
+    do {						\
+    	tailq_t *q = (queue);				\
+	entry = q->__head;				\
+	if (entry) {					\
+	    q->__head = entry->link_field;		\
+	    entry->link_field = NULL;			\
+	    if (q->__head == NULL)			\
+		q->__tail = NULL;			\
+	}						\
     } while (0);
 
 #endif /* _COMOTYPES_H */

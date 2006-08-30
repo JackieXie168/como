@@ -62,6 +62,14 @@ enum _ipc_types {
    S_SEEK, 
    S_INFORM,
 
+   /* capture client IPCs */
+   CCA_ERROR,
+   CCA_OPEN,
+   CCA_OPEN_RES,
+   CCA_CLOSE,
+   CCA_NEW_BATCH,
+   CCA_ACK_BATCH,
+
    IPC_MAX 	/* this must be last */
 }; 
 

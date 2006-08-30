@@ -445,12 +445,13 @@ supervisor_mainloop(int accept_fd)
 
 	if (map.running == NORMAL) 
 	    fprintf(stderr, 
-		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); "
+		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); cls %d (%d); "
 		"pkts %llu drops %d; mdl %d/%d\r", 
 		dd, hh, mm, ss,
 		map.stats->mem_usage_cur/(1024*1024), 
 		map.stats->mem_usage_peak/(1024*1024), 
-		map.mem_size, map.stats->table_queue, 
+		map.mem_size, map.stats->table_queue,
+		map.stats->ca_clients, map.stats->batch_queue,
 		map.stats->pkts, map.stats->drops,
 		map.stats->modules_active, map.module_used); 
 
