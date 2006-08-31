@@ -65,7 +65,11 @@
         }
         $http_query_string = $http_query_string . "&filter=";
         $http_query_string = $http_query_string . $tmp_filter[1] ;
-        $http_query_string = $http_query_string . " and dst ";
+        /*  Not sure why I had "and dst" here so we will just 
+            comment to make sure nothing breaks
+         */
+        #$http_query_string = $http_query_string . " and dst ";
+        $http_query_string = $http_query_string . "dst ";
         $http_query_string = $http_query_string . $daip;
     } else {
         $daip="none";
