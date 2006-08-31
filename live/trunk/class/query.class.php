@@ -73,10 +73,13 @@ class Query {
         } else {
 	   $this->query_string  = "module=$module&start=$this->start&end=$this->end&wait=$this->wait&format=$format" . $query;
         }
+        /*  This will urlencode the query_string  */
+        $this->query_string = strtr ($this->query_string, " ", "+");
         return $this->query_string;
     }
 
     function do_query ($comonode, $query_string) {
+
         $r = array(0=> 0,1=>0);
 	$script = file_get_contents("http://$comonode/?$query_string");
 	if (!$script) {
