@@ -66,7 +66,7 @@ init(__unused void *self, __unused char *args[])
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(1, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "nf:none:none:none");
     
