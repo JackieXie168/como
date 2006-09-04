@@ -197,8 +197,7 @@ sniffer_start(sniffer_t * s)
 error:
     close(me->sniff.fd);
     free(path);
-    if (http_res)
-	free(http_res);
+    free(http_res);
     return -1;
 }
 
