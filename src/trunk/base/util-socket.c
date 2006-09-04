@@ -113,7 +113,6 @@ create_socket(const char *path, char **arg)
 	if (*local) {
 	    if (*local != '/') 
 		errx(EXIT_FAILURE, "bad local in %s\n", path);
-	    local++;
 	}
 	i = socket(AF_INET, SOCK_STREAM, 0);
 	/* allow local address reuse in TIME_WAIT */
