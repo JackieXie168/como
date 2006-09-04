@@ -383,6 +383,8 @@ copy_args(char ** x, char ** argv, int argc)
 {
     int j,i; 
 
+    argc++; /* the last item has to be NULL */
+    
     if (x == NULL) {
 	x = safe_calloc(argc, sizeof(char *));
 	j = 0;  
