@@ -51,7 +51,6 @@
 #include "module.h"
 #include "bitmap.h"
 #include "uhash.h"
-#include "comopriv.h"
 
 #define FLOWDESC    struct _flows
 FLOWDESC {
