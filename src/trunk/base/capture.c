@@ -1672,7 +1672,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    batch = batch_create(pc, bc, cap_ppbufs);
 	    
 	    if (batch->count > 0) {
-		batch->ref_mask = 1;
+		batch->ref_mask = 1LL;
 
 		if (s_cabuf.clients_count > 0) {
 		    /* export the batch to clients */
@@ -1689,7 +1689,9 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		if (map.stats->ts < map.stats->first_ts)
 		    map.stats->first_ts = map.stats->ts;
 
-		if (batch->ref_mask == 1) {
+		if (batch->ref_mask != 1) {
+		    batch->ref_mask &= ~1LL;
+		} else {
 		    batch_free(batch);
 		}
 	    } else {
