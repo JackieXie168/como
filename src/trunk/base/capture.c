@@ -744,7 +744,7 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void *pack, size_t sz)
 
 	for (src = map.sources; src != NULL; src = src->next) {
 	    metadesc_match_t bm;
-	    metadesc_incompatibility_t *incomps;
+	    metadesc_incompatibility_t *incomps = NULL;
 	    int incomps_count;
 	    if (!src->outdesc) {
 		logmsg(LOGWARN, "sniffer %s does not provide outdesc\n",
@@ -760,6 +760,7 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void *pack, size_t sz)
 		    logmsg(LOGWARN, "%s",
 			   metadesc_incompatibility_reason(&incomps[i]));
 		}
+		free(incomps);
 		mdl->status = MDL_INCOMPATIBLE;
 		map.stats->modules_active--;
 		return;

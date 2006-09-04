@@ -60,7 +60,9 @@ int    metadesc_best_match       (metadesc_t * out, metadesc_t * in,
 				  metadesc_incompatibility_t ** incomps,
 				  int *incomps_count);
 char * metadesc_determine_filter (metadesc_t * md);
-char * metadesc_incompatibility_reason(metadesc_incompatibility_t * incomp);
+
+const char * metadesc_incompatibility_reason (metadesc_incompatibility_t *
+					      incomp);
 
 pktmeta_type_t pktmeta_type_from_name(const char * name);
 
