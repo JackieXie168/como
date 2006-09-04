@@ -391,11 +391,11 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
     
     /* check timestamp resolution */
     if (in->ts_resolution < out->ts_resolution)
-	return 0;
+	return METADESC_INCOMPATIBLE_TS_RESOLUTION;
     
     /* check flags */
     if (in->flags & ~out->flags)
-	return 0;
+	return METADESC_INCOMPATIBLE_FLAGS;
     
     /* check options */
     if (in->pktmeta_count > 0) {
@@ -416,7 +416,7 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
 	}
 	
 	if (!pktmeta_types_ok)
-	    return 0;
+	    return METADESC_INCOMPATIBLE_PKTMETAS;
 	
 	affinity += in->pktmeta_count;
     }
@@ -460,7 +460,7 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
 	}
 	
 	if (!tpl_ok)
-	    return 0;
+	    return METADESC_INCOMPATIBLE_TPLS;
 	
 	affinity += tpl_ok;
 
@@ -480,19 +480,20 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
 }
 
 int
-metadesc_try_match(metadesc_t *out, metadesc_t *in,
-		  metadesc_match_t **matches)
+metadesc_try_match(metadesc_t * out, metadesc_t * in,
+		   __OUT metadesc_match_t ** matches,
+		   __OUT metadesc_incompatibility_t ** incomps_,
+		   __OUT int *incomps_count_)
 {
     metadesc_t *init, *outit;
-    metadesc_match_t *res;
-    int affinity, matches_count = 0;
-    
-    res = NULL;
+    metadesc_match_t *res = NULL;
+    metadesc_incompatibility_t *incomps = NULL;
+    int affinity, matches_count = 0, incomps_count = 0;
     
     for (init = in; init != NULL; init = init->_next) {
 	for (outit = out; outit != NULL; outit = outit->_next) {
 	    affinity = metadesc_try_match_pair(outit, init);
-	    if (affinity) {
+	    if (affinity > 0) {
 		res = safe_realloc(res, (matches_count + 1) *
 				   sizeof(metadesc_match_t));
 		
@@ -500,22 +501,35 @@ metadesc_try_match(metadesc_t *out, metadesc_t *in,
 		res[matches_count].out = outit;
 		res[matches_count].affinity = affinity;
 		matches_count++;
+	    } else {
+		incomps = safe_realloc(incomps, (incomps_count + 1) *
+				       sizeof(metadesc_incompatibility_t));
+		incomps[incomps_count].in = init;
+		incomps[incomps_count].out = outit;
+		incomps[incomps_count].reason = affinity;
+		incomps_count++;
 	    }
 	}
     }
     
     *matches = res;
+    *incomps_ = incomps;
+    *incomps_count_ = incomps_count;
     
     return matches_count;
 }
 
 int
-metadesc_best_match(metadesc_t *out, metadesc_t *in, metadesc_match_t *best)
+metadesc_best_match(metadesc_t * out, metadesc_t * in,
+		    __OUT metadesc_match_t * best,
+		    __OUT metadesc_incompatibility_t ** incomps,
+		    __OUT int *incomps_count)
 {
     metadesc_match_t *matches;
     int matches_count;
     
-    matches_count = metadesc_try_match(out, in, &matches);
+    matches_count = metadesc_try_match(out, in, &matches, incomps,
+				       incomps_count);
     
     if (matches_count) {
 	int i, max_affinity = 0;
@@ -536,7 +550,23 @@ metadesc_best_match(metadesc_t *out, metadesc_t *in, metadesc_match_t *best)
 }
 
 char *
-metadesc_determine_filter(metadesc_t *md)
+metadesc_incompatibility_reason(metadesc_incompatibility_t * incomp)
+{
+    static char *reasons[] = {
+    	"Incompatible templates."
+    	"Incompatible packet meta options.",
+    	"Incompatible flags.",
+    	"Incompatible timestamp resolution.",
+    };
+    if (incomp->reason < 0 && incomp->reason > -5) {
+    	return reasons[incomp->reason + 4];
+    }
+    return NULL;
+}
+
+
+char *
+metadesc_determine_filter(metadesc_t * md)
 {
     int *layers[5];
     int l;
@@ -734,11 +764,14 @@ metadesc_determine_filter(metadesc_t *md)
 }
 #endif
 
+#if 0
 void
 test_metadesc()
 {
     metadesc_t *indesc1, *outdesc1;
     metadesc_match_t b;
+    metadesc_incompatibility_t *incomps;
+    int incomps_count;
     int mc;
     pkt_t *pkt;
     char *filter;
@@ -849,7 +882,7 @@ test_metadesc()
     assert(COMO(l4type) == L4TYPE_ANY);
     assert(COMO(caplen) == 0);
     
-    mc = metadesc_best_match(outdesc1, indesc1, &b);
+    mc = metadesc_best_match(outdesc1, indesc1, &b, &incomps, &incomps_count);
     printf("matches %d\n", mc);
     
     filter = metadesc_determine_filter(indesc1);
@@ -862,3 +895,4 @@ test_metadesc()
 
     exit(0);
 }
+#endif

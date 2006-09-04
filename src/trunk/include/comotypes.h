@@ -33,6 +33,9 @@
 #ifndef _COMOTYPES_H
 #define _COMOTYPES_H
 
+#define __OUT
+#define __INOUT
+
 #include <inttypes.h>
 #include <sys/time.h>
 #include "stdpkt.h"
