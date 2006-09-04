@@ -138,6 +138,7 @@ sniffer_start(sniffer_t * s)
     ret = como_writen(me->sniff.fd, msg, strlen(msg));
     free(msg);
     free(path);
+    path = NULL;
     if (ret < 0) {
 	logmsg(LOGWARN, "sniffer-como: write error: %s\n", strerror(errno));
 	goto error;
@@ -145,12 +146,13 @@ sniffer_start(sniffer_t * s)
 
     /* receives the HTTP response if present */
     http_res_sz = 32;
-    http_res = safe_malloc(http_res_sz);
+    http_res = safe_malloc(http_res_sz + 1);
     ret = como_read(me->sniff.fd, http_res, http_res_sz);
     if (ret < 0) {
 	logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
 	goto error;
     }
+    *(http_res + http_res_sz) = '\0';
     rdn = (size_t) ret;
     if (strncmp(http_res, "HTTP", 4) == 0) {
 	for (;;) {
@@ -161,12 +163,13 @@ sniffer_start(sniffer_t * s)
 		break;
 	    }
 	    http_res_sz = http_res_sz * 2;
-	    http_res = safe_realloc(http_res, http_res_sz);
+	    http_res = safe_realloc(http_res, http_res_sz + 1);
 	    ret = como_read(me->sniff.fd, http_res + rdn, http_res_sz);
 	    if (ret < 0) {
 		logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
 		goto error;
 	    }
+	    *(http_res + http_res_sz) = '\0';
 	    rdn += (size_t) ret;
 	}
 	if (strncmp(http_res + 9, "200 OK", 6) != 0) {
