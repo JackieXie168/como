@@ -173,6 +173,7 @@ cleanup()
 		getprocfullname(map.whoami));
         return;
     }
+    map.logflags |= LOGUI; /* make sure the message is visible */
     logmsg(LOGUI, "\n\n\n--- about to exit... remove work directory %s\n",
         map.workdir);
     asprintf(&cmd, "rm -rf %s\n", map.workdir);
