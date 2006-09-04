@@ -1357,10 +1357,6 @@ batch_export(batch_t * batch)
 {
     int id;
     
-    /* append the batch to the queue of active batches */
-    TQ_APPEND(&s_cabuf.batches, batch, next);
-    map.stats->batch_queue++;
-    
     /* iterate over clients */
     for (id = 0; id < s_cabuf.clients_count; id++) {
 	cabuf_cl_t *cl;
@@ -1385,6 +1381,12 @@ batch_export(batch_t * batch)
 	}
 	
 	batch->ref_mask |= cl->ref_mask;
+    }
+
+    if (batch->ref_mask > 1) {
+	/* append the batch to the queue of active batches */
+	TQ_APPEND(&s_cabuf.batches, batch, next);
+	map.stats->batch_queue++;
     }
 }
 
