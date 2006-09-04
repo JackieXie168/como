@@ -40,7 +40,7 @@
 #include <errno.h>
 #include <assert.h>
 
-#include "como.h" 
+#include "como.h"
 #include "sniffers.h" 
 
 #include "capbuf.c"
@@ -121,11 +121,15 @@ sniffer_start(sniffer_t * s)
     struct como_me *me = (struct como_me *) s;
     int ret;
     char *msg, *path = NULL;
+    char *http_res = NULL; /* HTTP response */
+    char *res_end;
+    size_t http_res_sz;
+    size_t rdn, cpn;
     
     me->sniff.fd = create_socket(me->device, &path);
     if (me->sniff.fd < 0) { 
-        logmsg(LOGWARN, "sniffer-como: cannot create socket: %s\n", 
-	    strerror(errno)); 
+	logmsg(LOGWARN, "sniffer-como: cannot create socket: %s\n", 
+	       strerror(errno)); 
 	goto error;
     } 
     
@@ -135,26 +139,58 @@ sniffer_start(sniffer_t * s)
     free(msg);
     free(path);
     if (ret < 0) {
-        logmsg(LOGWARN, "sniffer-como: write error: %s\n", strerror(errno));
+	logmsg(LOGWARN, "sniffer-como: write error: %s\n", strerror(errno));
 	goto error;
     } 
 
-#if 0
-    /* FIXME: sniffer-como can't get pktdesc anymore */
-    /*
-     * a pktdesc_t for the stream is the first data to be received
-     */
-    ret = como_readn(sd, (char *) &src->output, sizeof(pktdesc_t));
+    /* receives the HTTP response if present */
+    http_res_sz = 32;
+    http_res = safe_malloc(http_res_sz);
+    ret = como_read(me->sniff.fd, http_res, http_res_sz);
     if (ret < 0) {
-        logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
-	return -1; 
-    } 
-#endif
+	logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
+	goto error;
+    }
+    rdn = (size_t) ret;
+    if (strcmp(http_res, "HTTP") == 0) {
+	for (;;) {
+	    res_end = strstr(http_res, "\r\n\r\n");
+	    if (res_end != NULL) {
+		res_end += 4;
+		cpn = rdn - (res_end - http_res);
+		break;
+	    }
+	    http_res_sz = http_res_sz * 2;
+	    http_res = safe_realloc(http_res, http_res_sz);
+	    ret = como_read(me->sniff.fd, http_res + rdn, http_res_sz);
+	    if (ret < 0) {
+		logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
+		goto error;
+	    }
+	    rdn += (size_t) ret;
+	}
+    } else {
+	cpn = rdn;
+	res_end = http_res;
+    }
+    
+    if (cpn > 0) {
+	char *x;
+	x = capbuf_reserve_space(&me->capbuf, cpn);
+	memcpy(x, res_end, cpn);
+	me->avn = cpn;
+    }
+
+    free(http_res);
+
+    /* FIXME: sniffer-como can't get pktdesc anymore */
 
    return 0;
 error:
     close(me->sniff.fd);
     free(path);
+    if (http_res)
+	free(http_res);
     return -1;
 }
 
