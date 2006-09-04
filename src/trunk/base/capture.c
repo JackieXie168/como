@@ -70,7 +70,7 @@ static timestamp_t s_min_flush_ivl = 0;
 
 static int s_active_modules = 0;
 
-#define CA_MAXCLIENTS 64
+#define CA_MAXCLIENTS	(64 - 1) /* 1 is CAPTURE itself */
 
 typedef struct cabuf_cl {
     int fd;
@@ -1061,7 +1061,7 @@ ca_ipc_cca_open(__unused procname_t sender, int fd, __unused void * buf,
     assert(id < CA_MAXCLIENTS);
     cl = safe_calloc(1, sizeof(cabuf_cl_t));
     cl->fd = fd;
-    cl->ref_mask = (1LL << (uint64_t) id);
+    cl->ref_mask = (1LL << (uint64_t) (id + 1)); /* id 0 -> mask 2 */
     
     s_cabuf.clients[id] = cl;
     s_cabuf.clients_count++;
@@ -1429,7 +1429,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     DEBUGGER_WAIT_ATTACH(map);
 
     /* register handlers for signals */
-    signal(SIGPIPE, exit);
+    signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, exit);
     signal(SIGTERM, exit);
     signal(SIGHUP, SIG_IGN);
@@ -1672,6 +1672,8 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    batch = batch_create(pc, bc, cap_ppbufs);
 	    
 	    if (batch->count > 0) {
+		batch->ref_mask = 1;
+
 		if (s_cabuf.clients_count > 0) {
 		    /* export the batch to clients */
 		    batch_export(batch);
@@ -1686,11 +1688,13 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
 		if (map.stats->ts < map.stats->first_ts)
 		    map.stats->first_ts = map.stats->ts;
-		}
 
-		if (s_cabuf.clients_count == 0) {
+		if (batch->ref_mask == 1) {
 		    batch_free(batch);
 		}
+	    } else {
+	    	batch_free(batch);
+	    }
 	}
 
 	/* 
