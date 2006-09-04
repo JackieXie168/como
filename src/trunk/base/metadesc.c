@@ -549,14 +549,14 @@ metadesc_best_match(metadesc_t * out, metadesc_t * in,
     return matches_count > 0;
 }
 
-char *
+const char *
 metadesc_incompatibility_reason(metadesc_incompatibility_t * incomp)
 {
-    static char *reasons[] = {
-    	"Incompatible templates."
+    static const char *reasons[] = {
+    	"Incompatible templates.",
     	"Incompatible packet meta options.",
     	"Incompatible flags.",
-    	"Incompatible timestamp resolution.",
+    	"Incompatible timestamp resolution."
     };
     if (incomp->reason < 0 && incomp->reason > -5) {
     	return reasons[incomp->reason + 4];
