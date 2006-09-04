@@ -228,10 +228,13 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	ssize_t rdn;
 	size_t rd_sz = me->read_size;
 	base = capbuf_reserve_space(&me->capbuf, rd_sz);
-	if (base == me->capbuf.base && avn > 0) {
+	if (base == me->capbuf.base) {
 	    /* handle the wrapping: me->cur points to avn previously read
 	     * bytes, move them to base and decrement rd_sz */
-	    memmove(base, me->cur, avn);
+	    if (avn > 0) {
+		memmove(base, me->cur, avn);
+	    }
+	    me->cur = base;
 	    me->cur = base;
 	    rd_sz -= avn;
 	    base += avn;
