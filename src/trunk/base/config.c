@@ -383,10 +383,8 @@ copy_args(char ** x, char ** argv, int argc)
 {
     int j,i; 
 
-    argc++; /* the last item has to be NULL */
-    
     if (x == NULL) {
-	x = safe_calloc(argc, sizeof(char *));
+	x = safe_calloc(argc + 1, sizeof(char *));
 	j = 0;  
     } else {
 	/*
@@ -396,17 +394,17 @@ copy_args(char ** x, char ** argv, int argc)
 	 */
 	for (j = 0; x[j]; j++)
 	    ;
-	x = safe_realloc(x, (argc + j) * sizeof(char*));
+	x = safe_realloc(x, (argc + j + 1) * sizeof(char*));
     }
   
-    for (i = 1; i < argc; i++)
-	x[i+j-1] = safe_strdup(argv[i]);
+    for (i = 0; i < argc; i++)
+	x[i+j] = safe_strdup(argv[i]);
 
     /*
      * Last position is set to null to be able to know
      * when args finish from the modules
      */
-    x[i+j-1] = NULL;
+    x[i+j] = NULL;
 
     return x; 
 }
