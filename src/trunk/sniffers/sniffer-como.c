@@ -152,7 +152,7 @@ sniffer_start(sniffer_t * s)
 	goto error;
     }
     rdn = (size_t) ret;
-    if (strcmp(http_res, "HTTP") == 0) {
+    if (strncmp(http_res, "HTTP", 4) == 0) {
 	for (;;) {
 	    res_end = strstr(http_res, "\r\n\r\n");
 	    if (res_end != NULL) {
@@ -168,6 +168,11 @@ sniffer_start(sniffer_t * s)
 		goto error;
 	    }
 	    rdn += (size_t) ret;
+	}
+	if (strncmp(http_res + 9, "200 OK", 6) != 0) {
+	    logmsg(LOGWARN, "sniffer-como: unsuccessful HTTP request: %s\n",
+		   me->device);
+	    goto error;
 	}
     } else {
 	cpn = rdn;
