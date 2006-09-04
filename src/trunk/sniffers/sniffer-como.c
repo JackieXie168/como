@@ -235,7 +235,6 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 		memmove(base, me->cur, avn);
 	    }
 	    me->cur = base;
-	    me->cur = base;
 	    rd_sz -= avn;
 	    base += avn;
 	}
