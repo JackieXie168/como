@@ -232,8 +232,9 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	    /* handle the wrapping: me->cur points to avn previously read
 	     * bytes, move them to base and decrement rd_sz */
 	    memmove(base, me->cur, avn);
-	    rd_sz -= avn;
 	    me->cur = base;
+	    rd_sz -= avn;
+	    base += avn;
 	}
 	/* read CoMo packets from stream */
 	rdn = read(me->sniff.fd, base, rd_sz);
