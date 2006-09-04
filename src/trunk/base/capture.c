@@ -975,6 +975,7 @@ cabuf_cl_destroy(int id, cabuf_cl_t * cl)
 	bi->ref_mask &= ~cl->ref_mask;
 	if (bi->ref_mask == 0) {
 	    TQ_POP(&s_cabuf.batches, bi, next);
+	    map.stats->batch_queue--;
 	    batch_free(bi);
 	}
 	bi = bn;
