@@ -115,7 +115,7 @@ capbuf_reserve_space(struct capbuf * capbuf, size_t s)
 {
     void *end;
     
-    s = ROUND_32(s);
+    //s = ROUND_32(s);
     assert(s > 0);
     
     end = capbuf->tail + s;
@@ -137,6 +137,6 @@ capbuf_reserve_space(struct capbuf * capbuf, size_t s)
 static inline void
 capbuf_truncate(struct capbuf * capbuf, void * x)
 {
-    x = (void *) ROUND_32((uint32_t) x);
+    //x = (void *) ROUND_32((uint32_t) x);
     capbuf->tail = x;
 }
