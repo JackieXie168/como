@@ -33,20 +33,36 @@
 #ifndef COMOPRIV_H_
 #define COMOPRIV_H_
 
-struct _como_metadesc_match {
-    metadesc_t *in;
-    metadesc_t *out;
-    int affinity;
-};
+#include "comotypes.h"
 
-typedef struct _como_metadesc_match metadesc_match_t;
+typedef struct metadesc_match {
+    metadesc_t *	in;
+    metadesc_t *	out;
+    int			affinity;
+} metadesc_match_t;
 
-void   metadesc_list_free       (metadesc_t *head);
-int    metadesc_best_match      (metadesc_t *out, metadesc_t *in,
-				 metadesc_match_t *best);
-char * metadesc_determine_filter(metadesc_t *md);
+typedef struct metadesc_incompatibility {
+    metadesc_t *	in;
+    metadesc_t *	out;
+    int			reason;
+} metadesc_incompatibility_t;
 
-pktmeta_type_t pktmeta_type_from_name(const char *name);
+#define METADESC_INCOMPATIBLE_TS_RESOLUTION	-1
+#define METADESC_INCOMPATIBLE_FLAGS		-2
+#define METADESC_INCOMPATIBLE_PKTMETAS		-3
+#define METADESC_INCOMPATIBLE_TPLS		-4
+
+
+
+void   metadesc_list_free        (metadesc_t * head);
+int    metadesc_best_match       (metadesc_t * out, metadesc_t * in,
+				  metadesc_match_t * best,
+				  metadesc_incompatibility_t ** incomps,
+				  int *incomps_count);
+char * metadesc_determine_filter (metadesc_t * md);
+char * metadesc_incompatibility_reason(metadesc_incompatibility_t * incomp);
+
+pktmeta_type_t pktmeta_type_from_name(const char * name);
 
 /*
  * util-process.c
