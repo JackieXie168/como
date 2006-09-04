@@ -146,30 +146,30 @@ sniffer_start(sniffer_t * s)
 
     /* receives the HTTP response if present */
     http_res_sz = 32;
-    http_res = safe_malloc(http_res_sz + 1);
+    http_res = safe_malloc(http_res_sz);
     ret = como_read(me->sniff.fd, http_res, http_res_sz);
     if (ret < 0) {
 	logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
 	goto error;
     }
-    *(http_res + http_res_sz) = '\0';
     rdn = (size_t) ret;
     if (strncmp(http_res, "HTTP", 4) == 0) {
 	for (;;) {
-	    res_end = strstr(http_res, "\r\n\r\n");
+	    res_end = strstr(http_res, "\r\n\r\n"); /* TODO: use a function
+						       that doesn't go further
+						       than http_res + rdn */
 	    if (res_end != NULL) {
 		res_end += 4;
 		cpn = rdn - (res_end - http_res);
 		break;
 	    }
 	    http_res_sz = http_res_sz * 2;
-	    http_res = safe_realloc(http_res, http_res_sz + 1);
-	    ret = como_read(me->sniff.fd, http_res + rdn, http_res_sz);
+	    http_res = safe_realloc(http_res, http_res_sz);
+	    ret = como_read(me->sniff.fd, http_res + rdn, http_res_sz - rdn);
 	    if (ret < 0) {
 		logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
 		goto error;
 	    }
-	    *(http_res + http_res_sz) = '\0';
 	    rdn += (size_t) ret;
 	}
 	if (strncmp(http_res + 9, "200 OK", 6) != 0) {
@@ -225,16 +225,19 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     
     avn = me->avn;
     
-    if (avn >= me->min_proc_size) {
-	base = me->cur;
-    } else {
+    if (avn < me->min_proc_size) {
 	ssize_t rdn;
-	base = capbuf_reserve_space(&me->capbuf, me->read_size);
+	size_t rd_sz = me->read_size;
+	base = capbuf_reserve_space(&me->capbuf, rd_sz);
 	if (base == me->capbuf.base && avn > 0) {
+	    /* handle the wrapping: me->cur points to avn previously read
+	     * bytes, move them to base and decrement rd_sz */
 	    memmove(base, me->cur, avn);
+	    rd_sz -= avn;
+	    me->cur = base;
 	}
 	/* read CoMo packets from stream */
-	rdn = read(me->sniff.fd, base + avn, me->read_size);
+	rdn = read(me->sniff.fd, base, rd_sz);
 	if (rdn < 0) {
 	    return -1;
 	}
@@ -242,7 +245,10 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	if (avn == 0) {
 	    return -1;
 	}
+	capbuf_truncate(&me->capbuf, base + rdn);
     }
+    /* start to capture packets from the current position saved in the state */
+    base = me->cur;
 
     for (npkts = 0; npkts < max_pkts; npkts++) {
 	size_t sz;
