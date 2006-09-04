@@ -1347,9 +1347,6 @@ batch_export(batch_t * batch)
 {
     int id;
     
-    if (s_cabuf.clients_count == 0 || batch->count == 0) {
-	return;
-    }
     /* append the batch to the queue of active batches */
     TQ_APPEND(&s_cabuf.batches, batch, next);
     map.stats->batch_queue++;
@@ -1664,20 +1661,26 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    /* create a new batch containing all captured packets */
 	    batch = batch_create(pc, bc, cap_ppbufs);
 	    
-	    batch_export(batch);
+	    if (batch->count > 0) {
+		if (s_cabuf.clients_count > 0) {
+		    /* export the batch to clients */
+		    batch_export(batch);
+		}
+		/* process the batch */
+		start_tsctimer(map.stats->ca_pkts_timer);
+		map.stats->ts = batch_process(batch);
+		end_tsctimer(map.stats->ca_pkts_timer);
 
-	    /* process the batch */
-	    start_tsctimer(map.stats->ca_pkts_timer);
-	    map.stats->ts = batch_process(batch);
-	    end_tsctimer(map.stats->ca_pkts_timer);
+		/* update the stats */
+		map.stats->pkts += batch->count;
 
-	    /* update the stats */
-	    map.stats->pkts += batch->count;
+		if (map.stats->ts < map.stats->first_ts)
+		    map.stats->first_ts = map.stats->ts;
+		}
 
-	    if (map.stats->ts < map.stats->first_ts)
-		map.stats->first_ts = map.stats->ts;
-
-
+		if (s_cabuf.clients_count == 0) {
+		    batch_free(batch);
+		}
 	}
 
 	/* 
