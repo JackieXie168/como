@@ -757,7 +757,7 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void *pack, size_t sz)
 		logmsg(LOGWARN, "module %s does not get %s packets:\n",
 		       mdl->name, src->cb->name);
 		for (i = 0; i < incomps_count; i++) {
-		    logmsg(LOGWARN, "%s",
+		    logmsg(LOGWARN, "%s\n",
 			   metadesc_incompatibility_reason(&incomps[i]));
 		}
 		free(incomps);
