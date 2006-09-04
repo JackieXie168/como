@@ -94,7 +94,11 @@ SET(EXAMPLE_TRACE ${CMAKE_INSTALL_PREFIX}${INST_ETCDIR}/example-trace.pcap)
 # Produce the default config file and add a rule to install it
 #
 CONFIGURE_FILE(como.conf.cmake ${COMO_BINARY_DIR}/como.conf)
+IF(EXISTS ${DEFAULT_CFGFILE})
+MESSAGE(STATUS "The default config file will not be installed because the file `${DEFAULT_CFGFILE}` already exists.")
+ELSE(EXISTS ${DEFAULT_CFGFILE})
 INSTALL_FILES(${INST_ETCDIR} FILES ${COMO_BINARY_DIR}/como.conf)
+ENDIF(EXISTS ${DEFAULT_CFGFILE})
 
 #
 # Install a README.db into default db directory.
