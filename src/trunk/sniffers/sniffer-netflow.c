@@ -498,7 +498,7 @@ sniffer_init(const char * device, const char * args)
 	 * packets will be sent.
 	 */
 	if ((p = strstr(args, "window=")) != NULL) {
-	    me->window = atoi(p + 7);
+	    me->window = TIME2TS(atoi(p + 7), 0);
 	}
 	/*
 	 * "timescale". 
@@ -507,7 +507,7 @@ sniffer_init(const char * device, const char * args)
 	 * interval. 
 	 */
 	if ((p = strstr(args, "timescale=")) != NULL) {
-	    me->timescale = atoi(p + 10);
+	    me->timescale = TIME2TS(atoi(p + 10), 0);
 	}
 	/* 
 	 * "sampling". 
