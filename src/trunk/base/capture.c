@@ -1265,7 +1265,6 @@ batch_create(int pc, int bc, ppbuf_t ** ppbufs)
     timestamp_t max_last_pkt_ts = 0;
     int one_full_flag = 0;
     timestamp_t ts[bc];
-    pkt_t *pkt[pc];
 
     /* CHECKME: value ??? */
     static const timestamp_t live_th = TIME2TS(0, 10000);
@@ -1285,11 +1284,10 @@ batch_create(int pc, int bc, ppbuf_t ** ppbufs)
 	}
     }
 
-    /* initialize ts and pkt */
+    /* initialize ts */
     for (i = 0; i < bc; i++) {
 	if (ppbufs[i]->count > 0) {
-	    pkt[i] = ppbuf_get_next(ppbufs[i]);
-	    ts[i] = pkt[i]->ts;
+	    ts[i] = (ppbuf_get(ppbufs[i]))->ts;
 	} else {
 	    /*
 	     * the batch is empty. use batches[i]->last_pkt_ts, which contains
@@ -1303,7 +1301,6 @@ batch_create(int pc, int bc, ppbuf_t ** ppbufs)
 		return NULL;
 	    }
 	    ts[i] = ~0;
-	    pkt[i] = NULL;
 	    continue;
 	}
     }
@@ -1326,12 +1323,13 @@ batch_create(int pc, int bc, ppbuf_t ** ppbufs)
 	i = min_ts_i;
 
 	/* update batch */
-	batch_append(batch, pkt[i]);
+	batch_append(batch, ppbuf_get(ppbufs[i]));
+	/* advance ith ppbuf */
+	ppbuf_next(ppbufs[i]);
 
 	if (ppbufs[i]->count > 0) {
 	    /* advance the (min_ts_i)th ppbuf */
-	    pkt[i] = ppbuf_get_next(ppbufs[i]);
-	    ts[i] = pkt[i]->ts;
+	    ts[i] = (ppbuf_get(ppbufs[i]))->ts;
 	} else {
 	    if (max_last_pkt_ts - ppbufs[i]->last_pkt_ts <= live_th) {
 		break;

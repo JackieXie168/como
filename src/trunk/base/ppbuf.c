@@ -140,17 +140,26 @@ ppbuf_end(ppbuf_t * ppbuf)
 
 
 /**
- *-- ppbuf_get_next
+ *-- ppbuf_get
  * 
- * Returns the packet pointed by roff, decrements count and advances roff.
+ * Returns the packet at the offset roff
  */
 static pkt_t *
-ppbuf_get_next(ppbuf_t * ppbuf)
+ppbuf_get(ppbuf_t * ppbuf)
 {
-    pkt_t *pkt;
+    return ppbuf->pp[ppbuf->roff];
+}
+
+
+/**
+ *-- ppbuf_next
+ * 
+ * Decrements count and advances roff.
+ */
+static void
+ppbuf_next(ppbuf_t * ppbuf)
+{
     ppbuf->count--;
     assert(ppbuf->count >= 0);
-    pkt = ppbuf->pp[ppbuf->roff];
     ppbuf->roff = (ppbuf->roff + 1) % ppbuf->size;
-    return pkt;
 }
