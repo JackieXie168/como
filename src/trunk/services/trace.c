@@ -81,13 +81,13 @@ service_trace(int client_fd, __unused int node_id, qreq_t * qreq)
 	x = como_writen(client_fd, (char *) pkt, sizeof(pkt_t));
 	if (x < 0) {
 	    logmsg(LOGWARN, "service trace error: %s\n", strerror(errno));
-	    break;
+	    goto error;
 	}
 	/* TODO: padding */
 	x = como_writen(client_fd, pkt->payload, pkt->caplen);
 	if (x < 0) {
 	    logmsg(LOGWARN, "service trace error: %s\n", strerror(errno));
-	    break;
+	    goto error;
 	}
     }
 
