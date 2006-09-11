@@ -268,21 +268,23 @@ apply_map_changes(struct _como * x)
 	    continue;
 	} 
 
-	/* initialize this module, before doing so we 
-	 * need to freeze CAPTURE to avoid conflicts in 
-	 * the shared memory
+	/* if this module is not running on demand, initialize it. 
+	 * however, before doing so freeze CAPTURE to avoid conflicts 
+         * in the shared memory
 	 */
-	ipc_send_blocking(CAPTURE, IPC_FREEZE, NULL, 0);
-        if (init_module(mdl)) { 
-	    /* let CAPTURE resume */
-	    ipc_send(CAPTURE, IPC_ACK, NULL, 0); 
-	    remove_module(&map, mdl);
-	    continue;
-	} 
-	
 	if (mdl->running != RUNNING_ON_DEMAND) {
+	    char * pack;
+
+	    ipc_send_blocking(CAPTURE, IPC_FREEZE, NULL, 0);
+	    if (init_module(mdl)) { 
+		/* let CAPTURE resume */
+		ipc_send(CAPTURE, IPC_ACK, NULL, 0); 
+		remove_module(&map, mdl);
+		continue;
+	    } 
+	
 	    /* prepare the module for transmission */
-	    char *pack = pack_module(mdl, &sz);
+	    pack = pack_module(mdl, &sz);
 
 	    /* inform the other processes */
 	    ipc_send(CAPTURE, IPC_MODULE_ADD, pack, sz); 
@@ -400,14 +402,15 @@ supervisor_mainloop(int accept_fd)
 	    continue; 
   	} 
 
-	if (init_module(mdl)) { 
-	    logmsg(LOGWARN, "cannot initialize module %s\n", mdl->name); 
-	    remove_module(&map, mdl);
-	    continue; 
-  	} 
+	if (mdl->running != RUNNING_ON_DEMAND) {
+	    if (init_module(mdl)) { 
+		logmsg(LOGWARN, "cannot initialize module %s\n", mdl->name); 
+		remove_module(&map, mdl);
+		continue; 
+	    } 
 
-	if (mdl->running != RUNNING_ON_DEMAND) 
 	    map.stats->modules_active++;
+	}
     } 
 
     /* initialize resource management */
