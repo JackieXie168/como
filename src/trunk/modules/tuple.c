@@ -138,13 +138,19 @@ init(void * self, char *args[])
     outmd->ts_resolution = flush_ivl;
     outmd->flags = META_PKT_LENS_ARE_AVERAGED;
     
-    pkt = metadesc_tpl_add(outmd, "none:none:~ip:none");
+    pkt = metadesc_tpl_add(outmd, "~nf:none:~ip:none");
+    N16(NF(sampling)) = 0xffff;
+    N32(NF(duration)) = 0xffffffff;
+    N32(NF(pktcount)) = 0xffffffff;
     IP(proto) = 0xff;
     N16(IP(len)) = 0xff;
     N32(IP(src_ip)) = 0xffffffff;
     N32(IP(dst_ip)) = 0xffffffff;
     
-    pkt = metadesc_tpl_add(outmd, "none:none:~ip:~tcp");
+    pkt = metadesc_tpl_add(outmd, "~nf:none:~ip:~tcp");
+    N16(NF(sampling)) = 0xffff;
+    N32(NF(duration)) = 0xffffffff;
+    N32(NF(pktcount)) = 0xffffffff;
     IP(proto) = 0xff;
     N16(IP(len)) = 0xff;
     N32(IP(src_ip)) = 0xffffffff;
@@ -152,7 +158,10 @@ init(void * self, char *args[])
     N16(TCP(src_port)) = 0xffff;
     N16(TCP(dst_port)) = 0xffff;
     
-    pkt = metadesc_tpl_add(outmd, "none:none:~ip:~udp");
+    pkt = metadesc_tpl_add(outmd, "~nf:none:~ip:~udp");
+    N16(NF(sampling)) = 0xffff;
+    N32(NF(duration)) = 0xffffffff;
+    N32(NF(pktcount)) = 0xffffffff;
     IP(proto) = 0xff;
     N16(IP(len)) = 0xff;
     N32(IP(src_ip)) = 0xffffffff;
