@@ -200,10 +200,10 @@ struct parsed_protos_t {
     uint16_t l2type;
     uint16_t l3type;
     uint16_t l4type;
+    uint16_t lclen;
     uint16_t l2len;
     uint16_t l3len;
     uint16_t l4len;
-    uint16_t padding;
     uint32_t len;
 };
 
@@ -221,6 +221,8 @@ parse_protos(const char *protos, struct parsed_protos_t *pp)
     pp->l2type = LINKTYPE_ANY;
     pp->l3type = L3TYPE_ANY;
     pp->l4type = L4TYPE_ANY;
+
+    pp->lclen = 0;
     pp->l2len = 0;
     pp->l3len = 0;
     pp->l4len = 0;
@@ -235,11 +237,9 @@ parse_protos(const char *protos, struct parsed_protos_t *pp)
 	if (*t == '\0')
 	    continue;
 	
-	if (l > LCOMO) {
-	    if (*t == '~') {
-		t++;
-		has_bitmask = 1;
-	    }
+	if (*t == '~') {
+	    t++;
+	    has_bitmask = 1;
 	}
 	
 	hi = headerinfo_lookup_with_name_and_layer(t, l);
@@ -249,6 +249,8 @@ parse_protos(const char *protos, struct parsed_protos_t *pp)
 	switch (l) {
 	case LCOMO:
 	    pp->type = hi->type;
+	    if (has_bitmask)
+		pp->lclen = hi->hdr_len;
 	    l = L2;
 	    break;
 	case L2:
@@ -283,7 +285,8 @@ parse_protos(const char *protos, struct parsed_protos_t *pp)
  * Adds a new packet template to the metadesc_t object pointed by md.
  * The structure of the new template is specified with the argument protos that
  * has the following syntax:
- * type + ':' + ['~'] + l2type + ':' + ['~'] + l3type + ':' + ['~'] + l4type
+ * ['~'] + type + ':' + ['~'] + l2type + ':' + ['~'] + l3type + ':' + ['~'] +
+ * l4type
  * Where type is one of defined COMOTYPE, l2type one of LINKTYPE, and so on.
  * These types must be specified with their compact name:
  * e.g. COMOTYPE_ANY -> 'any', COMOTYPE_LINK -> 'link'
@@ -311,9 +314,9 @@ metadesc_tpl_add(metadesc_t *md, const char *protos)
     /* sets important fields of new packet */
     COMO(type) = pp.type;
     COMO(l2type) = pp.l2type;
-    COMO(l2ofs) = 0;
+    COMO(l2ofs) = pp.lclen;
     COMO(l3type) = pp.l3type;
-    COMO(l3ofs) = pp.l2len;
+    COMO(l3ofs) = COMO(l2ofs) + pp.l2len;
     COMO(l4type) = pp.l4type;
     COMO(l4ofs) = COMO(l3ofs) + pp.l3len;
     COMO(l7ofs) = COMO(l4ofs) + pp.l4len;
@@ -376,6 +379,29 @@ metadesc_tpl_add(metadesc_t *md, const char *protos)
 	}						\
     } else if (pin->l ## lno ## type != none &&		\
 	       hasL ## lno ## P(pout)) {		\
+    	tout = tout->_next;				\
+    	continue;					\
+    }
+
+#define CHECK_LAYERCOMO(none)				\
+    if (pin->l2ofs > 0 && pin->l2ofs == pout->l2ofs) {	\
+	char *inmask, *outmask;				\
+	int k = 0, mask_ok = 1;				\
+	inmask = COMOP(pin, payload); 			\
+	outmask = COMOP(pout, payload); 		\
+	while (k < pin->l2ofs) {			\
+	    if (inmask[k] & ~outmask[k]) {		\
+		mask_ok = 0;				\
+		break;					\
+	    }						\
+	    k++;					\
+	}						\
+	if (!mask_ok) {					\
+	    tout = tout->_next;				\
+	    continue;					\
+	}						\
+    } else if (pin->type != none &&			\
+	       pout->l2ofs > 0) {			\
     	tout = tout->_next;				\
     	continue;					\
     }
@@ -444,7 +470,7 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
 	    }
 	    
 	    CHECK_TYPE(type, COMOTYPE_ANY, COMOTYPE_NONE);
-	    /* NOTE: no bitmask checking for type */
+	    CHECK_LAYERCOMO(COMOTYPE_NONE);
 	    
 	    CHECK_TYPE(l2type, LINKTYPE_ANY, LINKTYPE_NONE);
 	    CHECK_LAYER(2, LINKTYPE_NONE);
