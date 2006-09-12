@@ -479,6 +479,9 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		copy_value = 1;
 		*cp = '\0';
 		if (value == cp) {
+		    if (done) {
+			break;
+		    }
 		    name = cp + 1;
 		    continue;
 		}
