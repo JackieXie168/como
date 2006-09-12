@@ -278,7 +278,9 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
     "<div class=nvtitle style=\"border-top: 1px solid;\">"	\
     "Top-%d %s</div>\n" \
     "<table class=netview>\n"					\
-    "  <tr class=nvtitle><td>IP Address</td>\n"			\
+    "  <tr class=nvtitle>\n"					\
+    "    <td>#</td>\n" 	                			\
+    "    <td>IP Address</td>\n"					\
     "    <td>bps</td></tr>\n"						
 
 #define HTMLFOOTER						\
