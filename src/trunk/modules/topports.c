@@ -379,6 +379,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char * fmt; 
+    static int pn;
     CONFIGDESC * config = CONFIG(self);
     char * name; 
     uint8_t proto, res; 
@@ -393,6 +394,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
         /* by default, pretty print */
         *len = sprintf(s, PRETTYHDR);  
         fmt = PRETTYFMT; 
+        pn = 1;
 
         /* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
@@ -438,7 +440,8 @@ print(void * self, char *buf, size_t *len, char * const args[])
 		   port, getprotoname(proto), name, bytes, pkts); 
     } else if (fmt == HTMLFMT) { 
 	float mbps = ((float) bytes * 8 / (float) config->meas_ivl) / 1000000;
-	*len = sprintf(s, fmt, port, getprotoname(proto), name, mbps); 
+	*len = sprintf(s, fmt, pn, port, getprotoname(proto), name, mbps); 
+	pn++;
     } else 
 	*len = sprintf(s, fmt, ts, port, getprotoname(proto), 
 		       name, bytes, pkts); 
