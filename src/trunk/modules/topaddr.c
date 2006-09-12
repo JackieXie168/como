@@ -281,7 +281,9 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
     "  <tr class=nvtitle>\n"					\
     "    <td>#</td>\n" 	                			\
     "    <td>IP Address</td>\n"					\
-    "    <td>bps</td></tr>\n"						
+    "    <td>bps</td>\n"					\
+    "    <td>pps</td>\n"					\
+    "  </tr>\n"							
 
 #define HTMLFOOTER						\
     "</table>\n"						\
