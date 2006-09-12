@@ -366,7 +366,7 @@ ftche_new()
     ftche_t *ftche;
     
     ftche = safe_calloc(1, sizeof(ftche_t));
-    ftche->heap = heap_init(flow_cmp);
+    ftche->heap = heap_init(flow_cmp, 32);
     ftche->min_ts = ~0;
     ftche->max_ts = 0;
     
