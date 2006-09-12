@@ -51,11 +51,12 @@ typedef struct _heap_t heap_t;
  * Initializes a heap.
  *
  * cmp		- the callback used to compare any two elements 
+ * size		- initial size
  *
  * Return a pointer to an initialized heap handle, or NULL on failure.
  */
 heap_t*
-heap_init(heap_compare cmp);
+heap_init(heap_compare cmp, uint32_t size);
 
 /*
  * heap_insert()

@@ -52,7 +52,7 @@ struct _heap_t {
 
 
 heap_t *
-heap_init(heap_compare cmp)
+heap_init(heap_compare cmp, uint32_t size)
 {
     heap_t *h;
     
@@ -64,7 +64,7 @@ heap_init(heap_compare cmp)
     
     h = (heap_t*) safe_malloc(sizeof(heap_t));
     h->cmp = cmp;
-    h->size = 1;
+    h->size = size;
     h->maxsize = 0; 		/* dynamic heap. no max size set */
     h->array = safe_malloc(h->size * sizeof(void*));
     h->first_free = 0; /* the heap is empty */
