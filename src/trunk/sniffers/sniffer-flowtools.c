@@ -635,7 +635,7 @@ sniffer_start(sniffer_t * s)
     me->sniff.fd = me->fd;
 
     /* initialize the heap */
-    me->heap = heap_init(flow_cmp);
+    me->heap = heap_init(flow_cmp, 32);
 
     /* 
      * read the first file just to put at least one flow record 
@@ -686,7 +686,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
  	 * of flows in the heap. 
 	 */ 
 	while (me->max_ts - me->min_ts < me->window) {
-	    if (me->flags & (SNIFF_INACTIVE | SNIFF_COMPLETE)) 
+	    if (me->sniff.flags & (SNIFF_INACTIVE | SNIFF_COMPLETE)) 
 		break; 
 
 	    if (!flowtools_read(me)) { 
