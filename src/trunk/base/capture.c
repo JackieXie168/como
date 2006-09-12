@@ -57,6 +57,7 @@
 /* flush and freeze/unfreeze thresholds */
 #define MB(m)				((m)*1024*1024)
 #define FREEZE_THRESHOLD(mem)		(MB(mem)*3/4)
+#define THAW_THRESHOLD(mem)		(MB(mem)*1/8)
 
 /* global state */
 extern struct _como map;
@@ -1642,14 +1643,15 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    res = src->cb->next(src->sniff, max_no, s_min_flush_ivl, &drops);
 	    end_tsctimer(map.stats->ca_sniff_timer);
 
+	    /* tell the ppbuf we're done with capture */
+	    ppbuf_end(src->sniff->ppbuf);
+
 	    if (res < 0) {
 		/* disable the sniffer */
 		src->sniff->flags |= SNIFF_INACTIVE | SNIFF_TOUCHED;
 		src->cb->stop(src->sniff);
 		continue;
 	    }
-	    /* tell the ppbuf we're done with capture */
-	    ppbuf_end(src->sniff->ppbuf);
 
 	    /* update cap_ppbufs */
 	    cap_ppbufs[bc] = src->sniff->ppbuf;
@@ -1704,7 +1706,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	 * running from file if the usage is above the FREEZE_THRESHOLD. 
 	 * this will give EXPORT some time to process the tables and free
 	 * memory. we resume as soon as memory usage goes below the 
-	 * threshold. 
+	 * THAW_THRESHOLD. 
 	 * 
 	 */
 	map.stats->mem_usage_cur = memory_usage();
@@ -1717,7 +1719,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		if (src->sniff->flags & SNIFF_FILE)
 		    src->sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
 	    }
-	} else {
+	} else if (map.stats->mem_usage_cur < THAW_THRESHOLD(map.mem_size)) {
 	    /* 
 	     * memory is now below threshold. unfreeze any source
 	     */
