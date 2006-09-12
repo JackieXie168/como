@@ -144,9 +144,12 @@ query_validate(qreq_t * req, int node_id)
 	    ; 
 
 	/* add the alias arguments to the query */
-	req->args = safe_realloc(req->args,(nargs + alias->ac)*sizeof(char *));
+	req->args = safe_realloc(req->args,
+				 (1 + nargs + alias->ac)*sizeof(char *));
 	for (i = nargs; i < nargs + alias->ac; i++) 
 	    req->args[i] = safe_strdup(alias->args[i - nargs]); 
+
+	req->args[nargs + alias->ac] = NULL;
     } 
 
     if (!req->mdl->callbacks.print && 
