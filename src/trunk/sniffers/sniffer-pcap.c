@@ -333,12 +333,39 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     timestamp_t first_seen = 0;
 
     /* TODO: handle truncated traces */
-    if (me->nread >= me->file_size)
+    if (me->nread >= me->file_size) {
+	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
+	    /* we've finished but the ppbuf is not empty */
+	    return 0;
+	}
         return -1;       /* end of file, nothing left to do */
+    }
+
+    if (me->nread > me->remap) {
+	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
+	    /* can't call munmap while the ppbuf contains some valid packets
+	     * pointing to the currently mmaped memory */
+	    return 0;
+	}
+	/* we've read all the packets that fit in the mmaped memory, now
+	 * mmap the next area of the trace file */
+	munmap(me->base, me->map_size);
+	me->base = (char *) mmap(NULL, me->map_size,
+				 PROT_READ, MAP_PRIVATE,
+				 me->sniff.fd, me->remap);
+	if (me->base == MAP_FAILED) {
+	    logmsg(LOGWARN, "sniffer-pcap: mmap failed: %s\n",
+		   strerror(errno));
+	    return -1;
+	}
+	me->off = me->nread - me->remap;
+	me->remap += me->remap_sz;
+    }
 
     npkts = 0;
 
     while (npkts < max_pkts) {
+	timestamp_t ts;
 	pcap_hdr_t *ph;
 #ifdef BUILD_FOR_ARM
 	pcap_hdr_t tmp_ph;
@@ -347,22 +374,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	int drop_this = 0;
 	char *base = me->base + me->off;
 
-	if (me->nread > me->remap) {
-    	    /* we've read all the packets that fit in the mmaped memory, now
-    	     * mmap the next area of the trace file */
-    	    munmap(me->base, me->map_size);
-	    me->base = (char *) mmap(NULL, me->map_size,
-				     PROT_READ, MAP_PRIVATE,
-				     me->sniff.fd, me->remap);
-	    if (me->base == MAP_FAILED) {
-		logmsg(LOGWARN, "sniffer-pcap: mmap failed: %s\n",
-		       strerror(errno));
-		return -1;
-	    }
-	    me->off = me->nread - me->remap;
-	    me->remap += me->remap_sz;
+	if (me->nread > me->remap)
 	    break;
-	}
 
 	/* do we have a pcap header? */
 	if (left < sizeof(pcap_hdr_t))
@@ -392,6 +405,14 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	if (left < sizeof(pcap_hdr_t) + ph->caplen)
 	    break;
 
+	ts = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
+	if (npkts > 0 && (ts - first_seen) >= max_ivl) {
+	    /* Never returns more than max_ivl of traffic */
+	    break;
+	} else {
+	    first_seen = ts;
+	}
+	
 	/* reserve the space in the buffer for the pkt_t */
 	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sizeof(pkt_t));
 
@@ -399,16 +420,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	 * Now we have a packet: start filling a new pkt_t struct
 	 * (beware that it could be discarded later on)
 	 */
-	COMO(ts) = TIME2TS(ph->ts.tv_sec, ph->ts.tv_usec);
-	
-	if (npkts > 0) {
-	    if (COMO(ts) - first_seen > max_ivl) {
-		/* Never returns more than max_ivl of traffic */
-		break;
-	    }
-	} else {
-	    first_seen = COMO(ts);
-	}
+	COMO(ts) = ts;
 	COMO(len) = ph->len;
 	COMO(type) = me->type;
 	
