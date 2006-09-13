@@ -82,7 +82,7 @@
 
     $tmp = "generic_query.php?comonode=$comonode&module=tuple&source=tuple&";
     $tmp = $tmp . "interval=$duration&start={$iv['start']}&"; 
-    $tmp = $tmp . "end={$iv['end']}&format=html";
+    $tmp = $tmp . "end={$iv['end']}&format=sidebox";
     $details = detail_button($tmp);
 
     /* 
@@ -109,7 +109,7 @@
 				    $args);
 	 
 	$query[$i] = "generic_query.php?$margs&module={$module[$i]}&" . 
-	             "format=html&start={$iv['start']}&" . 
+	             "format=sidebox&start={$iv['start']}&" . 
 		     "end={$iv['end']}&comonode=$comonode";
 
 	$name[$i] = $node->modinfo[$module[$i]]['name'];

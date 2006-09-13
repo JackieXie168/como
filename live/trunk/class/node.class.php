@@ -378,7 +378,7 @@ class Node {
 		$modargs = $modargs . "urlargs=format=plain&";
 		$modargs = $modargs . "urlargs=extra=blincview&";
 	    } else {
-		$modargs = $modargs . "urlargs=format=html&";
+		$modargs = $modargs . "urlargs=format=sidebox&";
 	    }
 	    break;
 
