@@ -45,7 +45,8 @@ typedef struct sniffer		sniffer_t;
 
 typedef struct ppbuf ppbuf_t;
 
-void ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt);
+void ppbuf_capture   (ppbuf_t * ppbuf, pkt_t * pkt);
+int  ppbuf_get_count (ppbuf_t * ppbuf);
 
 /*
  * A sniffer is in charge of delivering packets to CoMo from a given

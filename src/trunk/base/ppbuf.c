@@ -97,6 +97,18 @@ ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
 
 
 /**
+ * -- ppbuf_get_count
+ * 
+ * Returns number of valid item in the ppbuf.
+ */
+int
+ppbuf_get_count(ppbuf_t * ppbuf)
+{
+    return ppbuf->count;
+}
+
+
+/**
  * -- ppbuf_begin
  * 
  * Initializes the ppbuf for capture mode. The roff field is moved to the first

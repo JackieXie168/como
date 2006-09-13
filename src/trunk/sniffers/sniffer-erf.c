@@ -211,8 +211,34 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     timestamp_t first_seen = 0;
 
     /* TODO: handle truncated traces */
-    if (me->nread >= me->file_size)
+    if (me->nread >= me->file_size) {
+	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
+	    /* we've finished but the ppbuf is not empty */
+	    return 0;
+	}
         return -1;       /* end of file, nothing left to do */
+    }
+
+    if (me->nread > me->remap) {
+	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
+	    /* can't call munmap while the ppbuf contains some valid packets
+	     * pointing to the currently mmaped memory */
+	    return 0;
+	}
+	/* we've read all the packets that fit in the mmaped memory, now
+	 * mmap the next area of the trace file */
+	munmap(me->base, me->map_size);
+	me->base = (char *) mmap(NULL, me->map_size,
+				 PROT_READ, MAP_PRIVATE,
+				 me->sniff.fd, me->remap);
+	if (me->base == MAP_FAILED) {
+	    logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
+		   strerror(errno));
+	    return -1;
+	}
+	me->off = me->nread - me->remap;
+	me->remap += me->remap_sz;
+    }
 
     *dropped_pkts = 0;
     
@@ -227,19 +253,6 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	char *base = me->base + me->off;
 
 	if (me->nread > me->remap) {
-    	    /* we've read all the packets that fit in the mmaped memory, now
-    	     * mmap the next area of the trace file */
-    	    munmap(me->base, me->map_size);
-	    me->base = (char *) mmap(NULL, me->map_size,
-				      PROT_READ, MAP_PRIVATE,
-				      me->sniff.fd, me->remap);
-	    if (me->base == MAP_FAILED) {
-		logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
-		       strerror(errno));
-		return -1;
-	    }
-	    me->off = me->nread - me->remap;
-	    me->remap += me->remap_sz;
 	    break;
 	}
 
@@ -256,6 +269,13 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
         /* check if entire record is available */
         if (left < (size_t) len) 
 	    break; 
+
+	if (npkts > 0 && (rec->ts - first_seen) >= max_ivl) {
+	    /* Never returns more than max_ivl of traffic */
+	    break;
+	} else {
+	    first_seen = rec->ts;
+	}
 
 	/* skip DAG header */
 	base += dag_record_size; 
@@ -295,14 +315,6 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	 * ok, data is good now, copy the packet over 
 	 */
 	COMO(ts) = rec->ts;
-	if (npkts > 0) {
-	    if (COMO(ts) - first_seen > max_ivl) {
-		/* Never returns more than max_ivl of traffic */
-		break;
-	    }
-	} else {
-	    first_seen = COMO(ts);
-	}
 	COMO(len) = (uint32_t) ntohs(rec->wlen);
 	COMO(type) = COMOTYPE_LINK;
 
