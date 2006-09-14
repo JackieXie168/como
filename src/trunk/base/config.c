@@ -438,6 +438,7 @@ copy_args_from_file(char ** x, char * file, int * count)
 	j++;
 	n++;
 	x = safe_realloc(x, j * sizeof(char *));
+	strchomp(line);
 	x[j - 1] = safe_strdup(line);
     }
 
