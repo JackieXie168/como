@@ -276,13 +276,14 @@ load(__unused void * self, char * buf, __unused size_t len, timestamp_t * ts)
     "<html>\n"							\
     "<head>\n"							\
     "  <style type=\"text/css\">\n"				\
-    "   body {margin: 0; padding: 0;\n"				\
+    "   body {margin: 0; padding: 0\n"				\
     "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
-    "     font-size: 9pt;}\n" 				        \
-    "   ul,li {margin: 1px\n"				\
+    "     font-size: 9pt; scrollbar-face-color: #ddd}\n"        \
+    "   table,tr,td{\n"						\
+    "     margin: 1;\n"						\
     "     font-family: \"lucida sans unicode\", verdana, arial;\n" \
-    "     font-size: 9pt;}" 					\
-    "   a, a.visited {text-decoration: none;}\n"		\
+    "     font-size: 9pt; background-color: #dddddd;}\n"	\
+    "   a, a.visited { text-decoration: none;}\n"		\
     "   .netview {\n"						\
     "     top: 0px; width: 100%%; vertical-align:top;\n" 	\
     "     margin: 2; padding-left: 5px;\n" 			\
@@ -296,17 +297,29 @@ load(__unused void * self, char * buf, __unused size_t len, timestamp_t * ts)
     "<body>\n" 							 
 
 #define HTMLTITLE						\
-    "<div class=nvtitle>Alerts</div>\n" 
+    "<div class=nvtitle style=\"border-top: 1px dashed;\">"	\
+    "Alerts</div>\n" 
 
 #define STR_NOALERTS						\
     "No anomalies to report.\n"
 
 #define HTML_ALERTS						\
-    "<ul class=netview><li>Time<li>Packets<li>Bytes<li>Connx</ul>\n" 
+    "<table class=netview>\n"                                   \
+    "  <tr class=nvtitle>\n" 					\
+    "    <td><b>Time</b></td>\n" 		                \
+    "    <td><b>Packets</b></td>\n" 				\
+    "    <td><b>Bytes</b></td>\n" 				\
+    "    <td><b>Connx</b></td>\n" 				\
+    "  </tr>\n"                                         
 
 #define HTMLFMT							\
-    "<ul class=netview><li><a href=%s target=_top>%s</a>\n"	\
-    "<li>%d.%1u<li>%d.%1u<li>%d.%1u</ul>\n"
+    "<tr><td><a href=%s target=_top>%s</a></td>"		\
+    "<td>%d.%1u</td>"						\
+    "<td>%d.%1u</td>"						\
+    "<td>%d.%1u</td></tr>\n"
+
+#define HTMLFOOTER_ALERTS                                       \
+    "</table>\n"                                                
 
 #define HTMLFOOTER                                              \
     "</body></html>\n"                                          
@@ -364,9 +377,13 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     } 
 
     if (buf == NULL && args == NULL) {  
-	*len = alerts? 0 : sprintf(s, STR_NOALERTS);  
-	if (fmt == HTMLFMT) 
+	*len = alerts > 0 ? 0 : sprintf(s, STR_NOALERTS);  
+	if (fmt == HTMLFMT) {
+	    if (alerts > 0) {
+		*len += sprintf(s + *len, HTMLFOOTER_ALERTS);
+	    }
 	    *len += sprintf(s + *len, HTMLFOOTER);
+	}
 	alerts = 0;	/* reset */
 	return s;
     } 
