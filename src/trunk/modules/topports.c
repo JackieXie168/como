@@ -93,18 +93,20 @@ init(void * self, char *args[])
             config->last_export = atoi(wh);
         } else if (strstr(args[i], "udp")) {
             int port = atoi(args[i]);
-	    char *x, *z; 
+	    char *z;
+	    int len;
 	    z = index(wh, ',') + 1;
-	    x = strpbrk(z, "\t\n\0");
-	    config->udp_service[port] = mem_mdl_calloc(self, 1, x - z);
-	    strncpy(config->udp_service[port], z, x - z);
+	    len = strlen(z);
+	    config->udp_service[port] = mem_mdl_malloc(self, len + 1);
+	    strcpy(config->udp_service[port], z);
         } else if (strstr(args[i], "tcp")) {
             int port = atoi(args[i]);
-	    char *x, *z; 
+	    char *z;
+	    int len;
 	    z = index(wh, ',') + 1;
-	    x = strpbrk(z, "\t\n\0");
-	    config->udp_service[port] = mem_mdl_calloc(self, 1, x - z);
-	    strncpy(config->udp_service[port], z, x - z);
+	    len = strlen(z);
+	    config->tcp_service[port] = mem_mdl_malloc(self, len + 1);
+	    strcpy(config->tcp_service[port], z);
         }
     }
     
@@ -190,9 +192,11 @@ export(__unused void * self, void *efh, void *fh, int isnew)
 	return 0;
     } 
 
-    for (i = 0; i < 65536; i++) { 
+    for (i = 0; i < x->maxtcpport; i++) { 
 	ex->tcpbytes[i] += x->tcpbytes[i];
 	ex->tcppkts[i] += x->tcppkts[i];
+    }
+    for (i = 0; i < x->maxudpport; i++) { 
 	ex->udpbytes[i] += x->udpbytes[i];
 	ex->udppkts[i] += x->udppkts[i];
     } 
