@@ -64,13 +64,6 @@
  */
 #define MAX_USER_CLASSES	(MAX_CLASSES - 2)
 
-/*
- * Convert the index of the application class to a code. 
- * Lower index is used to break ties when a packet matches
- * multiple applications.
- */
-#define APP_TO_CODE(x)		((((uint) 1) << (x)) - 1) 
-
 
 #define FLOWDESC    struct _app_stat
 FLOWDESC {
@@ -82,7 +75,7 @@ FLOWDESC {
 typedef struct {
     int meas_ivl; 			/* measurement granularity (secs) */
     int classes; 			/* no. of categories */ 
-    char * names[16]; 			/* category names */
+    char * names[MAX_CLASSES]; 			/* category names */
     uint16_t tcp_port2app[65536];	/* mapping tcp port number to app */
     uint16_t udp_port2app[65536];	/* mapping udp port number to app */
     char template[1024]; 
@@ -99,8 +92,24 @@ init(void * self, char * args[])
 
     config = mem_mdl_calloc(self, 1, sizeof(config_t));
     config->meas_ivl = 1;
-    memset(config->tcp_port2app, 0xff, sizeof(config->tcp_port2app)); 
-    memset(config->udp_port2app, 0xff, sizeof(config->udp_port2app)); 
+
+    memset(config->tcp_port2app, 0xff, sizeof(config->tcp_port2app));
+    memset(config->udp_port2app, 0xff, sizeof(config->udp_port2app));
+
+    /* add the "UNKNWON" class for all TCP/UDP packets that cannot be 
+     * classified.
+     */ 
+    config->names[0] = mem_mdl_malloc(self, 8);
+    strcpy(config->names[0], "Unknown");
+
+    /* 
+     * add one class for all packets that are not TCP or UDP.
+     */ 
+    config->names[1] = mem_mdl_malloc(self, 12);
+    strcpy(config->names[1], "Not TCP/UDP");
+    
+    /* two classes so far */
+    config->classes = 2;
 
     /* 
      * process input arguments 
@@ -115,9 +124,9 @@ init(void * self, char * args[])
 	} else if (strstr(args[i], "class")) { 
 	    /* silently ignore more than MAX_USER_CLASSES classes */ 
 	    if (config->classes < MAX_USER_CLASSES) { 
-		char * x = strpbrk(wh, "\n\0"); 
-		config->names[config->classes] = mem_mdl_calloc(self, 1, x-wh); 
-		strncpy(config->names[config->classes], wh, x - wh);
+		int len = strlen(wh);
+		config->names[config->classes] = mem_mdl_malloc(self, len + 1);
+		strcpy(config->names[config->classes], wh);
 		config->classes++;
 	    } 
 	} else if (strstr(args[i], "udp")) {
@@ -125,9 +134,9 @@ init(void * self, char * args[])
 	    char * x = index(wh, ','); 
 	    int j; 
 
-	    for (j = 0; j < config->classes; j++) { 
+	    for (j = 2; j < config->classes; j++) { 
 		if (!strncmp(config->names[j], wh, (x - wh))) {
-		    config->udp_port2app[port] = APP_TO_CODE(j); 
+		    config->udp_port2app[port] = j; 
 		    break; 
 		} 
 	    } 
@@ -136,38 +145,15 @@ init(void * self, char * args[])
 	    char * x = index(wh, ','); 
 	    int j; 
 
-	    for (j = 0; j < config->classes; j++) { 
+	    for (j = 2; j < config->classes; j++) { 
 		if (!strncmp(config->names[j], wh, (x - wh))) {
-		    config->tcp_port2app[port] = APP_TO_CODE(j); 
+		    config->tcp_port2app[port] = j; 
 		    break; 
 		} 
 	    } 
 	} 
     }
 
-    /* add the "UNKNWON" class for all TCP/UDP packets that cannot be 
-     * classified. we also go thru the port2app arrays and 
-     * set all entries that are 0xffff to be APP_TO_CODE(config->classes) 
-     */ 
-    config->names[config->classes] = mem_mdl_malloc(self, 8);
-    snprintf(config->names[config->classes], 8, "Unknown");
-
-    for (i = 0; i < 65536; i++) { 
-	if (config->tcp_port2app[i] == 0xffff) 
-	    config->tcp_port2app[i] = APP_TO_CODE(config->classes); 
-	if (config->udp_port2app[i] == 0xffff) 
-	    config->udp_port2app[i] = APP_TO_CODE(config->classes); 
-    } 
-
-    config->classes++;
-
-    /* 
-     * finally add one class for all packets that are not TCP or UDP
-     */ 
-    config->names[config->classes] = mem_mdl_malloc(self, 12);
-    snprintf(config->names[config->classes], 12, "Not TCP/UDP");
-    config->classes++;
-	 
     /* 
      * our input stream needs to contain the port numbers and 
      * a packet length. for the timestamp, we use a default value of 
@@ -235,8 +221,11 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 	      cf->udp_port2app[H16(UDP(dst_port))];
     } else {
 	/* other protocols */
-	app = APP_TO_CODE(cf->classes - 1); 
-    } 
+	app = 1; 
+    }
+    if (app == 0xffff) {
+	app = 0;
+    }
 
     if (COMO(type) == COMOTYPE_NF) {
 	x->bytes[app] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
@@ -269,19 +258,18 @@ store(void * self, void *fh, char *buf)
     
     PUTH32(buf, x->ts); 
     for (i = 0; i < cf->classes; i++) {
-	PUTH64(buf, x->bytes[APP_TO_CODE(i)] / cf->meas_ivl);
-	PUTH32(buf, x->pkts[APP_TO_CODE(i)] / cf->meas_ivl);
+	PUTH64(buf, x->bytes[i] / cf->meas_ivl);
+	PUTH32(buf, x->pkts[i] / cf->meas_ivl);
     } 
 
-    return sizeof(uint32_t) + cf->classes * sizeof(app_t);
+    return sizeof(FLOWDESC);
 }
 
 
 static size_t
-load(void * self, char * buf, size_t len, timestamp_t * ts)
+load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 {
-    config_t * config = CONFIG(self);
-    size_t sz = sizeof(uint32_t) + config->classes * sizeof(app_t);
+    size_t sz = sizeof(FLOWDESC);
 
     if (len < sz) {
         ts = 0;
@@ -478,7 +466,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 MODULE(apps) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
-    st_recordsize: sizeof(uint32_t) + MAX_CLASSES * sizeof(app_t),
+    st_recordsize: sizeof(FLOWDESC),
     capabilities: {has_flexible_flush: 0, 0},
     init: init,
     check: NULL,
