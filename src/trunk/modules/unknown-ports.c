@@ -238,8 +238,7 @@ store(void * self, void *rp, char *buf)
     state_t * st = FSTATE(self); 
     FLOWDESC * x = F(rp);
     struct info * tp; 
-    int i, j, k;
-    uint8_t n; 
+    int i, j, k, n;
     
     /* allocate the array with the results */
     tp = mem_mdl_calloc(self, x->count, sizeof(struct info)); 
@@ -266,8 +265,10 @@ store(void * self, void *rp, char *buf)
 	} 
     }
 
-    if (k == 0) 
-	return 0; 
+    if (k == 0) {
+	mem_mdl_free(self, tp);
+	return 0;
+    } 
 
     /* now sort the tp array */ 
     qsort(tp, k, sizeof(struct info), cmp); 
@@ -275,7 +276,7 @@ store(void * self, void *rp, char *buf)
     /* store just the first 256 ports */ 
     PUTH32(buf, x->ts);
     n = MIN(256, k);
-    PUTH8(buf, n);
+    PUTH32(buf, n);
     for (i = 0; i < n; i++) {
 	PUTH8(buf, tp[i].proto); 
 	PUTH8(buf, tp[i].padding); 	/* padding */
@@ -283,21 +284,21 @@ store(void * self, void *rp, char *buf)
 	PUTH32(buf, tp[i].bytes); 
 	PUTH32(buf, tp[i].pkts); 
 	PUTH32(buf, tp[i].hosts); 
-    } 
+    }
+    
+    mem_mdl_free(self, tp);
 
-    return (n * sizeof(struct info) + 5); 
+    return n * sizeof(struct info) + 8; 
 }
 
 static size_t
 load(__unused void * self, char *buf, __unused size_t len, timestamp_t *ts)
 {
-    time_t timestamp; 
-    uint8_t n; 
+    int n;
 
-    GETH32(buf, &timestamp)
-    GETH8(buf, &n); 
-    *ts = TIME2TS(timestamp, 0);
-    return (n * sizeof(struct info) + 5); 
+    *ts = TIME2TS(ntohl(((FLOWDESC *)buf)->ts), 0);
+    n = ntohl(((FLOWDESC *)buf)->count);
+    return n * sizeof(struct info) + 8; 
 }
 
 
@@ -357,7 +358,11 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     time_t ts;
     uint8_t count; 
     int i; 
+    FLOWDESC *x;
+    
 
+    *len = 0;
+    
     if (buf == NULL && args != NULL) { 
 	int n; 
 
@@ -386,15 +391,15 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     } 
 
     if (buf == NULL && args == NULL) { 
-	*len = 0; 
 	if (fmt == HTMLFMT) 
 	    *len = sprintf(s, HTMLFOOTER);  
   	return s; 
     } 
 
-    GETH32(buf, &ts); 
-    GETH8(buf, &count); 
-    tp = (struct info *) buf; 
+    x = (FLOWDESC *) buf; 
+    ts = (time_t) ntohl(x->ts);
+    count = ntohl(x->count);
+    tp = (struct info *) (buf + sizeof(FLOWDESC)); 
 
     /* read each field of the record */
     for (i = 0; i < count; i++) { 
@@ -410,9 +415,9 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
         } 
 	    
 	if (fmt == PRETTYFMT)
-	    *len = sprintf(s, "%.24s ", asctime(localtime(&ts))); 
+	    *len += sprintf(s + *len, "%.24s ", asctime(localtime(&ts))); 
 	else if (fmt == PLAINFMT)
-	    *len = sprintf(s, "%u ", (uint) ts); 
+	    *len += sprintf(s + *len, "%u ", (uint) ts); 
 	    
 	*len += sprintf(s + *len, fmt, ntohs(tp[i].port), 
 		   getprotoname(tp[i].proto), ntohl(tp[i].pkts), 
@@ -426,7 +431,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 MODULE(unknown_ports) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
-    st_recordsize: 256 * sizeof(struct info) + 5, 
+    st_recordsize: 256 * sizeof(struct info) + 8, 
     capabilities: {has_flexible_flush: 0, 0},
     init: init,
     check: check,
