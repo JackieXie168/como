@@ -375,7 +375,6 @@ flowtools_read(struct flowtools_me * me)
 	 * of interest. if iface is 0, all flows are of interest. 
 	 */
 	if (me->iface && (me->iface != fr->input && me->iface != fr->output)) {
-	    logmsg(LOGSNIFFER, "filtering out by interface\n"); 
 	    /* read next record and try again */ 
 	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
 	    continue; 
@@ -386,7 +385,6 @@ flowtools_read(struct flowtools_me * me)
 	 * of interest. if iface is 0, all flows are of interest. 
 	 */
 	if (me->exporter && fr->exaddr != me->exporter) {
-	    logmsg(LOGSNIFFER, "filtering out by exporter\n");
 	    /* read next record and try again */ 
 	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
 	    continue; 
