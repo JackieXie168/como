@@ -534,7 +534,7 @@ do_config(struct _como * m, int argc, char *argv[])
 		break;
 	    }
 
-	    if (m->running == INLINE) 
+	    if (m->runmode == RUNMODE_INLINE) 
 		m->inline_mdl = mdl;
 
 	    logmsg(LOGUI, "... module%s %s [%d][%d] ", 
@@ -591,8 +591,9 @@ do_config(struct _como * m, int argc, char *argv[])
 	break;
 
     case TOK_MODULE:
-	if (scope == CTX_GLOBAL) { 
-	    mdl = new_module(m, argv[1], (m->running == INLINE? -1 : 0), -1);
+	if (scope == CTX_GLOBAL) {
+	    int node = (m->runmode == RUNMODE_INLINE? -1 : 0);
+	    mdl = new_module(m, argv[1], node, -1);
 	    scope = CTX_MODULE; 		/* change scope */
 	} else { 
 	    safe_dup(&alias->module, argv[1]);
@@ -967,7 +968,6 @@ const char *MALLOC_OPTS;	/* other systems don't have it */
 extern const char *MALLOC_OPTS;
 
 typedef struct cli_args_t {
-    int		done;
     char	**cfg_files;
     int		cfg_files_count;
     char	*dbdir;
@@ -976,7 +976,7 @@ typedef struct cli_args_t {
     size_t	mem_size;
     int		logflags;
     int		debug;
-    runmodes_t  running; 
+    runmode_t	runmode; 
     char	*sniffer;
     char	*module;
     char	*module_args;
@@ -1105,7 +1105,7 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 	int i;
 	
 	/* Run with inline mode */
-	m->running = INLINE;
+	m->runmode = RUNMODE_INLINE;
 	
 	/* To define a module from command line, we use do_config().
 	 *
@@ -1136,8 +1136,6 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 	    }
 	}
     }
-    
-    m->done = 1;
 }
 
 
@@ -1154,7 +1152,7 @@ init_map(struct _como * m)
 
     memset(m, 0, sizeof(struct _como));
     m->whoami = SUPERVISOR;
-    m->running = NORMAL; 
+    m->runmode = RUNMODE_NORMAL; 
     m->logflags = DEFAULT_LOGFLAGS;
     m->mem_size = DEFAULT_MEMORY;
     m->maxfilesize = DEFAULT_FILESIZE;
@@ -1220,8 +1218,8 @@ configure(struct _como * m, int argc, char ** argv)
 	}
     }
     
-    m->running = cli_args.running;
-    m->inline_fd = (m->running == INLINE) ? 1 /* stdout */ : -1; 
+    m->runmode = cli_args.runmode;
+    m->inline_fd = (m->runmode == RUNMODE_INLINE) ? 1 /* stdout */ : -1; 
     
     m->debug = cli_args.debug;
 
@@ -1234,10 +1232,10 @@ configure(struct _como * m, int argc, char ** argv)
 	parse_cfgfile(m, cli_args.cfg_files[c]);
     }
     
-    if (!config_file_exists && m->running == NORMAL) 
+    if (!config_file_exists && m->runmode != RUNMODE_INLINE) 
         parse_cfgfile(m, DEFAULT_CFGFILE);	/* add default config file */
 
-    if (m->running == INLINE) {
+    if (m->runmode == RUNMODE_INLINE) {
 	char *conf_argv[2];
 	
     	if (cli_args.sniffer != NULL) {
@@ -1335,7 +1333,7 @@ configure(struct _como * m, int argc, char ** argv)
     /* 
      * open the dbdir for all nodes (virtual ones included) 
      */
-    if (m->running == NORMAL) {
+    if (m->runmode == RUNMODE_NORMAL) {
 	if (m->dbdir == NULL)
 	    panicx("missing db-path");
 	d = opendir(m->dbdir);

@@ -126,7 +126,7 @@ static void
 su_ipc_record(__unused procname_t sender, __unused int fd, 
 	void * buf, __unused size_t l)
 {
-    assert(map.running == INLINE);  
+    assert(map.runmode == RUNMODE_INLINE);  
     fprintf(stdout, "%s", (char *) buf); 
 }
 
@@ -144,7 +144,7 @@ static void
 su_ipc_done(__unused procname_t sender, __unused int fd, 
 	__unused void * b, __unused size_t l)
 {
-    assert(map.running == INLINE); 
+    assert(map.runmode == RUNMODE_INLINE); 
     ipc_send(CAPTURE, IPC_EXIT, NULL, 0); 
     ipc_send(EXPORT, IPC_EXIT, NULL, 0); 
     ipc_send(STORAGE, IPC_EXIT, NULL, 0); 
@@ -349,7 +349,7 @@ supervisor_mainloop(int accept_fd)
     signal(SIGINT, exit);               /* catch SIGINT to clean up */
     signal(SIGTERM, exit);              /* catch SIGTERM to clean up */
     signal(SIGCHLD, defchld);		/* catch SIGCHLD (defunct children) */
-    if (map.running == NORMAL)
+    if (map.runmode == RUNMODE_NORMAL)
 	signal(SIGHUP, reconfigure);    /* catch SIGHUP to update config */
 
     /* register a handler for exit */
@@ -362,7 +362,7 @@ supervisor_mainloop(int accept_fd)
     ipc_register(IPC_RECORD, su_ipc_record); 
     ipc_register(IPC_DONE, su_ipc_done); 
 
-    if (map.running == INLINE) {
+    if (map.runmode == RUNMODE_INLINE) {
         inline_mainloop(accept_fd); 
 	return; 
     } 
@@ -390,7 +390,7 @@ supervisor_mainloop(int accept_fd)
     }
 
     /* initialize all modules */ 
-    for (i = 0; i < map.module_max; i++) {
+    for (i = 0; i <= map.module_last; i++) {
 	module_t * mdl = &map.modules[i]; 
 
 	if (mdl->status != MDL_LOADING) 
@@ -447,7 +447,7 @@ supervisor_mainloop(int accept_fd)
         mm = (secs % 3600) / 60;
         ss = secs % 60; 
 
-	if (map.running == NORMAL) 
+	if (map.runmode == RUNMODE_NORMAL) {
 	    fprintf(stderr, 
 		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); cls %d (%d); "
 		"pkts %llu drops %d; mdl %d/%d\r", 
@@ -457,10 +457,13 @@ supervisor_mainloop(int accept_fd)
 		map.mem_size, map.stats->table_queue,
 		map.stats->ca_clients, map.stats->batch_queue,
 		map.stats->pkts, map.stats->drops,
-		map.stats->modules_active, map.module_used); 
+		map.stats->modules_active, map.module_used);
+	}
 
 	n_ready = select(max_fd, &r, NULL, NULL, &to);
-	fprintf(stderr, "%78s\r", ""); /* clean the line */
+	if (map.runmode == RUNMODE_NORMAL) {
+	    fprintf(stderr, "%78s\r", ""); /* clean the line */
+	}
 
 	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 	    int id;

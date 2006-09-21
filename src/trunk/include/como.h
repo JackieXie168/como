@@ -75,7 +75,7 @@ typedef struct _node	node_t;
 struct _como {
     procname_t whoami; 		/* process using this instance */
     procname_t parent; 		/* parent process */
-    runmodes_t running;         /* mode of operation */ 
+    runmode_t  runmode;         /* mode of operation */
 
     int ac;			/* command line arguments */
     char **av;			/* command line arguments */
