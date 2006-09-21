@@ -30,6 +30,8 @@
  * $Id$
  */
 
+/* CoMo portability library */
+
 #ifndef BITMAP_H_
 #define BITMAP_H_
 #include <stdint.h>

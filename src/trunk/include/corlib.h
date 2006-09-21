@@ -30,61 +30,20 @@
  * $Id$
  */
 
-#include <stdlib.h>
+/* CoMo portability library */
 
-#include "corlib.h"
+#ifndef LIBCOMO_H_
+#define LIBCOMO_H_
 
-#define INITIAL_SIZE 128
+/* CoMo's customization of lib */
 
-struct mempool {
-    size_t size;
-    void **free_items;
-    int fi_usage;
-    int fi_size;
-};
+#include "como.h"
 
-mempool_t *
-mempool_new(size_t size)
-{
-    mempool_t *pool;
+#define lib_malloc	safe_malloc
+#define lib_calloc	safe_calloc
+#define lib_realloc	safe_realloc
 
-    pool = (mempool_t *) safe_malloc(sizeof(mempool_t));
-    pool->size = size;
-    pool->free_items = safe_calloc(INITIAL_SIZE, sizeof(void *));
-    pool->fi_usage = 0;
-    pool->fi_size = INITIAL_SIZE;
+/* Actual corlib include file */
+#include "corlib2.h"
 
-    return pool;
-}
-
-void
-mempool_destroy(mempool_t *pool)
-{
-    int i;
-    for (i = 0; i < pool->fi_usage; i++)
-        free(pool->free_items[i]);
-    free(pool);
-}
-
-void *
-mempool_alloc(mempool_t *pool)
-{
-    if (pool->fi_usage == 0)
-        return safe_malloc(pool->size);
-    
-    pool->fi_usage--; /* XXX shorten the array on low usage? */
-    return pool->free_items[pool->fi_usage];
-}
-
-void
-mempool_free(mempool_t *pool, void *elem)
-{
-    if (pool->fi_usage == pool->fi_size) { /* need larger free chunks list */
-        pool->fi_size *= 2;
-        pool->free_items = realloc(pool->free_items, sizeof(void *) * pool->fi_size);
-    }
-
-    pool->free_items[pool->fi_usage] = elem;
-    pool->fi_usage++;
-}
-
+#endif /*LIBCOMO_H_*/

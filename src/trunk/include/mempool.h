@@ -30,6 +30,8 @@
  * $Id$
  */
 
+/* CoMo portability library */
+
 #ifndef _COMO_MEMPOOL_H
 #define _COMO_MEMPOOL_H
 

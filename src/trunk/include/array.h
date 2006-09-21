@@ -30,61 +30,29 @@
  * $Id$
  */
 
-#include <stdlib.h>
+/* CoMo portability library */
 
-#include "corlib.h"
+#ifndef ARRAY_H_
+#define ARRAY_H_
 
-#define INITIAL_SIZE 128
+typedef struct array {
+    void *	data;
+    int		len;
+    int		size;
+    void *	base;
+    size_t	element_size;
+} array_t;
 
-struct mempool {
-    size_t size;
-    void **free_items;
-    int fi_usage;
-    int fi_size;
-};
 
-mempool_t *
-mempool_new(size_t size)
-{
-    mempool_t *pool;
+array_t * array_new        (size_t element_size);
+array_t * array_sized_new  (size_t element_size, int reserved_size);
+void **   array_free       (array_t * array, int free_seg);
+void      array_add        (array_t * array, void *data);
+void      array_sort       (array_t * array, cmp_fn cmFn);
+void      array_clear      (array_t * array, int reserved_size, int zero_seg);
+void *    array_shift_     (array_t * array);
 
-    pool = (mempool_t *) safe_malloc(sizeof(mempool_t));
-    pool->size = size;
-    pool->free_items = safe_calloc(INITIAL_SIZE, sizeof(void *));
-    pool->fi_usage = 0;
-    pool->fi_size = INITIAL_SIZE;
+#define   array_at(a,t,i)  (((t *) a->data)[i])
+#define   array_shift(a,t) ((t *) array_shift_(a))
 
-    return pool;
-}
-
-void
-mempool_destroy(mempool_t *pool)
-{
-    int i;
-    for (i = 0; i < pool->fi_usage; i++)
-        free(pool->free_items[i]);
-    free(pool);
-}
-
-void *
-mempool_alloc(mempool_t *pool)
-{
-    if (pool->fi_usage == 0)
-        return safe_malloc(pool->size);
-    
-    pool->fi_usage--; /* XXX shorten the array on low usage? */
-    return pool->free_items[pool->fi_usage];
-}
-
-void
-mempool_free(mempool_t *pool, void *elem)
-{
-    if (pool->fi_usage == pool->fi_size) { /* need larger free chunks list */
-        pool->fi_size *= 2;
-        pool->free_items = realloc(pool->free_items, sizeof(void *) * pool->fi_size);
-    }
-
-    pool->free_items[pool->fi_usage] = elem;
-    pool->fi_usage++;
-}
-
+#endif

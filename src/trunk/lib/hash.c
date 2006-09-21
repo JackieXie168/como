@@ -88,8 +88,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "como.h"
-#include "hash.h"
+#include "corlib.h"
 
 /*
  * When there are this many entries per bucket, on average, rebuild
@@ -266,6 +265,14 @@ hash_new_full(allocator_t * alc, int keyType, hash_key_fn hashKeyFn,
 
     return tablePtr;
 }
+
+
+int
+hash_size(hash_t * tablePtr)
+{
+    return tablePtr->numEntries;
+}
+
 
 static hash_entry_t *
 hash_lookup_internal(hash_t * tablePtr, void *key)

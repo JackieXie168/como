@@ -70,6 +70,8 @@ int match_module(module_t * a, module_t * b);
 uint memory_usage();
 uint memory_peak();
 
+allocator_t * allocator_safe();
+
 void * mem_mdl_smalloc(size_t sz, const char * file, int line, module_t * mdl);
 void * mem_mdl_scalloc(size_t n, size_t sz, const char *, int, module_t * mdl);
 void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
@@ -103,6 +105,11 @@ void export_mainloop();
  */
 void supervisor_mainloop();
 
+/*
+ * querymode.c
+ */
+void querymode_init();
+
 /* 
  * logging.c 
  */
@@ -127,9 +134,9 @@ void _epanicx (const char * file, int line, const char *fmt, ...);
 /* 
  * filter-syntax.c
  */
-int parse_filter(char *, treenode_t **, char **);
-int evaluate(treenode_t *t, pkt_t *pkt);
-treenode_t *tree_copy(treenode_t *t);
+int          parse_filter (char *, treenode_t **, char **);
+int          evaluate     (treenode_t *t, pkt_t *pkt);
+
 
 /*
  * asn.c
@@ -155,6 +162,7 @@ int como_writen(int fd, const char *buf, size_t len);
  * util-misc.c
  */
 char * getprotoname (int proto);
+void   print_rusage (FILE *f, int who);
 char * strchug      (char *str);
 char * strchomp     (char *str);
 
