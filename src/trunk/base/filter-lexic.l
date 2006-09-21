@@ -141,6 +141,7 @@ all             { return(ALL); }
 exporter        { return(EXPORTER); }	
 to_ds           { return(TODS); }
 from_ds         { return(FROMDS); }
+asn		{ return(ASN); }
 
 [ \t\n]+
 

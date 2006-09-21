@@ -78,7 +78,8 @@ enum tokens {
     TOK_COMMENT,
     TOK_MAXFILESIZE,
     TOK_VIRTUAL,
-    TOK_ALIAS
+    TOK_ALIAS,
+    TOK_ASNFILE
 };
 
 
@@ -149,6 +150,7 @@ keyword_t keywords[] = {
     { "filesize",    TOK_MAXFILESIZE, 2, CTX_GLOBAL|CTX_VIRTUAL },
     { "virtual-node",TOK_VIRTUAL,     2, CTX_GLOBAL },
     { "alias",       TOK_ALIAS,       2, CTX_GLOBAL },
+    { "asnfile",     TOK_ASNFILE,     1, CTX_GLOBAL },
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -694,6 +696,10 @@ do_config(struct _como * m, int argc, char *argv[])
 	scope = CTX_ALIAS; 
 	break;
 
+    case TOK_ASNFILE:
+	safe_dup(&m->asnfile, argv[1]);
+	break;
+
     default:
 	sprintf(errstr, "unknown keyword %s\n", argv[0]);
 	return errstr; 
@@ -1167,6 +1173,7 @@ init_map(struct _como * m)
     m->node[0].query_port = DEFAULT_QUERY_PORT;
     m->node_count = 1;
     m->debug_sleep = 20;
+    m->asnfile = NULL;
 }
 
 
@@ -1336,5 +1343,11 @@ configure(struct _como * m, int argc, char ** argv)
 	    createdir(m->dbdir); 
 	else 
 	    closedir(d);
-    } 
+    }
+
+    /*
+     * process the AS file
+     */
+
+    asn_readfile(m->asnfile);
 }
