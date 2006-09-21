@@ -116,7 +116,7 @@ struct prefix {
 
 prefix_t *base = NULL;
 
-void
+static void
 free_prefix_tree(prefix_t * ptr)
 {
     if (ptr->left)
@@ -127,7 +127,7 @@ free_prefix_tree(prefix_t * ptr)
 }
 
 
-void
+static void
 init_prefix_tree(void)
 {
     if (base) {
@@ -138,7 +138,7 @@ init_prefix_tree(void)
     base = NULL;
 }
 
-void
+static void
 add_new_prefix(const uint32_t prefix, const uint32_t mask,
 	       const uint8_t subnet, const asn_t origin)
 {
@@ -215,7 +215,7 @@ add_new_prefix(const uint32_t prefix, const uint32_t mask,
 
 /* build_tree : recursive tree-building */
 
-prefix_t *
+static prefix_t *
 build_tree(prefix_t * const ptr, const int count)
 {
     prefix_t *temp = ptr;
@@ -267,7 +267,7 @@ build_tree(prefix_t * const ptr, const int count)
 
 /* make_prefix_tree: build tree from flat chain */
 
-void
+static void
 make_prefix_tree(void)
 {
     /* count items in tree */
@@ -289,7 +289,7 @@ make_prefix_tree(void)
  * --------------------------------------------------------------------------
  */
 
-uint32_t
+static inline uint32_t
 fetch32(const uint8_t * const buffer, const int offset)
 {
     return (buffer[offset + 0] << 24)
@@ -297,13 +297,13 @@ fetch32(const uint8_t * const buffer, const int offset)
 	 | (buffer[offset + 2] << 8) | buffer[offset + 3];
 }
 
-uint16_t
+static inline uint16_t
 fetch16(const uint8_t * const buffer, const int offset)
 {
     return (buffer[offset + 0] << 8) | buffer[offset + 1];
 }
 
-uint8_t
+static inline uint8_t
 fetch8(const uint8_t * const buffer, const int offset)
 {
     return buffer[offset];
