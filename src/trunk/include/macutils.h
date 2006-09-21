@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2006, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -30,7 +30,11 @@
  * $Id$
  */
 
+#ifndef _MACUTILS_H
+#define _MACUTILS_H
 #include "como.h"
 
 void pretty_mac(uint8_t *addr, char *output, size_t size, int lookup_vendor);
+
+#endif
 
