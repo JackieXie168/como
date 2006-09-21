@@ -42,6 +42,9 @@
 #include <stdio.h>
 #include <time.h>
 #include "module.h"
+#include "macutils.h"
+
+#define MAC_ADDR_SIZE   6
 
 /* 
  * the information we maintain in capture is just the 
@@ -55,9 +58,10 @@ FLOWDESC {
     uint8_t	samples; 
     int8_t 	channel;
     uint8_t	wepmode;
+    uint8_t     bssid[MAC_ADDR_SIZE];
     uint8_t	len; 
     char 	ssid[33];
-    uint8_t     padding[3]; 
+    uint8_t     padding[1]; 
 };
 
 #define CONFIGDESC   struct _ssid_config
@@ -120,6 +124,7 @@ match(__unused void * self, pkt_t * pkt, void * fh)
     FLOWDESC * x = F(fh); 
     
     if (!(strncmp(x->ssid, MGMT_BODY(ssid), x->len)) && 
+            (!(bcmp(x->bssid, &IEEE80211_BASE(addr3), MAC_ADDR_SIZE))) &&
 	    (x->channel == MGMT_BODY(ch)))
 	return 1; 
 
@@ -155,7 +160,7 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 	    x->len = 3; 
 	    sprintf(x->ssid, "ANY"); 
 	}
-
+        bcopy(IEEE80211_BASE(addr3), x->bssid, MAC_ADDR_SIZE);
 	x->channel = MGMT_BODY(ch); 	
     }
     x->samples++;
@@ -180,6 +185,8 @@ store(__unused void * self, void *rp, char *buf)
     PUTH8(buf, x->samples); 
     PUTH8(buf, x->channel);
     PUTH8(buf, x->wepmode); 
+    for (i = 0; i < MAC_ADDR_SIZE; i++)
+	PUTH8(buf, x->bssid[i]); /* CHECKME: why not use memcpy? */
     PUTH8(buf, x->len); 
     for (i = 0; i < x->len; i++) 
 	PUTH8(buf, x->ssid[i]); /* CHECKME: why not use memcpy? */
@@ -203,8 +210,8 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 
 #define PRETTYHDR		\
     "Date                     Signal (dbm)    Noise (dbm)     Channel \
-   Samples    WEP   SSID\n"
-#define PRETTYFMT	"%.24s %-15d %-15d %-10d %-10d %-5s %-32s\n"
+   Samples    WEP   MAC               SSID\n"
+#define PRETTYFMT	"%.24s %-15d %-15d %-10d %-10d %-5s %s %-32s\n"
 #define PLAINFMT	"%12ld %1d %2d %2d %2d %2d\n" 
 
 static char *
@@ -250,8 +257,11 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     /* print according to the requested format */
     if (fmt == PRETTYFMT) {
 	char * wepmode = x->wepmode? "Y": "N"; 
+        char bssid[64];
+
+        pretty_mac(x->bssid, bssid, sizeof(bssid), 1);
 	*len = sprintf(s, fmt, asctime(localtime(&t)), sig, noise,
-					x->channel, x->samples, wepmode, ssid); 
+                                    x->channel, x->samples, wepmode, bssid, ssid);
     } else {
 	*len = sprintf(s, fmt, (long int) t, x->wepmode, 
 		   x->channel, sig, noise, x->samples); 

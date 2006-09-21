@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <time.h>
 #include "module.h"
+#include "macutils.h"
 
 #define MAC_ADDR_SIZE   6
 
@@ -140,25 +141,11 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
     return sizeof(FLOWDESC);
 }
 
-static void __unused
-mac_addr_to_ascii(uint8_t *mac, char *dest)
-{
-    char *ptr = dest;
-    int i;
-
-    for (i = 0; i < MAC_ADDR_SIZE; i++) {
-        sprintf(ptr, "%02x:", mac[i]);
-        ptr += 3;
-    }
-
-    dest[3 * MAC_ADDR_SIZE - 1] = '\0';
-}
-
 static char *
 print(__unused void *self, char *buf, size_t *len, __unused char *const args[])
 {
     static char output[1024];
-    char ascii_mac[20];
+    char ascii_mac[128];
     uint32_t chan, samples;
     int32_t strength;
     timestamp_t ts;
@@ -183,7 +170,7 @@ print(__unused void *self, char *buf, size_t *len, __unused char *const args[])
     strength = ntohl(x->signal_strength);
     mean_strength = (float)strength / (float)samples;
 
-    mac_addr_to_ascii(x->addr, ascii_mac);
+    pretty_mac(x->addr, ascii_mac, sizeof(ascii_mac), 0);
     *len = sprintf(output, "%llu %s %02d   %.4f %d\n", ts, ascii_mac,
             chan, mean_strength, samples);
     return output;
