@@ -74,6 +74,8 @@ typedef struct cca		cca_t;
 
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
+typedef uint16_t		asn_t;		/* ASN values */
+
 typedef enum runmodes_t { 
     NORMAL = 0, 
     INLINE = 1

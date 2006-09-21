@@ -56,6 +56,12 @@ struct _ipaddr {
 };
 typedef struct _ipaddr ipaddr_t;
 
+struct _asnfilt {
+    uint8_t direction;
+    uint16_t asn;
+};
+typedef struct _asnfilt asnfilt_t;
+
 struct _portrange {
     uint8_t direction;
     uint16_t lowport;
@@ -75,6 +81,7 @@ union _nodedata {
     uint16_t proto;
     iface_t iface;
     ipaddr_t exaddr;
+    asnfilt_t asn;
 };
 typedef union _nodedata nodedata_t;
 

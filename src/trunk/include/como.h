@@ -85,6 +85,7 @@ struct _como {
     char * libdir;		/* base directory for modules */
     int logflags;       	/* log flags (i.e., what to log) */
     FILE * logfile;		/* log file */
+    char * asnfile;		/* routing table file giving AS identities */
 
     size_t mem_size;    	/* memory size for capture/export (MB) */
     int mem_type;		/* defines how to allocate memory */

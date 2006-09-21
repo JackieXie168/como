@@ -31,6 +31,7 @@ SET(COMO_SRCS
   sniffers.c
   ieee80211frames.c
   radio.c
+  asn.c
   ${COMO_SOURCE_DIR}/lib/bitmap.c
   ${COMO_SOURCE_DIR}/lib/hash.c
   ${COMO_SOURCE_DIR}/lib/heap.c

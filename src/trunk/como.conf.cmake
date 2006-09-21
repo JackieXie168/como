@@ -15,6 +15,17 @@
 
 #librarydir	"/where/are/modules"
 
+# File in MRT format (see draft-ietf-grow-mrt-03.txt) that
+# gives the IP address ranges announced by each autonomous
+# system (AS) [eg a global routing table]. See the RIS
+# project for one source of such files:
+#       http://www.ripe.net/ris/rawdata.html
+# NB: AS 65535 is predefined to be RFC1918 address space
+# (ie 10/8, 172.16/12, 192.168/16) and if no file is
+# specified that will be all that is known about.
+
+#asnfile = "bview.20060901.0000.gz"
+
 # Memory (in MBytes) allocated to the CAPTURE process 
 # to maintain the state used by all modules. The more 
 # modules, the more memory is needed.
@@ -39,7 +50,9 @@
 # Virtual nodes. It is possible to define virtual nodes 
 # that run the same set of modules of the main node but 
 # on a subset of traffic. The virtual nodes would reply 
-# to queries on a dedicated port number
+# to queries on a dedicated port number. For the syntax
+# of the filter expression see the description of the
+# module filter below.
 
 #virtual-node	"Virtual Node"
 #  location	"Unknown"
@@ -142,12 +155,18 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 # - protocol:
 #       ip/tcp/udp/icmp
 # - ip address and netmask:
-#       src/dst xxx.xxx.xxx.xxx (only dots and numbers: host IP)
-#       src/dst xxx.xxx.xxx.xxx/yy (dots and numbers/CIDR notation)
+#       direction xxx.xxx.xxx.xxx (only dots and numbers: host IP)
+#       direction xxx.xxx.xxx.xxx/yy (dots and numbers/CIDR notation)
+#       direction asn xxxxx (address announced by an autonomous system)
+#       where direction must be one of
+#           src   the source address matches the value/range
+#           dst   the destination address matches the value/range
+#           addr  either source or destination matches
+#           host  synonym for addr
 # - port: 
 #       sport/dport xxxxx (just 1 port)
 #       sport/dport xxxxx:yyyyy (a set of ports)
-# - interaces: 
+# - interfaces: 
 #       input/output xxxxx (it only works with NetFlow data)
 # - from_ds / to_ds:
 #       IEEE 802.11 packets coming from or going to access point
@@ -163,6 +182,7 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #   filter  "tcp and src 10.213.54.6 and sport 5000:6000"
 #   filter  "udp and (not(sport 21) or src 64.32.234.9/31)"
 #   filter  "input 53 and udp"
+#   filter  "src asn 2529 or addr asn 65535" 
 #
 
 #

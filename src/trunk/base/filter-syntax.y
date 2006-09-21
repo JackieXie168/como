@@ -106,6 +106,7 @@
 #define Texporter 9
 #define Tfromds   10
 #define Ttods     11
+#define Tasn      12
 
 struct _listnode
 {
@@ -234,6 +235,13 @@ tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
             t->data->ipaddr.direction = data->ipaddr.direction;
             t->data->ipaddr.ip = data->ipaddr.ip & data->ipaddr.nm;
             t->data->ipaddr.nm = data->ipaddr.nm;
+            break;
+        case Tasn:
+            asprintf(&(t->string), "%d ASN %d",
+                     data->asn.direction,
+                     data->asn.asn);
+            t->data->asn.direction = data->asn.direction;
+            t->data->asn.asn = data->asn.asn;
             break;
         case Tport:
             asprintf(&(t->string), "%d port %d:%d",
@@ -697,6 +705,17 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
                     ((N32(IP(src_ip)) & t->data->ipaddr.nm) ==
                      t->data->ipaddr.ip);
             break;
+        case Tasn:
+            if (!isIP) 
+		return 0;
+            if (t->data->asn.direction == 0)			/* src */
+                z = asn_test((N32(IP(src_ip))), t->data->asn.asn);
+            else if (t->data->ipaddr.direction == 1)		/* dst */
+                z = asn_test((N32(IP(dst_ip))), t->data->asn.asn);
+            else 						/* addr */
+                z = asn_test((N32(IP(src_ip))), t->data->asn.asn) ||
+		    asn_test((N32(IP(dst_ip))), t->data->asn.asn);
+            break;
         case Tport:
             if (!isTCP && !isUDP)
                 return 0;
@@ -812,11 +831,12 @@ int evaluate(treenode_t *t, pkt_t *pkt)
     portrange_t portrange;
     iface_t iface;
     ipaddr_t exaddr;
+	asnfilt_t asn;
 }
 
 /* Data types and tokens used by the parser */
 
-%token NOT AND OR OPENBR CLOSEBR COLON ALL EXPORTER FROMDS TODS
+%token NOT AND OR OPENBR CLOSEBR COLON ALL EXPORTER FROMDS TODS ASN
 %left NOT AND OR /* Order of precedence */
 %token <byte> DIR PORTDIR IFACE
 %token <word> LEVEL3 LEVEL4 NUMBER
@@ -824,6 +844,7 @@ int evaluate(treenode_t *t, pkt_t *pkt)
 %token <string> IPADDR
 %type <tree> expr
 %type <ipaddr> ip
+%type <asn> asnfilt
 %type <portrange> port
 %type <word> proto 
 %type <iface> iface
@@ -871,6 +892,10 @@ expr: expr AND expr
       {
         $$ = tree_make(Tpred, Tip, NULL, NULL, (nodedata_t *)&$1);
       }
+    | asnfilt
+      {
+        $$ = tree_make(Tpred, Tasn, NULL, NULL, (nodedata_t *)&$1);
+      }
     | port
       {
         $$ = tree_make(Tpred, Tport, NULL, NULL, (nodedata_t *)&$1);
@@ -911,6 +936,12 @@ ip: DIR IPADDR
             YYABORT;
         if (parse_nm($3, &($$.nm)) == -1)
             YYABORT;
+    }
+;
+asnfilt: DIR ASN NUMBER
+    {
+        $$.direction = $1;
+        $$.asn       = $3;
     }
 ;
 port: PORTDIR NUMBER

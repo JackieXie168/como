@@ -132,6 +132,12 @@ int evaluate(treenode_t *t, pkt_t *pkt);
 treenode_t *tree_copy(treenode_t *t);
 
 /*
+ * asn.c
+ */
+void asn_readfile(const char * filename);
+int asn_test(const uint32_t addr, const uint16_t asn);
+
+/*
  * util-socket.c
  */
 int create_socket(const char *path, char **arg);
