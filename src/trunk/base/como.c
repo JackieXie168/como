@@ -127,14 +127,17 @@ main(int argc, char *argv[])
      */
 
     /* start the STORAGE process */
-    pid = start_child(STORAGE,COMO_PRIVATE_MEM,storage_mainloop,storage_fd,0);
+    pid = start_child(STORAGE, COMO_PRIVATE_MEM,
+		      storage_mainloop, storage_fd, 0);
 
     /* start the EXPORT process */
-    pid = start_child(EXPORT, COMO_PRIVATE_MEM, export_mainloop, -1, 0); 
+    pid = start_child(EXPORT, COMO_PRIVATE_MEM,
+		      export_mainloop, -1, 0);
 
     /* start the CAPTURE process */
-    pid = start_child(CAPTURE,COMO_SHARED_MEM,capture_mainloop,capture_fd,0); 
-
+    pid = start_child(CAPTURE, COMO_SHARED_MEM,
+		      capture_mainloop, capture_fd, 0);
+    
     /* move to the SUPERVISOR process (we don't fork here) */
     map.whoami = SUPERVISOR; 
     map.mem_type = COMO_SHARED_MEM; 
