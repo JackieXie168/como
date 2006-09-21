@@ -38,7 +38,7 @@
 
 #include "como.h"
 #include "comopriv.h"
-#include "hash.h"
+#include "corlib.h"
 
 /* global state */
 extern struct _como map;

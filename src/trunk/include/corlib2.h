@@ -30,61 +30,36 @@
  * $Id$
  */
 
-#include <stdlib.h>
+/* CoMo portability library */
 
-#include "corlib.h"
+#ifndef LIB_H_
+#define LIB_H_
 
-#define INITIAL_SIZE 128
+#ifndef lib_malloc
+#warning "lib_malloc not defined: using default libc's malloc"
+#define lib_malloc	malloc
+#endif
 
-struct mempool {
-    size_t size;
-    void **free_items;
-    int fi_usage;
-    int fi_size;
-};
+#ifndef lib_calloc
+#warning "lib_calloc not defined: using default libc's malloc"
+#define lib_calloc	calloc
+#endif
 
-mempool_t *
-mempool_new(size_t size)
-{
-    mempool_t *pool;
+#ifndef lib_realloc
+#warning "lib_realloc not defined: using default libc's malloc"
+#define lib_realloc	realloc
+#endif
 
-    pool = (mempool_t *) safe_malloc(sizeof(mempool_t));
-    pool->size = size;
-    pool->free_items = safe_calloc(INITIAL_SIZE, sizeof(void *));
-    pool->fi_usage = 0;
-    pool->fi_size = INITIAL_SIZE;
+typedef int  (*cmp_fn)            (const void *a, const void *b);
+typedef void (*destroy_notify_fn) (void *data);
 
-    return pool;
-}
+#include "allocator.h"
+#include "array.h"
+#include "bitmap.h"
+#include "hash.h"
+#include "heap.h"
+#include "mempool.h"
+#include "ptr_array.h"
+#include "uhash.h"
 
-void
-mempool_destroy(mempool_t *pool)
-{
-    int i;
-    for (i = 0; i < pool->fi_usage; i++)
-        free(pool->free_items[i]);
-    free(pool);
-}
-
-void *
-mempool_alloc(mempool_t *pool)
-{
-    if (pool->fi_usage == 0)
-        return safe_malloc(pool->size);
-    
-    pool->fi_usage--; /* XXX shorten the array on low usage? */
-    return pool->free_items[pool->fi_usage];
-}
-
-void
-mempool_free(mempool_t *pool, void *elem)
-{
-    if (pool->fi_usage == pool->fi_size) { /* need larger free chunks list */
-        pool->fi_size *= 2;
-        pool->free_items = realloc(pool->free_items, sizeof(void *) * pool->fi_size);
-    }
-
-    pool->free_items[pool->fi_usage] = elem;
-    pool->fi_usage++;
-}
-
+#endif /*LIB_H_*/

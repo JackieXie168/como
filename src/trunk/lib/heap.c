@@ -35,8 +35,7 @@
 #include <inttypes.h>   /* uintN_t */
 #include <errno.h>	/* error values */
 
-#include "como.h"	/* safe_malloc, safe_realloc */
-#include "heap.h"
+#include "corlib.h"
 
 /* 
  * this is defined here to hide it from other files.
@@ -62,11 +61,11 @@ heap_init(heap_compare cmp, uint32_t size)
         return NULL;
     }
     
-    h = (heap_t*) safe_malloc(sizeof(heap_t));
+    h = (heap_t*) lib_malloc(sizeof(heap_t));
     h->cmp = cmp;
     h->size = size;
     h->maxsize = 0; 		/* dynamic heap. no max size set */
-    h->array = safe_malloc(h->size * sizeof(void*));
+    h->array = lib_malloc(h->size * sizeof(void*));
     h->first_free = 0; /* the heap is empty */
     
     return h;
@@ -104,7 +103,7 @@ heap_insert(heap_t *h, void *elem)
 	if (h->maxsize == 0) { 
 	    /* dynamic heap. double its size */
 	    h->size <<= 1;
-	    h->array = safe_realloc(h->array, h->size * sizeof(void*));
+	    h->array = lib_realloc(h->array, h->size * sizeof(void*));
 	} else { 
 	    /* return an error and let the caller decide */
 	    errno = ENOSPC; 
@@ -174,17 +173,17 @@ heap_extract(heap_t *h, void **elem)
     return 0;
 }
 
-__inline__ void *
+void *
 heap_root(heap_t *h)
 {
     return h->first_free ? h->array[0] : NULL;
 }
 
-__inline__ void
+void
 heap_setsize(heap_t *h, int size) 
 { 
     h->maxsize = h->size = size; 
-    h->array = safe_realloc(h->array, h->size * sizeof(void*));
+    h->array = lib_realloc(h->array, h->size * sizeof(void*));
 }
 
 void
@@ -194,3 +193,13 @@ heap_close(heap_t *h)
 	free(h->array);
     free(h);
 }
+
+void
+heap_clear(heap_t *h, int zero_seg)
+{
+    if (zero_seg > 0) {
+	memset(h->array, 0, h->first_free * sizeof(void*));
+    }
+    h->first_free = 0;
+}
+

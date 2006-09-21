@@ -30,61 +30,37 @@
  * $Id$
  */
 
-#include <stdlib.h>
+/* CoMo portability library */
 
-#include "corlib.h"
+#ifndef ALLOCATOR_H_
+#define ALLOCATOR_H_
 
-#define INITIAL_SIZE 128
+typedef void * (*alc_malloc_fn) (size_t size,
+				 const char * file, int line,
+				 void *data);
 
-struct mempool {
-    size_t size;
-    void **free_items;
-    int fi_usage;
-    int fi_size;
-};
+typedef void * (*alc_calloc_fn) (size_t nmemb, size_t size,
+				 const char * file, int line,
+				 void *data);
 
-mempool_t *
-mempool_new(size_t size)
-{
-    mempool_t *pool;
+typedef void * (*alc_free_fn)   (void *ptr,
+				 const char * file, int line,
+				 void *data);
 
-    pool = (mempool_t *) safe_malloc(sizeof(mempool_t));
-    pool->size = size;
-    pool->free_items = safe_calloc(INITIAL_SIZE, sizeof(void *));
-    pool->fi_usage = 0;
-    pool->fi_size = INITIAL_SIZE;
+typedef struct allocator {
+    alc_malloc_fn	malloc;
+    alc_calloc_fn	calloc;
+    alc_free_fn		free;
+    void *		data;
+} allocator_t;
 
-    return pool;
-}
+#define alc_malloc(alc, size)		\
+    (alc)->malloc(size, __FILE__, __LINE__, (alc)->data)
 
-void
-mempool_destroy(mempool_t *pool)
-{
-    int i;
-    for (i = 0; i < pool->fi_usage; i++)
-        free(pool->free_items[i]);
-    free(pool);
-}
+#define alc_calloc(alc, nmemb, size)	\
+    (alc)->calloc(nmemb, size, __FILE__, __LINE__, (alc)->data)
 
-void *
-mempool_alloc(mempool_t *pool)
-{
-    if (pool->fi_usage == 0)
-        return safe_malloc(pool->size);
-    
-    pool->fi_usage--; /* XXX shorten the array on low usage? */
-    return pool->free_items[pool->fi_usage];
-}
+#define alc_free(alc, ptr)		\
+    (alc)->free(ptr, __FILE__, __LINE__, (alc)->data)
 
-void
-mempool_free(mempool_t *pool, void *elem)
-{
-    if (pool->fi_usage == pool->fi_size) { /* need larger free chunks list */
-        pool->fi_size *= 2;
-        pool->free_items = realloc(pool->free_items, sizeof(void *) * pool->fi_size);
-    }
-
-    pool->free_items[pool->fi_usage] = elem;
-    pool->fi_usage++;
-}
-
+#endif /*ALLOCATOR_H_*/

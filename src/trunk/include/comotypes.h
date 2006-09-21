@@ -40,6 +40,7 @@
 #include <sys/time.h>
 #include "stdpkt.h"
 #include "filter.h"
+#include "allocator.h"
 
 /*
  * New definitions of object types
@@ -68,8 +69,6 @@ typedef struct _como_metatpl	metatpl_t;
 
 typedef struct _como_headerinfo headerinfo_t;
 
-typedef struct _como_allocator  allocator_t;
-
 typedef struct cca		cca_t;
 
 typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
@@ -96,33 +95,6 @@ typedef enum running_t {
 } running_t;
 
 
-typedef void * (*alc_malloc_fn) (size_t size,
-				 const char * file, int line,
-				 void *data);
-
-typedef void * (*alc_calloc_fn) (size_t nmemb, size_t size,
-				 const char * file, int line,
-				 void *data);
-
-typedef void * (*alc_free_fn)   (void *ptr,
-				 const char * file, int line,
-				 void *data);
-
-struct _como_allocator {
-    alc_malloc_fn	malloc;
-    alc_calloc_fn	calloc;
-    alc_free_fn		free;
-    void *		data;
-};
-
-#define alc_malloc(alc, size)		\
-    (alc)->malloc(size, __FILE__, __LINE__, (alc)->data)
-
-#define alc_calloc(alc, nmemb, size)	\
-    (alc)->calloc(nmemb, size, __FILE__, __LINE__, (alc)->data)
-
-#define alc_free(alc, ptr)		\
-    (alc)->free(ptr, __FILE__, __LINE__, (alc)->data)
 
 /*
  * Module callbacks

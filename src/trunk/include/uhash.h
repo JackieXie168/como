@@ -30,6 +30,8 @@
  * $Id$
  */
 
+/* CoMo portability library */
+
 /*
  * An implementation of a universal class of hash functions.
  * See "Universal Classes of Hash Functions", by J. Lawrence Carter

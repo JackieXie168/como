@@ -30,6 +30,8 @@
  * $Id$
  */
 
+/* CoMo portability library */
+
 #ifndef HASH_H_
 #define HASH_H_
 
@@ -54,7 +56,6 @@ typedef struct hash_iter_t  hash_iter_t;
 
 typedef unsigned int (*hash_key_fn) (const void *keyPtr);
 typedef int (*compare_hash_keys_fn) (const void *keyPtr1, const void *keyPtr2);
-typedef void (*destroy_notify_fn) (void *data);
 
 /*
  * Acceptable key types for hash tables:
@@ -80,6 +81,7 @@ hash_t *hash_new_full     (allocator_t *alc,
 			   compare_hash_keys_fn compareKeysFn,
 			   destroy_notify_fn keyDestroyFn,
 			   destroy_notify_fn valueDestroyFn);
+int     hash_size     (hash_t * tablePtr);
 void *  hash_lookup_string(hash_t *tablePtr, const char *key);
 void *  hash_lookup_ulong (hash_t *tablePtr, unsigned long key);
 void *  hash_lookup       (hash_t *tablePtr, void *key);

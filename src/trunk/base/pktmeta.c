@@ -35,7 +35,7 @@
 
 #include "como.h"
 #include "comopriv.h"
-#include "hash.h"
+#include "corlib.h"
 
 static hash_t *s_registered_types = NULL;
 static pktmeta_type_t s_type_counter = 0;
