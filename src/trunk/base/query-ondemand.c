@@ -104,7 +104,7 @@ static void
 qd_ipc_done(procname_t sender, __unused int fd,
         __unused void * b, __unused size_t l)
 {
-    assert(map.running == INLINE);
+    assert(map.runmode == RUNMODE_INLINE);
     ipc_send(child(CAPTURE, getprocid(sender)), IPC_EXIT, NULL, 0);
     ipc_send(sender, IPC_EXIT, NULL, 0);
     ipc_finish();
@@ -157,7 +157,7 @@ query_ondemand(int fd, qreq_t * req, int node_id)
      */
 
     /* inline mode */
-    map.running = INLINE;
+    map.runmode = RUNMODE_INLINE;
 
     /* 
      * store the output file descriptor in a the map in order to make it

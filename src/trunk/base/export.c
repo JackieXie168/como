@@ -200,7 +200,7 @@ call_store(module_t * mdl, rec_t *rp)
 
     start_tsctimer(map.stats->ex_mapping_timer); 
     
-    if (map.running == INLINE) {
+    if (map.runmode == RUNMODE_INLINE) {
 	/* running inline */
 	dst = alloca(bsize); /* NOTE: might be replaced with a heap allocated
 				area using a static variable to keep track of
@@ -208,7 +208,7 @@ call_store(module_t * mdl, rec_t *rp)
     }
     
     do {
-	if (map.running == NORMAL) { 
+	if (map.runmode == RUNMODE_NORMAL) { 
 	    dst = csmap(mdl->file, mdl->offset, (ssize_t *) &bsize);
 	    if (dst == NULL)
 		panic("fail csmap for module %s", mdl->name);
@@ -234,7 +234,7 @@ call_store(module_t * mdl, rec_t *rp)
 	    ret -= ACT_STORE_BATCH;
 	}
 	
-	if (map.running == NORMAL) { 
+	if (map.runmode == RUNMODE_NORMAL) { 
 	    /*
 	     * update the offset and commit the bytes written to 
 	     * disk so far so that they are available to readers 
@@ -524,7 +524,7 @@ ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
     /*
      * open output file unless we are running in inline mode 
      */
-    if (map.running == NORMAL) {
+    if (map.runmode == RUNMODE_NORMAL) {
 	logmsg(V_LOGEXPORT, "module %s: opening file\n", mdl->name);
 	mdl->file = csopen(mdl->output, CS_WRITER, mdl->streamsize, storage_fd);
 	if (mdl->file < 0)
@@ -620,7 +620,7 @@ ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
 	mdl->shared_map = em->shared_map;
 	
 	/* if in inline mode, make sure this is the inline module */
-	assert(map.running == NORMAL || mdl == map.inline_mdl); 
+	assert(map.runmode == RUNMODE_NORMAL || mdl == map.inline_mdl); 
 
 	/*
 	 * Process the table, if the module it belongs to is active.
@@ -685,7 +685,7 @@ ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
     assert(sender == sibling(CAPTURE)); 
 
     /* this should happen only in inline mode */ 
-    assert(map.running == INLINE); 
+    assert(map.runmode == RUNMODE_INLINE); 
 
     /* 
      * we will not receive any more messages from CAPTURE. let's 

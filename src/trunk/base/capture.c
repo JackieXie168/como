@@ -141,6 +141,9 @@ cleanup()
 	src->cb->stop(sniff);
 	ppbuf_free(sniff);
     }
+//#ifdef DEBUG
+    print_rusage(stderr, 0);
+//#endif
 }
 
 
@@ -461,7 +464,6 @@ batch_filter(batch_t * batch)
     static int size;
     int i, c, l;
     char *out;
-    timestamp_t max_ts = 0;
     int idx;
     int first_done = 0;
     static uint64_t ld_bytes;	/* bytes seen in one minute */
@@ -501,19 +503,8 @@ batch_filter(batch_t * batch)
 	    for (i = 0; i < l; i++, pktptr++, out++, c++) {
 		pkt = *pktptr;
 		if (pkt->ts == 0) {
-		    if (first_done == 0)
-			logmsg(LOGCAPTURE, "pkt %d has NULL timestamp\n", c);
+		    logmsg(LOGWARN, "pkt %d has NULL timestamp\n", c);
 		    continue;
-		}
-
-		if (pkt->ts >= max_ts) {
-		    max_ts = pkt->ts;
-		} else if (first_done == 0) {
-		    logmsg(LOGCAPTURE,
-			   "pkt no. %d timestamps not increasing "
-			   "(%u.%06u --> %u.%06u)\n",
-			   i, TS2SEC(max_ts), TS2USEC(max_ts),
-			   TS2SEC(pkt->ts), TS2USEC(pkt->ts));
 		}
 
 		*out = evaluate(mdl->filter_tree, pkt);
@@ -746,6 +737,9 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void *pack, size_t sz)
 
     /* Default values for filter stuff */
     mdl->filter_tree = NULL;
+
+    logmsg(LOGCAPTURE, "module %s activated with filter %s\n",
+	   mdl->name, mdl->filter_str);
 
     /* Parse the filter string from the configuration file */
     parse_filter(mdl->filter_str, &(mdl->filter_tree), NULL);
@@ -1436,7 +1430,7 @@ setup_sniffers(struct timeval *tout)
 
     /* if no sniffers now active then we log this change of state */
 
-    if ((active == 0) && (map.running == NORMAL)) {
+    if ((active == 0) && (map.runmode == RUNMODE_NORMAL)) {
 	logmsg(LOGWARN, "no sniffers left. waiting for queries\n");
 	print_timers();
     }
@@ -1582,7 +1576,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		    panic("IPC_FLUSH failed!");
 	    }
 
-	    if (map.running == INLINE && done_msg_sent == 0) {
+	    if (map.runmode == RUNMODE_INLINE && done_msg_sent == 0) {
 		done_msg_sent = 1;
 		/* inform export that no more message will come */
 		if (ipc_send(sibling(EXPORT), IPC_DONE, NULL, 0) != IPC_OK)
