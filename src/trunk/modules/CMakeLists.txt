@@ -27,6 +27,7 @@ SET(MODULES
   protocol
   anomaly-ewma
   trace
+  assoc
 )
 
 IF(FTLIB_FOUND)
