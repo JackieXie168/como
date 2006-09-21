@@ -41,23 +41,9 @@
 #include <time.h>
 #include <assert.h>
 #include "module.h"
+#include "macutils.h"
 
 #define MAC_ADDR_SIZE   6
-
-static void
-mac_addr_to_ascii(uint8_t *mac, char *dest)
-{
-    char *ptr = dest;
-    int i;
-
-    for (i = 0; i < MAC_ADDR_SIZE; i++) {
-        sprintf(ptr, "%02x:", mac[i]);
-        ptr += 3;
-    }
-
-    dest[3 * MAC_ADDR_SIZE - 1] = '\0';
-}
-
 
 #define FLOWDESC    struct _ssid
 FLOWDESC {
@@ -289,8 +275,8 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 }
 
 #define PRETTYHDR		\
-    "Date                     Mode           AP                pkts_down \
-Client              pkts_up\n"
+    "Date                     Mode           AP                      pkts_down \
+Client                    pkts_up\n"
 #define PRETTYFMT	"%.24s %14s %s %9u %s %9u\n"
 #define PLAINFMT	"%d %s %s %u %s %u\n" 
 
@@ -333,8 +319,8 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     pkts_ul = ntohl(x->pkts_upload);
     pkts_dl = ntohl(x->pkts_download);
 
-    mac_addr_to_ascii(x->ap, buff1);
-    mac_addr_to_ascii(x->client, buff2);
+    pretty_mac(x->ap, buff1, sizeof(buff1), fmt == PRETTYFMT);
+    pretty_mac(x->client, buff2, sizeof(buff2), fmt == PRETTYFMT);
     
     /* print according to the requested format */
     if (fmt == PRETTYFMT) {

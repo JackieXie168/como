@@ -142,7 +142,7 @@ cleanup()
 	ppbuf_free(sniff);
     }
 //#ifdef DEBUG
-    print_rusage(stderr, 0);
+//    print_rusage(stderr, 0);
 //#endif
 }
 
