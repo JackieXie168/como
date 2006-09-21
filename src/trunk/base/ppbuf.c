@@ -91,6 +91,19 @@ ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
 {
     ppbuf->captured++;
     assert(ppbuf->captured <= ppbuf->size);
+#ifdef DEBUG
+    if (pkt->ts < ppbuf->last_pkt_ts) {
+	logmsg(LOGCAPTURE,"pkt no. %d timestamps not increasing "
+			   "(%u.%06u --> %u.%06u)\n",
+			   ppbuf->woff,
+			   TS2SEC(ppbuf->last_pkt_ts),
+			   TS2USEC(ppbuf->last_pkt_ts),
+			   TS2SEC(pkt->ts),
+			   TS2USEC(pkt->ts));
+
+    }
+    ppbuf->last_pkt_ts = pkt->ts;
+#endif
     ppbuf->pp[ppbuf->woff] = pkt;
     ppbuf->woff = (ppbuf->woff + 1) % ppbuf->size;
 }
