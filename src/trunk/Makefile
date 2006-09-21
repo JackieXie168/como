@@ -4,24 +4,26 @@
 # A convenience Makefile for como that creates a build directory
 # and calls CMake to produce the real Makefiles
 
+BUILD_TYPE?=debug
+
 .PHONY: all install clean distclean
 
-all: build/Makefile
-	cd build && make all
+all: $(BUILD_TYPE)/Makefile
+	cd $(BUILD_TYPE) && make all
 
-build:
-	if [ ! -d build ]; then mkdir build; fi
+$(BUILD_TYPE):
+	if [ ! -d $(BUILD_TYPE) ]; then mkdir $(BUILD_TYPE); fi
 
-cmake: build
-	cd build && cmake .. $(MAKEFLAGS)
+cmake: $(BUILD_TYPE)
+	cd $(BUILD_TYPE) && cmake .. -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(MAKEFLAGS)
 
-build/Makefile: cmake
+$(BUILD_TYPE)/Makefile: cmake
 
-install: build/Makefile
-	cd build && make install
+install: $(BUILD_TYPE)/Makefile
+	cd $(BUILD_TYPE) && make install
 
-clean: build/Makefile
-	cd build && make clean
+clean: $(BUILD_TYPE)/Makefile
+	cd $(BUILD_TYPE) && make clean
 
 distclean:
-	rm -rf build
+	rm -rf $(BUILD_TYPE)
