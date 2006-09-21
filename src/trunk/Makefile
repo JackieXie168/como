@@ -19,10 +19,10 @@ cmake: $(BUILD_TYPE)
 
 $(BUILD_TYPE)/Makefile: cmake
 
-install: $(BUILD_TYPE)/Makefile
+install: $(BUILD_TYPE)
 	cd $(BUILD_TYPE) && make install
 
-clean: $(BUILD_TYPE)/Makefile
+clean: $(BUILD_TYPE)
 	cd $(BUILD_TYPE) && make clean
 
 distclean:
