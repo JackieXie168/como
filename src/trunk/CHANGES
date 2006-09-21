@@ -36,7 +36,19 @@ $Id$
   memory
 
 . Migrated to CMAKE as build system
- 
+
+. Added syntax to filters for autonomous system numbers as an alternative
+  to IP address ranges....  eg  filter "tcp and (addr asn 2529)"
+  the definition of what "AS2529" might be is read from a routing table
+  file in MRT format:
+        http://www.ietf.org/internet-drafts/draft-ietf-grow-mrt-03.txt
+  by a configuration file entry such as
+        asnfile "/path/to/filename"
+  A good source of MRT files is the RIS project
+        http://www.ripe.net/ris/rawdata.html
+  If no ansfile is provided then only RFC1918 addresses (10/8 etc) will
+  be known about (as "asn 65535")
+
 -------------------------------------
 ---- CoMo v1.0 (May 14th, 2006) 
 --
