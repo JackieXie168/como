@@ -1289,6 +1289,9 @@ batch_create(int force_batch)
 	    if (this_ppbuf->captured == 0)
 		continue;
 
+	    if (this_ppbuf->count == 0)
+		continue;
+
 	    this_ts = (ppbuf_get(this_ppbuf))->ts;
 
 	    if (this_ts < min_ts) {
