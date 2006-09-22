@@ -309,7 +309,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
         }
         
         /* reserve the space in the buffer for the pkt_t */
-	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sizeof(pkt_t) + len);
+	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sizeof(pkt_t));
         
         /* 
 	 * ok, data is good now, copy the packet over 
