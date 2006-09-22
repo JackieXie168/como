@@ -324,6 +324,8 @@ asn_readfile(const char *filename)
     int fd;			/* file descriptor */
 #define	BUFFER_SIZE	1024
     uint8_t buffer[BUFFER_SIZE];	/* working buffer  */
+#define ERRBUF_SIZE	64
+    char errbuf[ERRBUF_SIZE];
 
     /*
      * debounce on the filename (if picky would extend this to an MD5
@@ -423,9 +425,9 @@ asn_readfile(const char *filename)
 	    status = fetch8(buffer, 9);
 
 	    if (status != 1) {
-		snprintf(buffer, BUFFER_SIZE,
+		snprintf(errbuf, ERRBUF_SIZE,
 			 "unexpected status value: %u", status);
-		fail = buffer;
+		fail = errbuf;
 		break;
 	    }
 
@@ -496,10 +498,10 @@ asn_readfile(const char *filename)
 			case 2:	/* AS_SEQ */
 			    break;
 			default:
-			    snprintf(buffer, BUFFER_SIZE,
+			    snprintf(errbuf, ERRBUF_SIZE,
 				     "unexpected status value: %u",
 				     status);
-			    fail = buffer;
+			    fail = errbuf;
 			    break;
 			}
 
