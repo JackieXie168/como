@@ -1189,6 +1189,8 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
     pkt_t *pkt;
 
     pkt = ppbuf_get(ppbuf);
+
+    ppbuf_next(ppbuf);
     
     if (pkt->ts < batch->last_pkt_ts) {
 	logmsg(LOGCAPTURE,"dropping pkt no. %d: timestamps not increasing "
@@ -1208,8 +1210,6 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
 
     s_cabuf.pp[batch->woff] = pkt;
     batch->woff = (batch->woff + 1) % s_cabuf.size;
-
-    ppbuf_next(ppbuf);
     
     batch->last_pkt_ts = pkt->ts;
 }
