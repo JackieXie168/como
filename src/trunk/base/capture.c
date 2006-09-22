@@ -51,9 +51,6 @@
 /* poll time (in usec) */
 #define POLL_WAIT   1000
 
-/* packet buffer */
-#define PKT_BUFFER 	8192
-
 /* flush and freeze/unfreeze thresholds */
 #define MB(m)				((m)*1024*1024)
 #define FREEZE_THRESHOLD(mem)		(MB(mem)*3/4)
@@ -1074,13 +1071,13 @@ ca_ipc_cca_ack_batch(__unused procname_t sender, __unused int fd,
  * 
  */
 static void
-cabuf_init()
+cabuf_init(size_t size)
 {
     /*
      * allocate the buffer of pointers to captured packets in shared
      * memory.
      */
-    s_cabuf.size = PKT_BUFFER;
+    s_cabuf.size = size;
     s_cabuf.pp = mem_calloc(s_cabuf.size, sizeof(pkt_t *));
 }
 
@@ -1458,6 +1455,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     fd_set ipc_fds;
     int done_msg_sent = 0;
     int force_batch = 0;
+    size_t sum_max_pkts = 0; /* sum of max pkts across initialized sniffers */
 
     /* wait for the debugger to attach */
 
@@ -1482,10 +1480,6 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     ipc_register(IPC_EXIT, ca_ipc_exit);
     ipc_register(CCA_OPEN, ca_ipc_cca_open);
     ipc_register(CCA_ACK_BATCH, ca_ipc_cca_ack_batch);
-
-    /* initialize the capture buffer */
-
-    cabuf_init();
 
     /* initialize select()able file descriptors */
 
@@ -1528,7 +1522,12 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
 	/* ensure select structures will be set up */
 	sniff->flags |= SNIFF_TOUCHED;
+	
+	sum_max_pkts += src->sniff->max_pkts;
     }
+
+    /* initialize the capture buffer */
+    cabuf_init(sum_max_pkts /* TODO: * service_buffering */);
 
     /*
      * This is the actual main loop where we monitor the various
