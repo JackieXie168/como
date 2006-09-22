@@ -160,12 +160,6 @@ static void
 ppbuf_end(ppbuf_t * ppbuf)
 {
     if (ppbuf->captured) {
-	int last;
-	last = ppbuf->woff - 1;
-	if (last < 0) {
-	    last = ppbuf->size - 1;
-	}
-	
 	ppbuf->count += ppbuf->captured;
     }
 }
@@ -195,3 +189,27 @@ ppbuf_next(ppbuf_t * ppbuf)
     assert(ppbuf->count >= 0);
     ppbuf->roff = (ppbuf->roff + 1) % ppbuf->size;
 }
+
+
+#ifdef DEBUG
+static int
+ppbuf_is_ordered(ppbuf_t * ppbuf)
+{
+    int i, roff;
+    timestamp_t ts = 0;
+
+    if (ppbuf->count == 0)
+	return 1;
+
+    roff = ppbuf->roff;
+    for (i = 0; i < ppbuf->count; i++) {
+	pkt_t *pkt;
+	pkt = ppbuf->pp[roff];
+	if (pkt->ts < ts)
+	    return 0;
+	roff = (roff + 1) % ppbuf->size;
+    }
+    
+    return 1;
+}
+#endif
