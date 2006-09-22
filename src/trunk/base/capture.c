@@ -1230,7 +1230,8 @@ batch_create(int force_batch)
     int pc = 0;
 
     /* CHECKME: value ??? */
-    static const timestamp_t live_th = TIME2TS(0, 10000);
+//    static const timestamp_t live_th = TIME2TS(0, 10000);
+    static const timestamp_t live_th = ~0;
 
     int one_full_flag = 0;
 
@@ -1246,7 +1247,7 @@ batch_create(int force_batch)
 
 	ppbuf = src->sniff->ppbuf;
 
-	pc += ppbuf->captured;
+	pc += ppbuf->count;
 
 	if (ppbuf->last_pkt_ts > max_last_pkt_ts)
 	    max_last_pkt_ts = ppbuf->last_pkt_ts;
