@@ -1210,6 +1210,8 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
     batch->woff = (batch->woff + 1) % s_cabuf.size;
 
     ppbuf_next(ppbuf);
+    
+    batch->last_pkt_ts = pkt->ts;
 }
 
 /*
