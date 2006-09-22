@@ -1304,11 +1304,12 @@ batch_create(int force_batch)
 
 	for (src = map.sources; src; src = src->next) {
 	    timestamp_t this_ts;
+	    ppbuf_t *this_ppbuf;
 
 	    if (src->sniff->flags & SNIFF_INACTIVE)
 		continue;
 
-	    ppbuf_t *this_ppbuf = src->sniff->ppbuf;
+	    this_ppbuf = src->sniff->ppbuf;
 
 	    if (this_ppbuf->captured == 0)
 		continue;
