@@ -1311,9 +1311,6 @@ batch_create(int force_batch)
 
 	    this_ppbuf = src->sniff->ppbuf;
 
-	    if (this_ppbuf->captured == 0)
-		continue;
-
 	    if (this_ppbuf->count == 0)
 		continue;
 
