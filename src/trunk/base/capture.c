@@ -499,10 +499,6 @@ batch_filter(batch_t * batch)
 	do {
 	    for (i = 0; i < l; i++, pktptr++, out++, c++) {
 		pkt = *pktptr;
-		if (pkt->ts == 0) {
-		    logmsg(LOGWARN, "pkt %d has NULL timestamp\n", c);
-		    continue;
-		}
 
 		*out = evaluate(mdl->filter_tree, pkt);
 		if (first_done == 0) {
@@ -1187,6 +1183,35 @@ batch_export(batch_t * batch)
 }
 
 
+static void
+batch_append(batch_t * batch, ppbuf_t * ppbuf)
+{
+    pkt_t *pkt;
+
+    pkt = ppbuf_get(ppbuf);
+    
+    if (pkt->ts < batch->last_pkt_ts) {
+	logmsg(LOGCAPTURE,"dropping pkt no. %d: timestamps not increasing "
+			   "(%u.%06u --> %u.%06u)\n",
+			   batch->woff,
+			   TS2SEC(batch->last_pkt_ts),
+			   TS2USEC(batch->last_pkt_ts),
+			   TS2SEC(pkt->ts),
+			   TS2USEC(pkt->ts));
+	/* drop */
+	map.stats->drops++;
+	return;
+    }
+
+    batch->count++;
+    assert(batch->count <= batch->reserved);
+
+    s_cabuf.pp[batch->woff] = pkt;
+    batch->woff = (batch->woff + 1) % s_cabuf.size;
+
+    ppbuf_next(ppbuf);
+}
+
 /*
  * -- batch_create
  * 
@@ -1300,17 +1325,9 @@ batch_create(int force_batch)
 	assert(ppbuf);
 
 	/* update batch */
-
-	batch->count++;
-	assert(batch->count <= batch->reserved);
-
-	s_cabuf.pp[batch->woff] = ppbuf_get(ppbuf);
-	batch->woff = (batch->woff + 1) % s_cabuf.size;
-
-	ppbuf_next(ppbuf);
+	batch_append(batch, ppbuf);
 	pc--;
 
-	batch->last_pkt_ts = min_ts;
 
 	/* 
 	 * if there are no more packets from this sniffer and we are

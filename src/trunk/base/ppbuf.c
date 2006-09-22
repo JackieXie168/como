@@ -85,27 +85,36 @@ ppbuf_destroy(ppbuf_t * ppbuf)
  * Captures a pkt into the ppbuf.
  * This is the only exported function that will be called by sniffers to
  * link a captured packet into the ppbuf.
+ * Returns 1 if the packet was inserted in the buffer, 0 if it has been
+ * dropped.
  */
-void
+int
 ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
 {
-    ppbuf->captured++;
-    assert(ppbuf->captured <= ppbuf->size);
-#ifdef DEBUG
+    if (pkt->ts == 0) {
+	logmsg(LOGCAPTURE, "dropping pkt no. %d: invalid timestamp\n",
+	       ppbuf->woff);
+	return 0;
+    }
     if (pkt->ts < ppbuf->last_pkt_ts) {
-	logmsg(LOGCAPTURE,"pkt no. %d timestamps not increasing "
+	logmsg(LOGCAPTURE,"dropping pkt no. %d: timestamps not increasing "
 			   "(%u.%06u --> %u.%06u)\n",
 			   ppbuf->woff,
 			   TS2SEC(ppbuf->last_pkt_ts),
 			   TS2USEC(ppbuf->last_pkt_ts),
 			   TS2SEC(pkt->ts),
 			   TS2USEC(pkt->ts));
-
+	return 0;
     }
+    ppbuf->captured++;
+    assert(ppbuf->captured <= ppbuf->size);
+
     ppbuf->last_pkt_ts = pkt->ts;
-#endif
+
     ppbuf->pp[ppbuf->woff] = pkt;
     ppbuf->woff = (ppbuf->woff + 1) % ppbuf->size;
+
+    return 1;
 }
 
 
@@ -156,8 +165,6 @@ ppbuf_end(ppbuf_t * ppbuf)
 	if (last < 0) {
 	    last = ppbuf->size - 1;
 	}
-	/* save the last packet's timestamp */
-	ppbuf->last_pkt_ts = (ppbuf->pp[last])->ts;
 	
 	ppbuf->count += ppbuf->captured;
     }
