@@ -1681,6 +1681,9 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    if ((sniff->flags & SNIFF_SELECT) && !FD_ISSET(sniff->fd, &r))
 		continue;	/* nothing to read here. */
 
+	    if (sniff->ppbuf->count == sniff->ppbuf->size)
+		continue;	/* the ppbuf is full */
+
 	    /* initialize the ppbuf for capture mode */
 
 	    max_no = ppbuf_begin(sniff->ppbuf);
