@@ -1766,8 +1766,10 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		if (sniff->flags & SNIFF_INACTIVE)
 		    continue;
 
-		if (sniff->flags & SNIFF_FILE)
+		if (sniff->flags & SNIFF_FILE) {
 		    sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
+		    logmsg(CAPTURE, "freezing sniffer %s\n", src->cb->name);
+		}
 	    }
 	} else if (map.stats->mem_usage_cur < THAW_THRESHOLD(map.mem_size)) {
 	    /* 
@@ -1779,6 +1781,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		if (sniff->flags & SNIFF_FROZEN) {
 		    sniff->flags &= ~SNIFF_FROZEN;
 		    sniff->flags |= SNIFF_TOUCHED;
+		    logmsg(CAPTURE, "unfreezing sniffer %s\n", src->cb->name);
 		}
 	    }
 	}
