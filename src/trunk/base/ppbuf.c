@@ -207,6 +207,7 @@ ppbuf_is_ordered(ppbuf_t * ppbuf)
 	pkt = ppbuf->pp[roff];
 	if (pkt->ts < ts)
 	    return 0;
+	ts = pkt->ts;
 	roff = (roff + 1) % ppbuf->size;
     }
     
