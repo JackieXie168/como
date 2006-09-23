@@ -1597,7 +1597,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		    panic("IPC_FLUSH failed!");
 	    }
 
-	    if (map.runmode == RUNMODE_INLINE && done_msg_sent == 0) {
+	    if (map.exit_when_done == 1 && done_msg_sent == 0) {
 		done_msg_sent = 1;
 		/* inform export that no more message will come */
 		if (ipc_send(sibling(EXPORT), IPC_DONE, NULL, 0) != IPC_OK)

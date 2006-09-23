@@ -122,6 +122,9 @@ struct _como {
 				 * mode
 				 */
     int inline_fd;		/* fd of inline client */
+    int exit_when_done;		/* when one causes capture to send IPC_DONE
+				   message to its parent process when all
+				   the sniffers have terminated */
     struct {
 	int	done_flag:1;
 	int	dbdir_set:1;
