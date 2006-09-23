@@ -15,6 +15,7 @@
 .Op Fl p Ar query-port
 .Op Fl m Ar mem-size
 .Op Fl v Ar logflags
+.Op Fl e
 .Op Fl s Ar sniffer:device:"args"
 .Op Ar module:"args"
 .Op Ar filter
@@ -65,6 +66,10 @@ erf:filename         # ERF file
 pcap:filename        # arg. is the pcap file name
 dump:URL             # remote CoMo via http
 .Ed
+.It Fl e
+This option causes CoMo to exit after all sniffers have terminated. It's
+mainly useful when running from traces as it is unlikely that a live sniffer
+will terminate. No queries can be run after CoMo exits.
 .It Fl v Ar logflags
 A comma-separated list of flags including
 .Ar ca,qu,me,st,qd,su,warn

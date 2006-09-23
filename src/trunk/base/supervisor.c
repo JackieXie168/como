@@ -144,7 +144,6 @@ static void
 su_ipc_done(__unused procname_t sender, __unused int fd, 
 	__unused void * b, __unused size_t l)
 {
-    assert(map.runmode == RUNMODE_INLINE); 
     ipc_send(CAPTURE, IPC_EXIT, NULL, 0); 
     ipc_send(EXPORT, IPC_EXIT, NULL, 0); 
     ipc_send(STORAGE, IPC_EXIT, NULL, 0); 

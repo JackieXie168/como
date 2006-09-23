@@ -981,6 +981,7 @@ typedef struct cli_args_t {
     char	*module;
     char	*module_args;
     char	*filter;
+    int		exit_when_done;
 } cli_args_t;
 
 
@@ -1013,7 +1014,7 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 	"[filter]]\n";
 
     /* flag to be set if we parsed a configuration file */
-    static const char *opts = "hc:D:L:p:m:v:x:s:";
+    static const char *opts = "hc:D:L:p:m:v:x:s:e";
     
     memset(m, 0, sizeof(cli_args_t));
     
@@ -1030,6 +1031,11 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
             printf(usage, argv[0]);
             exit(0);
             break;
+
+	case 'e':
+	    m->exit_when_done = 1;
+	    break;
+
         case 'x':
 	    /* pass debug options into a string */
 	    if (strstr(optarg,"malloc=") == optarg) {
@@ -1216,6 +1222,7 @@ configure(struct _como * m, int argc, char ** argv)
 	    m->mem_size = cli_args.mem_size;
 	    m->cli_args.mem_size_set = 1;
 	}
+	m->exit_when_done = cli_args.exit_when_done;
     }
     
     m->runmode = cli_args.runmode;
