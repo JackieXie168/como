@@ -162,7 +162,7 @@ static size_t
 load(char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
-        ts = 0;
+        *ts = 0;
         return 0;
     }
 

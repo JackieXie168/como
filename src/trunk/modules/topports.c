@@ -314,7 +314,7 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
     time_t timestamp; 
 
     if (len < sizeof(struct topports)) {
-        ts = 0;
+        *ts = 0;
         return 0; 
     }
 

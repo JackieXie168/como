@@ -393,8 +393,10 @@ store(rec_t *efh, char *buf, size_t len)
 static size_t
 load(char *buf, size_t len, timestamp_t *ts)
 {    
-    if (len < sizeof(struct fts3rec_v5))
+    if (len < sizeof(struct fts3rec_v5)) {
+        *ts = 0;
         return 0; /* configuration error | lost sync */
+    }
     
     *ts = TIME2TS(ntohl(*(uint32_t*)buf), ntohl(*(uint32_t*)(buf + 4)));
     

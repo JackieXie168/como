@@ -1177,7 +1177,7 @@ load(char *buf, size_t len, timestamp_t *ts)
     pktinfo_t *p;
     
     if (len < sizeof(pktinfo_t)) {
-        ts = 0;
+        *ts = 0;
         return 0;
     } 
     

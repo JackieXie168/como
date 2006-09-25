@@ -272,7 +272,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
     size_t sz = sizeof(FLOWDESC);
 
     if (len < sz) {
-        ts = 0;
+        *ts = 0;
         return 0; 
     }
 

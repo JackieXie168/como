@@ -223,7 +223,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
     RECORD *r = (RECORD *) buf;
 
     if (len < sizeof(RECORD)) {
-        ts = 0;
+        *ts = 0;
         return 0;
     }
 
