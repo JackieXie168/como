@@ -145,7 +145,7 @@ avs_or_prism2_header_to_como_radio(const char *buf, struct _como_radio *r)
     return prism2_header_to_como_radio(buf, r);
 }
 
-static int
+inline static int
 channel_lookup_80211abg(uint16_t freq)
 {
     switch(freq) {
