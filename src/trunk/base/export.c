@@ -688,6 +688,10 @@ ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
 
     for (i = 0; i <= map.module_last; i++) {
 	module_t * mdl = &map.modules[i];
+	
+	if (mdl->status != MDL_ACTIVE)
+	    continue;
+
 	/* 
 	 * we will not receive any more messages from CAPTURE. let's 
 	 * try to store all records we have before reporting to be 
