@@ -1001,7 +1001,7 @@ ca_ipc_cca_open(__unused procname_t sender, int fd, __unused void *buf,
 
     /* look for an empty slot */
     for (id = 0; id < CA_MAXCLIENTS; id++)
-	if (s_cabuf.clients[id] != NULL)
+	if (s_cabuf.clients[id] == NULL)
 	    break;
 
     assert(id < CA_MAXCLIENTS);
