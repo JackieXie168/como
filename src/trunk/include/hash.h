@@ -32,8 +32,11 @@
 
 /* CoMo portability library */
 
+
 #ifndef HASH_H_
 #define HASH_H_
+
+#include "corlib.h"
 
 /** Hash iterator object. The iterator is on the stack, but its real
  * fields are hidden privately.
