@@ -681,18 +681,23 @@ static void
 ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
 	__unused size_t len)
 {
-    /* only the parent process should send this message */
+    int i;
+    
+    /* only CAPTURE should send this message */
     assert(sender == sibling(CAPTURE)); 
 
-    if (map.inline_mdl != NULL) {
+    for (i = 0; i <= map.module_last; i++) {
+	module_t * mdl = &map.modules[i];
 	/* 
 	 * we will not receive any more messages from CAPTURE. let's 
 	 * try to store all records we have before reporting to be 
 	 * done. 
 	 */
-	store_records(map.inline_mdl, ~0, ~0);
+	store_records(mdl, ~0, ~0);
+    }
 
-	/* print the footer since running inline (asserted before) */
+    if (map.runmode == RUNMODE_INLINE) {
+	/* print the footer since running inline  */
 	if (module_db_record_print(map.inline_mdl, NULL,
 				   NULL, map.inline_fd) < 0)
 	    handle_print_fail(map.inline_mdl);
