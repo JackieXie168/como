@@ -304,7 +304,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
         default:
             /* other types are not supported */
-            base += len;
+            me->off += len;
+            me->nread += len;
             continue;
         }
         
