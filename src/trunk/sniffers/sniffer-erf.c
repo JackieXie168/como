@@ -278,7 +278,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	}
     }
 
-    if (me->nread > me->remap) {
+    if (me->nread >= me->remap) {
 	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
 	    /* can't call munmap while the ppbuf contains some valid packets
 	     * pointing to the currently mmaped memory */
