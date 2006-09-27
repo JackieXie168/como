@@ -225,6 +225,7 @@ sniffer_start(sniffer_t * s)
     int ps, mp; /* page size, maximum packet size */
     int r;
     
+    me->sniff.fd = -1;
     me->file_idx = 0;
     if (open_next_file(me) < 0)
 	return -1;
