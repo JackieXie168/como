@@ -84,13 +84,12 @@ open_next_file(struct erf_me * me)
     struct stat trace_stat;
 
     if (me->sniff.fd >= 0) {
-	close(me->sniff.fd);
-	me->sniff.fd = -1;
+	me->sniff.flags |= SNIFF_TOUCHED;
 	me->file_idx++;
+	if (me->file_idx >= me->files.gl_pathc)
+	    goto error;
+	close(me->sniff.fd);
     }
-
-    if (me->file_idx >= me->files.gl_pathc)
-	goto error;
 
     /* open the trace file */
     device = me->files.gl_pathv[me->file_idx];
