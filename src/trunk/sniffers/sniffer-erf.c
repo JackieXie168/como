@@ -37,6 +37,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <glob.h>	/* glob */
 #include <errno.h>
 #include <string.h>     /* bcopy */
 
@@ -62,6 +63,9 @@
 
 struct erf_me {
     sniffer_t		sniff;		/* common fields, must be the first */
+    glob_t		files;		/* result of device pattern */
+    size_t		file_idx;	/* index of current file in
+					   files.gl_pathv */
     size_t		file_size;	/* size fo trace file */
     size_t		nread;
     size_t		map_size;	/* size of mmap */
@@ -73,6 +77,49 @@ struct erf_me {
 };
 
 
+static int
+open_next_file(struct erf_me * me)
+{
+    char *device;
+    struct stat trace_stat;
+
+    if (me->sniff.fd >= 0) {
+	close(me->sniff.fd);
+	me->sniff.fd = -1;
+	me->file_idx++;
+    }
+
+    if (me->file_idx >= me->files.gl_pathc)
+	goto error;
+
+    /* open the trace file */
+    device = me->files.gl_pathv[me->file_idx];
+    me->sniff.fd = open(device, O_RDONLY);
+    if (me->sniff.fd < 0) {
+	logmsg(LOGWARN, "sniffer-erf: error while opening file %s: %s\n",
+	       device, strerror(errno));
+	goto error;
+    }
+    
+    /* get the trace file size */
+    if (fstat(me->sniff.fd, &trace_stat) < 0) {
+	logmsg(LOGWARN, "sniffer-erf: failed to stat file %s: %s\n",
+	       device, strerror(errno));
+	goto error;
+    }
+    me->file_size = trace_stat.st_size;
+
+    me->base = NULL;
+    me->nread = me->off = 0;
+    me->remap = 0;
+
+    return 0;
+
+error:
+    return -1;
+}
+
+
 /*
  * -- sniffer_init
  * 
@@ -81,7 +128,6 @@ static sniffer_t *
 sniffer_init(const char * device, const char * args)
 {
     struct erf_me *me;
-    struct stat trace_stat;
     
     me = safe_calloc(1, sizeof(struct erf_me));
 
@@ -105,22 +151,20 @@ sniffer_init(const char * device, const char * args)
 	}
     }
 
-    /* open the trace file */
-    me->sniff.fd = open(device, O_RDONLY);
-    if (me->sniff.fd < 0) {
-	logmsg(LOGWARN, "sniffer-erf: error while opening file %s: %s\n",
+    /* 
+     * list all files that match the given pattern. 
+     */
+    if (glob(device, GLOB_ERR | GLOB_TILDE, NULL, &me->files) < 0) {
+	logmsg(LOGWARN, "sniffer-erf: error matching %s: %s\n",
 	       device, strerror(errno));
+	goto error;
+    }
+	
+    if (me->files.gl_pathc == 0) { 
+	logmsg(LOGWARN, "sniffer-erf: no files match %s\n", device);
 	goto error;
     }
     
-    /* get the trace file size */
-    if (fstat(me->sniff.fd, &trace_stat) < 0) {
-	logmsg(LOGWARN, "sniffer-erf: failed to stat file %s: %s\n",
-	       device, strerror(errno));
-	goto error;
-    }
-    me->file_size = trace_stat.st_size;
-
     /* create the capture buffer */
     if (capbuf_init(&me->capbuf, args, NULL, ERF_MIN_BUFSIZE,
 		    ERF_MAX_BUFSIZE) < 0)
@@ -128,9 +172,6 @@ sniffer_init(const char * device, const char * args)
 
     return (sniffer_t *) me;
 error:
-    if (me->sniff.fd >= 0) {
-	close(me->sniff.fd);
-    }
     free(me);
     return NULL;
 }
@@ -151,6 +192,25 @@ sniffer_setup_metadesc(sniffer_t * s)
     pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
 }
 
+
+static int
+mmap_next_region(struct erf_me * me)
+{
+    if (me->base != NULL) {
+	munmap(me->base, me->map_size);
+    }
+    /* mmap the trace file */
+    me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
+			     me->sniff.fd, me->remap);
+    if (me->base == MAP_FAILED) {
+	logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
+	       strerror(errno));
+	return -1;
+    }
+    return 0;
+}
+
+
 /*
  * -- sniffer_start
  * 
@@ -165,17 +225,13 @@ sniffer_start(sniffer_t * s)
     int ps, mp; /* page size, maximum packet size */
     int r;
     
-    /* mmap the trace file */
-    me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
-			     me->sniff.fd, 0);
-    if (me->base == MAP_FAILED) {
-	logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
-	       strerror(errno));
-	close(me->sniff.fd);
+    me->file_idx = 0;
+    if (open_next_file(me) < 0)
 	return -1;
-    }
-    me->nread = me->off = 0;
-    
+
+    if (mmap_next_region(me) < 0)
+	return -1;
+
     /*
      * compute remap offset using the system pagesize and the maximum
      * packet length.
@@ -213,10 +269,12 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     /* TODO: handle truncated traces */
     if (me->nread >= me->file_size) {
 	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
-	    /* we've finished but the ppbuf is not empty */
+	    /* we've finished with this file but the ppbuf is not empty */
 	    return 0;
 	}
-        return -1;       /* end of file, nothing left to do */
+	if (open_next_file(me) < 0) {
+	    return -1; /* end of file, nothing left to do */
+	}
     }
 
     if (me->nread > me->remap) {
@@ -227,15 +285,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	}
 	/* we've read all the packets that fit in the mmaped memory, now
 	 * mmap the next area of the trace file */
-	munmap(me->base, me->map_size);
-	me->base = (char *) mmap(NULL, me->map_size,
-				 PROT_READ, MAP_PRIVATE,
-				 me->sniff.fd, me->remap);
-	if (me->base == MAP_FAILED) {
-	    logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
-		   strerror(errno));
+	if (mmap_next_region(me) < 0)
 	    return -1;
-	}
 	me->off = me->nread - me->remap;
 	me->remap += me->remap_sz;
     }
