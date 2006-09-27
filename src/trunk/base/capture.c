@@ -1710,6 +1710,8 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		 *     state to be added.  so TODO!   RNC1 21SEP06
 		 */
 		ppbuf_free(sniff);
+		/* disable the sniffer */
+		src->sniff->flags |= SNIFF_INACTIVE | SNIFF_TOUCHED;
 		continue;
 	    }
 
