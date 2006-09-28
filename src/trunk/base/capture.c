@@ -1228,6 +1228,7 @@ batch_create(int force_batch)
     ppbuf_t *ppbuf;
     timestamp_t max_last_pkt_ts = 0;
     int pc = 0;
+    static timestamp_t prev_last_pkt_ts;
 
     /* CHECKME: value ??? */
     static const timestamp_t live_th = TIME2TS(0, 10000);
@@ -1289,6 +1290,7 @@ batch_create(int force_batch)
     /* create the batch structure */
 
     batch = mem_calloc(1, sizeof(batch_t));
+    batch->last_pkt_ts = prev_last_pkt_ts;
     cabuf_reserve(batch, pc);
 
     /*
@@ -1347,6 +1349,8 @@ batch_create(int force_batch)
 	cabuf_complete(batch);
 
     batch->ref_mask = 1LL;
+    
+    prev_last_pkt_ts = batch->last_pkt_ts;
 
     return batch;
 }
