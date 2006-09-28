@@ -39,6 +39,7 @@ typedef struct capbuf {
     void *	end;
     void *	tail;
     size_t	size;
+    size_t	ofcheck;
 } capbuf_t;
 
 /*
@@ -103,6 +104,12 @@ capbuf_finish(struct capbuf * capbuf)
 }
 
 
+static void
+capbuf_begin(struct capbuf * capbuf)
+{
+    capbuf->ofcheck = 0;
+}
+
 /*
  * -- capbuf_reserve_space
  * 
@@ -117,6 +124,9 @@ capbuf_reserve_space(struct capbuf * capbuf, size_t s)
     
     //s = ROUND_32(s);
     assert(s > 0);
+    capbuf->ofcheck += s;
+    if (capbuf->ofcheck > capbuf->size)
+	panic("capbuf overflow");
     
     end = capbuf->tail + s;
     if (end > capbuf->end) {

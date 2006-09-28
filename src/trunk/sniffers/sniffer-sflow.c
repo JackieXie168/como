@@ -864,6 +864,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
     *dropped_pkts = 0;
     
+    capbuf_begin(&me->capbuf);
+    
     for (t = 0, npkts = 0;
 	 t < dg.hdr.num_records && npkts < max_pkts; t++) {
 	uint32_t num_elements = 0;

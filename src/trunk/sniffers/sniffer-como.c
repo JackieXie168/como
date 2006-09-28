@@ -222,6 +222,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
     *dropped_pkts = 0;
     
+    capbuf_begin(&me->capbuf);
+    
     avn = me->avn;
     
     if (avn < me->min_proc_size) {

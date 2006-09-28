@@ -690,6 +690,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     *dropped_pkts = 0;
 
     npkts = 0;
+    
+    capbuf_begin(&me->capbuf);
 
     while (npkts < max_pkts) {
 	struct _flowinfo *flow; 
