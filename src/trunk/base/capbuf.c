@@ -148,7 +148,7 @@ static inline void
 capbuf_truncate(struct capbuf * capbuf, void * x)
 {
     //x = (void *) ROUND_32((uint32_t) x);
-    assert(x <= tail);
+    assert(x <= capbuf->tail);
     capbuf->ofcheck -= capbuf->tail - x;
     capbuf->tail = x;
 }
