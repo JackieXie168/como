@@ -347,7 +347,7 @@ flowtools_next(struct flowtools_me * me)
  * more records are available.  
  * 
  */ 
-timestamp_t 
+static timestamp_t 
 flowtools_read(struct flowtools_me * me) 
 { 
     struct fts3rec_v5 *fr = NULL;
