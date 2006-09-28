@@ -245,6 +245,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t __unused max_ivl,
 
     *dropped_pkts = 0;
     
+    capbuf_begin(&me->capbuf);
+    
     base = capbuf_reserve_space(&me->capbuf, me->read_size);
     /* read packets */
     rdn = read(me->sniff.fd, base, me->read_size);

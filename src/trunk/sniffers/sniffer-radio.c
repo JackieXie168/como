@@ -908,6 +908,8 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
     struct radio_me *me = (struct radio_me *) s;
     int count, x;
     
+    capbuf_begin(&me->capbuf);
+    
     for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
 	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
 			   (u_char *) me);

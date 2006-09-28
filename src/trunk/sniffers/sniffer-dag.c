@@ -174,6 +174,8 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
 
     *dropped_pkts = 0;
     
+    capbuf_begin(&me->capbuf);
+    
     base = (char *) me->bottom;
     npkts = 0;
     while (npkts < max_pkts) { 

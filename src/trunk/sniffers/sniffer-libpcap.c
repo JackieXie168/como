@@ -320,12 +320,14 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
     struct libpcap_me *me = (struct libpcap_me *) s;
     int count, x;
     
+    *dropped_pkts = 0;
+    
+    capbuf_begin(&me->capbuf);
+    
     for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
 	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
 			   (u_char *) me);
     }
-    
-    *dropped_pkts = 0;
     
     return (x >= 0) ? 0 : -1;
 }

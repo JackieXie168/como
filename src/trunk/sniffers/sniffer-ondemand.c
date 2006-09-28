@@ -55,8 +55,8 @@
  */
 
 /* sniffer-specific information */
-#define ONDEMAND_MIN_BUFSIZE	(me->sniff.max_pkts * sizeof(pkt_t))
-#define ONDEMAND_MAX_BUFSIZE	(ONDEMAND_MIN_BUFSIZE + (2*1024*1024))
+#define ONDEMAND_MIN_BUFSIZE	(1024*1024)
+#define ONDEMAND_MAX_BUFSIZE	(4*ONDEMAND_MIN_BUFSIZE)
 
 struct ondemand_me {
     sniffer_t		sniff;		/* common fields, must be the first */
@@ -231,6 +231,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     
     npkts = 0;
     
+    capbuf_begin(&me->capbuf);
+    
     while (npkts < max_pkts && replayed_size < max_size) {
 	timestamp_t ts;
 	
@@ -285,6 +287,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	    
 	    left = me->mdl->callbacks.replay(me->mdl, ptr, (char *) pkt,
 					     &l, left);
+	    capbuf_truncate(&me->capbuf, ((void *) pkt) + l);
 	    if (left < 0) {
 		errno = ENODATA;
 		return -1;
