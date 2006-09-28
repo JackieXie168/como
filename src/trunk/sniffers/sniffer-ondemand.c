@@ -221,11 +221,12 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     size_t replayed_size = 0, max_size;
     void * ptr;
     int left = 0;
+    const size_t max_pkt_sz = sizeof(pkt_t) + 65536;
 
     if (me->done)
 	return -1;
     
-    max_size = (me->capbuf.size - 65536);
+    max_size = (me->capbuf.size - max_pkt_sz);
     
     ofs = me->resume_ofs;
     
@@ -279,7 +280,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	
 	left = 0;
 	do {
-	    size_t l = sizeof(pkt_t) + 65536;
+	    size_t l = max_pkt_sz;
 	    pkt_t *pkt;
 	    
 	    /* reserve the space in the buffer for the pkt_t */
