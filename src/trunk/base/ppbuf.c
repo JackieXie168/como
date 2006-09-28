@@ -191,8 +191,8 @@ ppbuf_next(ppbuf_t * ppbuf)
 }
 
 
-#ifdef DEBUG
-static int
+#ifdef DEBUG_PPBUF
+int
 ppbuf_is_ordered(ppbuf_t * ppbuf)
 {
     int i, roff;

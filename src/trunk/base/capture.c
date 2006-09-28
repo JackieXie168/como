@@ -1255,7 +1255,9 @@ batch_create(int force_batch)
 	if (ppbuf->count == ppbuf->size)
 	    one_full_flag = 1;
 
+#ifdef DEBUG_PPBUF
 	assert(ppbuf_is_ordered(ppbuf));
+#endif
     }
 
     /* easy if no packets */
