@@ -48,8 +48,7 @@
 #include "comoendian.h"
 #include "comotypes.h"
 #include "comopriv.h"
-#include "heap.h"
-#include "hash.h"
+#include "corlib.h"
 
 #include "capbuf.c"
 
