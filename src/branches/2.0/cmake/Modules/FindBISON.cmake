@@ -1,0 +1,35 @@
+#
+# This module finds if bison is installed and determines where the
+# executable are. This code sets the following variables:
+#
+#  BISON_EXECUTABLE      = the full path to BISON
+#  BISON_FOUND           = true if BISON found.
+#
+
+IF (BISON_EXECUTABLE)
+  # Already in cache, be silent
+  SET(BISON_FIND_QUIETLY TRUE)
+ENDIF (BISON_EXECUTABLE)
+
+SET(BISON_NAMES bison)
+FIND_PROGRAM(BISON_EXECUTABLE NAMES ${BISON_NAMES})
+
+IF (BISON_EXECUTABLE)
+   SET(BISON_FOUND TRUE)
+ELSE (BISON_EXECUTABLE)
+   SET(BISON_FOUND FALSE)
+ENDIF (BISON_EXECUTABLE)
+
+IF (BISON_FOUND)
+   IF (NOT BISON_FIND_QUIETLY)
+      MESSAGE(STATUS "Found BISON: ${BISON_EXECUTABLE}")
+   ENDIF (NOT BISON_FIND_QUIETLY)
+ELSE (BISON_FOUND)
+   IF (BISON_FIND_REQUIRED)
+      MESSAGE(STATUS "Looked for BISON executable named ${BISON_NAMES}.")
+      MESSAGE(FATAL_ERROR "Could NOT find BISON executable")
+   ENDIF (BISON_FIND_REQUIRED)
+ENDIF (BISON_FOUND)
+
+MARK_AS_ADVANCED(BISON_EXECUTABLE)
+

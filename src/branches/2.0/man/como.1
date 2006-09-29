@@ -1,0 +1,133 @@
+.\"
+.\" $Id$
+.\"
+.Dd May 5, 2006
+.Dt COMO 1
+.Os
+.Sh NAME
+.Nm como
+.Nd COntinuous MOnitoring program
+.Sh SYNOPSIS
+.Nm
+.Op Fl c Ar config-file
+.Op Fl D Ar basedir
+.Op Fl L Ar libdir
+.Op Fl p Ar query-port
+.Op Fl m Ar mem-size
+.Op Fl v Ar logflags
+.Op Fl e
+.Op Fl s Ar sniffer:device:"args"
+.Op Ar module:"args"
+.Op Ar filter
+.Sh DESCRIPTION
+.Nm
+is a software that implements capture, processing and storage
+of packet traces for a Continuous Monitoring system.
+It saves data to disk for off-line processing, and exports them
+through a simplified http interface for further processing.
+.Pp
+The configuration parameters for a CoMo instance can be set from
+the command line and/or one or more configuration files.
+Command line options and configuration files are processed in the order they
+are specified, and later definition override earlier ones.
+If a module is given CoMo will execute in in-line mode: that means that the
+data produced by that module will be printed on the standard ouput instead of
+being saved to disk. The filter parameter applies only if a module is given.
+If no configuration file is supplied from the
+command line and CoMo is not running in in-line mode, then the program will
+look for a default configuration file in $PREFIX/etc/como/como.conf.
+.Pp
+The following command line options are available.
+Unless other specified, multiple instances override each other,
+and only the last occurrence is retained.
+.Bl -tag -width indent
+.It Fl c Ar config-file
+The configuration file to use.
+If specified multiple times, all the files will be loaded in sequence.
+.It Fl D Ar directory
+The data directory.
+.It Fl L Ar libdir
+The directory containing library modules.
+.It Fl p Ar query-port
+The port where CoMo listens for HTTP requests, default 44444
+.It Fl m Ar mem-size
+The memory size, in megabytes, used for the capture process.
+.It Fl s Ar sniffer:device:"args"
+The source of traffic. Can be any of the following devices types,
+followed by a colon-separated argument specifying the relevant
+parameter, e.g. a device name, or file, or URL; optionally followed by
+another colon-separated argument containg as a single string the source
+optional arguments:
+.Bd -literal -offset indent
+bpf:device           # argument is the network device
+libpcap:device       # device name
+dag:/dev/dag0        # DAG card
+erf:filename         # ERF file
+pcap:filename        # arg. is the pcap file name
+dump:URL             # remote CoMo via http
+.Ed
+.It Fl e
+This option causes CoMo to exit after all sniffers have terminated. It's
+mainly useful when running from traces as it is unlikely that a live sniffer
+will terminate. No queries can be run after CoMo exits.
+.It Fl v Ar logflags
+A comma-separated list of flags including
+.Ar ca,qu,me,st,qd,su,warn
+each optionally prefixed by
+.Ar v-
+to indicate the verbose version of the message,
+and also by a + or - to enable or disable the specific
+class of messages.
+.It Ar module:"args"
+A valid module name to be run in in-line mode with the optional parameters
+specified by a colon-separated argument.
+.It Ar filter
+A filter to be applied to the received packets before processing with the
+in-line module.
+.El
+.Sh CONFIGURATION FILE
+The above parameters (and more) can also be set through a
+configuration file, which has a free-form ascii format
+with # indicating comments, and lines typically made of
+a keyword and any additional parameters.
+Configuration file and command line options are processed in the order
+in which they are encountered, so either can override the other.
+.Pd
+For a complete and up-to-date description of the configuration
+file options please refer to the file
+.It Pa example.conf
+in the distribution.
+.Pp
+A sample configuration file is shown below:
+.Bd -literal -offset indent
+# This is a sample configuration file for como
+#
+
+memsize	   64               # same as -m
+query-port 44444            # same as -p
+basedir "data"              # same as -D
+libdir  "modules"           # same as -L
+sniffer "bpf" "xl0"         # same as -s
+
+filter "ip"                 # a global filter
+
+module "example"
+  source      "example.so"  # module shared object 
+  output      "example"     # output file
+  description "Example of module configuration"
+  filter      "tcp"         # packets of interest (default: ALL)
+  filesize    1000000       # max output file size (default: 128MB)
+  blocksize   1024          # max record size on file (default: 1024)
+  hashsize    1             # hash table size (default: 1)
+  memsize     1024          # private memory in bytes (default: 0)
+end
+.Ed
+Again, you can have multiple 'module' sections, and
+multiple instances of the other parameters.
+.Pp
+.El
+.Sh SEE ALSO
+.Xr tcpdump 1 ,
+.Xr bpf 4
+.Sh BUGS
+To be filled...

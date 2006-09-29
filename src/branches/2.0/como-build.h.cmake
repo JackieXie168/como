@@ -1,0 +1,16 @@
+#ifndef COMO_BUILD_H_
+#define COMO_BUILD_H_
+
+#define COMO_VERSION	"@COMO_VERSION@"
+
+#define DEFAULT_LIBDIR	"@DEFAULT_LIBDIR@"
+
+#define DEFAULT_DBDIR	"@DEFAULT_DBDIR@"
+
+#define DEFAULT_CFGFILE	"@DEFAULT_CFGFILE@"
+
+#cmakedefine ENABLE_SHARED_MODULES
+
+#cmakedefine ENABLE_PROFILING
+
+#endif /*COMO_BUILD_H_*/
