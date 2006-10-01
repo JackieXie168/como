@@ -45,6 +45,7 @@
 #include "module.h"
 
 #define FLOWDESC    struct _tuple_stat
+#define EFLOWDESC   FLOWDESC
 
 FLOWDESC {
     timestamp_t start_ts; 
@@ -69,13 +70,14 @@ CONFIGDESC {
      */    
     int compact;
     uint32_t mask;
+    uint32_t last_export;
+    uint32_t meas_ivl;
 };
 
 static timestamp_t
 init(void * self, char *args[])
 {
     CONFIGDESC * config;
-    timestamp_t flush_ivl = TIME2TS(1,0);
     int i; 
     pkt_t * pkt; 
     metadesc_t *inmd, *outmd;
@@ -83,6 +85,8 @@ init(void * self, char *args[])
     config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
     config->compact = 0;
     config->mask = ~0;
+    config->last_export = 0;
+    config->meas_ivl = 1;
     
     /*
      * process input arguments
@@ -92,7 +96,7 @@ init(void * self, char *args[])
 
 	if (strstr(args[i], "interval")) {
 	    x = index(args[i], '=') + 1; 
-	    flush_ivl = TIME2TS(atoi(x), 0);
+            config->meas_ivl = atoi(x);
 	} else if (strstr(args[i], "compact")) {
 	    config->compact = 1;
 	} else if (strstr(args[i], "mask")) { 
@@ -109,7 +113,7 @@ init(void * self, char *args[])
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = flush_ivl;
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
     IP(proto) = 0xff;
@@ -135,7 +139,7 @@ init(void * self, char *args[])
     
     /* setup outdesc */
     outmd = metadesc_define_out(self, 0);
-    outmd->ts_resolution = flush_ivl;
+    outmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     outmd->flags = META_PKT_LENS_ARE_AVERAGED;
     
     pkt = metadesc_tpl_add(outmd, "~nf:none:~ip:none");
@@ -170,7 +174,7 @@ init(void * self, char *args[])
     N16(UDP(dst_port)) = 0xffff;
     
     CONFIG(self) = config; 
-    return flush_ivl;
+    return TIME2TS(config->meas_ivl, 0);
 }
 
 
@@ -259,6 +263,51 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
     return 0;
 }
+
+static int
+compare(const void *efh1, const void *efh2)
+{
+    return CMPEF(efh1)->start_ts < CMPEF(efh2)->start_ts ? -1 : 1;
+}
+
+static int
+ematch(void __unused *self, void __unused *efh, void __unused *fh)
+{
+    return 0;
+}
+
+static int
+export(__unused void * self, void *efh, void *fh, int __unused isnew)
+{
+    FLOWDESC *x = F(fh);
+    EFLOWDESC *ex = EF(efh);
+
+    bcopy(x, ex, sizeof(EFLOWDESC));
+    return 0;
+}
+
+static int
+action(__unused void *self, __unused void *efh, __unused timestamp_t ivl,
+        __unused timestamp_t current_time, __unused int count)
+{
+    CONFIGDESC * config = CONFIG(self);
+
+    if (efh == NULL) {
+        /* 
+         * this is the action for the entire table. 
+         * check if it is time to export the table. 
+         * if not stop. 
+         */
+        if (TS2SEC(current_time) < config->last_export + config->meas_ivl)
+            return ACT_STOP;            /* too early */
+
+        config->last_export = TS2SEC(ivl);
+        return ACT_GO;          /* dump the records */
+    }
+
+    return (ACT_STORE | ACT_DISCARD); /* Always store the records */
+}
+
 
 static ssize_t
 store(__unused void * self, void *efh, char *buf)
@@ -563,7 +612,7 @@ replay(void * self, char *buf, char *out, size_t * len, int pleft)
 
 MODULE(tuple) = {
     ca_recordsize: sizeof(FLOWDESC),
-    ex_recordsize: 0,
+    ex_recordsize: sizeof(FLOWDESC),
     st_recordsize: sizeof(FLOWDESC), 
     capabilities: {has_flexible_flush: 0, 0},
     init: init,
@@ -572,10 +621,10 @@ MODULE(tuple) = {
     match: match,
     update: update,
     flush: NULL, 
-    ematch: NULL,
-    export: NULL,
-    compare: NULL,
-    action: NULL,
+    ematch: ematch,
+    export: export,
+    compare: compare,
+    action: action,
     store: store,
     load: load,
     print: print,
