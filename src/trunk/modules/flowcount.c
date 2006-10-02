@@ -170,8 +170,9 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
     /*
      * incrementally hash relevant fields
      */
+    hash = uhash(&cf->hfunc, NULL, 0, UHASH_NEW);
     if (cf->flow_fields & USE_SRC)
-        hash = uhash(&cf->hfunc, (uint8_t *) &IP(src_ip), 4, UHASH_NEW);
+        hash = uhash(&cf->hfunc, (uint8_t *) &IP(src_ip), 4, UHASH_APPEND);
     if (cf->flow_fields & USE_DST)
         hash = uhash(&cf->hfunc, (uint8_t *) &IP(dst_ip), 4, UHASH_APPEND);
     if (cf->flow_fields & USE_PROTO)
