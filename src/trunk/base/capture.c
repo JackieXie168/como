@@ -473,10 +473,7 @@ batch_filter(batch_t * batch)
 
     i = batch->count * s_active_modules;	/* size of the output bitmap */
 
-    if (which == NULL) {
-	size = i;
-	which = safe_malloc(i);
-    } else if (size < i) {
+    if (size < i) {
 	size = i;
 	which = safe_realloc(which, i);
     }
@@ -1130,6 +1127,8 @@ cabuf_complete(batch_t * batch)
 	batch->pkts1 = NULL;
 	batch->pkts0_len = batch->count;
 	batch->pkts1_len = 0;
+    } else {
+	batch->pkts1_len = batch->count - batch->pkts0_len;
     }
     batch->reserved = batch->count;
 }
