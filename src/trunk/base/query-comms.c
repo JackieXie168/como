@@ -388,12 +388,14 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
      * NOTE: max_args will always be at least one (i.e., the NULL entry
      *       to indicate end of the arguments). 
      */
-    max_args = 0; 
-    p = buf; 
-    do { 
-	p = strchr(p+1, '&'); 
-	max_args++; 
-    } while (p != NULL && strlen(p) > 1);
+    max_args = 1; 
+    p = strchr(buf, '?');
+    if (p != NULL) {
+        do { 
+            p = strchr(p+1, '&'); 
+            max_args++; 
+        } while (p != NULL && strlen(p) > 1);
+    }
 
     /* allocate a new request data structures */
     q->args = safe_calloc(max_args, sizeof(char *)); 
