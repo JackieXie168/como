@@ -1760,13 +1760,32 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	 * running from file if the usage is above the FREEZE_THRESHOLD. 
 	 * this will give EXPORT some time to process the tables and free
 	 * memory. we resume as soon as memory usage goes below the 
-	 * THAW_THRESHOLD. 
+	 * THAW_THRESHOLD, or EXPORT has no data to process (hence no mem
+         * is going to be free'd).
 	 */
 
 	map.stats->mem_usage_cur = memory_usage();
 	map.stats->mem_usage_peak = memory_peak();
 
-	if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size)) {
+	if (map.stats->table_queue == 0 ||
+                map.stats->mem_usage_cur < THAW_THRESHOLD(map.mem_size)) {
+	    /* 
+             * either memory is below threshold or export cannot free more mem.
+             * unfreeze any source.
+	     */
+	    for (src = map.sources; src; src = src->next) {
+		sniffer_t *sniff = src->sniff;
+
+		if (sniff->flags & SNIFF_FROZEN) {
+		    sniff->flags &= ~SNIFF_FROZEN;
+		    sniff->flags |= SNIFF_TOUCHED;
+		    logmsg(CAPTURE, "unfreezing sniffer %s\n", src->cb->name);
+		}
+	    }
+	} else if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size)) {
+            /*
+             * too much mem being used, freeze sniffer running from files.
+             */
 	    for (src = map.sources; src; src = src->next) {
 		sniffer_t *sniff = src->sniff;
 
@@ -1776,19 +1795,6 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		if (sniff->flags & SNIFF_FILE) {
 		    sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
 		    logmsg(CAPTURE, "freezing sniffer %s\n", src->cb->name);
-		}
-	    }
-	} else if (map.stats->mem_usage_cur < THAW_THRESHOLD(map.mem_size)) {
-	    /* 
-	     * memory is now below threshold. unfreeze any source
-	     */
-	    for (src = map.sources; src; src = src->next) {
-		sniffer_t *sniff = src->sniff;
-
-		if (sniff->flags & SNIFF_FROZEN) {
-		    sniff->flags &= ~SNIFF_FROZEN;
-		    sniff->flags |= SNIFF_TOUCHED;
-		    logmsg(CAPTURE, "unfreezing sniffer %s\n", src->cb->name);
 		}
 	    }
 	}
