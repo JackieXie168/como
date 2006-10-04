@@ -284,12 +284,16 @@ class Node {
 	    /* create a default config file */ 
 	    $usable_mods = $this->getModules("gnuplot");
 	    $config[0] = "main";
-	    for ($i = 0; $i < count($usable_mods); $i++) {
-		$config[0] = $config[0] . ";;"; 
-		$config[0] = $config[0] . $usable_mods[$i];
-	    }
-	    $config[0] = $config[0] . "\n"; 
-	    $config[1] = "secondary;;alert;;topdest;;topports\n";
+	    for ($i = 0; $i < count($usable_mods); $i++)
+		$config[0] .= ";;" . $usable_mods[$i];
+	    $config[0] .= "\n";
+
+	    $usable_mods = $this->getModules("sidebox");
+	    $config[1] = "secondary";
+	    for ($i = 0; $i < count($usable_mods); $i++)
+		$config[1] .= ";;" . $usable_mods[$i];
+	    $config[1] .= "\n";
+
 	    file_put_contents($filename, $config); 
 	} else {
 	    $config = file($filename); 
