@@ -45,16 +45,16 @@ function initializeMenu(module)
     var state = readCookie(module);
     menu.style.display = state; 
     var display = menu.style.display;
-    image.src = (display == "block")? "images/minus.gif" : "images/plus.gif";
+    image.src = (display == "block")? "../images/minus.gif" : "../images/plus.gif";
 
     trigger.onclick = function() {
         var display = menu.style.display;
 	if (display == "block") { 
-	    image.src = "images/plus.gif"; 
+	    image.src = "../images/plus.gif"; 
 	    menu.style.display = "none"; 
 	    document.cookie = module + "=none"; 
         } else { 
-	    image.src = "images/minus.gif"; 
+	    image.src = "../images/minus.gif"; 
 	    menu.style.display = "block"; 
 	    document.cookie = module + "=block"; 
         } 

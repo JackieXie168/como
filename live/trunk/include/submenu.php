@@ -49,5 +49,12 @@ if (isset($_GET['comonode']))
         &nbsp;&nbsp;&nbsp;About CoMo&nbsp;&nbsp;&nbsp;</a>
     </li>
     <?php } ?>
+    <?php  
+    if ($sub == "setup") { ?>
+    <li>
+        <a href=../admin>
+        &nbsp;&nbsp;&nbsp;Add Nodes&nbsp;&nbsp;&nbsp;</a>
+    </li>
+    <?php } ?>
     </ul>
 </div>

@@ -1,8 +1,8 @@
 <?
      /*  $Id$  */
-    require_once "comolive.conf";
-    require_once "class/node.class.php";
-    require_once "include/framing.php"; 
+    require_once ("../comolive.conf");
+    require_once ("../class/node.class.php");
+    require_once ("../include/framing.php"); 
 
     $G = init_global();
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
@@ -39,7 +39,7 @@
 	    /*
 	     * query failed. write error message and exit
 	     */
-            include ("html/node_failure.html");
+            include ("../html/node_failure.html");
 	    exit;
         } 
        
@@ -52,7 +52,7 @@
 		$mes = $mes . "Please create this directory and make ";
 		$mes = $mes . "it writable by the webserver<br><br>";
 		$generic_message = $mes;
-		include ("html/generic_message.html");
+		include ("../html/generic_message.html");
 		exit;
 	    }
 	}
@@ -65,7 +65,7 @@
 		$mes = $mes . "Please check permissions<br>";
 		$mes = $mes . "on this directory and the file.<br>";
 		$generic_message = $mes;
-		include ("html/generic_message.html");
+		include ("../html/generic_message.html");
 		exit;
 	    }
             /*  Create the config file  */
@@ -81,7 +81,7 @@
 		$mes = $mes . "Please check permissions<br>";
 		$mes = $mes . "on this directory and the file.<br>";
 		$generic_message = $mes;
-		include ("html/generic_message.html");
+		include ("../html/generic_message.html");
 		exit;
             }
 
@@ -117,7 +117,7 @@
 	    $mes = $mes . "Please check permissions<br>";
 	    $mes = $mes . "on this directory and the file.<br>";
 	    $generic_message = $mes;
-	    include ("html/generic_message.html");
+	    include ("../html/generic_message.html");
 	    exit;
         }
         fwrite ($fh, $tofile);

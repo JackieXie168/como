@@ -1,15 +1,15 @@
 <?php
-    require_once "comolive.conf";
-    require_once "class/node.class.php";
-    require_once "class/query.class.php";
-    require_once "include/framing.php";
-    require_once "include/getinputvars.php.inc";
+    require_once ("../comolive.conf");
+    require_once ("../class/node.class.php");
+    require_once ("../class/query.class.php");
+    require_once ("../include/framing.php");
+    require_once ("../include/getinputvars.php.inc");
 
     /*  get the node hostname and port number */
     if (!isset($_GET['comonode'])) { 
         print "This file requires the comonode=host:port arg passed to it<br>";
         print "Thanks for playing!<br><br><br><br><br><br><br>";
-        include("include/footer.php.inc");
+        include("../include/footer.php.inc");
         exit;
     }
 

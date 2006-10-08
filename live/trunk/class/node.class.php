@@ -33,8 +33,10 @@ class Node {
     function Node($comonode, $G) 
     {
 	$this->status = 1; 
-        $this->db_path = $G['ABSROOT'] . "/" . $G['NODEDB'];
-	$this->results = $G['ABSROOT'] . "/" . $G['RESULTS'];
+        #$this->db_path = $G['ABSROOT'] . "/" . $G['NODEDB'];
+	#$this->results = $G['ABSROOT'] . "/" . $G['RESULTS'];
+        $this->db_path = $G['NODEDB'];
+	$this->results = $G['RESULTS'];
 
 	/* 
          * the comonode may consist of host:port or just port. if 
