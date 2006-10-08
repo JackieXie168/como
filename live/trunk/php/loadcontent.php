@@ -9,12 +9,12 @@ if (isset($_SERVER['QUERY_STRING'])) {
 <html>
 <head>
 </head>
-<link rel="stylesheet" type="text/css" href="css/mainstage.css">
-<script language="JavaScript" src="js/loading.js"></script>
+<link rel="stylesheet" type="text/css" href="../css/mainstage.css">
+<script language="JavaScript" src="../js/loading.js"></script>
 </head>
     <body onload="showLoading('mainstage.php?<?php echo $url ?>')">
     <div id=loading>
-	<img src=images/loading.gif>
+	<img src="../images/loading.gif">
     </div>
 
     <div id=content> <div>

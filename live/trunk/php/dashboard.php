@@ -1,14 +1,16 @@
 <?php
     /*  $Id$  */
-    require_once "class/node.class.php";	/* Node class */
-    require_once "include/framing.php"; 	/* header/footer functions */
-    require_once "include/vcrbuttons.php";      /* zoom_in, zoom_out, etc. */
-    require_once "include/getinputvars.php.inc";/* init_env */ 
-    include_once "comolive.conf";		/* init_global */
+    require_once "../class/node.class.php";	/* Node class */
 
-    if (!file_exists("comolive.conf")) {
+    require_once "../include/framing.php"; 	/* header/footer functions */
+    require_once "../include/vcrbuttons.php";      /* zoom_in, zoom_out, etc. */
+    require_once "../include/getinputvars.php.inc";/* init_env */ 
+
+    if (!file_exists("../comolive.conf")) {
         print "Please create a comolive.conf file";
 	exit; 
+    } else {
+        include_once "../comolive.conf";		/* init_global */
     }
 
     /*  get the node hostname and port number */
@@ -27,7 +29,7 @@
 	/* cannot connect to node, fail with error */
 	$header = do_header(NULL, $G); 
 	$footer = do_footer(); 
-	include "html/node_failure.html"; 
+	include "../html/node_failure.html"; 
 	exit;
     }
     /*  Check if there are running modules that support CoMoLive  */
@@ -40,7 +42,7 @@
         $mes = $mes . "Please check your modules.<br><br>";
         $mes = $mes . "Host = $comonode.<br>";
         $generic_message = $mes;
-        include ("html/generic_message.html");
+        include ("../html/generic_message.html");
         exit;
     }
 
@@ -129,5 +131,5 @@
     $footer = do_footer(); 
 
     // include the HTML template 
-    include "html/dashboard.html"; 
+    include "../html/dashboard.html"; 
 ?>

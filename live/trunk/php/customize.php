@@ -1,9 +1,9 @@
 <!-- $Id$ --> 
 
 <?php
-    require_once "comolive.conf";
-    require_once "class/node.class.php";
-    include_once "include/framing.php"; 
+    require_once ("../comolive.conf");
+    require_once ("../class/node.class.php");
+    include_once ("../include/framing.php");
 
     function failure_message() 
     { 

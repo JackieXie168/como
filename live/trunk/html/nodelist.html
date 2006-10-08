@@ -2,14 +2,14 @@
 <html>
   <head>
     <title>CoMolive! - Intel Research Cambridge</title>
-    <link rel="stylesheet" type="text/css" href="css/live.css">
-    <link rel="stylesheet" type="text/css" href="css/nodelist.css">
-    <link rel="shortcut icon" href="images/favicon.ico">
+    <link rel="stylesheet" type="text/css" href="../css/live.css">
+    <link rel="stylesheet" type="text/css" href="../css/nodelist.css">
+    <link rel="shortcut icon" href="../images/favicon.ico">
     <meta http-equiv="Content-Type" content="text/html" charset="iso-8859-1">
     <meta name=description content="CoMolive!">
   </head>
 
-  <script language="JavaScript" src="js/utils.js"></script>
+  <script language="JavaScript" src="../js/utils.js"></script>
 
   <body>
   <?php echo $header ?>
@@ -53,7 +53,7 @@
       <form align=middle action=dashboard.php method=get>
 	<input type=text name=comonode size=21 value="comonode:44444"
          onFocus=clearText(this);>
-	<input type=image src=images/go.jpg>
+	<input type=image src=../images/go.jpg>
       </form>
 
     <?php  if ($G['ALLOWCUSTOMIZE']) { ?>
@@ -62,7 +62,7 @@
       <form align=middle action=nodeview.php method=get>
 	<input type=text name=comonode size=21 value="comonode:44444"
          onFocus=clearText(this);>
-	<input type=image src=images/go.jpg >
+	<input type=image src=../images/go.jpg >
       </form>
     <?php } ?>
     </td>

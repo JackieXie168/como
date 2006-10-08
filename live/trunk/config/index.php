@@ -1,6 +1,6 @@
 <!--  $Id$  -->
 <?php
-$rev = substr('\$Revision$', 11, -2);
+$REVISION = substr('\$Revision$', 11, -2);
 
 /*  This file creates the main configuration file for CoMoLive!  */
 /*  Include the framing information to create headers and footers  */     
@@ -20,7 +20,7 @@ if (file_exists("../comolive.conf")) {
     $m = "CoMoLive! is already configured.  If you are having a <br>" . 
          "problem, you should post your issue to the mailing " . 
          "list.<br><br>" .
-         "Click <a href=$webroot>here</a>";
+         "Click <a href=$webroot/>here</a>";
     $generic_message = $m;
     include("../html/generic_message.html");
     exit;
@@ -73,6 +73,7 @@ $CONVERT_DESC = "Path to convert";
 
 $WEBROOT_DESC = "Path relative to root of webserver";
 $ABSROOT_DESC = "Path relative to root of filesystem";
+$PASSWORD_DESC = "Password for admin directory";
 $DOT_DESC = "Path to dot";
 $PYTHON_DESC = "Path to python";
 
@@ -87,7 +88,9 @@ if ($action == "setup") {
 $i=0;
 $G = array();
 if ($action == "install") {
+    $FAIL=0;
     /*  Create an array with the value and desciption  */
+    $G['REV']['val'] = $REVISION;
     if (isset($_POST["TIMEPERIOD"])) {
         $G['TIMEPERIOD']['val'] = $_POST["TIMEPERIOD"];
         $G['TIMEPERIOD']['desc'] = $TIMEPERIOD_DESC;
@@ -124,29 +127,35 @@ if ($action == "install") {
         $G['ABSROOT']['val'] = $_POST["ABSROOT"];
         $G['ABSROOT']['desc'] = $ABSROOT_DESC;
     }
+    if (isset($_POST["PASSWORD"])) {
+        $G['PASSWORD']['val'] = $_POST["PASSWORD"];
+        $G['PASSWORD']['desc'] = $PASSWORD_DESC;
+    }
+    if (!(is_writable("../{$G['NODEDB']['val']}"))) {
+        $FAIL=1;
+    }
 
     /*  Make sure results and db dir are writeable  */
-    if (!(is_writable("../{$G['RESULTS']['val']}")) || 
-       (!(is_writable("../{$G['NODEDB']['val']}")))) {
-        $m = "Please create the directory $webroot/{$G['RESULTS']['val']}<br>" .
-             "and create the directory $webroot/{$G['NODEDB']['val']}<br>" .
-             "and make sure the directories are writeable " . 
-             "by the web server<br><br>" . 
-             "<pre>mkdir $webroot/{$G['RESULTS']['val']};<br>" . 
-             "mkdir $webroot/{$G['NODEDB']['val']};<br>" . 
-             "chown WEBUSER $webroot/{$G['RESULTS']['val']};<br>" .
-             "chown WEBUSER $webroot/{$G['NODEDB']['val']};<br></pre>";
+    if ($FAIL) {
+    $m = "Please make sure the live directory is writeable <br>" .
+         "by the web server<br><br>" . 
+         "<pre>" . 
+         "chown WEBUSER $absroot; <br></pre>";
         $generic_message = $m;
         include("../html/generic_message.html");
         exit;
     }
 
     /*  Write configuration file to disk  */
+    create_site($G, "public");
+    create_site($G, "admin");
     write_config($G, "comolive.conf");
     $m = "Configuration complete.  Copy the comolive.conf file " .
          "to the web root.<br><pre>" . 
          "mv $absroot/config/comolive.conf $webroot/<br></pre>" .
-         "Click <a href=$webroot>here</a> when you have moved the file";
+         "You can make changes to the config file by " . 
+         "editing comolive.conf<br>" . 
+         "Click <a href=$webroot/>here</a> when you have moved the file";
     $generic_message = $m;
     include("../html/generic_message.html");
     exit;
@@ -166,7 +175,7 @@ function write_config($G, $outfile) {
     "     * CoMoLive! Version \n" .
     "     */ \n\n" .
     "    \$GLOBAL['VERSION'] = 1.0; \n" .
-    "    \$GLOBAL['REV'] = substr('\$Revision: 854 \$', 11, -2);\n\n";
+    "    \$GLOBAL['REV'] = " . $G['REV']['val'] . ";\n\n";
     $tmp = comment($G['TIMEPERIOD']['desc']);
     $c .= $tmp;
     $c .= "    \$GLOBAL['TIMEPERIOD'] = " . $G['TIMEPERIOD']['val'] . ";\n\n";
@@ -246,4 +255,37 @@ function comment ($val) {
     return $newval;
 }
 
+function create_site ($G, $sitename) {
+    $dname = $G['ABSROOT']['val'] . "/" . $sitename;
+    $srcname = $G['ABSROOT']['val'] . "/php";
+    if ($sitename != "admin") {
+        /*  Create the site directory  */
+        mkdir ($dname, 0755);
+        /*  Create the sym links  */
+        $symname[0] = "dashboard.php";
+        $symname[1] = "generic_query.php";
+        $symname[2] = "index.php";
+        $symname[3] = "loadcontent.php";
+        $symname[4] = "mainstage.php";
+        $symname[5] = "nodeview.php";
+        $symname[6] = "sysinfo.php";
+        for ($i = 0; $i < count($symname); $i++) {
+            $orig = $srcname . "/" . $symname[$i];
+            $dest = $dname . "/" . $symname[$i];
+            symlink($orig, $dest);
+        }
+        /*  Create the results and db directory  */
+        mkdir("$dname/{$G['RESULTS']['val']}", 0755);
+        mkdir("$dname/{$G['NODEDB']['val']}", 0755);
+    } else {
+        /*  Write out .htpasswd and .htaccess files  */
+        $htpwd = $G['ABSROOT']['val'] . "/admin";
+        $htaccess = "AuthName \"CoMoLive! Admin\"\n" . 
+                    "AuthType Basic\n" . 
+                    "AuthUserFile $htpwd/.htpasswd\n" . 
+                    "Require valid-user\n";
+        system ("htpasswd -b -c $htpwd/.htpasswd admin {$G['PASSWORD']['val']}");
+        file_put_contents("$htpwd/.htaccess", $htaccess);
+    }
+}
 ?>

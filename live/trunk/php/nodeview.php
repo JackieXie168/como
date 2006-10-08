@@ -1,8 +1,8 @@
 <?php
     /*  $Id$  */
-    require_once "comolive.conf";
-    include_once "include/framing.php"; 
-    include_once "class/node.class.php";
+    require_once ("../comolive.conf");
+    include_once ("../include/framing.php"); 
+    include_once ("../class/node.class.php");
    
     $G = init_global();
 
@@ -30,7 +30,7 @@
     if (!isset($_GET['comonode'])) {
         $mes = "This file requires the comonode=host:port arg passed to it";
         $generic_message = $mes;
-        include ("html/generic_message.html");
+        include ("../html/generic_message.html");
         exit;
     }
     $comonode = $_GET['comonode'];
@@ -65,7 +65,7 @@
             $mes = $mes . "Please check your settings and make the $NODEDB";
             $mes = $mes . " directory writable by the webserver<br><br>";
             $generic_message = $mes;
-            include ("html/generic_message.html");
+            include ("../html/generic_message.html");
             exit;
         }
         $tofile = "";
@@ -102,7 +102,7 @@
                 $mes = $mes . "Please check your settings and make the $NODEDB";
                 $mes = $mes . " directory writable by the webserver<br><br>";
                 $generic_message = $mes;
-                include ("html/generic_message.html");
+                include ("../html/generic_message.html");
                 exit;
             }
         }
@@ -118,7 +118,7 @@
         /*  query the CoMo node  */
         $node = new Node($comonode,$G);
         if ($node->status == 0) { 
-            include ("html/node_failure.html");
+            include ("../html/node_failure.html");
             exit; 
         }
 
@@ -129,7 +129,7 @@
             $mes = $mes . "Please create this directory and make ";
             $mes = $mes . "it writable by the webserver<br><br>";
             $generic_message = $mes;
-            include ("html/generic_message.html");
+            include ("../html/generic_message.html");
             exit;
         }
         $all_groups = array();
@@ -138,7 +138,7 @@
     }
 
 
-    include ("html/nodeview.html");
+    include ("../html/nodeview.html");
 
 
 function list_dir ($handle, $NODEDB) 

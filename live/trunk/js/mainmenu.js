@@ -15,7 +15,7 @@ function startMenuRequest(val)
     var val;
     createXMLHttpRequestMainMenu();
     xmlHttpMainMenu.onreadystatechange = handleMenuStateChange;
-    xmlHttpMainMenu.open("GET", "include/submenu.php?sub=" + val, true);
+    xmlHttpMainMenu.open("GET", "../include/submenu.php?sub=" + val, true);
     xmlHttpMainMenu.send(null);
 }
 

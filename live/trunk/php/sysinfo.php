@@ -1,10 +1,10 @@
 <!--  $Id$  -->
 
 <?php
-    require_once "class/node.class.php";        /* Node class */
-    include_once "comolive.conf";               /* init_global */
+    require_once "../class/node.class.php";        /* Node class */
+    include_once "../comolive.conf";               /* init_global */
 
-    if (!file_exists("comolive.conf")) {
+    if (!file_exists("../comolive.conf")) {
         print "Please create a comolive.conf file";
         exit;
     }
@@ -23,7 +23,7 @@
     $node = new Node($comonode, $G);
     if ($node->status == false) {
         /* cannot connect to node, fail with error */
-        include "html/node_failure.html";
+        include ("../html/node_failure.html");
         exit;
     }
 
@@ -37,5 +37,5 @@
     else 
         $comment = ""; 
 
-    include "html/sysinfo.html";
+    include ("../html/sysinfo.html");
 ?>

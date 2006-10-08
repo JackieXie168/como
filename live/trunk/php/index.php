@@ -5,7 +5,9 @@
      * this is the entry page to the CoMolive! site. show the banner
      * and add the usual html header stuff. 
      */
-
+    include("../include/framing.php");
+    $header = simple_header("../");
+    $footer = simple_footer();
     /* 
      * look for comolive.conf. it is a required file but cannot use
      * require_once directly because it causes a warning on the screen 
@@ -19,28 +21,29 @@
      *     just to change the default values.
      * 
      */ 
-    if (!file_exists("comolive.conf")) {
-	echo "Please create and update file comolive.conf in the<br>"; 
-        echo "comolive root directory. <br>You can find a sample";
-        echo "configuration in comolive.conf.default"; 
+
+    if (!file_exists("../comolive.conf")) {
+	$mesg = "Please click <a href=../config/>here</a> to create a ";
+        $mesg .= "comolive.conf file<br>"; 
+        $generic_message = $mesg;
+        include("../html/generic_message.html");
 	exit; 
     }
 
-    require_once "comolive.conf";
-    require_once "include/framing.php";
+    require_once "../comolive.conf";
 
     if (!(isset ($G)))
 	$G = init_global();
 
     /* 
-     * get the all the groups that have been created  
+     * get all the groups that have been created  
      * They should be located in the db directory and 
      * have a lst extension
      */
   
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
     $dadir = $G['NODEDB'];
-    $handle=opendir("$dadir");
+    $handle = opendir("$dadir");
 
     /*
      *  $allgroups is a 2d array containing 
@@ -56,8 +59,8 @@
     $node_array = array();
     $n = $x = 0;
     /*  Read the directory and populate node array  */
-    while (false!==($filez= readdir($handle))) {
-        if ($filez!= "." && $filez!= ".." && ereg (".*\.lst$", $filez)) {
+    while (false !== ($filez = readdir($handle))) {
+        if ($filez != "." && $filez != ".." && ereg (".*\.lst$", $filez)) {
 	    if (file_exists("{$G['NODEDB']}/$filez")) {
 	        $desc = file ("{$G['NODEDB']}/$filez");
                 $group = trim($desc[0]);
@@ -120,7 +123,6 @@
 	    } 
         }
     }
-
     $header = do_header(NULL, $G); 
     $footer = do_footer(NULL); 
     /**  
@@ -146,5 +148,5 @@
 
     }
 
-    include ("html/nodelist.html");
+    include ("../html/nodelist.html");
 ?>
