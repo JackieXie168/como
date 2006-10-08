@@ -278,6 +278,13 @@ function create_site ($G, $sitename) {
         mkdir("$dname/{$G['RESULTS']['val']}", 0755);
         mkdir("$dname/{$G['NODEDB']['val']}", 0755);
     } else {
+        /*  Create the links to db and results  */
+        $orig = $G['ABSROOT']['val'] . "/db";
+        $dest = $G['ABSROOT']['val'] . "/admin/db";
+        symlink($orig, $dest);
+        $orig = $G['ABSROOT']['val'] . "/results";
+        $dest = $G['ABSROOT']['val'] . "/admin/results";
+        symlink($orig, $dest);
         /*  Write out .htpasswd and .htaccess files  */
         $htpwd = $G['ABSROOT']['val'] . "/admin";
         $htaccess = "AuthName \"CoMoLive! Admin\"\n" . 
