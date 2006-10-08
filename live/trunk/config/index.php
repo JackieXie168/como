@@ -1,12 +1,12 @@
-<!--  $Id:$  -->
+<!--  $Id$  -->
 <?php
+$rev = substr('\$Revision$', 11, -2);
 
 /*  This file creates the main configuration file for CoMoLive!  */
 /*  Include the framing information to create headers and footers  */     
 include("../include/framing.php");
 $header = simple_header("../");
 $footer = simple_footer();
-$sitedir = "sites";
 
 /*  This is our way of initially finding the location of the webserver
  *  root directory.  Once this page loads, it gives you the option 
@@ -34,13 +34,11 @@ if (isset($_GET['action']))
 /*  This will check to make sure all directories are there and
  *  writeable. 
  */
-if (!(file_exists("../$sitedir")) || (!(is_writable("../$sitedir")))) {
-    $m = "Please create the directory $webroot/$sitedir<br>" .
-         "and make sure the config directory is writeable " . 
+if (!(file_exists($absroot)) || (!(is_writable($absroot)))) {
+    $m = "Please make sure the live directory is writeable <br>" .
          "by the web server<br><br>" . 
-         "<pre>mkdir $webroot/$sitedir;<br>" . 
-         "chown WEBUSER $webroot/$sitedir;<br>" . 
-         "chown WEBUSER $webroot/config; <br></pre>";
+         "<pre>" . 
+         "chown WEBUSER $absroot; <br></pre>";
     $generic_message = $m;
     include("../html/generic_message.html");
     exit;
@@ -189,7 +187,8 @@ function write_config($G, $outfile) {
     $c .= "    \$GLOBAL['GNUPLOT'] = \"" . $G['GNUPLOT']['val'] . "\";\n\n";
     $tmp = comment($G['CONVERT']['desc']);
     $c .= $tmp;
-    $c .= "    \$GLOBAL['CONVERT'] = \"" . $G['CONVERT']['val'] . "\";\n\n" .
+    $c .= "    \$GLOBAL['CONVERT'] = \"" . $G['CONVERT']['val'] . 
+    " -density 200x200 -resize 600x450\";\n\n" .
     $tmp = comment($G['WEBROOT']['desc']);
     $c .= $tmp;
     $c .= "    \$GLOBAL['WEBROOT'] = \"" . $G['WEBROOT']['val'] . "\";\n\n" .
