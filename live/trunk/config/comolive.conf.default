@@ -1,0 +1,103 @@
+<?php
+/* 
+ * CoMolive! configuration file 
+ * 
+ * $Id$
+ */
+function init_global() {
+    /* 
+     * CoMoLive! Version
+     */
+    $GLOBAL['VERSION'] = 1.0;
+    $GLOBAL['REV'] = substr('$Revision$', 11, -2);
+    /* 
+     * The default amount of time that CoMo should 
+     * query initially (in seconds)
+     */
+    $GLOBAL['TIMEPERIOD'] = 6*3600;
+
+    /* 
+     * Define the granularity for all graphs (in seconds), i.e. 
+     * all timestamps will be aligned to this granularity
+     */
+    $GLOBAL['TIMEBOUND'] = 300; 
+
+    /*
+     * Define the resolutions of graphs, i.e. the number of points  
+     * to be present in a graph. This is just an indication to the  
+     * module of the desired resolution. The actual implementation is 
+     * module dependant.  
+     */
+    $GLOBAL['RESOLUTION'] = 200;
+
+    /* 
+     * where the results will reside for future accesses. path is 
+     * relative to apache document root. apache needs to have write
+     * access to it. 
+     */
+    $GLOBAL['RESULTS'] = "./results"; 
+
+    /* 
+     * directory with the node lists. the path is relative to  
+     * document root and needs to be readable from apache. 
+     * look into db/README for details. 
+     */
+    $GLOBAL['NODEDB'] = "./db"; 
+
+    /* gnuplot command -- check that this is the correct path */
+    $GLOBAL['GNUPLOT'] = "/usr/bin/gnuplot"; 
+
+    /* convert command -- check that this is the correct path */
+    $GLOBAL['CONVERT'] = "/usr/bin/convert -density 200x200 -resize 600x450"; 
+
+    /*  
+     *  Error report values are defined on php.net
+     *  Set to 'E_ALL' for debugging or '0' for none
+     */
+    $errorreport = 0;  /*  No error reporting  */
+    #$errorreport = E_ALL;  /*  Display all errors  */
+
+    $GLOBAL['ERROR_REPORTING'] = $errorreport;
+    error_reporting("$errorreport");
+
+    /* select if using Flash or not */
+    $browser = $_SERVER['HTTP_USER_AGENT']; 
+    if (stristr($browser, "msie")) {  
+	$GLOBAL['USEFLASH'] = true; 
+    } else { 
+	$GLOBAL['USEFLASH'] = false; 
+    }
+
+    /* Customize your logo here */
+    $GLOBAL['MYLOGO'] = "./images/intel.gif";
+
+    /* Use file caching 
+     * Some pages will have the opportunity to write data to files.
+     * Use this option to utilize this feature or turn it 
+     * off to force a regeneration of the data. 
+     * It usually should be on.
+     */
+    $GLOBAL['USECACHE'] = 1;
+
+    /* Allow customization of CoMoLive! */
+    $GLOBAL['ALLOWCUSTOMIZE'] = 1;
+
+    /*  Absolute and Webroot directory location  */
+    $GLOBAL['WEBROOT'] = dirname($_SERVER['SCRIPT_NAME']);
+    $GLOBAL['ABSROOT'] = dirname($_SERVER['SCRIPT_FILENAME']);
+
+    /*  Use BlincView  */
+    $GLOBAL['USEBLINCVIEW'] = 0;
+    $GLOBAL['BLINCVIEWCMD'] = "./contrib/blinc/blincview_dst.py";
+
+    /*  If you use BlincView, you will need to 
+     *  install DOT (http://graphviz.org) and python 
+     */
+    $GLOBAL['DOT'] ="/usr/local/bin/dot";
+    $GLOBAL['PYTHON'] ="/usr/bin/python"; 
+    
+
+    /*  Return the Variable  */
+    return($GLOBAL);
+}
+?>
