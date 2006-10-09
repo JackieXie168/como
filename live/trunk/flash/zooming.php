@@ -11,6 +11,9 @@
     $info = "image=http://" . $_SERVER['HTTP_HOST']; 
     $info .= $docroot . "/" . $filename . ".jpg"; 
 
+    /* where to find the cursor */
+    $info .= "&cursor=../flash/global_cursor.swf";
+
     /* the query that the flash client needs to send back */
     $info .= "&link=dashboard.php&comonode=$comonode&module=$module";
     $info .= "&start=$start&end=$end&format=gnuplot&";
