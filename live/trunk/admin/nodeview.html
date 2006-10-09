@@ -11,7 +11,6 @@
 
   <body>
     <?php echo $header ?>
-
 <body>
 <table class=fence>
   <tr>
@@ -20,21 +19,8 @@
     <div class="sysinfobar">
     <form action="nodeview.php" method="GET">
     <center>
-    <table border=0><tr><td>
-        <table class=sysinfo border=0>
-            <tr><td width=300> 
-            <div class=title>Group name</div> 
-            </td></tr>
-	    <tr><td> 
-	    <select size=1 name=groupselect>
-	        <option value=default selected>Group
-	    <?php 
-            for ($i = 0; $i < count($all_groups); $i++) { ?>
-                <option value=<?php echo $all_groups[$i]['filename']?>>
-                <?php echo $all_groups[$i]['desc']?>
-            <?php } ?>
-	    </select>
-	    </td></tr>
+    <table border=1><tr><td>
+        <table class=sysinfo border=0 width=200>
 	    <tr><td>  
 		<div class=title>Como Node </div> 
 	    </td></tr>
@@ -64,17 +50,7 @@
 	    </td></tr>
 	    <tr><td>
 		<?php echo $node->comment ?>
-	    </td></tr>
-	    <tr><td>
-		<input type="submit" name=method value="Submit"> 
-	    </td></tr>
-	</table>
-	<input type=hidden name=comonode value="<?php echo $comonode?>">
-	<input type=hidden name=nodename value="<?php echo $node->nodename?>">
-	<input type=hidden name=nodeplace value="<?php echo $node->nodeplace?>">
-	<input type=hidden name=speed value="<?php echo $node->linkspeed?>">
-	<input type=hidden name=comment value="<?php echo $node->comment?>">
-    </form>
+	    </td></tr></table>
  
 	</td><td valign=top>
 	    <form action="nodeview.php" method="GET">
@@ -85,13 +61,43 @@
 		<tr><td>
 		    <input type=textbox name=groupname>
 		</td></tr>
-		<tr><td align=center>
+		<tr><td align=left>
 		    <input type=submit name=method value="Add Group">
 		    <input type=hidden name=comonode value="<?php echo $comonode?>">
 		</td></tr>
-	    </table>
+                <tr><td width=300> 
+                    <div class=title>Available Sites</div> 
+                </td></tr>
+                <tr>
+                <table border=0 width=100%>
+                    <tr>
+                <?php 
+                $NUMROW=3;
+                if (count($all_groups) > 0) {
+                    sort($all_groups);
+                }
+                for ($i = 0; $i < count($all_groups); $i++) { 
+                    if ((($i % $NUMROW) == 0) && ($i != 0)) {
+                        print "</tr><tr>";
+                    }
+                ?>
+                    <td><input type=checkbox name=groupselect[<?php echo $i ?>]
+                         value=<?php echo $all_groups[$i]['filename']?> >
+                    <?php echo $all_groups[$i]['desc']?></td>
+                <?php } ?>
+                </table>
+            </tr>
 	    </form>
-	</td></tr></table>
+	    <td colspan=2 align=center>
+        <input type="submit" name=method value="Submit"> 
+	<input type=hidden name=comonode value="<?php echo $comonode?>">
+	<input type=hidden name=nodename value="<?php echo $node->nodename?>">
+	<input type=hidden name=nodeplace value="<?php echo $node->nodeplace?>">
+	<input type=hidden name=speed value="<?php echo $node->linkspeed?>">
+	<input type=hidden name=comment value="<?php echo $node->comment?>">
+    </form>
+
+</tr></table>
     </div>
 
     <?php echo $footer ?>
