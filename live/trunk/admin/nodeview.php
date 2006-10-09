@@ -138,7 +138,7 @@
     }
 
 
-    include ("../html/nodeview.html");
+    include ("nodeview.html");
 
 
 function list_dir ($handle, $NODEDB) 
