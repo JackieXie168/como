@@ -168,7 +168,7 @@ IF(LINUX)
 ENDIF(LINUX)
 
 #
-# Make sure we os.h is included everywhere
+# Make sure os.h is included everywhere
 #
 ADD_DEFINITIONS(-include ${COMO_SOURCE_DIR}/include/os.h)
 

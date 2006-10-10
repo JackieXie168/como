@@ -6,23 +6,21 @@
 
 BUILD_TYPE?=debug
 
-.PHONY: all install clean distclean
+.PHONY: all install clean distclean $(BUILD_TYPE)/Makefile
 
 all: $(BUILD_TYPE)/Makefile
 	cd $(BUILD_TYPE) && make all
 
 $(BUILD_TYPE):
-	if [ ! -d $(BUILD_TYPE) ]; then mkdir $(BUILD_TYPE); fi
+	mkdir -p $(BUILD_TYPE)
 
-cmake: $(BUILD_TYPE)
+$(BUILD_TYPE)/Makefile: $(BUILD_TYPE)
 	cd $(BUILD_TYPE) && cmake .. -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(MAKEFLAGS)
 
-$(BUILD_TYPE)/Makefile: cmake
-
-install: $(BUILD_TYPE)
+install: $(BUILD_TYPE)/Makefile
 	cd $(BUILD_TYPE) && make install
 
-clean: $(BUILD_TYPE)
+clean: $(BUILD_TYPE)/Makefile
 	cd $(BUILD_TYPE) && make clean
 
 distclean:
