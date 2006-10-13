@@ -17,7 +17,6 @@
     <td class=leftmain>
 
     <div class="sysinfobar">
-    <form action="nodeview.php" method="GET">
     <center>
     <table border=1><tr><td>
         <table class=sysinfo border=0 width=200>
@@ -69,6 +68,8 @@
                     <div class=title>Available Sites</div> 
                 </td></tr>
                 <tr>
+            </form>
+        <form action="nodeview.php" method="GET">
                 <table border=0 width=100%>
                     <tr>
                 <?php 
@@ -81,13 +82,12 @@
                         print "</tr><tr>";
                     }
                 ?>
-                    <td><input type=checkbox name=groupselect[<?php echo $i ?>]
+                    <td><input type=checkbox name=sites[<?php echo $i ?>]
                          value=<?php echo $all_groups[$i]['filename']?> >
                     <?php echo $all_groups[$i]['desc']?></td>
                 <?php } ?>
                 </table>
             </tr>
-	    </form>
 	    <td colspan=2 align=center>
         <input type="submit" name=method value="Submit"> 
 	<input type=hidden name=comonode value="<?php echo $comonode?>">

@@ -38,6 +38,7 @@
 
     switch ($method) { 
     case "Submit": 
+        $groupselect = "default";
         if (isset($_GET['groupselect']))
             $groupselect = $_GET['groupselect'];
         if (isset($_GET['nodename']))
@@ -48,17 +49,19 @@
             $speed = trim($_GET['speed']);
         if (isset($_GET['comment']))
             $comment = trim($_GET['comment']);
+        if (isset($_GET['sites']))
+            $sites = $_GET['sites'];
+        $numsites = count($sites);
 
         /*  Create the default file  */
         if ($groupselect == "default") {
             $groupselect = "default.lst";
             if (!file_exists("$NODEDB/$groupselect")) 
-        file_put_contents("$NODEDB/$groupselect", "CoMo Nodes\n");
+                file_put_contents("$NODEDB/$groupselect", "CoMo Nodes\n");
         }
 
         $tmp = file("$NODEDB/$groupselect");
         $numlines = count($tmp);
-
         if (($fh = fopen("$NODEDB/$groupselect", "a")) === FALSE) {
             $mes = "NOTICE<br>File $NODEDB/$groupselect ";
             $mes = $mes . "is not writable by the webserver<br>";
@@ -68,16 +71,24 @@
             include ("../html/generic_message.html");
             exit;
         }
+        /*  Build site array  */
+        for ($s = 0; $s < $numsites; $s++) {
+            $siteval .= $sites[$s] . "*;*";
+        }
+    
         $tofile = "";
+        /*  Write the column header info  */
         if ($numlines == 1) {
-            $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;\n";
+            $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;Groups;;Tags;;\n";
         }
 
+        /*  Write the node data to the file  */
         $tofile = $tofile . $nodename . ";;" ;
         $tofile = $tofile . $comonode . ";;" ;
         $tofile = $tofile . $nodeplace . ";;" ;
         $tofile = $tofile . $speed . ";;" ;
-        $tofile = $tofile . $comment . ";;\n" ;
+        $tofile = $tofile . $comment . ";;" ;
+        $tofile .= $siteval . ";;\n" ;
 
         fwrite ($fh, $tofile);
         fclose($fh);
