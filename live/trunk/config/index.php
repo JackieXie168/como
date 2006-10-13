@@ -7,6 +7,7 @@ $REVISION = substr('\$Revision$', 11, -2);
 include("../include/framing.php");
 $header = simple_header("../");
 $footer = simple_footer();
+include("../include/helper-messages.php");
 
 /*  This is our way of initially finding the location of the webserver
  *  root directory.  Once this page loads, it gives you the option 
@@ -31,19 +32,6 @@ $action = "setup";
 if (isset($_GET['action']))
     $action = $_GET['action'];
 
-/*  This will check to make sure all directories are there and
- *  writeable. 
- */
-if (!(file_exists($absroot)) || (!(is_writable($absroot)))) {
-    $m = "Please make sure the live directory is writeable <br>" .
-         "by the web server<br><br>" . 
-         "<pre>" . 
-         "chown WEBUSER $absroot; <br></pre>";
-    $generic_message = $m;
-    include("../html/generic_message.html");
-    exit;
-}
- 
 /*  Brief description of the options in the file  */
 $TIMEPERIOD_DESC = "The default amount of time that CoMo should\n" .
                    "query initially (in seconds)";
@@ -88,7 +76,6 @@ if ($action == "setup") {
 $i=0;
 $G = array();
 if ($action == "install") {
-    $FAIL=0;
     /*  Create an array with the value and desciption  */
     $G['REV']['val'] = $REVISION;
     if (isset($_POST["TIMEPERIOD"])) {
@@ -131,20 +118,16 @@ if ($action == "install") {
         $G['PASSWORD']['val'] = $_POST["PASSWORD"];
         $G['PASSWORD']['desc'] = $PASSWORD_DESC;
     }
-    if (!(is_writable("../{$G['NODEDB']['val']}"))) {
-        $FAIL=1;
+    if (!(check_writable("../{$G['NODEDB']['val']}"))) {
+        $dir = "../{$G['NODEDB']['val']}";
+    $m = "Please make sure the $dir directory exists <br>" .
+         "and is writeable by the web server<br><br>" .
+         "<pre>" .
+         "mkdir $dir;<br>" .
+         "chown WEBUSER $dir; <br></pre>";
+        generic_message($m);
     }
 
-    /*  Make sure results and db dir are writeable  */
-    if ($FAIL) {
-    $m = "Please make sure the live directory is writeable <br>" .
-         "by the web server<br><br>" . 
-         "<pre>" . 
-         "chown WEBUSER $absroot; <br></pre>";
-        $generic_message = $m;
-        include("../html/generic_message.html");
-        exit;
-    }
 
     /*  Write configuration file to disk  */
     create_site($G, "public");
@@ -247,7 +230,8 @@ function write_config($G, $outfile) {
 /*  Function to convert the DESC vars to print nicely in the config 
  *  file  
  */
-function comment ($val) {
+function comment ($val) 
+{
     $rep = "\n     * ";
     $newval = "    /*\n     * ";
     $test = ereg_replace("\n", $rep , $val);
@@ -255,7 +239,8 @@ function comment ($val) {
     return $newval;
 }
 
-function create_site ($G, $sitename) {
+function create_site ($G, $sitename) 
+{
     $dname = $G['ABSROOT']['val'] . "/" . $sitename;
     $srcname = $G['ABSROOT']['val'] . "/php";
     if ($sitename != "admin") {
@@ -294,5 +279,23 @@ function create_site ($G, $sitename) {
         system ("htpasswd -b -c $htpwd/.htpasswd admin {$G['PASSWORD']['val']}");
         file_put_contents("$htpwd/.htaccess", $htaccess);
     }
+}
+
+function check_writable ($dir)
+{
+/*  This will check to make sure all directories are there and
+ *  writeable.
+ */
+if (!(file_exists($dir)) || (!(is_writable($dir)))) {
+    $m = "Please make sure the $dir directory exists and is writeable <br>" .
+         "by the web server<br><br>" .
+         "<pre>" .
+         "mkdir $dir;" .
+         "chown WEBUSER $dir; <br></pre>";
+    return $m;
+} else {
+    return 0;
+}
+
 }
 ?>
