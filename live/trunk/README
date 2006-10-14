@@ -1,6 +1,6 @@
 $Id$ 
 
-CoMolive! v1.0
+CoMolive! v1.1
 Copyright (c) 2005, 2006 Intel Corporation
 All rights reserved. 
 
@@ -13,16 +13,6 @@ particular environment where it is supposed to run.
 
 -- Installation notes
 
- . Create a directory named 'results' and a directory 'db' where 
-   apache can write. 
- . Edit the comolive.conf file to set several variables 
-   needed to locate the files and the directories results and db. 
- . PHP must be >= 4.3.0
+ . PHP must be >= 5.0
  . GNUPLOT must be >= 4.0
  . CONVERT must be available (from ImageMagick) 
-
--- Edit the node database 
- 
- . The page gives the ability to add a CoMo node to the list of 
-   queryable nodes.
-

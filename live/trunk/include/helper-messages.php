@@ -10,4 +10,18 @@ function generic_message ($mesg)
     exit;
     
 }
+
+function ERROR_DIRNOTWRITABLE ($dir) 
+{
+    $m = "Please make sure the $dir directory ".
+         "exists and is writeable <br>" .
+         "by the web server<br><br>" .
+         "<pre>" .
+         "mkdir $dir;<br>" .
+         "chown WEBUSER $dir; <br></pre>";
+        $val = $m;
+    return $val;
+
+}
+
 ?>

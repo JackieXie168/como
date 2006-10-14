@@ -5,9 +5,10 @@ $REVISION = substr('\$Revision$', 11, -2);
 /*  This file creates the main configuration file for CoMoLive!  */
 /*  Include the framing information to create headers and footers  */     
 include("../include/framing.php");
+include("../include/helper-messages.php");
+
 $header = simple_header("../");
 $footer = simple_footer();
-include("../include/helper-messages.php");
 
 /*  This is our way of initially finding the location of the webserver
  *  root directory.  Once this page loads, it gives you the option 
@@ -22,9 +23,7 @@ if (file_exists("../comolive.conf")) {
          "problem, you should post your issue to the mailing " . 
          "list.<br><br>" .
          "Click <a href=$webroot/>here</a>";
-    $generic_message = $m;
-    include("../html/generic_message.html");
-    exit;
+    generic_message($m);
 }
 
 /*  This var is passed upon itself to let it know what to do  */
@@ -70,6 +69,7 @@ if ($action == "setup") {
     print "$header";
     include ("config.html");
     print "$footer";
+    exit;
 } 
 
 /*  Enter install mode  */
@@ -118,20 +118,26 @@ if ($action == "install") {
         $G['PASSWORD']['val'] = $_POST["PASSWORD"];
         $G['PASSWORD']['desc'] = $PASSWORD_DESC;
     }
-    if (!(check_writable("../{$G['NODEDB']['val']}"))) {
-        $dir = "../{$G['NODEDB']['val']}";
-    $m = "Please make sure the $dir directory exists <br>" .
-         "and is writeable by the web server<br><br>" .
-         "<pre>" .
-         "mkdir $dir;<br>" .
-         "chown WEBUSER $dir; <br></pre>";
-        generic_message($m);
+    /*  Make sure the results and db directory exists  */
+    $dir = "$absroot/{$G['NODEDB']['val']}";
+    $val = check_writable($dir);
+    if (!(check_writable($dir))) {
+        generic_message(ERROR_DIRNOTWRITABLE($dir));
+    }
+    $dir = "$absroot/{$G['RESULTS']['val']}";
+    if (!(check_writable($dir))) {
+        generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
 
-
+    /*  create the public and admin site directories  */
+    $dir = "$absroot/public";
+    if (!(file_exists($dir))) {
+        create_site($G, "public");
+    }
+    if (!(file_exists($dir))) {
+        create_site($G, "admin");
+    }
     /*  Write configuration file to disk  */
-    create_site($G, "public");
-    create_site($G, "admin");
     write_config($G, "comolive.conf");
     $m = "Configuration complete.  Copy the comolive.conf file " .
          "to the web root.<br><pre>" . 
@@ -139,9 +145,7 @@ if ($action == "install") {
          "You can make changes to the config file by " . 
          "editing comolive.conf<br>" . 
          "Click <a href=$webroot/>here</a> when you have moved the file";
-    $generic_message = $m;
-    include("../html/generic_message.html");
-    exit;
+    generic_message($m);
 }
 
 /*  Function to write the config file.  Changes to comolive.conf should
@@ -227,7 +231,8 @@ function write_config($G, $outfile) {
     file_put_contents($outfile, $c);
 }
 
-/*  Function to convert the DESC vars to print nicely in the config 
+/**
+ *  Function to convert the DESC vars to print nicely in the config 
  *  file  
  */
 function comment ($val) 
@@ -238,7 +243,9 @@ function comment ($val)
     $newval = $newval . $test . "\n     */\n\n";
     return $newval;
 }
-
+/**
+ *  Function to create the site.  Create all links to necessary files  
+ */
 function create_site ($G, $sitename) 
 {
     $dname = $G['ABSROOT']['val'] . "/" . $sitename;
@@ -283,19 +290,14 @@ function create_site ($G, $sitename)
 
 function check_writable ($dir)
 {
-/*  This will check to make sure all directories are there and
- *  writeable.
- */
-if (!(file_exists($dir)) || (!(is_writable($dir)))) {
-    $m = "Please make sure the $dir directory exists and is writeable <br>" .
-         "by the web server<br><br>" .
-         "<pre>" .
-         "mkdir $dir;" .
-         "chown WEBUSER $dir; <br></pre>";
-    return $m;
-} else {
-    return 0;
-}
+    /*  This will check to make sure all directories are there and
+     *  writeable.
+     */
+    if (!(file_exists($dir)) || (!(is_writable($dir)))) {
+        return 0;
+    } else {
+        return 1;
+    }
 
 }
 ?>
