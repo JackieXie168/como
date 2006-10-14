@@ -2,6 +2,7 @@
     /*  $Id$  */
     require_once ("../comolive.conf");
     include_once ("../include/framing.php"); 
+    include_once ("../include/helper-messages.php"); 
     include_once ("../class/node.class.php");
    
     $G = init_global();
@@ -17,21 +18,18 @@
         header("Location: index.php");
         exit;
     }
-
-    $method = "addnode";
+#    $method = "addnode";
     if (isset($_GET['method']))
         $method = $_GET['method'];
 
-    $groupname = "default";
-    if (isset($_GET['groupname']) && $_GET['groupname'] != "")
-        $groupname = $_GET['groupname'];
+print "1 method is $method";
+    if (isset($_GET['sitename']) && $_GET['sitename'] != "")
+        $sitename = $_GET['sitename'];
 
     /* get the node hostname and port number */
     if (!isset($_GET['comonode'])) {
         $mes = "This file requires the comonode=host:port arg passed to it";
-        $generic_message = $mes;
-        include ("../html/generic_message.html");
-        exit;
+        generic_message($mes);
     }
     $comonode = $_GET['comonode'];
 
@@ -96,35 +94,32 @@
         break; 
 
     case "Add Group": 
-        if ($groupname == "default") {
-            header("Location: nodeview.php?comonode=$comonode");
-            exit;
-        }
-        $groupfname = ereg_replace(" ", "_", $groupname);
-        $groupfname = $groupfname . ".lst";
+print "here";
+$groupfname = "groups.lst";
+#        $groupfname = ereg_replace(" ", "_", $sitename);
+#        $groupfname = $groupfname . ".lst";
         if (!file_exists("$NODEDB/$groupfname")) {
-            if ($fh = fopen ("$NODEDB/$groupfname", "w")) {
-                $towrite = "$groupname\n";
-                fwrite ($fh, $towrite);
-                header ("Location: nodeview.php?comonode=$comonode");
-            } else {
-                $mes = "NOTICE<br>File $NODEDB/$groupselect ";
-                $mes = $mes . "is not writable by the webserver<br>";
-                $mes = $mes . "Please check your settings and make the $NODEDB";
-                $mes = $mes . " directory writable by the webserver<br><br>";
-                $generic_message = $mes;
-                include ("../html/generic_message.html");
-                exit;
-            }
+             /*  Put headings here if you want  */
+            $towrite = "$sitename\n";
+print "put it $towrite";
+            file_put_contents($fh, $towrite);
+            header ("Location: nodeview.php?comonode=$comonode");
+        } else {
+            $mes = "NOTICE<br>File $NODEDB/$groupselect ";
+            $mes = $mes . "is not writable by the webserver<br>";
+            $mes = $mes . "Please check your settings and make the $NODEDB";
+            $mes = $mes . " directory writable by the webserver<br><br>";
+            generic_message($mes);
         }
-        /*  If we add a group, we need to go through the addnode
+        /**
+         *  If we add a group, we need to go through the addnode
          *  case.  I am commenting out the break and reassigning $method
          *  And so let it be commentted :)
          */
         $method = "addnode";
         /* break; */
 
-        case "addnode": 
+    case "addnode": 
 
         /*  query the CoMo node  */
         $node = new Node($comonode,$G);
@@ -136,12 +131,10 @@
         /*  get the groups */
         if (!($handle = opendir("$NODEDB"))) {
             $mes = "Directory $NODEDB, as specified in comolive.conf, ";
-            $mes = $mes . "is not writable by the webserver<br>";
-            $mes = $mes . "Please create this directory and make ";
-            $mes = $mes . "it writable by the webserver<br><br>";
-            $generic_message = $mes;
-            include ("../html/generic_message.html");
-            exit;
+            $mes .= "is not writable by the webserver<br>";
+            $mes .= "Please create this directory and make ";
+            $mes .= "it writable by the webserver<br><br>";
+            generic_message($mes);
         }
         $all_groups = array();
         $all_groups = list_dir($handle, $NODEDB);
