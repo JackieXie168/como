@@ -34,6 +34,8 @@
 #error "ppbuf.c must be included by capture.c"
 #endif
 
+#include "ppbuf_list.h"
+
 struct ppbuf {
     int		woff;		/* offset for the next pkt to capture */
     int		roff;		/* offset for the next pkt to read */
@@ -43,6 +45,7 @@ struct ppbuf {
     int		size;		/* number of allocated items in pp array */
     pkt_t **	pp;
     timestamp_t	last_pkt_ts;
+    ppbuf_list_entry_t	next;
 };
 
 

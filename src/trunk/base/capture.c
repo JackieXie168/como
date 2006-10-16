@@ -1222,6 +1222,7 @@ batch_create(int force_batch)
     batch_t *batch;
     source_t *src;
     ppbuf_t *ppbuf;
+    ppbuf_list_t ppblist;
     timestamp_t max_last_pkt_ts = 0;
     int pc = 0;
     static timestamp_t prev_last_pkt_ts;
@@ -1230,6 +1231,8 @@ batch_create(int force_batch)
     static const timestamp_t live_th = TIME2TS(0, 10000);
 
     int one_full_flag = 0;
+    
+    ppbuf_list_init(&ppblist);
 
     /*
      * count packets
@@ -1242,6 +1245,8 @@ batch_create(int force_batch)
 	    continue;
 
 	ppbuf = src->sniff->ppbuf;
+	
+	ppbuf_list_insert_head(&ppblist, ppbuf);
 
 	pc += ppbuf->count;
 
@@ -1273,12 +1278,7 @@ batch_create(int force_batch)
 
     if ((one_full_flag == 0) && !force_batch) {
 
-	for (src = map.sources; src; src = src->next) {
-	    if (src->sniff->flags & SNIFF_INACTIVE)
-		continue;
-
-	    ppbuf = src->sniff->ppbuf;
-
+	ppbuf_list_foreach (ppbuf, &ppblist) {
 	    if (ppbuf->count == 0)
 		if ((max_last_pkt_ts - ppbuf->last_pkt_ts) <= live_th)
 		    return NULL;
@@ -1298,20 +1298,14 @@ batch_create(int force_batch)
      */
 
     while (pc) {
-
+	ppbuf_t *this_ppbuf;
 	/* find minimum ts */
 
 	timestamp_t min_ts = ~0;
 	ppbuf = NULL;
 
-	for (src = map.sources; src; src = src->next) {
+	ppbuf_list_foreach (this_ppbuf, &ppblist) {
 	    timestamp_t this_ts;
-	    ppbuf_t *this_ppbuf;
-
-	    if (src->sniff->flags & SNIFF_INACTIVE)
-		continue;
-
-	    this_ppbuf = src->sniff->ppbuf;
 
 	    if (this_ppbuf->count == 0)
 		continue;
