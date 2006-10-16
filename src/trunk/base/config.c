@@ -79,7 +79,8 @@ enum tokens {
     TOK_MAXFILESIZE,
     TOK_VIRTUAL,
     TOK_ALIAS,
-    TOK_ASNFILE
+    TOK_ASNFILE,
+    TOK_LIVE_THRESH
 };
 
 
@@ -151,6 +152,7 @@ keyword_t keywords[] = {
     { "virtual-node",TOK_VIRTUAL,     2, CTX_GLOBAL },
     { "alias",       TOK_ALIAS,       2, CTX_GLOBAL },
     { "asnfile",     TOK_ASNFILE,     1, CTX_GLOBAL },
+    { "live-thresh", TOK_LIVE_THRESH, 1, CTX_GLOBAL },
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -294,6 +296,7 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
 {
     sniffer_cb_t *cb;
     source_t *s;
+    static int live_sniffers, file_sniffers;
 
     if (device == NULL && args == NULL) {
 	device = index(want, ':');
@@ -333,7 +336,26 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
 	free(s); 
 	return; 
     }
+
+    /* check that the sniffer is consistent with the sniffers already
+     * configured */
+    if (((s->sniff->flags & SNIFF_FILE) && live_sniffers > 0) ||
+	(!(s->sniff->flags & SNIFF_FILE) && file_sniffers > 0)) {
+	logmsg(LOGWARN, "impossible to activate sniffer-%s: "
+			"file and live sniffers cannot be used "
+			"at the same time\n", want);
+	s->cb->finish(s->sniff);
+	free(s);
+	return;
+    }
     
+    if (s->sniff->flags & SNIFF_FILE) {
+	file_sniffers++;
+	m->live_thresh = ~0;
+    } else {
+	live_sniffers++;
+    }
+
     m->sources = s;
 
     logmsg(LOGUI, "... sniffer [%s] %s\n", cb->name, s->device);
@@ -699,6 +721,10 @@ do_config(struct _como * m, int argc, char *argv[])
 
     case TOK_ASNFILE:
 	safe_dup(&m->asnfile, argv[1]);
+	break;
+
+    case TOK_LIVE_THRESH:
+	m->live_thresh = TIME2TS(0, atoi(argv[1]));
 	break;
 
     default:
@@ -1178,6 +1204,7 @@ init_map(struct _como * m)
     m->node_count = 1;
     m->debug_sleep = 20;
     m->asnfile = NULL;
+    m->live_thresh = TIME2TS(0, 10000); /* default 10 ms */
 }
 
 
