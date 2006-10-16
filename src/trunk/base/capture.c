@@ -1227,8 +1227,7 @@ batch_create(int force_batch)
     int pc = 0;
     static timestamp_t prev_last_pkt_ts;
 
-    /* CHECKME: value ??? */
-    static const timestamp_t live_th = TIME2TS(0, 10000);
+    const timestamp_t live_th = map.live_thresh;
 
     int one_full_flag = 0;
     
@@ -1409,13 +1408,15 @@ setup_sniffers(struct timeval *tout)
 	 * it is a valid one or not. we will add it later if needed. 
 	 * del_fd() deals with invalid fd. 
 	 */
-
-	capture_loop_del_fd(sniff->fd);
+	if (src->fd != -1)
+	    capture_loop_del_fd(src->fd);
 
 	/* inactive and frozen sniffers can be ignored */
 
-	if (sniff->flags & SNIFF_INACTIVE)
+	if (sniff->flags & SNIFF_INACTIVE) {
+	    sniff->fd = -1;
 	    continue;
+	}
 
 	if (sniff->flags & SNIFF_FROZEN)
 	    continue;
@@ -1439,8 +1440,10 @@ setup_sniffers(struct timeval *tout)
 
 	/* if sniffer uses select(), add the file descriptor to the list */
 
-	if (sniff->flags & SNIFF_SELECT)
-	    capture_loop_add_fd(sniff->fd);
+	if (sniff->flags & SNIFF_SELECT) {
+	    src->fd = sniff->fd;
+	    capture_loop_add_fd(src->fd);
+	}
     }
 
     /* if no sniffers now active then we log this change of state */
@@ -1519,6 +1522,8 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
     for (src = map.sources; src; src = src->next) {
 	sniffer_t *sniff = src->sniff;
+	
+	src->fd = -1;
 
 	if (src->cb->start(sniff) < 0) {
 	    sniff->flags |= SNIFF_INACTIVE | SNIFF_TOUCHED;
@@ -1536,6 +1541,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	sniff->ppbuf = ppbuf_new(src->sniff->max_pkts);
 
 	/* ensure select structures will be set up */
+	/* FIXME: this should happen in ca_ipc_start */
 	sniff->flags |= SNIFF_TOUCHED;
 	
 	sum_max_pkts += src->sniff->max_pkts;
@@ -1709,6 +1715,11 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 		/* disable the sniffer */
 		src->sniff->flags |= SNIFF_INACTIVE | SNIFF_TOUCHED;
 		continue;
+	    }
+	    
+	    /* monitoe the current sniffer fd */
+	    if (src->fd != src->sniff->fd) {
+		src->sniff->flags |= SNIFF_TOUCHED;
 	    }
 
 	    /* update drop statistics */
