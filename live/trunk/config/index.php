@@ -136,15 +136,17 @@ if ($action == "install") {
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
+    $dir = "$absroot/admin";
+    if (!(check_writable($dir))) {
+        generic_message(ERROR_DIRNOTWRITABLE($dir));
+    }
 
     /*  create the public and admin site directories  */
     $dir = "$absroot/public";
     if (!(file_exists($dir))) {
         create_site($G, "public");
     }
-    if (!(file_exists($dir))) {
-        create_site($G, "admin");
-    }
+    create_site($G, "admin");
     /*  Write configuration file to disk  */
     write_config($G, "comolive.conf");
     $m = "Configuration complete.  Copy the comolive.conf file " .
@@ -267,8 +269,7 @@ function create_site ($G, $sitename)
         $symname[2] = "index.php";
         $symname[3] = "loadcontent.php";
         $symname[4] = "mainstage.php";
-        $symname[5] = "nodeview.php";
-        $symname[6] = "sysinfo.php";
+        $symname[5] = "sysinfo.php";
         for ($i = 0; $i < count($symname); $i++) {
             $orig = $srcname . "/" . $symname[$i];
             $dest = $dname . "/" . $symname[$i];
@@ -279,6 +280,7 @@ function create_site ($G, $sitename)
         mkdir("$dname/{$G['NODEDB']['val']}", 0755);
     } else {
         /*  Create the links to db and results  */
+print "creat links";
         $orig = $G['ABSROOT']['val'] . "/db";
         $dest = $G['ABSROOT']['val'] . "/admin/db";
         symlink($orig, $dest);

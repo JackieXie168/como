@@ -1,4 +1,4 @@
-<!--  $Id:$  -->
+<!--  $Id$  -->
 
 <?php
     include("../include/framing.php");
