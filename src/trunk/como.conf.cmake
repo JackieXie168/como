@@ -100,6 +100,14 @@
 
 sniffer		"pcap" "@EXAMPLE_TRACE@"
 
+# Live sniffers synchronization threshold.
+# It specifies the threshold used by CoMo to synchronize multiple live
+# sniffers.
+# The unit is microseconds.
+# Default: 10000
+
+#live-threshold	10000
+
 # Log messages that are printed to stdout.
 # Valid keywords are:
 #
