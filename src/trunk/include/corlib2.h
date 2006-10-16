@@ -61,5 +61,6 @@ typedef void (*destroy_notify_fn) (void *data);
 #include "mempool.h"
 #include "ptr_array.h"
 #include "uhash.h"
+#include "flowtable.h"
 
 #endif /*LIB_H_*/
