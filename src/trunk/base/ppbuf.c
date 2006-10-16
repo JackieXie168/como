@@ -97,14 +97,13 @@ ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
 	return 0;
     }
     if (pkt->ts < ppbuf->last_pkt_ts) {
-	logmsg(LOGCAPTURE,"dropping pkt no. %d: timestamps not increasing "
+	logmsg(V_LOGCAPTURE,"pkt no. %d: timestamps not increasing "
 			   "(%u.%06u --> %u.%06u)\n",
 			   ppbuf->woff,
 			   TS2SEC(ppbuf->last_pkt_ts),
 			   TS2USEC(ppbuf->last_pkt_ts),
 			   TS2SEC(pkt->ts),
 			   TS2USEC(pkt->ts));
-	return 0;
     }
     ppbuf->captured++;
     assert(ppbuf->captured <= ppbuf->size);
