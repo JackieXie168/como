@@ -38,6 +38,7 @@
 
     switch ($method) { 
     case "Submit": 
+print "inside submit";
         if (isset($_GET['nodename']))
             $nodename= trim($_GET['nodename']);
         if (isset($_GET['nodeplace']))
@@ -50,12 +51,8 @@
             $sites = $_GET['sites'];
         $numsites = count($sites);
 
-        /*  Create the default file  */
-        if (!file_exists($nodefname)) {
-            /*  Write the column header info  */
-            $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;Groups;;Tags;;\n";
-            file_put_contents($nodefname, $tofile);
-        }
+        /*  Write the column header info  */
+        $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;Groups;;Tags;;\n";
 
         /*  Build site array  */
         $siteval = "";
@@ -63,15 +60,34 @@
             $siteval .= $value . "*;*";
         }
 
-        /*  Write the node data to the file  */
-        $tofile = $nodename . ";;" ;
-        $tofile = $tofile . $comonode . ";;" ;
-        $tofile = $tofile . $nodeplace . ";;" ;
-        $tofile = $tofile . $speed . ";;" ;
-        $tofile = $tofile . $comment . ";;" ;
-        $tofile .= $siteval . ";;\n" ;
+        /*  Is this node in the file already?  */
+        $alreadythere = 0;
+        $val = file($nodefname); 
+        for ($i = 1; $i < count($val); $i++) {
+            /*  If it is there, just modify group info  */
+            if (strstr($val[$i], $comonode)) {
+                $contents = explode(";;", $val[$i]);
+                $contents[5] = $siteval;
+                $val[$i] = implode(";;", $contents);
+                $tofile .= $val[$i];
+                $alreadythere = 1;
+            } else {
+                $tofile .= $val[$i];
+ 
+            }
+        }
+        /*  Node does not exist, write it  */
+        if (!$alreadythere) {
+            /*  Write the node data to the file  */
+            $tofile .= $nodename . ";;" ;
+            $tofile .= $comonode . ";;" ;
+            $tofile .= $nodeplace . ";;" ;
+            $tofile .= $speed . ";;" ;
+            $tofile .= $comment . ";;" ;
+            $tofile .= $siteval . ";;\n" ;
+        }
 
-        file_put_contents($nodefname, $tofile, FILE_APPEND);
+        file_put_contents($nodefname, $tofile);
 
         header("Location: index.php");
         break; 
