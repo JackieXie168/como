@@ -872,7 +872,10 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
 	    return;
 	}
     } else {
-	/* copy the mgmt frame */
+	/* copy the frame */
+	/* FIXME: caplen can be greater than than me->snaplen if the packet has
+	 * radio information as they are rewritten in the _como_radio struct.
+	 */
 	memcpy(dest, buf, len);
 	COMO(caplen) += len;
     }
