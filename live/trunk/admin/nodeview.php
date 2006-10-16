@@ -18,11 +18,10 @@
         header("Location: index.php");
         exit;
     }
-#    $method = "addnode";
+    $method = "addnode";
     if (isset($_GET['method']))
         $method = $_GET['method'];
 
-print "1 method is $method";
     if (isset($_GET['sitename']) && $_GET['sitename'] != "")
         $sitename = $_GET['sitename'];
 
@@ -33,6 +32,7 @@ print "1 method is $method";
     }
     $comonode = $_GET['comonode'];
 
+    $groupfname = $NODEDB . "/groups.lst";
 
     switch ($method) { 
     case "Submit": 
@@ -94,18 +94,17 @@ print "1 method is $method";
         break; 
 
     case "Add Group": 
-print "here";
-$groupfname = "groups.lst";
+        $groupfname = $NODEDB . "/groups.lst";
 #        $groupfname = ereg_replace(" ", "_", $sitename);
 #        $groupfname = $groupfname . ".lst";
-        if (!file_exists("$NODEDB/$groupfname")) {
+        if (file_exists($NODEDB)) {
              /*  Put headings here if you want  */
             $towrite = "$sitename\n";
-print "put it $towrite";
-            file_put_contents($fh, $towrite);
+            print "put it $towrite";
+            file_put_contents($groupfname, $towrite, FILE_APPEND);
             header ("Location: nodeview.php?comonode=$comonode");
         } else {
-            $mes = "NOTICE<br>File $NODEDB/$groupselect ";
+            $mes = "NOTICE<br>File $NODEDB";
             $mes = $mes . "is not writable by the webserver<br>";
             $mes = $mes . "Please check your settings and make the $NODEDB";
             $mes = $mes . " directory writable by the webserver<br><br>";
@@ -129,18 +128,9 @@ print "put it $towrite";
         }
 
         /*  get the groups */
-        if (!($handle = opendir("$NODEDB"))) {
-            $mes = "Directory $NODEDB, as specified in comolive.conf, ";
-            $mes .= "is not writable by the webserver<br>";
-            $mes .= "Please create this directory and make ";
-            $mes .= "it writable by the webserver<br><br>";
-            generic_message($mes);
-        }
-        $all_groups = array();
-        $all_groups = list_dir($handle, $NODEDB);
+        $all_groups = file($groupfname);
         break;
     }
-
 
     include ("nodeview.html");
 
