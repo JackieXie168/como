@@ -118,6 +118,7 @@ struct source {
     source_t *	next;
     sniffer_cb_t *cb;		/* callbacks */
     sniffer_t *	sniff;		/* sniffer state */
+    int		fd;		/* descriptor used in the select by capture */
     char *	device;		/* device name */
     char *	args;		/* optional arguments */
     metadesc_t *outdesc;	/* offered output metadesc list */
