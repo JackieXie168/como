@@ -33,12 +33,11 @@
     $comonode = $_GET['comonode'];
 
     $groupfname = $NODEDB . "/groups.lst";
+    $nodefname = $NODEDB . "/nodelist.lst";
+
 
     switch ($method) { 
     case "Submit": 
-        $groupselect = "default";
-        if (isset($_GET['groupselect']))
-            $groupselect = $_GET['groupselect'];
         if (isset($_GET['nodename']))
             $nodename= trim($_GET['nodename']);
         if (isset($_GET['nodeplace']))
@@ -52,63 +51,42 @@
         $numsites = count($sites);
 
         /*  Create the default file  */
-        if ($groupselect == "default") {
-            $groupselect = "default.lst";
-            if (!file_exists("$NODEDB/$groupselect")) 
-                file_put_contents("$NODEDB/$groupselect", "CoMo Nodes\n");
+        if (!file_exists($nodefname)) {
+            /*  Write the column header info  */
+            $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;Groups;;Tags;;\n";
+            file_put_contents($nodefname, $tofile);
         }
 
-        $tmp = file("$NODEDB/$groupselect");
-        $numlines = count($tmp);
-        if (($fh = fopen("$NODEDB/$groupselect", "a")) === FALSE) {
-            $mes = "NOTICE<br>File $NODEDB/$groupselect ";
-            $mes = $mes . "is not writable by the webserver<br>";
-            $mes = $mes . "Please check your settings and make the $NODEDB";
-            $mes = $mes . " directory writable by the webserver<br><br>";
-            $generic_message = $mes;
-            include ("../html/generic_message.html");
-            exit;
-        }
         /*  Build site array  */
-        for ($s = 0; $s < $numsites; $s++) {
-            $siteval .= $sites[$s] . "*;*";
-        }
-    
-        $tofile = "";
-        /*  Write the column header info  */
-        if ($numlines == 1) {
-            $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;Groups;;Tags;;\n";
+        $siteval = "";
+        foreach ($sites as $value) {
+            $siteval .= $value . "*;*";
         }
 
         /*  Write the node data to the file  */
-        $tofile = $tofile . $nodename . ";;" ;
+        $tofile = $nodename . ";;" ;
         $tofile = $tofile . $comonode . ";;" ;
         $tofile = $tofile . $nodeplace . ";;" ;
         $tofile = $tofile . $speed . ";;" ;
         $tofile = $tofile . $comment . ";;" ;
         $tofile .= $siteval . ";;\n" ;
 
-        fwrite ($fh, $tofile);
-        fclose($fh);
+        file_put_contents($nodefname, $tofile, FILE_APPEND);
+
         header("Location: index.php");
         break; 
 
     case "Add Group": 
-        $groupfname = $NODEDB . "/groups.lst";
-#        $groupfname = ereg_replace(" ", "_", $sitename);
-#        $groupfname = $groupfname . ".lst";
-        if (file_exists($NODEDB)) {
-             /*  Put headings here if you want  */
-            $towrite = "$sitename\n";
-            print "put it $towrite";
-            file_put_contents($groupfname, $towrite, FILE_APPEND);
-            header ("Location: nodeview.php?comonode=$comonode");
-        } else {
-            $mes = "NOTICE<br>File $NODEDB";
-            $mes = $mes . "is not writable by the webserver<br>";
-            $mes = $mes . "Please check your settings and make the $NODEDB";
-            $mes = $mes . " directory writable by the webserver<br><br>";
-            generic_message($mes);
+        /**
+         * Get the contents of the group file 
+         */         
+        if (isset($sitename)) {
+            $all_groups = file ($groupfname);
+            /*  Make sure this site doesn't already exist  */
+            if (!(in_array($sitename . "\n", $all_groups))) {
+                $towrite = "$sitename\n";
+                file_put_contents($groupfname, $towrite, FILE_APPEND);
+            }
         }
         /**
          *  If we add a group, we need to go through the addnode
@@ -127,11 +105,36 @@
             exit; 
         }
 
-        /*  get the groups */
-        $all_groups = file($groupfname);
+        /*  create the group file */
+        if (!file_exists($groupfname)) {
+            touch($groupfname);
+        }
+
+        if (file_exists($groupfname)) {
+            $val = "public";
+            $all_groups = file($groupfname);
+            /*  Put public at beginning of the array  */
+            array_unshift($all_groups, $val);
+        } else {
+            $all_groups[0] = "public";
+        }
+
+        /**  
+         *  Check if the node exists in the nodefile 
+         *  This is just to get the list of groups this node belongs 
+         *  to so we can check boxes when we are modifying
+         */
+        if (file_exists($nodefname)) {
+            $val = file($nodefname);
+            for ($i = 1; $i < count($val); $i++) {
+                $desc = split(';;', $val[$i]);
+                if ($comonode == $desc[1]) {
+                    $memberlist = explode("*;*", $desc[5]);
+                }
+            }
+        }
         break;
     }
-
     include ("nodeview.html");
 
 

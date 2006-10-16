@@ -74,15 +74,18 @@
                     <tr>
                 <?php 
                 $NUMROW=3;
-                if (count($all_groups) > 0) {
-                    sort($all_groups);
-                }
                 for ($i = 0; $i < count($all_groups); $i++) { 
                     if ((($i % $NUMROW) == 0) && ($i != 0)) {
                         print "</tr><tr>";
                     }
                 ?>
-                    <td><input type=checkbox name=sites[<?php echo $i ?>]
+                    <td><input type=checkbox 
+                    <?php 
+                    $val = trim($all_groups[$i]);
+                    if (in_array($val, $memberlist))
+                        print " checked ";
+                    ?> 
+                         name=sites[<?php echo $i ?>]
                          value=<?php echo $all_groups[$i]?> >
                     <?php echo $all_groups[$i]?></td>
                 <?php } ?>
