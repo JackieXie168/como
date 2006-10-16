@@ -83,18 +83,18 @@
                     }
                 ?>
                     <td><input type=checkbox name=sites[<?php echo $i ?>]
-                         value=<?php echo $all_groups[$i]['filename']?> >
-                    <?php echo $all_groups[$i]['desc']?></td>
+                         value=<?php echo $all_groups[$i]?> >
+                    <?php echo $all_groups[$i]?></td>
                 <?php } ?>
                 </table>
             </tr>
 	    <td colspan=2 align=center>
-        <input type="submit" name=method value="Submit"> 
 	<input type=hidden name=comonode value="<?php echo $comonode?>">
 	<input type=hidden name=nodename value="<?php echo $node->nodename?>">
 	<input type=hidden name=nodeplace value="<?php echo $node->nodeplace?>">
 	<input type=hidden name=speed value="<?php echo $node->linkspeed?>">
 	<input type=hidden name=comment value="<?php echo $node->comment?>">
+        <input type="submit" name=method value="Submit"> 
     </form>
 
 </tr></table>
