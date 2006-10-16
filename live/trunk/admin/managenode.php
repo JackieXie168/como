@@ -24,112 +24,79 @@
 
     $group = "";
     if (isset ($_GET['group']))
-        $group = $_GET['group'];
+        $group = trim($_GET['group']);
 
-    $nodefile = "$group";
+#    $nodefile = "$group";
+    $groupfname = $NODEDB . "/groups.lst";
+    $nodefname = $NODEDB . "/nodelist.lst";
+
 
     $action = "add";
     if (isset ($_GET['action']))
         $action = $_GET['action'];
 
-    /*  Add a config file or just an entry  */
-    if ($action == "add") {
-        $node = new Node($comonode, $G);
-        if (!($node->status)){
-	    /*
-	     * query failed. write error message and exit
-	     */
-            include ("../html/node_failure.html");
-	    exit;
-        } 
-       
-	/*  Attempt to create the db directory  */
-	if (!file_exists($NODEDB)) {
-	    if (!(system ("mkdir $ABSROOT/$NODEDB"))){
-		$mes = "NOTICE<br>Directory $NODEDB, as specified ";
-                $mes = $mes . "in comolive.conf, ";
-		$mes = $mes . "is not writable by the webserver<br>";
-		$mes = $mes . "Please create this directory and make ";
-		$mes = $mes . "it writable by the webserver<br><br>";
-		$generic_message = $mes;
-		include ("../html/generic_message.html");
-		exit;
-	    }
-	}
-        /*  Try to open the file for writing if it doesn't exist  */
-	if (!(file_exists("$NODEDB/$nodefile"))) {
-            /*  The file doesn't exist, create a message  */
-	    if (!($fh = fopen("$NODEDB/$nodefile", "w"))){
-		$mes = "NOTICE<br>Unable to open file for writing";
-                $mes = $mes . "<br>$NODEDB/$nodefile<br>";
-		$mes = $mes . "Please check permissions<br>";
-		$mes = $mes . "on this directory and the file.<br>";
-		$generic_message = $mes;
-		include ("../html/generic_message.html");
-		exit;
-	    }
-            /*  Create the config file  */
-	    $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;\n";
-            /*  Write data to the file  */                               
-	    fwrite ($fh, $tofile);
-	    fclose($fh);
-	} else {
-            /*  The file does exist, append new data to it  */
-    	    if (($fh = fopen("$NODEDB/$nodefile", "a")) === FALSE) {
-		$mes = "NOTICE<br>Unable to open file for writing";
-                $mes = $mes . "<br>$NODEDB/$nodefile<br>";
-		$mes = $mes . "Please check permissions<br>";
-		$mes = $mes . "on this directory and the file.<br>";
-		$generic_message = $mes;
-		include ("../html/generic_message.html");
-		exit;
-            }
-
-    	    $tmp = $node -> nodename . ";;" ;
-    	    $tmp = $tmp . $node -> comonode . ";;" ;
-    	    $tmp = $tmp . $node -> nodeplace . ";;" ;
-            $tmp = $tmp . $node -> linkspeed . ";;" ;
-    	    $tmp = $tmp . $node -> comment. "\n" ;
-    	    $tofile = $tmp;
-    	    fwrite ($fh, $tofile);
-	    fclose($fh);
-	    header("Location: index.php");
-        }
-    }
     /*  Delete a entry in the config file matching comonode  */
     if ($action == "delete") {
-        $datafile = file ("$NODEDB/$nodefile");
+        $datafile = file ($nodefname);
         $tofile = "";
+        /*  Loop thru the datafile and delete the group membership  */
         for ($i = 0; $i < count($datafile); $i++){
             if ($i == 0) {
     	        $tofile = $tofile . $datafile[$i];
             } else {
 		$val = explode (";;", $datafile[$i]);
 
-		if ($comonode != $val[1]){
+                /*  If match, delete the group membership  */
+		if ($comonode == $val[1]){
+                    /*  group membership in 5th element  */
+                    $val = explode ("*;*", $val[5]);
+                    $valcount = count($val);
+                    print "count is $valcount<br>";
+                    /*  if there are no more groups left, don't write the line*/
+                    if (count($val) > 2) {
+                        $findit = $group . "\*;\*";
+                        $newval = ereg_replace($findit, "", $datafile[$i]);
+                        $tofile = $tofile . $newval;
+                    }
+		} else {
 		    $tofile = $tofile . $datafile[$i];
-		}
+                }
             }
         }
-	if (($fh = fopen("$NODEDB/$nodefile", "w+")) === FALSE) {
-	    $mes = "NOTICE<br>Unable to open file for writing";
-	    $mes = $mes . "<br>$NODEDB/$nodefile<br>";
-	    $mes = $mes . "Please check permissions<br>";
-	    $mes = $mes . "on this directory and the file.<br>";
-	    $generic_message = $mes;
-	    include ("../html/generic_message.html");
-	    exit;
-        }
-        fwrite ($fh, $tofile);
-	fclose($fh);
+        file_put_contents($nodefname, $tofile);
 	header("Location: index.php");
     }
     if ($action == "groupdel"){
-	system ("rm -rf $NODEDB/$group");
-	header("Location: index.php");
-    }
-    ?>
+        $datafile = file ($groupfname);
+        $tofile = "";
+        for ($i = 0; $i < count($datafile); $i++){
+            if (trim($datafile[$i]) != $group) {
+                $tofile .= $datafile[$i];
+            }
 
-  </object>
-  </body>
-</html>
+        }
+        /*  Write out new file  */
+        file_put_contents($groupfname, $tofile);
+        /*  Go through the node list and remove the group entry  */
+        $datafile = file ($nodefname);
+        $tofile = "";
+        /*  Loop thru the datafile and delete the group membership  */
+        for ($i = 0; $i < count($datafile); $i++){
+            if ($i == 0) {
+    	        $tofile = $tofile . $datafile[$i];
+            } else {
+		$val = explode (";;", $datafile[$i]);
+                /*  group membership in 5th element  */
+                $val = explode ("*;*", $val[5]);
+                /*  if there are no more groups left, don't write the line*/
+                if (count($val) > 2) {
+                    $findit = $group . "\*;\*";
+                    $newval = ereg_replace($findit, "", $datafile[$i]);
+                    $tofile = $tofile . $newval;
+                }
+            }
+        }
+    }
+    file_put_contents($nodefname, $tofile);
+    header("Location: index.php");
+    ?>

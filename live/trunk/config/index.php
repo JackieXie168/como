@@ -26,6 +26,14 @@ if (file_exists("../comolive.conf")) {
     generic_message($m);
 }
 
+/*  Make sure the config directory is writable by the webserver  */
+    $dir = "$absroot/config";
+    $val = check_writable($dir);
+    if (!(check_writable($dir))) {
+        generic_message(ERROR_DIRNOTWRITABLE($dir));
+    }
+
+
 /*  This var is passed upon itself to let it know what to do  */
 $action = "setup";
 if (isset($_GET['action']))
