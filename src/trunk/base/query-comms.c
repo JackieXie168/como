@@ -480,7 +480,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		/* copy the argument into query args by default */
 		copy_value = 1;
 		*cp = '\0';
-		if (value == cp) {
+		if (value == cp || value == NULL) {
 		    if (done) {
 			break;
 		    }
