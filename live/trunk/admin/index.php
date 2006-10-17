@@ -21,6 +21,7 @@
 
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
     $NODEDB = $G['NODEDB'];
+    $WEBROOT = $G['WEBROOT'];
     $groupfname = $NODEDB . "/groups.lst";
     $nodefname = $NODEDB . "/nodelist.lst";
 
@@ -79,7 +80,7 @@
             $nodes['host'] = $host;
             $nodes['port'] = $port;
             $nodes['name'] = 
-            "<a href=dashboard.php?comonode=$comonode>$name</a>";
+            "<a href=$WEBROOT/$site/dashboard.php?comonode=$comonode>$name</a>";
             $nodes['location'] = $loc;
             $nodes['interface'] = $iface;
             $nodes['comment'] = $comment;
