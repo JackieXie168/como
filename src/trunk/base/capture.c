@@ -138,9 +138,6 @@ cleanup()
 	src->cb->stop(sniff);
 	ppbuf_free(sniff);
     }
-//#ifdef DEBUG
-//    print_rusage(stderr, 0);
-//#endif
 }
 
 

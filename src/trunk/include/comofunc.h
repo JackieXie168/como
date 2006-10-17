@@ -162,7 +162,6 @@ int como_writen(int fd, const char *buf, size_t len);
  * util-misc.c
  */
 char * getprotoname (int proto);
-void   print_rusage (FILE *f, int who);
 char * strchug      (char *str);
 char * strchomp     (char *str);
 
