@@ -4,7 +4,8 @@
     require_once ("../comolive.conf");
     require_once ("../class/node.class.php");
     include_once ("../include/framing.php");
-
+    $G = init_global();
+print_r($G);
     function failure_message() 
     { 
 	print_header(0, null);
