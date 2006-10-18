@@ -36,6 +36,7 @@ SET(COMO_SRCS
   ${COMO_SOURCE_DIR}/lib/hash.c
   ${COMO_SOURCE_DIR}/lib/heap.c
   ${COMO_SOURCE_DIR}/lib/macutils.c
+  ${COMO_SOURCE_DIR}/lib/printpkt.c
   ${COMO_SOURCE_DIR}/lib/mempool.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
 )
