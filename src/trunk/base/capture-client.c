@@ -114,7 +114,6 @@ pkt_t *cca_next_pkt(cca_t * cca)
 	    panic("receiving message from capture: %s\n", strerror(errno));
 	}
 	if (ret == CCA_NEW_BATCH) {
-	//logmsg(LOGWARN, "new batch\n");
 	    assert(m.new_batch.id == cca->id);
 	    cca->batch = m.new_batch.batch;
 	    cca->pktptr = cca->batch->pkts0;
@@ -140,7 +139,6 @@ pkt_t *cca_next_pkt(cca_t * cca)
 	    panic("sending message to capture: %s\n", strerror(errno));
 	}
 	cca->batch = NULL;
-	//logmsg(LOGWARN, "ack\n");
     }
     return pkt;
 }
