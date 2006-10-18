@@ -1,0 +1,61 @@
+body { 
+    font-family : "lucida sans unicode", verdana, arial;
+    font-size : 9pt; 
+    margin : 0; 
+    padding : 0;
+}
+table {
+    font-family : "lucida sans unicode", verdana, arial;
+    font-size : 9pt;
+    width : 95%;
+}
+tr, td {
+    background-color : #DDD;
+    font-family : "lucida sans unicode", verdana, arial;
+    font-size : 9pt;
+} 
+a, a:visited { 
+    color : #475677; 
+    text-decoration: none;
+}
+.box { 
+    background-color : #FFF;
+    padding : 0; 
+    margin: 0; 
+    border: 0; 
+} 
+.module_normal {
+    background-color : #FFF;
+    padding : 0; 
+    border: 0;
+    margin: 1;
+}
+.module_selected {
+    background-color : #DDD;
+    padding : 0; 
+    border: 0;
+    margin: 1;
+} 
+.region { 
+    background-color : #FFF;
+    border-top: 1px dashed #AAA;
+    padding: 0;
+    font-size : 12px;
+    font-weight : bold;  
+    color : #475677;
+} 
+.nodename {
+    background-color : #475677;
+    padding : 0px 10px 10px 10px ;
+    font-size : 20px;
+    color: #FFF; 
+    font-weight : bold;  
+    text-align : left;
+    width: 50%;
+}
+.buttons {
+    background-color : #DDD;
+    padding : 0px 10px 10px 10px ;
+    font-size : 10px;
+    text-align : left;
+}

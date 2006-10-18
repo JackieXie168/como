@@ -6,6 +6,7 @@ $REVISION = substr('\$Revision$', 11, -2);
 /*  Include the framing information to create headers and footers  */     
 include("../include/framing.php");
 include("../include/helper-messages.php");
+include("../include/helper-filesystem.php");
 
 $header = simple_header("../");
 $footer = simple_footer();
@@ -144,9 +145,9 @@ if ($action == "install") {
     /*  create the public and admin site directories  */
     $dir = "$absroot/public";
     if (!(file_exists($dir))) {
-        create_site($G, "public");
+        manage_site($G, "public", "CREATE");
     }
-    create_site($G, "admin");
+    manage_site($G, "admin", "CREATE");
     /*  Write configuration file to disk  */
     write_config($G, "comolive.conf");
     $m = "Configuration complete.  Copy the comolive.conf file " .
@@ -252,62 +253,5 @@ function comment ($val)
     $test = ereg_replace("\n", $rep , $val);
     $newval = $newval . $test . "\n     */\n\n";
     return $newval;
-}
-/**
- *  Function to create the site.  Create all links to necessary files  
- */
-function create_site ($G, $sitename) 
-{
-    $dname = $G['ABSROOT']['val'] . "/" . $sitename;
-    $srcname = $G['ABSROOT']['val'] . "/php";
-    if ($sitename != "admin") {
-        /*  Create the site directory  */
-        mkdir ($dname, 0755);
-        /*  Create the sym links  */
-        $symname[0] = "dashboard.php";
-        $symname[1] = "generic_query.php";
-        $symname[2] = "index.php";
-        $symname[3] = "loadcontent.php";
-        $symname[4] = "mainstage.php";
-        $symname[5] = "sysinfo.php";
-        for ($i = 0; $i < count($symname); $i++) {
-            $orig = $srcname . "/" . $symname[$i];
-            $dest = $dname . "/" . $symname[$i];
-            symlink($orig, $dest);
-        }
-        /*  Create the results and db directory  */
-        mkdir("$dname/{$G['RESULTS']['val']}", 0755);
-        mkdir("$dname/{$G['NODEDB']['val']}", 0755);
-    } else {
-        /*  Create the links to db and results  */
-print "creat links";
-        $orig = $G['ABSROOT']['val'] . "/db";
-        $dest = $G['ABSROOT']['val'] . "/admin/db";
-        symlink($orig, $dest);
-        $orig = $G['ABSROOT']['val'] . "/results";
-        $dest = $G['ABSROOT']['val'] . "/admin/results";
-        symlink($orig, $dest);
-        /*  Write out .htpasswd and .htaccess files  */
-        $htpwd = $G['ABSROOT']['val'] . "/admin";
-        $htaccess = "AuthName \"CoMoLive! Admin\"\n" . 
-                    "AuthType Basic\n" . 
-                    "AuthUserFile $htpwd/.htpasswd\n" . 
-                    "Require valid-user\n";
-        system ("htpasswd -b -c $htpwd/.htpasswd admin {$G['PASSWORD']['val']}");
-        file_put_contents("$htpwd/.htaccess", $htaccess);
-    }
-}
-
-function check_writable ($dir)
-{
-    /*  This will check to make sure all directories are there and
-     *  writeable.
-     */
-    if (!(file_exists($dir)) || (!(is_writable($dir)))) {
-        return 0;
-    } else {
-        return 1;
-    }
-
 }
 ?>

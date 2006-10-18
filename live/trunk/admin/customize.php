@@ -5,7 +5,7 @@
     require_once ("../class/node.class.php");
     include_once ("../include/framing.php");
     $G = init_global();
-print_r($G);
+
     function failure_message() 
     { 
 	print_header(0, null);
@@ -19,8 +19,7 @@ print_r($G);
 
 	print_footer();
     } 
-
-    function print_modules($which, $node)
+    function print_modules($node, $which)
     { 
 	/* 
 	 * browse the list of modules and print the name, the first 
@@ -127,107 +126,7 @@ print_r($G);
 	$node->saveConfig($selectmods); 
     }
 
-    print_header(0, null); 
+    $header = simple_header("../"); 
+    include ("customize.html");
 ?>
 
-<style>
-    body { 
-	font-family : "lucida sans unicode", verdana, arial;
-        font-size : 9pt; 
-        margin : 0; 
-        padding : 0;
-    }
-    table {
-	font-family : "lucida sans unicode", verdana, arial;
-        font-size : 9pt;
-        width : 95%;
-    }
-    tr, td {
-	background-color : #DDD;
-	font-family : "lucida sans unicode", verdana, arial;
-        font-size : 9pt;
-    } 
-    a, a:visited { 
-	color : #475677; 
-        text-decoration: none;
-    }
-    .box { 
-	background-color : #FFF;
-        padding : 0; 
-	margin: 0; 
-	border: 0; 
-    } 
-    .module_normal {
-	background-color : #FFF;
-        padding : 0; 
-	border: 0;
-	margin: 1;
-    }
-    .module_selected {
-	background-color : #DDD;
-        padding : 0; 
-	border: 0;
-	margin: 1;
-    } 
-    .region { 
-	background-color : #FFF;
-        border-top: 1px dashed #AAA;
-        padding: 0;
-        font-size : 12px;
-        font-weight : bold;  
-	color : #475677;
-    } 
-    .nodename {
-	background-color : #475677;
-        padding : 0px 10px 10px 10px ;
-        font-size : 20px;
-        color: #FFF; 
-        font-weight : bold;  
-        text-align : left;
-        width: 50%;
-    }
-    .buttons {
-	background-color : #DDD;
-        padding : 0px 10px 10px 10px ;
-        font-size : 10px;
-        text-align : left;
-    }
-
-</style>
-
-<body>
-<form action="customize.php" method="GET">
-<table>
-  <tr>
-    <td class=nodename>
-      <?=$node->nodename?> 
-    </td>
-    <td class=buttons>
-      Tick on the boxes below to customize the view of the main CoMo page. <br>
-      <p align=right>
-      <input type=submit value="Save"> 
-      <input type=submit value="Done" OnClick=window.close(this);>
-      <input type=hidden name=comonode value=<?=$comonode?>>
-      <input type=hidden name=action value=submit>
-    </td>
-  </tr>
-  <tr>
-    <td class=region>
-      Main Window 
-    </td>
-    <td class=region>
-      Side Boxes
-    </td>
-  </tr>
-  <tr valign=top>
-    <td class=box>
-      <?= print_modules('gnuplot', $node); ?>
-    </td>
-    <td class=box>
-      <?= print_modules('html', $node); ?>
-    </td>
-  </tr>
-</table>
-</form>
-</body>
-</html>

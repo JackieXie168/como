@@ -1,0 +1,35 @@
+<!--  $Id$  -->
+<html>
+  <head>
+    <link rel="stylesheet" type="text/css" name="como" href="../css/live.css">
+    <link rel="stylesheet" type="text/css" name="como" href="../css/mainstage.css">
+    <div id="nav">
+	<ul>
+    <?php
+        /*  This is where print the modules  */
+        for ($i = 0; $i < count($allmods); $i++) {
+            if (($i % $NUMLINKS == 0) && ($i != 0))
+                print "</ul>\n<ul>\n";
+
+            if ($module == $allmods[$i]) {
+                print "<li class=\"selected\">$allmods[$i]</li>";
+            } else {
+                print "<li><a href=\"loadcontent.php?";
+                print "comonode=$comonode&module=$allmods[$i]&";
+                print "filter={$node->modinfo[$allmods[$i]]['filter']}&";
+                print "start=$start&end=$end\">";
+                print "$allmods[$i]</a></li>\n";
+            }
+        }
+
+    ?>
+	</ul>
+    </div>
+    <center>
+
+    Download: [<a href=<?php echo $filename?>.jpg>JPG</a>]
+            [<a href=<?php echo $filename?>.eps>EPS</a>]
+
+    </center>
+    </body>
+</html>
