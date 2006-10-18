@@ -3,6 +3,7 @@
     require_once ("../comolive.conf");
     require_once ("../class/node.class.php");
     require_once ("../include/framing.php"); 
+    require_once ("../include/helper-filesystem.php"); 
 
     $G = init_global();
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
@@ -98,5 +99,9 @@
         }
     }
     file_put_contents($nodefname, $tofile);
+
+    /*  Move the group directory to OLDGROUP  */
+    manage_site($G, $group, "DELETE");
+
     header("Location: index.php");
     ?>

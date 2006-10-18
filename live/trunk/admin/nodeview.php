@@ -3,6 +3,7 @@
     require_once ("../comolive.conf");
     include_once ("../include/framing.php"); 
     include_once ("../include/helper-messages.php"); 
+    include_once ("../include/helper-filesystem.php"); 
     include_once ("../class/node.class.php");
    
     $G = init_global();
@@ -38,7 +39,6 @@
 
     switch ($method) { 
     case "Submit": 
-print "inside submit";
         if (isset($_GET['nodename']))
             $nodename= trim($_GET['nodename']);
         if (isset($_GET['nodeplace']))
@@ -102,6 +102,9 @@ print "inside submit";
             if (!(in_array($sitename . "\n", $all_groups))) {
                 $towrite = "$sitename\n";
                 file_put_contents($groupfname, $towrite, FILE_APPEND);
+                manage_site($G, $sitename, "CREATE");
+print "finish";
+exit;
             }
         }
         /**
@@ -152,7 +155,6 @@ print "inside submit";
         break;
     }
     include ("nodeview.html");
-
 
 function list_dir ($handle, $NODEDB) 
 {
