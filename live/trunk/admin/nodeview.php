@@ -13,6 +13,7 @@
 
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
     $NODEDB = $G['NODEDB'];
+    $ABSROOT = $G['ABSROOT'];
 
     /* Don't allow entrace without customization priviledge  */
     if (!($ALLOWCUSTOMIZE)) {
@@ -23,6 +24,7 @@
     if (isset($_GET['method']))
         $method = $_GET['method'];
 
+    /*  sitename is passed from the previous page when adding a site  */
     if (isset($_GET['sitename']) && $_GET['sitename'] != "")
         $sitename = $_GET['sitename'];
 
@@ -47,9 +49,15 @@
             $speed = trim($_GET['speed']);
         if (isset($_GET['comment']))
             $comment = trim($_GET['comment']);
+        /*  Sites is an array of sites submitted  */
         if (isset($_GET['sites']))
             $sites = $_GET['sites'];
         $numsites = count($sites);
+
+        /*  Make sure the public hasn't been deleted  */
+        if (!file_exists("$ABSROOT/public")) {
+            manage_site($G, "public", "CREATE");
+        }
 
         /*  Write the column header info  */
         $tofile = "Name;;CoMo Name:Port;;Location;;Interface;;Comments;;Groups;;Tags;;\n";
@@ -103,8 +111,6 @@
                 $towrite = "$sitename\n";
                 file_put_contents($groupfname, $towrite, FILE_APPEND);
                 manage_site($G, $sitename, "CREATE");
-print "finish";
-exit;
             }
         }
         /**

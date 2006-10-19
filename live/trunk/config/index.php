@@ -152,7 +152,7 @@ if ($action == "install") {
     write_config($G, "comolive.conf");
     $m = "Configuration complete.  Copy the comolive.conf file " .
          "to the web root.<br><pre>" . 
-         "mv $absroot/config/comolive.conf $webroot/<br></pre>" .
+         "mv $absroot/config/comolive.conf $absroot/<br></pre>" .
          "You can make changes to the config file by " . 
          "editing comolive.conf<br>" . 
          "Click <a href=$webroot/>here</a> when you have moved the file";
