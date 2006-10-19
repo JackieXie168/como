@@ -282,7 +282,9 @@ class Node {
     function getConfig($which) 
     {
 	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
-	if (file_exists($filename) == false) { 
+print "look at $filename<br>";
+	if (!file_exists($filename)) { 
+print "insde no exist";
 	    /* create a default config file */ 
 	    $usable_mods = $this->getModules("gnuplot");
 	    $config[0] = "main";
@@ -298,8 +300,11 @@ class Node {
 
 	    file_put_contents($filename, $config); 
 	} else {
+print "insde exist";
 	    $config = file($filename); 
+print_r($config);
 	}
+exit;
 
 	/* parse the config information */
 	return $this->parseConfig($config, $which); 

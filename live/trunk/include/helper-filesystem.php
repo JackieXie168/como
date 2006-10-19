@@ -6,15 +6,6 @@
  */
 function manage_site ($G, $sitename, $action) 
 {
-    if (isset($G['ABSROOT']['val'])) {
-        $G['ABSROOT'] = $G['ABSROOT']['val'];
-    }
-    if (isset($G['RESULTS']['val'])) {
-        $G['RESULTS'] = $G['RESULTS']['val'];
-    }
-    if (isset($G['NODEDB']['val'])) {
-        $G['NODEDB'] = $G['NODEDB']['val'];
-    }
     $dname = $G['ABSROOT'] . "/" . $sitename;
     if ($action == "CREATE") {
         $srcname = $G['ABSROOT'] . "/php";
