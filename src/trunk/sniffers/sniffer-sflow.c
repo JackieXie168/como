@@ -797,7 +797,7 @@ sniffer_start(sniffer_t * s)
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     int * dropped_pkts)
+	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct sflow_me *me = (struct sflow_me *) s;
     int npkts;			/* processed pkts */
@@ -864,7 +864,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
     *dropped_pkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
     
     for (t = 0, npkts = 0;
 	 t < dg.hdr.num_records && npkts < max_pkts; t++) {
@@ -1139,6 +1139,22 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     return 0;
 }
 
+/*
+ * sniffer_usage
+ *
+ * return the current usage of this sniffer's internal buffers
+ */
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct sflow_me *me = (struct sflow_me *) s;
+    size_t sz;
+    void * y;
+    
+    y = ((void *) last) + sizeof(pkt_t) + last->caplen;
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    return (float) sz / (float) me->capbuf.size;
+}
 
 /*
  * sniffer_stop
@@ -1153,7 +1169,6 @@ sniffer_stop(sniffer_t * s)
     /* close the socket */
     close(me->sniff.fd);
 }
-
 
 static void
 sniffer_finish(sniffer_t * s)
@@ -1172,5 +1187,6 @@ SNIFFER(sflow) = {
     setup_metadesc: sniffer_setup_metadesc,
     start: sniffer_start,
     next: sniffer_next,
+    usage: sniffer_usage,
     stop: sniffer_stop,
 };

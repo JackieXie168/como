@@ -673,7 +673,7 @@ error:
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     int * dropped_pkts)
+	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct netflow_me *me = (struct netflow_me *) s;
     int npkts;                 /* processed pkts */
@@ -691,7 +691,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
     npkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
 
     while (npkts < max_pkts) {
 	struct _flowinfo *flow; 
@@ -758,6 +758,23 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     return 0;
 }
 
+/*
+ * sniffer_usage
+ *
+ * return the current usage of this sniffer's internal buffers
+ */
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct netflow_me *me = (struct netflow_me *) s;
+    size_t sz;
+    void * y;
+
+    y = ((void *) last) + sizeof(pkt_t) + last->caplen;
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    return (float) sz / (float) me->capbuf.size;
+}
+
 
 /*
  * sniffer_stop
@@ -791,5 +808,6 @@ SNIFFER(netflow) = {
     setup_metadesc: sniffer_setup_metadesc,
     start: sniffer_start,
     next: sniffer_next,
+    usage: sniffer_usage,
     stop: sniffer_stop,
 };
