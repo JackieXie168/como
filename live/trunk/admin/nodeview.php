@@ -149,6 +149,7 @@
          *  This is just to get the list of groups this node belongs 
          *  to so we can check boxes when we are modifying
          */
+        $memberlist[0] = "public*;*";
         if (file_exists($nodefname)) {
             $val = file($nodefname);
             for ($i = 1; $i < count($val); $i++) {
@@ -157,7 +158,7 @@
                     $memberlist = explode("*;*", $desc[5]);
                 }
             }
-        }
+        } 
         break;
     }
     include ("nodeview.html");

@@ -101,7 +101,7 @@
                 $tmp = $tmp . "comonode=$comonode>";
                 $tmp = $tmp . "Modify</a>";
                 $nodes['modify'] = $tmp;
-            } 
+            }
             $node_array[$site]['nodes'][$group_count[$site]] = $nodes;
             $node_array[$site]['delgroup'] = "";
             if ($ALLOWCUSTOMIZE) {
@@ -162,6 +162,7 @@
 	$nodes[$x]['interface'] = "";
 	$nodes[$x]['comment'] = "";
 	$nodes[$x]['delnode'] = "";
+	$nodes[$x]['modify'] = "";
 	$node_array[$all_groups[0]]['nodes'] = $nodes;
 	$node_array[$all_groups[0]]['delgroup'] = "";
 	$node_array[$all_groups[0]]['filename'] = "";

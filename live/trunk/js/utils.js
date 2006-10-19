@@ -4,3 +4,9 @@ function clearText(thefield)
         thefield.value = ""
 }
 
+function ReloadPage()
+{
+        window.opener.location.reload(false);
+        self.close();
+
+}

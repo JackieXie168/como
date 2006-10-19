@@ -100,10 +100,12 @@ if ($action == "install") {
         $G['RESOLUTION']['desc'] = $RESOLUTION_DESC;
     }
     if (isset($_POST["RESULTS"])) {
+        $G['RESULTS'] = $_POST["RESULTS"];
         $G['RESULTS']['val'] = $_POST["RESULTS"];
         $G['RESULTS']['desc'] = $RESULTS_DESC;
     }
     if (isset($_POST["NODEDB"])) {
+        $G['NODEDB'] = $_POST["NODEDB"];
         $G['NODEDB']['val'] = $_POST["NODEDB"];
         $G['NODEDB']['desc'] = $NODEDB_DESC;
     }
@@ -120,10 +122,12 @@ if ($action == "install") {
         $G['WEBROOT']['desc'] = $WEBROOT_DESC;
     }
     if (isset($_POST["ABSROOT"])) {
+        $G['ABSROOT'] = $_POST["ABSROOT"];
         $G['ABSROOT']['val'] = $_POST["ABSROOT"];
         $G['ABSROOT']['desc'] = $ABSROOT_DESC;
     }
     if (isset($_POST["PASSWORD"])) {
+        $G['PASSWORD'] = $_POST["PASSWORD"];
         $G['PASSWORD']['val'] = $_POST["PASSWORD"];
         $G['PASSWORD']['desc'] = $PASSWORD_DESC;
     }

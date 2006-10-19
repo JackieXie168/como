@@ -49,6 +49,8 @@
             
 	    if ($is_selected) {
                 $cust_info[$i]['isselected'] = "checked";
+            } else {
+                $cust_info[$i]['isselected'] = "";
             }
             $cust_info[$i]['modname'] = $node->modinfo[$mods[$i]]['name'];
             $cust_info[$i]['timestr'] = $timestr;
