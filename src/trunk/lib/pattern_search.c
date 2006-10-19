@@ -112,7 +112,7 @@ preBmGs(char *x, int m, int bmGs[])
  *
  */
 static int 
-BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], uint *found) 
+BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], int *found) 
 {
     int i, j, k;
    
