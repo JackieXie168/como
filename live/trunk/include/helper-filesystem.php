@@ -6,6 +6,15 @@
  */
 function manage_site ($G, $sitename, $action) 
 {
+    if (isset($G['ABSROOT']['val'])) {
+        $G['ABSROOT'] = $G['ABSROOT']['val'];
+    }
+    if (isset($G['RESULTS']['val'])) {
+        $G['RESULTS'] = $G['RESULTS']['val'];
+    }
+    if (isset($G['NODEDB']['val'])) {
+        $G['NODEDB'] = $G['NODEDB']['val'];
+    }
     $dname = $G['ABSROOT'] . "/" . $sitename;
     if ($action == "CREATE") {
         $srcname = $G['ABSROOT'] . "/php";
@@ -31,6 +40,7 @@ function manage_site ($G, $sitename, $action)
             /*  Create the links to db and results  */
             $orig = $G['ABSROOT'] . "/db";
             $dest = $G['ABSROOT'] . "/admin/db";
+print "orig $orig and dest $dest";
             symlink($orig, $dest);
             $orig = $G['ABSROOT'] . "/results";
             $dest = $G['ABSROOT'] . "/admin/results";
@@ -47,7 +57,7 @@ function manage_site ($G, $sitename, $action)
     }
     /*  Cleanup site dir  */
     /*  Not finished  */
-    if (($action == DELETE) && ($sitename != "public")){
+    if (($action == "DELETE") && ($sitename != "public")){
         $symname[0] = "dashboard.php";
         $symname[1] = "generic_query.php";
         $symname[2] = "index.php";

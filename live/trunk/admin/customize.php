@@ -44,25 +44,17 @@
 	    $timestr = gmstrftime("%a %b %d %T %Y", 
 				  $node->modinfo[$mods[$i]]['start']);
 	    $fl = urldecode($node->modinfo[$mods[$i]]['filter']);
-
-	    print "<table class=$cl style=\"border:1px dashed; width:100%\">\n";
-	    print "<tr><td colspan=2 class=$cl>\n";
-	    print "<input name=$mods[$i] ";
-	    if ($is_selected) 
-		print " checked ";
-	    print "type=checkbox value=$mods[$i]>";
-	    print "{$node->modinfo[$mods[$i]]['name']}"; 
-	    print "</td></tr>\n";
-	    print "<tr><td class=$cl>\n";
-	    print "Description goes here</td>\n"; 
-	    print "<td class=$cl>\n";
-	    print "Online since: <br>\n"; 
-	    print "<i>$timestr</i><br>\n"; 
-	    print "Running filter: <br>\n"; 
-	    print "<i>'$fl'</i>";
-	    print "</td></tr>\n";
-	    print "</table>\n";
+            $cust_info[$i]['class'] = $cl;
+            $cust_info[$i]['mods'] = $mods[$i];
+            
+	    if ($is_selected) {
+                $cust_info[$i]['isselected'] = "checked";
+            }
+            $cust_info[$i]['modname'] = $node->modinfo[$mods[$i]]['name'];
+            $cust_info[$i]['timestr'] = $timestr;
+            $cust_info[$i]['fl'] = $fl;
 	}
+        return ($cust_info);
     } 
 
     $G = init_global();
@@ -127,6 +119,9 @@
     }
 
     $header = simple_header("../"); 
+
+    $main_info = print_modules($node, 'gnuplot');
+    $sec_info = print_modules($node, 'sidebox');
     include ("customize.html");
 ?>
 

@@ -29,29 +29,48 @@
   </tr>
   <tr valign=top>
     <td class=box>
-<table class=$cl style=\"border:1px dashed; width:100%\">
-<tr><td colspan=2 class=$cl>
-<input name=$mods[$i]
-                checked
-            print "type=checkbox value=$mods[$i]>";
-            print "{$node->modinfo[$mods[$i]]['name']}";
-
-
-            </td></tr>
-            <tr><td class=$cl>
+    <?php for ($i = 0; $i < count($main_info); $i++) { ?>
+    <table class=<?php echo $main_info[$i]['class'];print "testing"; ?> 
+           style="border:1px dashed; width:100%">
+        <tr><td colspan=2 class=<?php echo $main_info[$i]['class']?> >
+        <input name=<?php echo $main_info[$i]['mods'] ?>
+        <?php echo $main_info[$i]['isselected'] ?>
+               type=checkbox value=<?php echo $main_info[$i]['mods']?> >
+        <?php echo $main_info[$i]['modname'] ?>
+        </td></tr>
+        <tr><td class=<?php echo $main_info[$i]['mods']?> >
             Description goes here</td>
-            <td class=$cl>
+        <td class=<?php echo $main_info[$i]['mods']?> >
             Online since: <br>
-            <i>$timestr</i><br>
+        <i><?php echo $main_info[$i]['timestr']?> </i><br>
             Running filter: <br>
-            <i>'$fl'</i>
+        <i>'<?php echo $main_info[$i]['fl'] ?> '</i>
             </td></tr>
             </table>
 
-      <?= print_modules($node, 'gnuplot'); ?>
+    <?php } ?>
     </td>
     <td class=box>
-      <?= print_modules($node, 'html'); ?>
+    <?php for ($i = 0; $i < count($sec_info); $i++) { ?>
+    <table class=<?php echo $sec_info[$i]['class'];print "testing"; ?> 
+           style="border:1px dashed; width:100%">
+        <tr><td colspan=2 class=<?php echo $sec_info[$i]['class']?> >
+        <input name=<?php echo $sec_info[$i]['mods'] ?>
+        <?php echo $sec_info[$i]['isselected'] ?>
+               type=checkbox value=<?php echo $sec_info[$i]['mods']?> >
+        <?php echo $sec_info[$i]['modname'] ?>
+        </td></tr>
+        <tr><td class=<?php echo $sec_info[$i]['mods']?> >
+            Description goes here</td>
+        <td class=<?php echo $sec_info[$i]['mods']?> >
+            Online since: <br>
+        <i><?php echo $sec_info[$i]['timestr']?> </i><br>
+            Running filter: <br>
+        <i>'<?php echo $sec_info[$i]['fl'] ?> '</i>
+            </td></tr>
+            </table>
+
+    <?php } ?>
     </td>
   </tr>
 </table>
