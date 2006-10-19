@@ -472,7 +472,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct netflow_me));
 
     me->sniff.max_pkts = 8192;
-    me->sniff.flags = SNIFF_SELECT;
+    me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->device = device;
     me->window = TIME2TS(300,0); 	/* default window is 5 minutes */
     me->timescale = me->window; 	/* default timescale is window */

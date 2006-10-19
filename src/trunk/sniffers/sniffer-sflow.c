@@ -614,7 +614,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct sflow_me));
 
     me->sniff.max_pkts = 2400;
-    me->sniff.flags = SNIFF_SELECT;
+    me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->device = device;
     /* defult port as assigned by IANA */
     me->port = SFL_DEFAULT_COLLECTOR_PORT;
