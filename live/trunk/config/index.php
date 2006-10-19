@@ -142,6 +142,7 @@ if ($action == "install") {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
 
+
     /*  create the public and admin site directories  */
     $dir = "$absroot/public";
     if (!(file_exists($dir))) {
