@@ -39,6 +39,7 @@ SET(COMO_SRCS
   ${COMO_SOURCE_DIR}/lib/printpkt.c
   ${COMO_SOURCE_DIR}/lib/mempool.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
+  ${COMO_SOURCE_DIR}/lib/pattern_search.c
 )
 
 IF(ENABLE_PROFILING)

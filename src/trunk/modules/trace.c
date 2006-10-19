@@ -91,20 +91,20 @@ init(void * self, char * args[])
 	    }
 	} 
     }
-    
+
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
     inmd->ts_resolution = TIME2TS(1, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
-    
+
     /* setup outdesc */
     outmd = metadesc_define_out(self, 0);
     
     pkt = metadesc_tpl_add(outmd, "any:any:any:any");
     COMO(caplen) = config->snaplen;
 
-    CONFIG(self) = config; 
+    CONFIG(self) = config;
     return TIME2TS(1,0); 
 }
 
