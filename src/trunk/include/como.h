@@ -98,6 +98,7 @@ struct _como {
     stats_t *	stats; 		/* statistic counters */
 
     source_t *	sources;	/* list of input data feeds (sniffers) */
+    int		source_count;
 
     module_t *	modules; 	/* array of modules */ 
     int		module_max;  	/* max no. of modules */

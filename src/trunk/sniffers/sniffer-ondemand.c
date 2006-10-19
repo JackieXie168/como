@@ -87,7 +87,7 @@ sniffer_init(const char * device, const char * args)
     me->storage_fd = -1; 
     me->sniff.fd = -1; 
     me->sniff.max_pkts = 8192;
-    me->sniff.flags = SNIFF_POLL | SNIFF_FILE | SNIFF_TOUCHED;
+    me->sniff.flags = SNIFF_POLL | SNIFF_FILE;
     me->device = device;
 
     if (me->device == NULL || strlen(me->device) == 0) {
@@ -210,7 +210,7 @@ error:
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     int * dropped_pkts) 
+	     __unused pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct ondemand_me *me = (struct ondemand_me *) s;
     
@@ -232,7 +232,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     
     npkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, NULL);
     
     while (npkts < max_pkts && replayed_size < max_size) {
 	timestamp_t ts;

@@ -62,17 +62,24 @@ extern struct _como map;
 static fd_set s_valid_fds;
 static int s_max_fd;
 
-static int wait_for_modules = 2;
+static int s_wait_for_modules = 2;
 
 static timestamp_t s_min_flush_ivl = 0;
 
 static int s_active_modules = 0;
 
-#define CA_MAXCLIENTS	(64 - 1)	/* 1 is CAPTURE itself */
+#define CA_MAXCLIENTS		(64 - 1)	/* 1 is CAPTURE itself */
+
+#define CACLIENT_NOSAMPLING_THRESH	0.25
+#define CACLIENT_SAMPLING_THRESH	0.35
+#define CACLIENT_WAIT_THRESH		0.65
 
 typedef struct cabuf_cl {
-    int fd;
-    uint64_t ref_mask;
+    int		fd;		/* descriptor to communicate with the client */
+    uint64_t	ref_mask;	/* client mask */
+    float *	sniff_usage;	/* cumulative client usage of sniffer resources
+				   for each sniffer */
+    int *	sampling;	/* current sampling rate */
 } cabuf_cl_t;
 
 /*
@@ -83,6 +90,7 @@ static struct {
     int size;
     pkt_t **pp;
     tailq_t batches;
+    int has_clients_support;
     int clients_count;
     cabuf_cl_t *clients[CA_MAXCLIENTS];
     fd_set clients_fds;
@@ -856,9 +864,9 @@ ca_ipc_start(procname_t sender, __unused int fd, void *buf,
     if (sender == map.parent)
 	map.stats = *((void **) buf);
 
-    wait_for_modules--;
+    s_wait_for_modules--;
 
-    if (wait_for_modules == 0) {
+    if (s_wait_for_modules == 0) {
 	source_t *src;
 
 	for (src = map.sources; src; src = src->next) {
@@ -920,6 +928,7 @@ cabuf_cl_destroy(int id, cabuf_cl_t * cl)
 	bi = bn;
     }
 
+    free(cl->sniff_usage);
     free(cl);
 
     map.stats->ca_clients = s_cabuf.clients_count;
@@ -985,6 +994,15 @@ ca_ipc_cca_open(__unused procname_t sender, int fd, __unused void *buf,
     size_t sz;
     int id;
 
+    if (s_cabuf.has_clients_support == 0) {
+	logmsg(LOGWARN, "rejecting capture-client: clients support disabled. "
+	       "does sniffer define SNIFF_SHBUF?\n");
+	ipc_send_with_fd(fd, CCA_ERROR, NULL, 0);
+	close(fd);
+	capture_loop_del_fd(fd);
+	return;
+    }
+
     if (s_cabuf.clients_count == CA_MAXCLIENTS) {
 	logmsg(LOGWARN, "rejecting capture-client: too many clients\n");
 	ipc_send_with_fd(fd, CCA_ERROR, NULL, 0);
@@ -1002,12 +1020,16 @@ ca_ipc_cca_open(__unused procname_t sender, int fd, __unused void *buf,
     cl = safe_calloc(1, sizeof(cabuf_cl_t));
     cl->fd = fd;
     cl->ref_mask = (1LL << (uint64_t) (id + 1));	/* id 0 -> mask 2 */
+    cl->sniff_usage = safe_calloc(map.source_count , sizeof(float));
+    cl->sampling = mem_calloc(1, sizeof(int)); /* sampling rate is kept into
+						  shared memory */
 
     s_cabuf.clients[id] = cl;
     s_cabuf.clients_count++;
     FD_SET(fd, &s_cabuf.clients_fds);
 
     m.open_res.id = id;
+    m.open_res.sampling = cl->sampling;
     sz = sizeof(m.open_res);
 
     if (ipc_send_with_fd(fd, CCA_OPEN_RES, &m, sz) != IPC_OK) {
@@ -1031,6 +1053,7 @@ ca_ipc_cca_ack_batch(__unused procname_t sender, __unused int fd,
     ccamsg_t *m = (ccamsg_t *) buf;
     cabuf_cl_t *cl;
     batch_t *batch;
+    int source_id;
 
     cl = s_cabuf.clients[m->ack_batch.id];
     assert(cl != NULL);
@@ -1045,6 +1068,13 @@ ca_ipc_cca_ack_batch(__unused procname_t sender, __unused int fd,
     assert(batch != NULL);
     batch->ref_mask &= ~cl->ref_mask;
 
+    /* update the usage */
+    for (source_id = 0; source_id < map.source_count; source_id++) {
+	cl->sniff_usage[source_id] -= batch->sniff_usage[source_id];
+	if (cl->sniff_usage[source_id] > 2)
+	    logmsg(LOGCAPTURE, "decr usage: %d\n", cl->sniff_usage[source_id]);
+    }
+    
     if (batch->ref_mask == 0) {
 	assert(batch == TQ_HEAD(&s_cabuf.batches));
 	TQ_POP(&s_cabuf.batches, batch, next);
@@ -1063,12 +1093,29 @@ ca_ipc_cca_ack_batch(__unused procname_t sender, __unused int fd,
 static void
 cabuf_init(size_t size)
 {
+    source_t *src;
+
     /*
      * allocate the buffer of pointers to captured packets in shared
      * memory.
      */
     s_cabuf.size = size;
     s_cabuf.pp = mem_calloc(s_cabuf.size, sizeof(pkt_t *));
+    s_cabuf.has_clients_support = 1;
+
+    for (src = map.sources; src; src = src->next) {
+	sniffer_t *sniff = src->sniff;
+
+	if (sniff->flags & SNIFF_INACTIVE)
+	    continue;
+
+	/*
+	 * if a sniffer doesn't expose the payloads in shared memory
+	 * we turn off the support for clients
+	 */
+	if (!(sniff->flags & SNIFF_SHBUF))
+	    s_cabuf.has_clients_support = 0;
+    }
 }
 
 
@@ -1147,6 +1194,7 @@ batch_export(batch_t * batch)
     for (id = 0; id < s_cabuf.clients_count; id++) {
 	ccamsg_t m;
 	size_t sz;
+	int source_id;
 
 	cabuf_cl_t *cl = s_cabuf.clients[id];
 
@@ -1166,6 +1214,13 @@ batch_export(batch_t * batch)
 	if (ipc_send_with_fd(cl->fd, CCA_NEW_BATCH, &m, sz) != IPC_OK) {
 	    cabuf_cl_handle_failure(id, cl);
 	    continue;
+	}
+	
+	/* update the usage */
+	for (source_id = 0; source_id < map.source_count; source_id++) {
+	    cl->sniff_usage[source_id] += batch->sniff_usage[source_id];
+	    if (cl->sniff_usage[source_id] > 2)
+		logmsg(LOGCAPTURE, "incr usage: %d\n", cl->sniff_usage[source_id]);
 	}
 
 	batch->ref_mask |= cl->ref_mask;
@@ -1286,6 +1341,15 @@ batch_create(int force_batch)
     batch = mem_calloc(1, sizeof(batch_t));
     batch->last_pkt_ts = prev_last_pkt_ts;
     cabuf_reserve(batch, pc);
+    if (s_cabuf.clients_count > 0) {
+	batch->first_ref_pkts = mem_calloc(map.source_count, sizeof(pkt_t *));
+	batch->sniff_usage = mem_calloc(map.source_count, sizeof(float));
+	
+	ppbuf_list_foreach (ppbuf, &ppblist) {
+	    if (ppbuf->count > 0)
+		batch->first_ref_pkts[ppbuf->id] = ppbuf_get(ppbuf);
+	}
+    }
 
     /*
      * We transfer the packets into the batch structure in time order. We
@@ -1336,11 +1400,132 @@ batch_create(int force_batch)
     if (batch->count < batch->reserved)
 	cabuf_complete(batch);
 
+    if (s_cabuf.clients_count > 0) {
+	for (src = map.sources; src; src = src->next) {
+	    float usage;
+	    if (src->sniff->flags & SNIFF_INACTIVE)
+		continue;
+
+	    ppbuf = src->sniff->ppbuf;
+
+	    if (batch->first_ref_pkts[ppbuf->id] == NULL)
+		continue;
+
+	    usage = src->cb->usage(src->sniff,
+				   batch->first_ref_pkts[ppbuf->id],
+				   ppbuf->last_rpkt);
+	    batch->sniff_usage[ppbuf->id] = usage;
+	}
+    }
+
     batch->ref_mask = 1LL;
     
     prev_last_pkt_ts = batch->last_pkt_ts;
 
     return batch;
+}
+
+
+static int
+cabuf_cl_res_mgmt(int wait_for_clients, int avg_batch_len)
+{
+    int id;
+    int new_wait_for_clients = 0;
+
+    wait_for_clients = 0;
+
+    /*
+     * for each client check the current usage that the client
+     * has on each sniffer
+     */
+    for (id = 0; id < s_cabuf.clients_count; id++) {
+	int src_id;
+	int sampling = 0;
+
+	cabuf_cl_t *cl = s_cabuf.clients[id];
+
+	/* skip NULL clients */
+	if (cl == NULL)
+	    continue;
+
+	for (src_id = 0; src_id < map.source_count; src_id++) {
+	    float u = cl->sniff_usage[src_id];
+#ifdef DEBUG
+	    if (u > CACLIENT_WAIT_THRESH) {
+		/*
+		 * if the client usage is above the wait theshold
+		 * we set the new_wait_for_clients flag and increment
+		 * a wait counter
+		 */
+		new_wait_for_clients = 1;
+	    } else
+#endif
+	    if (u > CACLIENT_SAMPLING_THRESH) {
+		/*
+		 * if the client usage is above the sampling threshold
+		 * we tell the client to start sampling
+		 * the sampling rate is proportional to the distance of
+		 * the current usage from the threshold
+		 */
+		float m;
+		int s;
+		u -= CACLIENT_SAMPLING_THRESH;
+		m = 1.0 - CACLIENT_SAMPLING_THRESH;
+		s = (int) ((float) avg_batch_len * u / m);
+		if (s > sampling)
+		    sampling = s;
+	    } else if (u < CACLIENT_NOSAMPLING_THRESH) {
+		/*
+		 * if the client usage is below the nosampling threshold
+		 * we tell the client to stop sampling
+		 */
+		if (1 > sampling)
+		    sampling = 1;
+	    }
+	}
+	/* set the sampling rate */
+	if (sampling > 0) {
+	    *cl->sampling = sampling;
+	}
+    }
+#ifdef DEBUG
+    if (new_wait_for_clients == 0) {
+    	if (wait_for_clients) {
+	    source_t *src;
+	    logmsg(LOGCAPTURE, "client rate normal, unfreezing all sniffers\n");
+	    for (src = map.sources; src; src = src->next) {
+		sniffer_t *sniff = src->sniff;
+
+		if (sniff->flags & SNIFF_INACTIVE)
+		    continue;
+
+		sniff->flags &= ~SNIFF_FROZEN;
+		sniff->flags |= SNIFF_TOUCHED;
+	    }
+    	}
+    	wait_for_clients = 0;
+    } else {
+	/*
+	 * start a sync communication with the client(s) by freezing
+	 * all the sniffers if necessary and setting the
+	 * wait_for_clients flag
+	 */
+    	if (wait_for_clients == 0) { 
+	    source_t *src;
+	    logmsg(LOGCAPTURE, "client rate low, freezing all sniffers\n");
+	    for (src = map.sources; src; src = src->next) {
+		sniffer_t *sniff = src->sniff;
+
+		if (sniff->flags & SNIFF_INACTIVE)
+		    continue;
+
+		sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
+	    }
+	}
+	wait_for_clients = 1;
+    }
+#endif
+    return wait_for_clients;
 }
 
 
@@ -1376,6 +1561,7 @@ setup_sniffers(struct timeval *tout)
 
     int active = 0;
     int touched = 0;
+    timestamp_t polling = ~0;
 
     for (src = map.sources; src; src = src->next) {
 	sniff = src->sniff;
@@ -1391,7 +1577,6 @@ setup_sniffers(struct timeval *tout)
 	return active;
 
     /* rebuild the list of file selectors and recalculate the timeout */
-
     tout->tv_sec = 3600;
     tout->tv_usec = 0;
 
@@ -1421,18 +1606,14 @@ setup_sniffers(struct timeval *tout)
 	/* sniffers marked complete need to be finished off ASAP */
 
 	if (sniff->flags & SNIFF_COMPLETE) {
-	    tout->tv_sec = 0;
-	    tout->tv_usec = 0;
+	    polling = 0;
 	    continue;
 	}
 
 	/* if sniffer uses polling, reduce timeout to <= polling interval */
 
-	if (sniff->flags & SNIFF_POLL) {
-	    if (sniff->polling < TIME2TS(tout->tv_sec, tout->tv_usec)) {
-		tout->tv_sec = TS2SEC(sniff->polling);
-		tout->tv_usec = TS2USEC(sniff->polling);
-	    }
+	if ((sniff->flags & SNIFF_POLL) && sniff->polling < polling) {
+	    polling = sniff->polling;
 	}
 
 	/* if sniffer uses select(), add the file descriptor to the list */
@@ -1441,6 +1622,11 @@ setup_sniffers(struct timeval *tout)
 	    src->fd = sniff->fd;
 	    capture_loop_add_fd(src->fd);
 	}
+    }
+
+    if (polling < TS_MAX) {
+	tout->tv_sec = TS2SEC(polling);
+	tout->tv_usec = TS2USEC(polling);
     }
 
     /* if no sniffers now active then we log this change of state */
@@ -1463,7 +1649,7 @@ setup_sniffers(struct timeval *tout)
  *
  */
 void
-capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
+capture_mainloop(int accept_fd, int supervisor_fd, __unused int ca_id)
 {
     struct timeval timeout = { 0, 0 };
     source_t *src;
@@ -1471,6 +1657,8 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     int done_msg_sent = 0;
     int force_batch = 0;
     size_t sum_max_pkts = 0; /* sum of max pkts across initialized sniffers */
+    int avg_batch_len = 0;
+    int wait_for_clients = 0;
 
     /* wait for the debugger to attach */
 
@@ -1516,14 +1704,16 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
     init_timers();
 
     /* start all the sniffers */
-
     for (src = map.sources; src; src = src->next) {
 	sniffer_t *sniff = src->sniff;
 	
 	src->fd = -1;
 
+	/* create the ppbuf */
+	sniff->ppbuf = ppbuf_new(src->sniff->max_pkts, src->id);
+
 	if (src->cb->start(sniff) < 0) {
-	    sniff->flags |= SNIFF_INACTIVE | SNIFF_TOUCHED;
+	    sniff->flags |= SNIFF_INACTIVE;
 
 	    logmsg(LOGWARN,
 		   "error while starting sniffer %s (%s): %s\n",
@@ -1534,18 +1724,11 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	/* setup the sniffer metadesc */
 	src->cb->setup_metadesc(sniff);
 
-	/* create the ppbuf */
-	sniff->ppbuf = ppbuf_new(src->sniff->max_pkts);
-
-	/* ensure select structures will be set up */
-	/* FIXME: this should happen in ca_ipc_start */
-	sniff->flags |= SNIFF_TOUCHED;
-	
 	sum_max_pkts += src->sniff->max_pkts;
     }
 
     /* initialize the capture buffer */
-    cabuf_init(sum_max_pkts /* TODO: * service_buffering */);
+    cabuf_init(sum_max_pkts);
 
     /*
      * This is the actual main loop where we monitor the various
@@ -1576,7 +1759,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	 * if no sniffers are left, flush all the tables given that
 	 * no more packets will be received. 
 	 */
-	if ((active_sniff == 0) && (wait_for_modules == 0)) {
+	if ((active_sniff == 0) && (s_wait_for_modules == 0)) {
 	    int idx;
 
 	    tailq_t exp_tables = { NULL, NULL };
@@ -1609,7 +1792,6 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	r = s_valid_fds;
 	t = timeout;
 	n_ready = select(s_max_fd, &r, NULL, NULL, active_sniff ? &t : NULL);
-
 	if (n_ready < 0) {
 	    if (errno == EINTR)
 		continue;
@@ -1659,9 +1841,16 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
 	/* ignore the sniffers if SUPERVISOR hasn't sent start signal */
 
-	if (wait_for_modules > 0)
+	if (s_wait_for_modules > 0)
 	    continue;
 
+	/* check resources usage occupied by capture clients */
+	if (s_cabuf.clients_count > 0) {
+	    wait_for_clients = cabuf_cl_res_mgmt(wait_for_clients,
+						 avg_batch_len);
+	    if (wait_for_clients)
+		continue; /* skip capturing more packets */
+	}
 	/*
 	 * check sniffers for packet reception (both the ones that use 
 	 * select() and the ones that don't)
@@ -1669,6 +1858,7 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 
 	for (src = map.sources; src; src = src->next) {
 	    sniffer_t *sniff = src->sniff;
+	    pkt_t *first_ref_pkt = NULL;
 
 	    int res;
 	    int max_no;		/* max number of packets to capture */
@@ -1683,6 +1873,18 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    if (sniff->ppbuf->count == sniff->ppbuf->size)
 		continue;	/* the ppbuf is full */
 
+	    if (s_cabuf.clients_count > 0) {
+		batch_t *b;
+		b = TQ_HEAD(&s_cabuf.batches);
+		while (b != NULL) {
+		    if (b->first_ref_pkts[src->id] != NULL) {
+			first_ref_pkt = b->first_ref_pkts[src->id];
+			break;
+		    }
+		    b = b->next;
+		}
+	    }
+
 	    /* initialize the ppbuf for capture mode */
 
 	    max_no = ppbuf_begin(sniff->ppbuf);
@@ -1691,7 +1893,8 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	    /* capture more packets */
 
 	    start_tsctimer(map.stats->ca_sniff_timer);
-	    res = src->cb->next(sniff, max_no, s_min_flush_ivl, &drops);
+	    res = src->cb->next(sniff, max_no, s_min_flush_ivl,
+				first_ref_pkt, &drops);
 	    end_tsctimer(map.stats->ca_sniff_timer);
 
 	    /* tell the ppbuf we're done with capture */
@@ -1733,6 +1936,11 @@ capture_mainloop(int accept_fd, int supervisor_fd, __unused int id)
 	batch = batch_create(force_batch);
 
 	if (batch) {
+	    if (avg_batch_len == 0)
+		avg_batch_len = batch->count;
+	    else
+		avg_batch_len = (batch->count / 8) + (avg_batch_len * 7 / 8);
+
 	    /* export the batch to clients */
 	    if (s_cabuf.clients_count > 0)
 		batch_export(batch);
