@@ -618,7 +618,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct radio_me));
     
     me->sniff.max_pkts = 128;
-    me->sniff.flags = SNIFF_SELECT;
+    me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->snaplen = RADIO_DEFAULT_SNAPLEN;
     me->timeout = RADIO_DEFAULT_TIMEOUT;
     me->device = device;
@@ -906,12 +906,12 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
-	     int * dropped_pkts)
+	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct radio_me *me = (struct radio_me *) s;
     int count, x;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
     
     for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
 	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
@@ -922,6 +922,19 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
     me->dropped_pkts = 0;
     
     return (x >= 0) ? 0 : -1;
+}
+
+
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct radio_me *me = (struct radio_me *) s;
+    size_t sz;
+    void * y;
+    
+    y = ((void *) last) + sizeof(pkt_t) + last->caplen;
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    return (float) sz / (float) me->capbuf.size;
 }
 
 
@@ -960,4 +973,5 @@ SNIFFER(radio) = {
     start: sniffer_start,
     next: sniffer_next,
     stop: sniffer_stop,
+    usage: sniffer_usage
 };

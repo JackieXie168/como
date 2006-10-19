@@ -104,11 +104,26 @@ capbuf_finish(struct capbuf * capbuf)
 }
 
 
-static void
-capbuf_begin(struct capbuf * capbuf)
+static inline size_t
+capbuf_region_size(struct capbuf * capbuf, void * x, void * y)
 {
-    capbuf->ofcheck = 0;
+    if (y >= x) {
+	return y - x;
+    }
+    return capbuf->size - (x - y);
 }
+
+
+static void
+capbuf_begin(struct capbuf * capbuf, void * head)
+{
+    if (head == NULL) {
+	capbuf->ofcheck = 0;
+    } else {
+	capbuf->ofcheck = capbuf_region_size(capbuf, head, capbuf->tail);
+    }
+}
+
 
 /*
  * -- capbuf_reserve_space

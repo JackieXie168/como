@@ -84,7 +84,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct bpf_me));
 
     me->sniff.max_pkts = 8192;
-    me->sniff.flags = SNIFF_SELECT;
+    me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->device = device;
     
     /* create the capture buffer */
@@ -234,8 +234,8 @@ error:
  *                                      plus alignment padding)
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, timestamp_t __unused max_ivl,
-	     int * dropped_pkts)
+sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
+	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct bpf_me *me = (struct bpf_me *) s;
     char * base;                /* current position in input buffer */
@@ -245,7 +245,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t __unused max_ivl,
 
     *dropped_pkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
+    capbuf_begin(&me->pktbuf, first_ref_pkt->payload);
     
     base = capbuf_reserve_space(&me->capbuf, me->read_size);
     /* read packets */
@@ -301,6 +302,26 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t __unused max_ivl,
 }
 
 
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct bpf_me *me = (struct bpf_me *) s;
+    size_t sz;
+    void * y;
+    float u1, u2;
+    
+    y = ((void *) last) + last->caplen;
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    u1 = (float) sz / (float) me->capbuf.size;
+
+    y = ((void *) last) + sizeof(pkt_t);
+    sz = capbuf_region_size(&me->pktbuf, first, y);
+    u2 = (float) sz / (float) me->pktbuf.size;
+
+    return (u1 > u2) ? u1 : u2; /* return the maximum */
+}
+
+
 /*
  * -- sniffer_stop
  *  
@@ -334,4 +355,5 @@ SNIFFER(bpf) = {
     start: sniffer_start,
     next: sniffer_next,
     stop: sniffer_stop,
+    usage: sniffer_usage
 };

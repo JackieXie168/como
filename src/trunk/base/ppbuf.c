@@ -39,12 +39,14 @@
 struct ppbuf {
     int		woff;		/* offset for the next pkt to capture */
     int		roff;		/* offset for the next pkt to read */
+    pkt_t *	last_rpkt;	/* last pkt pointed by roff */
     int		count;		/* number of valid items in pp array */
     int		captured;	/* number of captured pkts since the last
 				   call to ppbuf_begin() */
     int		size;		/* number of allocated items in pp array */
     pkt_t **	pp;
     timestamp_t	last_pkt_ts;
+    int		id;		/* sniffer id */
     ppbuf_list_entry_t	next;
 };
 
@@ -55,13 +57,14 @@ struct ppbuf {
  * Allocates a new ppbuf with size many packet pointers.
  */
 static ppbuf_t *
-ppbuf_new(int size)
+ppbuf_new(int size, int id)
 {
     ppbuf_t *ppbuf;
     
     ppbuf = safe_calloc(1, sizeof(ppbuf_t));
     ppbuf->size = size;
     ppbuf->pp = safe_calloc(size, sizeof(pkt_t *));
+    ppbuf->id = id;
     
     return ppbuf;
 }
@@ -113,6 +116,8 @@ ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
 
     ppbuf->last_pkt_ts = pkt->ts;
 
+    pkt->input = ppbuf->id;
+    
     ppbuf->pp[ppbuf->woff] = pkt;
     ppbuf->woff = (ppbuf->woff + 1) % ppbuf->size;
 
@@ -175,7 +180,8 @@ ppbuf_end(ppbuf_t * ppbuf)
 static pkt_t *
 ppbuf_get(ppbuf_t * ppbuf)
 {
-    return ppbuf->pp[ppbuf->roff];
+    ppbuf->last_rpkt = ppbuf->pp[ppbuf->roff];
+    return ppbuf->last_rpkt;
 }
 
 

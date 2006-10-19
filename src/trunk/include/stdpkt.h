@@ -438,6 +438,8 @@ set_field(char *ptr, size_t size, uint64_t value)
                         ((((uint64_t) (u)) << 32) / 1000000))
 #define TIMEVAL2TS(rec) (TIME2TS((rec)->unix_secs,(rec)->unix_nsecs))
 
+#define TS_MAX	(timestamp_t) (~0)
+
 /*
  * Helper macros
  */

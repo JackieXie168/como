@@ -259,7 +259,7 @@ sniffer_start(sniffer_t * s)
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     int * dropped_pkts) 
+	     __unused pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct erf_me *me = (struct erf_me *) s;
     pkt_t *pkt;                 /* packet records */
@@ -295,7 +295,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     
     npkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, NULL);
 
     while (npkts < max_pkts) {
 	dag_record_t *rec;	/* DAG record structure */

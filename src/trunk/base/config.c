@@ -355,6 +355,9 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
     } else {
 	live_sniffers++;
     }
+    
+    s->id = m->source_count;
+    m->source_count++;
 
     m->sources = s;
 

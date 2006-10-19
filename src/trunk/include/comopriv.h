@@ -139,11 +139,16 @@ typedef struct batch {
     timestamp_t		last_pkt_ts; /* timestamp of last pkt in the batch */
     uint64_t		ref_mask; /* mask of capture clients referencing this
 				     batch */
+    pkt_t **		first_ref_pkts; /* the first packet referenced by this
+					   batch in each sniffer */
+    float *		sniff_usage;	/* resources taken by this batch in
+					   each sniffer */
 } batch_t;
 
 typedef union ccamsg_t {
     struct {
 	int		id;
+	int *		sampling;
     } open_res;
     struct {
 	int		id;
