@@ -356,7 +356,7 @@ l2done:
         addr = N32(IP(dst_ip)); 
 	len += sprintf(str + len, inet_ntoa(*(struct in_addr *) &addr));
 	if (isTCP || isUDP) {
-            port = isTCP ? H16(TCP(src_port)) : H16(UDP(src_port));
+            port = isTCP ? H16(TCP(dst_port)) : H16(UDP(dst_port));
 	    len += sprintf(str + len, ":%d", port);
         }
 
