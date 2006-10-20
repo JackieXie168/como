@@ -33,7 +33,10 @@
 #ifndef _PRINTPKT_H
 #define _PRINTPKT_H
 
-int print_pkt_pretty(pkt_t *pkt, char *output, int print_l2, int print_l3);
+#define PRINTPKT_L2                 1
+#define PRINTPKT_L3                 2
+
+int print_pkt_pretty(pkt_t *pkt, char *output, int flags);
 
 int print_pcap_file_header(char *output);
 int print_pkt_pcap(pkt_t *pkt, char *output);

@@ -237,7 +237,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     if (config->fmt == PCAPFMT)
         *len = print_pkt_pcap(pkt, str);
     else {
-        *len = print_pkt_pretty(pkt, str, 1, 1);
+        *len = print_pkt_pretty(pkt, str, PRINTPKT_L2 | PRINTPKT_L3);
         *len += sprintf(str + *len, "\n");
     }
     return str; 
