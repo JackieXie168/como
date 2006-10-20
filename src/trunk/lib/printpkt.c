@@ -150,7 +150,7 @@ print_tcp_flags(pkt_t *pkt)
  */
 
 int
-print_pkt_pretty(pkt_t *pkt, char *str, int print_l2, int print_l3)
+print_pkt_pretty(pkt_t *pkt, char *str, int flags)
 {
     int hh, mm, ss; 
     uint32_t addr; 
@@ -166,9 +166,12 @@ print_pkt_pretty(pkt_t *pkt, char *str, int print_l2, int print_l3)
     len = sprintf(str, "%02d:%02d:%02d.%06u ",
 		   hh, mm, ss, (uint) TS2USEC(COMO(ts))); 
 
-    if (print_l2 == 0 )
+    if ((flags & PRINTPKT_L2) == 0)
         goto l2done;
 
+    /*
+     * print layer 2 information
+     */
     if (isETH) {
         /* TODO */
     } else if (isHDLC) {
@@ -322,48 +325,48 @@ print_pkt_pretty(pkt_t *pkt, char *str, int print_l2, int print_l3)
     }
 
 l2done:
-    if (! print_l3)
+    if ((flags & PRINTPKT_L3) == 0)
         goto l3done;
+
     /* 
-     * depending on the l3 type we print different 
-     * information 
+     * print layer 3 information
      */
     if(isIP) {
+        uint16_t port;
+
         /* 
          * print IP header information 
          */
-	len += 
-	    sprintf(str + len, "IP | %s - ", getprotoname(IP(proto))); 
-        len += 
-	    sprintf(str + len, "tos 0x%x ttl %d id %d length: %d - ", 
-		    IP(tos), IP(ttl), H16(IP(id)), H16(IP(len)));   
+	len += sprintf(str + len, "IP | %s - ", getprotoname(IP(proto)));
+        len += sprintf(str + len, "tos 0x%x ttl %d id %d length: %d - ",
+		    IP(tos), IP(ttl), H16(IP(id)), H16(IP(len)));
 
 	/* 
-         * print IP addresses and port numbers (if any) 
+         * print IP addresses and port numbers (if any)
          */
-        addr = N32(IP(src_ip)); 
-	len += sprintf(str + len, inet_ntoa(*(struct in_addr*) &addr));
-	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP)  
-	    len += sprintf(str + len, ":%d", H16(UDP(src_port))); 
+        addr = N32(IP(src_ip));
+	len += sprintf(str + len, inet_ntoa(*(struct in_addr *) &addr));
+	if (isTCP || isUDP) {
+            port = isTCP ? H16(TCP(src_port)) : H16(UDP(src_port));
+	    len += sprintf(str + len, ":%d", port);
+        }
 
 	len += sprintf(str + len, " > "); 
 
         addr = N32(IP(dst_ip)); 
-	len += sprintf(str + len,inet_ntoa(*(struct in_addr *) &addr));
-	if (IP(proto) == IPPROTO_TCP || IP(proto) == IPPROTO_UDP)  
-	    len += sprintf(str + len, ":%d", H16(UDP(dst_port))); 
+	len += sprintf(str + len, inet_ntoa(*(struct in_addr *) &addr));
+	if (isTCP || isUDP) {
+            port = isTCP ? H16(TCP(src_port)) : H16(UDP(src_port));
+	    len += sprintf(str + len, ":%d", port);
+        }
 
         /* 
 	 * print TCP specific information 
          */
-	if (IP(proto) == IPPROTO_TCP) { 
-	    len += sprintf(str + len, 
-			" %s seq %u ack %u win %u", 
-			print_tcp_flags(pkt), 
-			(uint) H32(TCP(seq)), 
-			(uint) H32(TCP(ack_seq)), 
-		 	(uint16_t) H16(TCP(win))); 
-	}
+	if (isTCP)
+	    len += sprintf(str + len, " %s seq %u ack %u win %u", 
+			print_tcp_flags(pkt), (uint) H32(TCP(seq)), 
+			(uint) H32(TCP(ack_seq)), (uint16_t) H16(TCP(win))); 
     }
 
 l3done:; /* done */
