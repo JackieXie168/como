@@ -5,7 +5,7 @@
         $header = simple_header(NULL);
         $footer = simple_footer();
         $mesg = "Thanks for downloading CoMoLive!<br>";
-        $mesg .= "Lets get started!<br><br>";
+        $mesg .= "Let's get started!<br><br>";
         $mesg .= "Click <a href=config/>here</a> to setup CoMoLive!";
         $generic_message = $mesg;
         include ("html/generic_message.html");

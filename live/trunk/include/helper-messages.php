@@ -1,4 +1,4 @@
-<!--  $Id:  -->
+<!--  $Id$  -->
 <?php
 function generic_message ($mesg) 
 {

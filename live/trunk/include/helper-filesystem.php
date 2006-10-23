@@ -11,7 +11,9 @@ function manage_site ($G, $sitename, $action)
         $srcname = $G['ABSROOT'] . "/php";
         if ($sitename != "admin") {
             /*  Create the site directory  */
-            mkdir ($dname, 0755);
+            mkdir ($dname, 0755) || 
+                generic_message("Cannot create dir '$dname'. " .
+                                "Please check permissions.");
             /*  Create the sym links  */
             $symname[0] = "dashboard.php";
             $symname[1] = "generic_query.php";
