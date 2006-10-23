@@ -200,9 +200,10 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
 	    csclose(file_fd, 0);
 	}
 	    
-	len = sprintf(buf, "Module: %-15s | %s | %u | %s | %s\n",
+	len = sprintf(buf, "Module: %-15s | %s | %u | %s%s | %s\n",
 		      mdl->name, mdl->filter_str, TS2SEC(ts),
-		      mdl->callbacks.formats, 
+		      mdl->callbacks.formats,
+		      mdl->callbacks.replay ? " como" : "",
 		      (mdl->description? mdl->description : "--"));
 
 	ret = como_writen(client_fd, buf, len);
@@ -217,9 +218,10 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
 	     if (strcmp(alias->module, mdl->name) != 0) 
 		continue; 
 
-	    len = sprintf(buf, "Module: %-15s | %s | %u | %s | %s\n",
+	    len = sprintf(buf, "Module: %-15s | %s | %u | %s%s | %s\n",
 		      alias->name, mdl->filter_str, TS2SEC(ts),
-		      mdl->callbacks.formats, 
+		      mdl->callbacks.formats,
+		      mdl->callbacks.replay ? " como" : "",
 		      (alias->description? alias->description : "--"));
 	    ret = como_writen(client_fd, buf, len);
 	    if (ret < 0)
