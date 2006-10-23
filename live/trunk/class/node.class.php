@@ -284,7 +284,7 @@ class Node {
 	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
 print "look at $filename<br>";
 	if (!file_exists($filename)) { 
-print "insde no exist";
+print "inside no exist";
 	    /* create a default config file */ 
 	    $usable_mods = $this->getModules("gnuplot");
 	    $config[0] = "main";
@@ -300,7 +300,7 @@ print "insde no exist";
 
 	    file_put_contents($filename, $config); 
 	} else {
-print "insde exist";
+print "inside exist";
 	    $config = file($filename); 
 print_r($config);
 	}

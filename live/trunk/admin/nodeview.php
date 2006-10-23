@@ -12,7 +12,7 @@
     $footer = do_footer(NULL);
 
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
-    $NODEDB = $G['NODEDB'];
+    $NODEDB = $G['ABSROOT'] . '/' . $G['NODEDB'];
     $ABSROOT = $G['ABSROOT'];
 
     /* Don't allow entrace without customization priviledge  */
@@ -109,7 +109,9 @@
             /*  Make sure this site doesn't already exist  */
             if (!(in_array($sitename . "\n", $all_groups))) {
                 $towrite = "$sitename\n";
-                file_put_contents($groupfname, $towrite, FILE_APPEND);
+                file_put_contents($groupfname, $towrite, FILE_APPEND) ||
+                    generic_message("Cannot write to file '$groupfname', " .
+                                    "please check permissions");
                 manage_site($G, $sitename, "CREATE");
             }
         }
