@@ -12,7 +12,7 @@
     $footer = do_footer(NULL);
 
     $ALLOWCUSTOMIZE = $G['ALLOWCUSTOMIZE'];
-    $NODEDB = $G['ABSROOT'] . '/' . $G['NODEDB'];
+    $NODEDB = $G['NODEDB'];
     $ABSROOT = $G['ABSROOT'];
 
     /* Don't allow entrace without customization priviledge  */
