@@ -40,38 +40,44 @@ $action = "setup";
 if (isset($_GET['action']))
     $action = $_GET['action'];
 
+/*  Array with all the options */
+$opts = array('TIMEPERIOD', 'TIMEBOUND', 'RESOLUTION', 'RESULTS', 'NODEDB',
+    'GNUPLOT', 'CONVERT', 'WEBROOT', 'ABSROOT', 'PASSWORD', 'DOT', 'PYTHON');
+
 /*  Brief description of the options in the file  */
-$TIMEPERIOD_DESC = "The default amount of time that CoMo should\n" .
+$desc['TIMEPERIOD'] = "The default amount of time that CoMo should\n" .
                    "query initially (in seconds)";
 
-$TIMEBOUND_DESC = "Define the granularity for all graphs (in seconds),\n" . 
+$desc['TIMEBOUND'] = "Define the granularity for all graphs (in seconds),\n" . 
                   "i.e., all timestamps will be aligned to this\n" . 
                   "granularity";
 
-$RESOLUTION_DESC = "Define the resolutions of graphs, i.e. the number \n" .
+$desc['RESOLUTION'] = "Define the resolutions of graphs, i.e. the number \n" .
                    "of points to be present in a graph. This is just \n" .
                    "an indication to the module of the desired \n" . 
                    "resolution.  The actual implementation is \n" . 
                    "module dependant.";  
 
 
-$RESULTS_DESC = "Where the results will reside for future\n" . 
+$desc['RESULTS'] = "Where the results will reside for future\n" . 
                 "accesses. Path is relative to apache document\n" . 
                 "root. Apache needs to have write access to it.";
 
 
-$NODEDB_DESC = "Directory with the node lists. The path is relative to\n" . 
+$desc['NODEDB'] = "Directory with the node lists. The path is relative to\n" . 
                "document root and needs to be readable from apache.\n" . 
                "Look into db/README for details.";
 
-$GNUPLOT_DESC = "Path to gnuplot";
-$CONVERT_DESC = "Path to convert";
+$desc['GNUPLOT'] = "Path to gnuplot";
+$desc['CONVERT'] = "Path to convert";
 
-$WEBROOT_DESC = "Path relative to root of webserver";
-$ABSROOT_DESC = "Path relative to root of filesystem";
-$PASSWORD_DESC = "Password for admin directory";
-$DOT_DESC = "Path to dot";
-$PYTHON_DESC = "Path to python";
+$desc['WEBROOT'] = "Path relative to root of webserver";
+$desc['ABSROOT'] = "Path relative to root of filesystem";
+$desc['PASSWORD'] = "Password for admin directory";
+$desc['DOT'] = "Path to dot";
+$desc['PYTHON'] = "Path to python";
+
+
 
 /*  Enter setup mode  */
 if ($action == "setup") {
@@ -85,59 +91,21 @@ if ($action == "setup") {
 $i=0;
 $G = array();
 if ($action == "install") {
-    /*  Create an array with the value and desciption  */
-    $G['REV']['val'] = $REVISION;
-    if (isset($_POST["TIMEPERIOD"])) {
-        $G['TIMEPERIOD']['val'] = $_POST["TIMEPERIOD"];
-        $G['TIMEPERIOD']['desc'] = $TIMEPERIOD_DESC;
+    /*  Create an array with the value and description  */
+    $G['REV'] = $REVISION;
+    foreach ($opts as $opt) {
+        if (isset($_POST[$opt])) {
+            $G[$opt] = $_POST[$opt];
+        }
     }
-    if (isset($_POST["TIMEBOUND"])) {
-        $G['TIMEBOUND']['val'] = $_POST["TIMEBOUND"];
-        $G['TIMEBOUND']['desc'] = $TIMEBOUND_DESC;
-    }
-    if (isset($_POST["RESOLUTION"])) {
-        $G['RESOLUTION']['val'] = $_POST["RESOLUTION"];
-        $G['RESOLUTION']['desc'] = $RESOLUTION_DESC;
-    }
-    if (isset($_POST["RESULTS"])) {
-        $G['RESULTS'] = $_POST["RESULTS"];
-        $G['RESULTS']['val'] = $_POST["RESULTS"];
-        $G['RESULTS']['desc'] = $RESULTS_DESC;
-    }
-    if (isset($_POST["NODEDB"])) {
-        $G['NODEDB'] = $_POST["NODEDB"];
-        $G['NODEDB']['val'] = $_POST["NODEDB"];
-        $G['NODEDB']['desc'] = $NODEDB_DESC;
-    }
-    if (isset($_POST["GNUPLOT"])) {
-        $G['GNUPLOT']['val'] = $_POST["GNUPLOT"];
-        $G['GNUPLOT']['desc'] = $GNUPLOT_DESC;
-    }
-    if (isset($_POST["CONVERT"])) {
-        $G['CONVERT']['val'] = $_POST["CONVERT"];
-        $G['CONVERT']['desc'] = $CONVERT_DESC;
-    }
-    if (isset($_POST["WEBROOT"])) {
-        $G['WEBROOT']['val'] = $_POST["WEBROOT"];
-        $G['WEBROOT']['desc'] = $WEBROOT_DESC;
-    }
-    if (isset($_POST["ABSROOT"])) {
-        $G['ABSROOT'] = $_POST["ABSROOT"];
-        $G['ABSROOT']['val'] = $_POST["ABSROOT"];
-        $G['ABSROOT']['desc'] = $ABSROOT_DESC;
-    }
-    if (isset($_POST["PASSWORD"])) {
-        $G['PASSWORD'] = $_POST["PASSWORD"];
-        $G['PASSWORD']['val'] = $_POST["PASSWORD"];
-        $G['PASSWORD']['desc'] = $PASSWORD_DESC;
-    }
+
     /*  Make sure the results and db directory exists  */
-    $dir = "$absroot/{$G['NODEDB']['val']}";
+    $dir = "$absroot/{$G['NODEDB']}";
     $val = check_writable($dir);
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
-    $dir = "$absroot/{$G['RESULTS']['val']}";
+    $dir = "$absroot/{$G['RESULTS']}";
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
@@ -146,7 +114,6 @@ if ($action == "install") {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
 
-
     /*  create the public and admin site directories  */
     $dir = "$absroot/public";
     if (!(file_exists($dir))) {
@@ -154,7 +121,7 @@ if ($action == "install") {
     }
     manage_site($G, "admin", "CREATE");
     /*  Write configuration file to disk  */
-    write_config($G, "comolive.conf");
+    write_config($G, $opts, $desc, "comolive.conf");
     $m = "Configuration complete.  Copy the comolive.conf file " .
          "to the web root.<br><pre>" . 
          "mv $absroot/config/comolive.conf $absroot/<br></pre>" .
@@ -167,7 +134,7 @@ if ($action == "install") {
 /*  Function to write the config file.  Changes to comolive.conf should
  *  be made here 
  */
-function write_config($G, $outfile) {
+function write_config($G, $opts, $desc, $outfile) {
     $c = "<?php\n" . 
     "/*\n" . 
     " * CoMolive! configuration file\n" .
@@ -178,36 +145,21 @@ function write_config($G, $outfile) {
     "     * CoMoLive! Version \n" .
     "     */ \n\n" .
     "    \$GLOBAL['VERSION'] = 1.0; \n" .
-    "    \$GLOBAL['REV'] = " . $G['REV']['val'] . ";\n\n";
-    $tmp = comment($G['TIMEPERIOD']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['TIMEPERIOD'] = " . $G['TIMEPERIOD']['val'] . ";\n\n";
-    $tmp = comment($G['TIMEBOUND']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['TIMEBOUND'] = " . $G['TIMEBOUND']['val'] . ";\n\n"; 
-    $tmp = comment($G['RESOLUTION']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['RESOLUTION'] = 200;\n" .
-    $tmp = comment($G['RESULTS']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['RESULTS'] = \"" . $G['RESULTS']['val'] . "\";\n\n";
-    $tmp = comment($G['NODEDB']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['NODEDB'] = \"" . $G['NODEDB']['val'] . "\";\n\n";
-    $tmp = comment($G['GNUPLOT']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['GNUPLOT'] = \"" . $G['GNUPLOT']['val'] . "\";\n\n";
-    $tmp = comment($G['CONVERT']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['CONVERT'] = \"" . $G['CONVERT']['val'] . 
-    " -density 200x200 -resize 600x450\";\n\n" .
-    $tmp = comment($G['WEBROOT']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['WEBROOT'] = \"" . $G['WEBROOT']['val'] . "\";\n\n" .
-    $tmp = comment($G['ABSROOT']['desc']);
-    $c .= $tmp;
-    $c .= "    \$GLOBAL['ABSROOT'] = \"" . $G['ABSROOT']['val'] . "\";\n\n" .
-    "     /*\n" .
+    "    \$GLOBAL['REV'] = " . $G['REV'] . ";\n\n";
+
+    foreach ($opts as $opt) {
+        if ($opt == 'PYTHON' || $opt == 'DOT')
+            continue; /* set manually below */
+
+        $c .= comment($desc[$opt]);
+        if ($opt == 'CONVERT')
+            $c .= "    \$GLOBAL['".$opt."'] = \"" . $G[$opt] .
+                  " -density 200x200 -resize 600x450\";\n\n";
+        else
+            $c .= "    \$GLOBAL['".$opt."'] = \"" . $G[$opt] . "\";\n\n";
+    }
+    
+    $c .= "     /*\n" .
     "     *  Error report values are defined on php.net\n" .
     "     *  Set to 'E_ALL' for debugging or '0' for none\n" .
     "     */\n" .
@@ -248,7 +200,7 @@ function write_config($G, $outfile) {
 }
 
 /**
- *  Function to convert the DESC vars to print nicely in the config 
+ *  Function to convert the description of vars to print nicely in the config 
  *  file  
  */
 function comment ($val) 
