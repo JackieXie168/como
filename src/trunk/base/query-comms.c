@@ -449,10 +449,9 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 	return -400; /* Bad Request */
     }
     
-    if (strcmp(uri, "/status") == 0 || strcmp(qs, "status") == 0) {
+    if (strcmp(uri, "/status") == 0) {
 	q->mode = QMODE_SERVICE;
 	q->service = "status";
-        qs = NULL;
     } else if (strncmp(uri, "/services/", 10) == 0) {
 	q->mode = QMODE_SERVICE;
 	q->service = uri + 10;
@@ -482,6 +481,10 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		copy_value = 1;
 		*cp = '\0';
 		if (value == cp || value == NULL) {
+		    if (strcmp(name, "status") == 0) {
+			q->mode = QMODE_SERVICE;
+			q->service = "status";
+		    }
 		    if (done) {
 			break;
 		    }
