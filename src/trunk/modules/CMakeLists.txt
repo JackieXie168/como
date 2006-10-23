@@ -1,34 +1,24 @@
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 
 SET(MODULES
-  active-flows
-  anomaly-ewma
-  application
   apps
   assoc
-  connx
-  counter
   dhcp
   ewma
   flowcount
   frames
   ipssi
-  list
   macssi
   nfexlist
   pattern-search
-  ports
   protocol
   ssid
   topaddr
-  topdest
   topports
   trace
-  trace-nf
   traffic
   tuple
   unknown-ports
-  utilization
 )
 
 IF(FTLIB_FOUND)
