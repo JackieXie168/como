@@ -1275,6 +1275,8 @@ configure(struct _como * m, int argc, char ** argv)
     if (m->runmode == RUNMODE_INLINE) {
 	char *conf_argv[2];
 	
+	m->exit_when_done = 1;
+	
     	if (cli_args.sniffer != NULL) {
 	    add_sniffer(m, cli_args.sniffer, NULL, NULL);
     	}
