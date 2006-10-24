@@ -4,6 +4,7 @@ SET(MODULES
   apps
   assoc
   dhcp
+  ethtypes
   ewma
   flowcount
   frames
