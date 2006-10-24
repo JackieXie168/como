@@ -15,6 +15,7 @@ SET(MODULES
   protocol
   ssid
   topaddr
+  tophwaddr
   topports
   trace
   traffic
