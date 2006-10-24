@@ -155,14 +155,14 @@ update(__unused void * self, pkt_t *pkt, void *rp, int isnew)
     st->bytes += COMO(len);
     st->pkts++;
 
-    if (isIP) { 
+    if (isIP && hasL3) { 
 	hash = uhash(&cf->hfunc, (uint8_t *) &IP(src_ip), 4, UHASH_NEW);
         hash = uhash(&cf->hfunc, (uint8_t *) &IP(dst_ip), 4, UHASH_APPEND);
         hash = uhash(&cf->hfunc, (uint8_t *) &IP(proto), 1, UHASH_APPEND);
-        if (isTCP) { 
+        if (isTCP && hasL4) { 
             hash = uhash(&cf->hfunc,(uint8_t*) &TCP(src_port),2,UHASH_APPEND);
             hash = uhash(&cf->hfunc, (uint8_t *) &TCP(dst_port),2,UHASH_APPEND);
-	} else if (isUDP) { 
+	} else if (isUDP && hasL4) { 
             hash = uhash(&cf->hfunc,(uint8_t*) &UDP(src_port),2,UHASH_APPEND);
             hash = uhash(&cf->hfunc, (uint8_t *) &UDP(dst_port),2,UHASH_APPEND);
 	} 
