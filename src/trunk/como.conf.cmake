@@ -194,13 +194,59 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #
 
 #
-# The counter module computes the number of captured packets and bytes
-# Arguments:
-# - interval: the measurement interval (secs)
+# The traffic module computes the number of captured packets and bytes
 #
+# Arguments:
+# - interval:	the measurement interval (secs)
+#		syntax: interval=<value>
+#		<value> = integer
+#		default: 1
+#
+# - interface:	the NetFlow input/output interface of the monitored link
+#		syntax: interface=<index>
+#		<integer> = integer
+#		default: unused
 
 module "traffic"
   description	"Packet/Bytes counter"
   args		"interval=1"
-  source 	"counter.so"
+# args		"interface=1"
 end
+
+
+# The ethtypes module computes the number of packets and bytes divided by
+# ethertype. Each individual ethertype has to be specified in the
+# configuration. The packets have an ethertype which is not declared in the
+# configuration are counted into the "Other" (0x0000) ethertype.
+#
+# Arguments:
+# - interval:	the measurement interval (secs)
+#		syntax: interval=<value>
+#		<value> = integer
+#		default: 1
+#
+# - ethtype:	definition of an ethtype
+#		syntax: ethtype <name>=<value>
+#		<name> = any printable charactes
+#		<value> = integer in base 10 or 16 (0x prefix)
+#		default: IP,IPv6,ARP
+/*
+module "ethtypes"
+  description	"Ethertypes breakdown"
+  args		"interval=60"
+  args		"ethtype IP=0x0800"
+  args		"ethtype IPv6=0x86DD"
+  args		"ethtype ARP=0x0806"
+  args		"ethtype RARP=0x8035"
+  args		"ethtype AppleTalk=0x809b"
+  args		"ethtype AppleTalk ARP=0x80f3"
+  args		"ethtype Novell IPX=0x8137"
+  args		"ethtype Novell=0x8138"
+  args		"ethtype MPLS unicast=0x8847"
+  args		"ethtype MPLS multicast=0x8848"
+  args		"ethtype PPPoE Discovery Stage=0x8863"
+  args		"ethtype PPPoE Session Stage=0x8864"
+  args		"ethtype ATA over Ethernet=0x88A2"
+  args		"ethtype EAP over LAN (IEEE 802.1X)=0x888E"
+end  
+*/
