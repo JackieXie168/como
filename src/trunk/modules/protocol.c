@@ -203,7 +203,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 static size_t 
 do_header(char * const args[], CONFIGDESC * config) 
 {
-    size_t len; 
+    size_t len = 0;
     int n;
 
     /* first call of print, process the arguments and return */
