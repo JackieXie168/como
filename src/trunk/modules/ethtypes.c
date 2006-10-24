@@ -197,8 +197,15 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 
     for (i = 0; t[i].code != COMO(l3type) && i < config->types_count - 1; i++)
 	;
-    x->bytes[i] += COMO(len); 
-    x->pkts[i]++;
+
+    if (COMO(type) == COMOTYPE_SFLOW) {
+	x->bytes[i] += (uint64_t) COMO(len) *
+		       (uint64_t) H32(SFLOW(sampling_rate));
+	x->pkts[i] += H32(SFLOW(sampling_rate));
+    } else {
+	x->bytes[i] += COMO(len);
+	x->pkts[i]++;
+    }
 
     return 0;
 }
