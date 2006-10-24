@@ -309,7 +309,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     return s;
 }
 
-MODULE(traffic) = {
+MODULE(traffic-matrix) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
