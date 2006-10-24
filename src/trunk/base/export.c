@@ -256,6 +256,7 @@ call_store(module_t * mdl, rec_t *rp)
 		size_t sz;
 		timestamp_t ts;
 		sz = mdl->callbacks.load(mdl, p, ret, &ts);
+		assert(sz > 0 && ts != 0);
 		
 		/* print this record */
 		if (module_db_record_print(mdl, p, NULL, map.inline_fd) < 0)
