@@ -402,6 +402,8 @@ print_pretty(QUERYSTATE * qs, __unused CONFIGDESC * config)
 		       bytes_prct, pkts_prct);
     }
 
+    len += sprintf(qs->str + len, "\n");
+    
     return len;
 }
 
@@ -433,7 +435,7 @@ print_gnuplot(QUERYSTATE * qs, __unused CONFIGDESC * config)
 	bytes_sofar += bytes_prct; 
     } 
 
-    len += sprintf(qs->str + len, "\n"); 
+    len += sprintf(qs->str + len, "\n");
 
     return len;
 }
