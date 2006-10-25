@@ -129,6 +129,7 @@
                 $nodes['location'] = "";
                 $nodes['interface'] = "";
                 $nodes['comment'] = "";
+                $nodes['modify'] = "";
                 $nodes['delnode'] = "";
                 $node_array[$site]['nodes'][$group_count[$site]] = $nodes;
                 if ($ALLOWCUSTOMIZE) {
@@ -167,7 +168,7 @@
 	$node_array[$all_groups[0]]['delgroup'] = "";
 	$node_array[$all_groups[0]]['filename'] = "";
 
-    }
+    } 
 
     include ("../html/nodelist.html");
 ?>
