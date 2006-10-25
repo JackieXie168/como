@@ -7,6 +7,7 @@ $REVISION = substr('\$Revision$', 11, -2);
 include("../include/framing.php");
 include("../include/helper-messages.php");
 include("../include/helper-filesystem.php");
+include("../class/groupmanager.class.php");
 
 $header = simple_header("../");
 $footer = simple_footer();
@@ -118,14 +119,15 @@ if ($action == "install") {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
 
-    /*  create the public and admin site directories  */
-    $dir = "$absroot/public";
-    if (!(file_exists($dir))) {
-        manage_site($G, "public", "CREATE");
-    }
-    manage_site($G, "admin", "CREATE");
-    /*  Write configuration file to disk  */
+    /* create a config file for the user to copy to ABSROOT */
     write_config($G, $opts, $desc, "comolive.conf");
+
+    /*  create the public and admin site directories  */
+    $gm = new GroupManager($G);
+    $gm->addGroup('public');
+    print "addGroup public done\n";
+    $gm->deploy();
+
     $m = "Configuration complete.  Copy the comolive.conf file " .
          "to the web root.<br><pre>" . 
          "mv $absroot/config/comolive.conf $absroot/<br></pre>" .
