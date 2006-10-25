@@ -62,6 +62,12 @@ struct _asnfilt {
 };
 typedef struct _asnfilt asnfilt_t;
 
+struct _etherfilt {
+    uint8_t	direction;
+    uint8_t	mac[6];
+};
+typedef struct _etherfilt etherfilt_t;
+
 struct _portrange {
     uint8_t direction;
     uint16_t lowport;
@@ -82,6 +88,7 @@ union _nodedata {
     iface_t iface;
     ipaddr_t exaddr;
     asnfilt_t asn;
+    etherfilt_t ether;
 };
 typedef union _nodedata nodedata_t;
 
