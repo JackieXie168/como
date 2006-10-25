@@ -30,6 +30,8 @@ else if ($action == 'remove_group') {
 }
 else if ($action == 'add_group') {
     $group = getparam('group');
+    if ($group == 'admin') //admin is a special group, we dont let it be added
+        $group = 'admingroup';
     $m->addGroup($group);
     $m->deploy();
 }

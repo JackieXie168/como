@@ -118,7 +118,7 @@ if ($action == "install") {
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
-    $dir = "OLDGROUPS"; #
+    $dir = "$absroot/OLDGROUPS";
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
