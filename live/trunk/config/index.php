@@ -125,7 +125,6 @@ if ($action == "install") {
     /*  create the public and admin site directories  */
     $gm = new GroupManager($G);
     $gm->addGroup('public');
-    print "addGroup public done\n";
     $gm->deploy();
 
     $m = "Configuration complete.  Copy the comolive.conf file " .
