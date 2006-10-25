@@ -118,6 +118,10 @@ if ($action == "install") {
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
+    $dir = "OLDGROUPS"; #
+    if (!(check_writable($dir))) {
+        generic_message(ERROR_DIRNOTWRITABLE($dir));
+    }
 
     /* create a config file for the user to copy to ABSROOT */
     write_config($G, $opts, $desc, "comolive.conf");
