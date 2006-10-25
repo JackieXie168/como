@@ -113,6 +113,10 @@ if ($action == "install") {
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
+    $dir = "$absroot"; # XXX as of now absroot must be writable. need to fix.
+    if (!(check_writable($dir))) {
+        generic_message(ERROR_DIRNOTWRITABLE($dir));
+    }
 
     /*  create the public and admin site directories  */
     $dir = "$absroot/public";
