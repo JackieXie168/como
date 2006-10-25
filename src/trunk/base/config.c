@@ -710,6 +710,8 @@ do_config(struct _como * m, int argc, char *argv[])
 	node_id = m->node_count; 
 	bzero(&m->node[node_id], sizeof(node_t)); 
 	safe_dup(&m->node[node_id].name, argv[1]);
+	m->node[node_id].location = strdup("Unknown");
+	m->node[node_id].type = strdup("Unknown");
 	m->node_count++;
 	scope = CTX_VIRTUAL; 
 	break;
