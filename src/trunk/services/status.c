@@ -143,7 +143,7 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
 	    len = sprintf(buf, "Virtual: %s | %s | %s | ", 
 			  nd->name, nd->location, nd->type);
 
-	    if (node->comment != NULL) 		/* add comments if any */
+	    if (nd->comment != NULL) 		/* add comments if any */
 		len += sprintf(buf + len, "%s | ", nd->comment); 
 
 	    len += sprintf(buf + len, "%d | %s\n", 
