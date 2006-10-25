@@ -33,7 +33,6 @@ function manage_site ($G, $sitename, $action)
             /*  Create the links to db and results  */
             $orig = $G['ABSROOT'] . "/db";
             $dest = $G['ABSROOT'] . "/admin/db";
-print "orig $orig and dest $dest";
             symlink($orig, $dest);
             $orig = $G['ABSROOT'] . "/results";
             $dest = $G['ABSROOT'] . "/admin/results";
