@@ -107,21 +107,23 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
     ss = secs % 60;
     len += sprintf(buf + len, "Duration: %dd %dh %dm %ds\n", dd, hh, mm, ss); 
     
-    /* print the load */
-    for (i = 0; i < 15; i++) {
-    	ld_15m += map.stats->load_15m[i];
+    if (node_id == 0) {
+	/* print the load */
+	for (i = 0; i < 15; i++) {
+	    ld_15m += map.stats->load_15m[i];
+	}
+	for (i = 0; i < 60; i++) {
+	    ld_1h += map.stats->load_1h[i];
+	}
+	for (i = 0; i < 360; i++) {
+	    ld_6h += map.stats->load_6h[i];
+	}
+	for (i = 0; i < 1440; i++) {
+	    ld_1d += map.stats->load_1d[i];
+	}
+	len += sprintf(buf + len, "Load: %llu | %llu | %llu | %llu\n",
+		       ld_15m, ld_1h, ld_6h, ld_1d);
     }
-    for (i = 0; i < 60; i++) {
-    	ld_1h += map.stats->load_1h[i];
-    }
-    for (i = 0; i < 360; i++) {
-    	ld_6h += map.stats->load_6h[i];
-    }
-    for (i = 0; i < 1440; i++) {
-    	ld_1d += map.stats->load_1d[i];
-    }
-    len += sprintf(buf + len, "Load: %llu | %llu | %llu | %llu\n",
-		   ld_15m, ld_1h, ld_6h, ld_1d);
     
     /* add comments if any */
     if (node->comment != NULL) 
