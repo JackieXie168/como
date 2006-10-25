@@ -192,8 +192,8 @@ class GroupManager {
         $dir = $this->absroot.'/'.$user.'/';
 
         function my_mkdir($dir) {
-            if (!file_exists($dir)
-                return mkdir($dir) || $this->reportFailure($dir);
+            if (!file_exists($dir))
+                mkdir($dir) || $this->reportFailure($dir);
         }
 
         function my_symlink($a, $b) {
