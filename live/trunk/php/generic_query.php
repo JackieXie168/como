@@ -22,6 +22,13 @@
         $extra = "";
 
     $G = init_global();
+    $db = new NodeDB($G);
+    if (! $db->hasNode($comonode)) {
+        print "You do not have permission to access host:port<br>";
+        print "Thanks for playing!<br><br><br><br><br><br><br>";
+        include("../include/footer.php.inc");
+    }
+    
     $node = new Node ("$comonode", $G);
 
     /*  Get Input Vars  */
