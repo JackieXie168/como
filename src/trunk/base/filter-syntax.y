@@ -88,6 +88,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h> 	/* va_start */
+#include <netinet/ether.h>
 
 #include "como.h"
 
@@ -107,6 +108,7 @@
 #define Tfromds   10
 #define Ttods     11
 #define Tasn      12
+#define Tether    13
 
 struct _listnode
 {
@@ -140,6 +142,19 @@ parse_ip(char *ipstring, uint32_t *ip)
         return -1;
     }
     *ip = inp.s_addr;
+    return 0;
+}
+
+static int
+parse_mac(char *macstring, uint8_t *mac)
+{
+    struct ether_addr *a;
+    a = ether_aton(macstring);
+    if (a == NULL) {
+        yferror("Invalid MAC address: %s", macstring);
+        return -1;
+    }
+    memcpy(mac, a, sizeof(struct ether_addr));
     return 0;
 }
 
@@ -242,6 +257,13 @@ tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
                      data->asn.asn);
             t->data->asn.direction = data->asn.direction;
             t->data->asn.asn = data->asn.asn;
+            break;
+        case Tether:
+            asprintf(&(t->string), "ETHER %d %s",
+                     data->ether.direction,
+                     ether_ntoa((struct ether_addr *) data->ether.mac));
+            t->data->ether.direction = data->ether.direction;
+            memcpy(t->data->ether.mac, data->ether.mac, 6);
             break;
         case Tport:
             asprintf(&(t->string), "%d port %d:%d",
@@ -716,6 +738,17 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
                 z = asn_test((N32(IP(src_ip))), t->data->asn.asn) ||
 		    asn_test((N32(IP(dst_ip))), t->data->asn.asn);
             break;
+        case Tether:
+            if (!isETH && !isVLAN) 
+		return 0;
+            if (t->data->ether.direction == 0)			/* src */
+                z = (memcmp(ETH(src), t->data->ether.mac, 6) == 0);
+            else if (t->data->ipaddr.direction == 1)		/* dst */
+                z = (memcmp(ETH(dst), t->data->ether.mac, 6) == 0);
+            else 						/* addr */
+                z = (memcmp(ETH(src), t->data->ether.mac, 6) == 0) ||
+		    (memcmp(ETH(dst), t->data->ether.mac, 6) == 0);
+            break;
         case Tport:
             if (!isTCP && !isUDP)
                 return 0;
@@ -831,20 +864,22 @@ int evaluate(treenode_t *t, pkt_t *pkt)
     portrange_t portrange;
     iface_t iface;
     ipaddr_t exaddr;
-	asnfilt_t asn;
+    asnfilt_t asn;
+    etherfilt_t ether;
 }
 
 /* Data types and tokens used by the parser */
 
-%token NOT AND OR OPENBR CLOSEBR COLON ALL EXPORTER FROMDS TODS ASN
+%token NOT AND OR OPENBR CLOSEBR COLON ALL EXPORTER FROMDS TODS ASN ETHER
 %left NOT AND OR /* Order of precedence */
 %token <byte> DIR PORTDIR IFACE
 %token <word> LEVEL3 LEVEL4 NUMBER
 %token <dword> NETMASK
-%token <string> IPADDR
+%token <string> IPADDR MACADDR
 %type <tree> expr
 %type <ipaddr> ip
 %type <asn> asnfilt
+%type <ether> etherfilt
 %type <portrange> port
 %type <word> proto 
 %type <iface> iface
@@ -896,6 +931,10 @@ expr: expr AND expr
       {
         $$ = tree_make(Tpred, Tasn, NULL, NULL, (nodedata_t *)&$1);
       }
+    | etherfilt
+      {
+        $$ = tree_make(Tpred, Tether, NULL, NULL, (nodedata_t *)&$1);
+      }
     | port
       {
         $$ = tree_make(Tpred, Tport, NULL, NULL, (nodedata_t *)&$1);
@@ -936,6 +975,13 @@ ip: DIR IPADDR
             YYABORT;
         if (parse_nm($3, &($$.nm)) == -1)
             YYABORT;
+    }
+;
+etherfilt: ETHER DIR MACADDR
+    {
+	$$.direction = $2;
+	if (parse_mac($3, $$.mac) == -1)
+	    YYABORT;
     }
 ;
 asnfilt: DIR ASN NUMBER
