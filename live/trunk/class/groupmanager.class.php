@@ -18,7 +18,9 @@ class GroupManager {
 
         if (!file_exists($this->groups_file)) {
             print "creating from void, file does not exist\n";
-            $this->groups['public'] = array();
+            $this->groups = array();
+            $this->createUserDir('admin');
+            $this->addGroup('public');
             $this->save();
         } else {
             $contents = file($this->groups_file);
@@ -188,15 +190,29 @@ class GroupManager {
     function createUserDir($user)
     {
         $dir = $this->absroot.'/'.$user.'/';
-        mkdir($dir) || $this->reportFailure($dir);
-        mkdir($dir.'/'.$this->nodedb) || $this->reportFailure($dir);
-        mkdir($dir.'/'.$this->results) || $this->reportFailure($dir);
+
+        function my_mkdir($dir) {
+            if (!file_exists($dir)
+                return mkdir($dir) || $this->reportFailure($dir);
+        }
+
+        function my_symlink($a, $b) {
+            if (!file_exists($b))
+                return symlink($a, $b);
+        }
+
+        my_mkdir($dir);
+        my_mkdir($dir.'/'.$this->nodedb);
+        my_mkdir($dir.'/'.$this->results);
 
         $links = array("dashboard.php", "generic_query.php", "index.php",
             "loadcontent.php", "mainstage.php", "sysinfo.php");
 
         foreach ($links as $l)
-            symlink('../php/'.$l, $dir. $l);
+            my_symlink('../php/'.$l, $dir. $l);
+
+        if ($user == 'admin')
+            my_symlink('../'.$this->nodedb, $dir.$this->nodedb);
     }
 }
 
