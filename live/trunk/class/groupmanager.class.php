@@ -17,7 +17,6 @@ class GroupManager {
         $this->groups_file = $G['ABSROOT'].'/'.$G['NODEDB'].'/'.'groups';
 
         if (!file_exists($this->groups_file)) {
-            print "creating from void, file does not exist\n";
             $this->groups = array();
             $this->createUserDir('admin');
             $this->addGroup('public');
@@ -187,32 +186,32 @@ class GroupManager {
         print "WARNING: failed to write to '$file', check permissions!<br>\n";
     }
 
+    function my_mkdir($dir) {
+        if (!file_exists($dir))
+            mkdir($dir) || $this->reportFailure($dir);
+    }
+
+    function my_symlink($a, $b) {
+        if (!file_exists($b))
+            return symlink($a, $b);
+    }
+
     function createUserDir($user)
     {
         $dir = $this->absroot.'/'.$user.'/';
 
-        function my_mkdir($dir) {
-            if (!file_exists($dir))
-                mkdir($dir) || $this->reportFailure($dir);
-        }
-
-        function my_symlink($a, $b) {
-            if (!file_exists($b))
-                return symlink($a, $b);
-        }
-
-        my_mkdir($dir);
-        my_mkdir($dir.'/'.$this->nodedb);
-        my_mkdir($dir.'/'.$this->results);
+        $this->my_mkdir($dir);
+        $this->my_mkdir($dir.'/'.$this->nodedb);
+        $this->my_mkdir($dir.'/'.$this->results);
 
         $links = array("dashboard.php", "generic_query.php", "index.php",
             "loadcontent.php", "mainstage.php", "sysinfo.php");
 
         foreach ($links as $l)
-            my_symlink('../php/'.$l, $dir. $l);
+            $this->my_symlink('../php/'.$l, $dir. $l);
 
         if ($user == 'admin')
-            my_symlink('../'.$this->nodedb, $dir.$this->nodedb);
+            $this->my_symlink('../'.$this->nodedb, $dir.$this->nodedb);
     }
 }
 
