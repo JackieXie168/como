@@ -367,7 +367,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 {
     int max_args, nargs;
     char *p, *t;
-    char *uri, *qs;
+    char *uri, *qs = NULL;
 
     p = strchr(buf, '\n');
     *p = '\0';
