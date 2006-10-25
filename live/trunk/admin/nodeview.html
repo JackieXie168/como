@@ -1,4 +1,8 @@
 <!--  $Id$ -->
+<?php
+    require_once('../class/node.class.php');
+    $n = new Node($node);
+?>
 <html>
   <head>
     <title>CoMolive! - Intel Research Cambridge</title>
@@ -24,80 +28,66 @@
 		<div class=title>Como Node </div> 
 	    </td></tr>
 	    <tr><td>
-		<?php echo $comonode?>
+		<i><?= $node ?></i>
 	    </td></tr>
 	    <tr><td>
 		<div class=title>Node Name</div> 
 	    </td> </tr>
 	    <tr><td>
-		<?php echo $node->nodename ?>
+		<i><?= $n->nodename ?></i>
 	    </td></tr>
             <tr><td>
-		<div class=title>Location</div> 
+		<div class=title>Location</div>
 	    </td></tr>
 	    <tr><td>
-		<?php echo $node->nodeplace ?>
+		<i><?= $n->nodeplace ?></i>
 	    </td></tr>
 	    <tr><td>
 		<div class=title>Interface</div>
 	    </td></tr>
 	    <tr><td>
-		<?php echo $node->linkspeed ?>
+		<i><?= $n->linkspeed ?></i>
 	    </td></tr>
 	    <tr><td>
 		<div class=title>Data Source</div>
 	    </td></tr>
 	    <tr><td>
-		<?php echo $node->comment ?>
+		<i><?= $n->comment ?></i>
 	    </td></tr></table>
  
 	</td><td valign=top>
-	    <form action="nodeview.php" method="GET">
 	    <table border=0>
-		<tr><td>
-		    <div class=title>Add a new group name</div> 
-                </td></tr>
-		<tr><td>
-		    <input type=textbox name=sitename>
-		</td></tr>
-		<tr><td align=left>
-		    <input type=submit name=method value="Add Group">
-		    <input type=hidden name=comonode value="<?php echo $comonode?>">
-		</td></tr>
                 <tr><td width=300> 
                     <div class=title>Available Sites</div> 
                 </td></tr>
                 <tr>
             </form>
-        <form action="nodeview.php" method="GET">
+        <form action="manage.php" method="GET">
                 <table border=0 width=100%>
                     <tr>
                 <?php 
-                $NUMROW=3;
-                for ($i = 0; $i < count($all_groups); $i++) { 
-                    if ((($i % $NUMROW) == 0) && ($i != 0)) {
+                $rows = 3;
+
+                for ($i = 0; $i < count($groups); $i++) { 
+                    if ((($i % $rows) == 0) && ($i != 0)) {
                         print "</tr><tr>";
                     }
                 ?>
-                <td><input type=checkbox 
-                <?php 
-                $val = trim($all_groups[$i]);
-                if (in_array($val, $memberlist))
-                    print " checked ";
-                ?> 
-                name=sites[<?php echo $i ?>]
-                value=<?php echo $all_groups[$i]?> >
-                <?php echo $all_groups[$i] ?>
+                <td><input type=checkbox name=groups[<?php echo $i ?>]
+                value=<?php echo $groups[$i]?> >
+                <?php echo $groups[$i] ?>
                 </td>
                 <?php } ?>
                 </table>
             </tr>
 	    <td colspan=2 align=center>
-	<input type=hidden name=comonode value="<?php echo $comonode?>">
+	<input type=hidden name=action value=add_node>
+	<input type=hidden name=node value=<?= $node ?>>
+	<!--input type=hidden name=comonode value="<?php echo $comonode?>">
 	<input type=hidden name=nodename value="<?php echo $node->nodename?>">
 	<input type=hidden name=nodeplace value="<?php echo $node->nodeplace?>">
 	<input type=hidden name=speed value="<?php echo $node->linkspeed?>">
-	<input type=hidden name=comment value="<?php echo $node->comment?>">
+	<input type=hidden name=comment value="<?php echo $node->comment?>"-->
         <input type="submit" name=method value="Submit"> 
     </form>
 

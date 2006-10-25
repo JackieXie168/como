@@ -1,6 +1,7 @@
 <?php
     /*  $Id$  */
     require_once "../class/node.class.php";	/* Node class */
+    require_once "../class/nodedb.class.php";   /* NodeDB class */
 
     require_once "../include/framing.php"; 	/* header/footer functions */
     require_once "../include/vcrbuttons.php";      /* zoom_in, zoom_out, etc. */
@@ -21,9 +22,17 @@
 	exit;
     }
 
-    $comonode = $_GET['comonode'];
-
     $G = init_global(); 
+
+    $comonode = $_GET['comonode'];
+    $db = new NodeDB($G);
+    if (! $db->hasNode($comonode)) {
+        print "Sorry, but you do not have permission to query CoMo node $comonode.";
+	print "<br><br><br><br><br><br><br>";
+        print do_footer();
+        exit;
+    }
+
     $node = new Node($comonode, $G);
     if ($node->status == false) { 
 	/* cannot connect to node, fail with error */
@@ -32,8 +41,11 @@
 	include "../html/node_failure.html"; 
 	exit;
     }
+
     /*  Check if there are running modules that support CoMoLive  */
     $nummods = count($node->getModules("gnuplot"));
+    $nummods += count($node->getModules("conversation_graph"));
+
     if ($nummods == 0) {
 	$header = do_header(NULL, $G); 
 	$footer = do_footer(); 

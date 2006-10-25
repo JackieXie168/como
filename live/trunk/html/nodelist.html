@@ -18,38 +18,68 @@
 <table class=fence>
   <tr>
     <td class=leftmain>
-    <?php for ($i = 0; $i < count($all_groups); $i++) { ?>
-
-	<div class=grouphead><?php echo $all_groups[$i]?>
-        <?php echo $node_array[$all_groups[$i]]['delgroup'] ?>
+        <? if ($isAdmin) { ?>
+        <form align=middle action=manage.php method=get>
+        Create new group: &nbsp;
+	<input type=text name=group size=21 value="group name"
+         onFocus=clearText(this);>
+        <input type=hidden name=action value=add_group>
+	<input type=image src=../images/go.jpg>
+      </form>
+        <? } ?>
 	<table cellpadding=0 cellspacing=2 border=0>
-	<?php for ($j = 0; $j < count($node_array[$all_groups[$i]]['nodes']); $j++) { ?>
+	<?php
+            require_once("../class/node.class.php");
+            $last_group = '';
+
+            if ($isAdmin) foreach($emptygroups as $group) {
+                ?><tr><td colspan=4><br><b>Group: <?= $group ?></b>
+                  (<a href="manage.php?action=remove_group&group=<?= $group ?>">remove</a>)
+                  </td></tr><?
+            }
+            foreach ($nodes as $node) {
+                $n = new Node($node, $G);
+
+                if ($isAdmin) {
+                    $group = array_shift($groups);
+                    if ($group != $last_group) {
+                        $last_group = $group;
+                        ?><tr><td colspan=4><br><b>Group: <?= $group ?></b>
+                          (<a href="manage.php?action=remove_group&group=<?= $group ?>">remove</a>)
+                          </td></tr><?
+                    }
+                }
+
+                if ($n->status == 0) { ?>
+          <tr><td colspan=4>
+              CoMo Node <?=$node?>
+              <font color=red>warning: node seems to be down</font>
+          </td></tr>
+            <?  } else {
+                    $hostport = $n->hostaddr.':'.$n->hostport;
+            ?>
 	  <tr>
-	    <td width=100 valign=top>
-		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['name']?>
+	    <td width=100 valign=top><a href="dashboard.php?comonode=<?= $hostport ?>">
+		<?= $n->nodename ?>
+            </a>
             </td>
 	    <td width=50 valign=top>
-                <?php echo $node_array[$all_groups[$i]]['nodes'][$j]['port']?>
+                <?= $hostport ?>
             </td>
 	    <td width=100 valign=top>
-		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['location']?>
-	    </td>
-	    <td width=100 valign=top>
-		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['interface']?>
+		<?= $n->nodeplace ?>
 	    </td>
 	    <td width=300 valign=top>
-		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['comment']?>
+		<?= $n->comment ?>
 	    </td>
-	    <td width=50 valign=top>
-		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['modify']?>
-	    </td>
-	    <td width=50 valign=top>
-		<?php echo $node_array[$all_groups[$i]]['nodes'][$j]['delnode']?>
-	    </td>
+            <?  if ($isAdmin) { ?>
+            <td width=50 valign=top>
+            <a href="manage.php?action=remove_node&node=<?= $hostport ?>&group=<?= $group ?>">remove</a>
+            </td>
+            <? } ?>
 	  </tr>
-        <?php } ?>
+        <?php } } ?>
 	</table>               
-    <?php } ?>
     </td>
     <td class=nodeselect valign=top>
       Select node by IP address
@@ -59,12 +89,13 @@
 	<input type=image src=../images/go.jpg>
       </form>
 
-    <?php  if ($G['ALLOWCUSTOMIZE']) { ?>
+    <?php if ($isAdmin) { ?>
       <br>
       Add a new CoMo node
-      <form align=middle action=nodeview.php method=get>
-	<input type=text name=comonode size=21 value="comonode:44444"
+      <form align=middle action=manage.php method=get>
+	<input type=text name=node size=21 value="comonode:44444"
          onFocus=clearText(this);>
+        <input type=hidden name=action value=add_node>
 	<input type=image src=../images/go.jpg >
       </form>
     <?php } ?>

@@ -282,12 +282,16 @@ class Node {
     function getConfig($which) 
     {
 	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
-print "look at $filename<br>";
+#print "look at $filename<br>";
 	if (!file_exists($filename)) { 
-print "inside no exist";
+#print "inside no exist";
 	    /* create a default config file */ 
 	    $usable_mods = $this->getModules("gnuplot");
 	    $config[0] = "main";
+	    for ($i = 0; $i < count($usable_mods); $i++)
+		$config[0] .= ";;" . $usable_mods[$i];
+
+	    $usable_mods = $this->getModules("conversation_graph");
 	    for ($i = 0; $i < count($usable_mods); $i++)
 		$config[0] .= ";;" . $usable_mods[$i];
 	    $config[0] .= "\n";
@@ -300,11 +304,11 @@ print "inside no exist";
 
 	    file_put_contents($filename, $config); 
 	} else {
-print "inside exist";
+#print "inside exist";
 	    $config = file($filename); 
-print_r($config);
+#print_r($config);
 	}
-exit;
+#exit;
 
 	/* parse the config information */
 	return $this->parseConfig($config, $which); 
