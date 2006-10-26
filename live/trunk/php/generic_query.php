@@ -1,6 +1,7 @@
 <?php
     require_once ("../comolive.conf");
     require_once ("../class/node.class.php");
+    require_once ("../class/nodedb.class.php");
     require_once ("../class/query.class.php");
     require_once ("../include/framing.php");
     require_once ("../include/getinputvars.php.inc");
