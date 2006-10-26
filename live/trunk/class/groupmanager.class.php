@@ -209,7 +209,8 @@ class GroupManager {
         $this->my_mkdir($dir.'/java');
 
         $links = array("dashboard.php", "generic_query.php", "index.php",
-            "loadcontent.php", "mainstage.php", "sysinfo.php", "search.php");
+            "loadcontent.php", "mainstage.php", "sysinfo.php", "search.php",
+            "customize.php");
 
         foreach ($links as $l)
             $this->my_symlink("../php/$l", $dir . $l);

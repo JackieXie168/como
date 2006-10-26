@@ -24,6 +24,9 @@ class Node {
     var $start; 		/* query start and end time */ 
     var $end; 		/* XXX unclear why we need to keep it here */
 
+    var $main_formats;
+    var $secondary_formats;
+
     /* 
      * constructor for the class. 
      * this will run a ?status query (unless it is already cached) 
@@ -37,6 +40,9 @@ class Node {
 	#$this->results = $G['ABSROOT'] . "/" . $G['RESULTS'];
         $this->db_path = $G['NODEDB'];
 	$this->results = $G['RESULTS'];
+
+        $this->main_formats = array('gnuplot'=>1, 'conversation_graph'=>1);
+        $this->secondary_formats = array('sidebox'=>1);
 
 	/* 
          * the comonode may consist of host:port or just port. if 
@@ -241,6 +247,13 @@ class Node {
         return ($modules);
     }
 
+    /* Return all modules
+     */
+    function getAllModules()
+    {
+        return array_keys($this->modinfo);
+    }
+
 
     /* 
      * -- parseConfig
@@ -282,33 +295,38 @@ class Node {
     function getConfig($which) 
     {
 	$filename = "$this->db_path/$this->hostaddr:$this->hostport"."_modules";
-#print "look at $filename<br>";
 	if (!file_exists($filename)) { 
-#print "inside no exist";
 	    /* create a default config file */ 
-	    $usable_mods = $this->getModules("gnuplot");
-	    $config[0] = "main";
-	    for ($i = 0; $i < count($usable_mods); $i++)
-		$config[0] .= ";;" . $usable_mods[$i];
+            $done = array();
+            $config[0] = "main";
+            foreach ($this->main_formats as $fmt) {
+                $usable_mods = $this->getModules($fmt);
+                foreach ($usable_mods as $module) {
+                    if (array_key_exists($module, $done))
+                        continue; // don't repeat modules
+                    $config[0] .= ";;" . $module;
+                    $done[$module] = 1;
+                }
+            }
+            $config[0] .= "\n";
 
-	    $usable_mods = $this->getModules("conversation_graph");
-	    for ($i = 0; $i < count($usable_mods); $i++)
-		$config[0] .= ";;" . $usable_mods[$i];
-	    $config[0] .= "\n";
-
-	    $usable_mods = $this->getModules("sidebox");
+            $done = array();
 	    $config[1] = "secondary";
-	    for ($i = 0; $i < count($usable_mods); $i++)
-		$config[1] .= ";;" . $usable_mods[$i];
+            foreach ($this->secondary_formats as $fmt) {
+                $usable_mods = $this->getModules($fmt);
+                foreach ($usable_mods as $module) {
+                    if (array_key_exists($module, $done))
+                        continue;
+                    $config[1] .= ";;" . $module;
+                    $done[$module] = 1;
+                }
+            }
 	    $config[1] .= "\n";
 
 	    file_put_contents($filename, $config); 
 	} else {
-#print "inside exist";
-	    $config = file($filename); 
-#print_r($config);
+	    $config = file($filename);
 	}
-#exit;
 
 	/* parse the config information */
 	return $this->parseConfig($config, $which); 
@@ -329,14 +347,70 @@ class Node {
 	$secline = "secondary"; 
 
 	for ($i = 0; $i < count($mods); $i++) {
-	    $formats = $this->modinfo[$mods[$i]]['formats'];
-	    if (strstr($formats, "gnuplot"))
+            if ($this->isModuleMain($mods[$i]))
 		$mainline = $mainline . ";;" . $mods[$i]; 
-	    else if (strstr($formats, "html"))
+            else if ($this->isModuleSecondary($mods[$i]))
 		$secline = $secline . ";;" . $mods[$i]; 
 	} 
 
 	file_put_contents($filename, "$mainline\n$secline"); 
+    }
+
+    /*
+     * -- isModuleMain
+     *
+     * tells if a module supports a main format
+     */
+     function isModuleMain($module)
+     {
+        foreach ($this->getModuleFormats($module) as $fmt)
+            if ($this->isFormatMain($fmt))
+                return true;
+        return false;
+     }
+
+    /*
+     * -- isModuleSecondary
+     *
+     * tells if a module supports a main format
+     */
+     function isModuleSecondary($module)
+     {
+        foreach ($this->getModuleFormats($module) as $fmt)
+            if ($this->isFormatSecondary($fmt))
+                return true;
+        return false;
+     }
+
+    /*
+     * -- isFormatMain
+     *
+     * Returns true if and only if the format is supported
+     * as a main format.
+     */
+    function isFormatMain($fmt)
+    {
+        return array_key_exists($fmt, $this->main_formats);
+    }
+
+    /*
+     * -- isFormatSecondary
+     *
+     * Returns true if and only if the format is supported
+     * as a secondary format.
+     */
+    function isFormatSecondary($fmt)
+    {
+        return array_key_exists($fmt, $this->secondary_formats);
+    }
+
+    function getMainFormats()
+    {
+        return array_keys($this->main_formats);
+    }
+    function getSecondaryFormats()
+    {
+        return array_keys($this->secondary_formats);
     }
 
     /*
