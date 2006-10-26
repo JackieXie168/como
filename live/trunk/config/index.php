@@ -43,7 +43,8 @@ if (isset($_GET['action']))
 
 /*  Array with all the options */
 $opts = array('TIMEPERIOD', 'TIMEBOUND', 'RESOLUTION', 'RESULTS', 'NODEDB',
-    'GNUPLOT', 'CONVERT', 'WEBROOT', 'ABSROOT', 'PASSWORD', 'DOT', 'PYTHON');
+    'HTPASSWD', 'GNUPLOT', 'CONVERT', 'WEBROOT', 'ABSROOT', 'PASSWORD', 'DOT',
+    'PYTHON');
 
 /*  Brief description of the options in the file  */
 $desc['TIMEPERIOD'] = "The default amount of time that CoMo should\n" .
@@ -69,6 +70,7 @@ $desc['NODEDB'] = "Directory with the node lists. The path is relative to\n" .
                "document root and needs to be readable from apache.\n" . 
                "Look into db/README for details.";
 
+$desc['HTPASSWD'] = "Path to apache's htpasswd binary";
 $desc['GNUPLOT'] = "Path to gnuplot";
 $desc['CONVERT'] = "Path to convert";
 
@@ -129,6 +131,7 @@ if ($action == "install") {
     /*  create the public and admin site directories  */
     $gm = new GroupManager($G);
     $gm->addGroup('public');
+    $gm->setPassword('admin', $G['PASSWORD']);
     $gm->deploy();
 
     $m = "Configuration complete.  Copy the comolive.conf file " .
@@ -158,7 +161,10 @@ function write_config($G, $opts, $desc, $outfile) {
 
     foreach ($opts as $opt) {
         if ($opt == 'PYTHON' || $opt == 'DOT')
-            continue; /* set manually below */
+            continue; // set manually below
+
+        if ($opt == 'PASSWORD')
+            continue; // never makes it into cfg file
 
         $c .= comment($desc[$opt]);
         if ($opt == 'CONVERT')

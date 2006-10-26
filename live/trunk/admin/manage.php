@@ -30,9 +30,11 @@ else if ($action == 'remove_group') {
 }
 else if ($action == 'add_group') {
     $group = getparam('group');
+    $password = getparam('password');
     if ($group == 'admin') //admin is a special group, we dont let it be added
         $group = 'admingroup';
     $m->addGroup($group);
+    $m->setPassword($group, $password);
     $m->deploy();
 }
 else if ($action == 'add_node') {
