@@ -18,20 +18,30 @@
 <table class=fence>
   <tr>
     <td class=leftmain>
+	<table cellpadding=0 cellspacing=2 border=0>
+        <tr><td colspan=4>
         <? if ($isAdmin) { ?>
         <form align=middle action=manage.php method=get>
         Create new group: &nbsp;
-	<input type=text name=group size=21 value="group name"
-         onFocus=clearText(this);>
+	<input type=text name=group size=21 value="group name" onFocus=clearText(this);>
         &nbsp; Password:
-	<input type=password name=password size=21 value=""
-         onFocus=clearText(this);>
+	<input type=password name=password size=21 value="" onFocus=clearText(this);>
         <input type=hidden name=action value=add_group>
         &nbsp;
 	<input type=image src=../images/go.jpg>
       </form>
         <? } ?>
-	<table cellpadding=0 cellspacing=2 border=0>
+        </td></tr>
+        <tr>
+        <td colspan=4 class=separator>
+            <form method="POST" target=new class=search action="<?php #$searchquery ?>"> 
+                    Locate from a filter expression:
+                <input type="text" name="filter" size="45"/>
+                &nbsp; &nbsp;
+                <input type=image src=../images/go.jpg>
+            </form>
+        </td></tr>
+
 	<?php
             require_once("../class/node.class.php");
             $last_group = '';
@@ -105,6 +115,7 @@
       </form>
     <?php } ?>
     </td>
+    </tr>
 </table>               
     <?php echo $footer ?>
 
