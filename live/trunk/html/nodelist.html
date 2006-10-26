@@ -58,17 +58,18 @@
           <tr><td colspan=4>
               CoMo Node <?=$node?>
               <font color=red>warning: node seems to be down</font>
+              <? if($isAdmin) { ?>
+              </td><td><a href="manage.php?action=remove_node&node=<?= $node ?>&group=<?= $group ?>">remove</a></td>
+              <? } ?>
           </td></tr>
-            <?  } else {
-                    $hostport = $n->hostaddr.':'.$n->hostport;
-            ?>
+            <?  } else { ?>
 	  <tr>
-	    <td width=100 valign=top><a href="dashboard.php?comonode=<?= $hostport ?>">
+	    <td width=100 valign=top><a href="dashboard.php?comonode=<?= $node ?>">
 		<?= $n->nodename ?>
             </a>
             </td>
 	    <td width=50 valign=top>
-                <?= $hostport ?>
+                <?= $node ?>
             </td>
 	    <td width=100 valign=top>
 		<?= $n->nodeplace ?>
@@ -78,7 +79,7 @@
 	    </td>
             <?  if ($isAdmin) { ?>
             <td width=50 valign=top>
-            <a href="manage.php?action=remove_node&node=<?= $hostport ?>&group=<?= $group ?>">remove</a>
+            <a href="manage.php?action=remove_node&node=<?= $node ?>&group=<?= $group ?>">remove</a>
             </td>
             <? } ?>
 	  </tr>
