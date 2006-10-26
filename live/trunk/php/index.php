@@ -77,6 +77,14 @@
         }
     }
 
+    /*
+     * If we are doing a search we need to prepare the list
+     * of what nodes actually matched the user's query.
+     */
+    if ($_GET['filter']) {
+        print "TODO -- filter=${_GET['filter']}<br>\n";
+    }
+
     $header = do_header(NULL, $G);
     $footer = do_footer(NULL);
 
