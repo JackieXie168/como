@@ -79,7 +79,7 @@ displaymsg(FILE *f, procname_t sender, logmsg_t *lmsg)
 {
     if (lmsg->flags != LOGUI) {
     	fprintf(f, "[%5ld.%06ld %2s] ",
-		lmsg->tv.tv_sec % 86400, lmsg->tv.tv_usec,
+		lmsg->tv.tv_sec % 86400, (long int)lmsg->tv.tv_usec,
 		getprocname(sender));
     }
     fprintf(f, "%s", lmsg->msg);

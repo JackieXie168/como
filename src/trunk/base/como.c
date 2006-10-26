@@ -74,6 +74,10 @@ main(int argc, char *argv[])
     /* linux does not support setproctitle. we have our own. */
     setproctitle_init(argc, argv);
 #endif
+#ifdef __APPLE__
+    /* linux does not support setproctitle. we have our own. */
+    setproctitle_init(argc, argv);
+#endif
 
     /* set default values */
     init_map(&map); 
