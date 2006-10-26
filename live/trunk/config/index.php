@@ -2,6 +2,8 @@
 <?php
 $REVISION = substr('\$Revision$', 11, -2);
 
+require("../include/compat.php");
+
 /*  This file creates the main configuration file for CoMoLive!  */
 /*  Include the framing information to create headers and footers  */     
 include("../include/framing.php");
