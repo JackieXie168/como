@@ -10,19 +10,22 @@ if (isset($_GET['webroot']))
 
 if (isset($_GET['comonode'])) 
     $comonode = $_GET['comonode'];
+
+if (isset($_GET['group'])) 
+    $group = $_GET['group'];
 ?>
 
 <div class=secmenubar>
     <ul>
     <?php if ($sub == "view") { ?>
     <li>
-        <a href=<?php echo $webroot?>>
+        <a href=<?php echo "$webroot/$group" ?>>
         &nbsp;&nbsp;&nbsp;List&nbsp;&nbsp;&nbsp;</a>
     </li>
-    <li>
+    <?php /* ?> <li>
         <a href=worldview.php>
         &nbsp;&nbsp;&nbsp;Map&nbsp;&nbsp;&nbsp;</a>
-    </li>
+    </li> <?php */ ?>
     <?php
     } else if ($sub == "system") { 
     ?>
@@ -31,7 +34,7 @@ if (isset($_GET['comonode']))
         &nbsp;&nbsp;&nbsp;Properties&nbsp;&nbsp;&nbsp;</a>
     </li>
     <?php
-        if (isset ($_GET['customize'])) {
+        if (isset ($_GET['customize'])) { /* XXX XXX XXX */
             $custom_link = "<a href=# onClick=\"return customize=window.open('$webroot/admin/customize.php?comonode=$comonode','customize','width=700,height=450,status=no,scrollbars=yes'); return false;\">&nbsp;&nbsp;&nbsp;Customize&nbsp;&nbsp;&nbsp;</a>";
         } else {
             $custom_link = "&nbsp;&nbsp;&nbsp;Customize&nbsp;&nbsp;&nbsp;";
@@ -49,13 +52,6 @@ if (isset($_GET['comonode']))
     <li>
         <a href=http://como.intel-research.net>
         &nbsp;&nbsp;&nbsp;About CoMo&nbsp;&nbsp;&nbsp;</a>
-    </li>
-    <?php } ?>
-    <?php  
-    if ($sub == "setup") { ?>
-    <li>
-        <a href=../admin>
-        &nbsp;&nbsp;&nbsp;Add Nodes&nbsp;&nbsp;&nbsp;</a>
     </li>
     <?php } ?>
     </ul>
