@@ -38,6 +38,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#ifndef __APPLE__
+#include <netinet/ether.h>
+#else
+#include <net/ethernet.h>
+#endif
 #include <arpa/inet.h>          /* inet_ntop */
 #include <strings.h>            /* bcopy */
 

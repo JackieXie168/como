@@ -38,7 +38,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
-#include <netinet/ether.h>
 #include "module.h"
 #include "uhash.h"
 
