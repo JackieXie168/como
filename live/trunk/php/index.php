@@ -22,11 +22,16 @@
      */ 
 
     if (!file_exists("../comolive.conf")) {
-	$mesg = "Please click <a href=../config/>here</a> to create a ";
-        $mesg .= "comolive.conf file<br>"; 
+        require_once "../include/framing.php";
+        require_once "../include/helper-messages.php";
+        $header = simple_header('..');
+        $footer = simple_footer();
+        $mesg = "Thanks for downloading CoMoLive!<br>";
+        $mesg .= "Let's get started!<br><br>";
+        $mesg .= "Click <a href=../config/>here</a> to setup CoMoLive!";
         $generic_message = $mesg;
-        include("../html/generic_message.html");
-	exit; 
+        include ("../html/generic_message.html");
+        exit;
     }
 
     require_once "../comolive.conf";
