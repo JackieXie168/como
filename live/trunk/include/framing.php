@@ -141,5 +141,3 @@ function simple_footer()
     return $footer;
 }
 ?>
-
-
