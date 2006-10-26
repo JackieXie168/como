@@ -114,20 +114,11 @@
             /*  This is the number of buttons per row  */
             $NUMLINKS = 6;
 
-            /*
-             * supported formats XXX cleaner design needed
-             */
-            function is_supported($fmt) {
-                $supported_formats = array('gnuplot'=>1, 'conversation_graph'=>1);
-                return array_key_exists($fmt, $supported_formats);
-            }
-
             /*  Use the config file to decide how many modules to show  */
             $i = 0;
             foreach ($node->getConfig('main') as $m) {
                 foreach ($node->getModuleFormats($m) as $fmt) {
-                    # only pick supported formats
-                    if (! is_supported($fmt))
+                    if (! $node->isFormatMain($fmt))
                         continue;
 
                     if (($i % $NUMLINKS == 0) && ($i != 0))

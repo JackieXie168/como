@@ -299,7 +299,7 @@ class Node {
 	    /* create a default config file */ 
             $done = array();
             $config[0] = "main";
-            foreach ($this->main_formats as $fmt) {
+            foreach ($this->getMainFormats() as $fmt) {
                 $usable_mods = $this->getModules($fmt);
                 foreach ($usable_mods as $module) {
                     if (array_key_exists($module, $done))
@@ -312,7 +312,7 @@ class Node {
 
             $done = array();
 	    $config[1] = "secondary";
-            foreach ($this->secondary_formats as $fmt) {
+            foreach ($this->getSecondaryFormats() as $fmt) {
                 $usable_mods = $this->getModules($fmt);
                 foreach ($usable_mods as $module) {
                     if (array_key_exists($module, $done))
