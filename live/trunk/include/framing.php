@@ -7,8 +7,13 @@
  * javascript code for the submenus. 
  *
  */ 
+require_once "../class/nodedb.class.php";
+
 function do_header($comonode, $G) 
 { 
+    $db = new NodeDB($G);
+    $group = $db->getGroup();
+
     $webroot = $G['WEBROOT'];
     $customize = $G['ALLOWCUSTOMIZE'];
 
@@ -21,7 +26,7 @@ function do_header($comonode, $G)
      * are needed for aesthetical reasons). 
      */ 
     $header = $header . "<div id=menubar><ul>\n"; 
-    $param = "webroot=$webroot&comonode=$comonode";
+    $param = "webroot=$webroot&comonode=$comonode&group=$group";
     if ($customize) 
 	$param = $param . "&customize=1";
 
@@ -41,8 +46,7 @@ function do_header($comonode, $G)
 	      "&nbsp;&nbsp;&nbsp;Help&nbsp;&nbsp;&nbsp;</a></li>\n";
 
     if ($customize) {
-        $header = $header . "<li>\n<a href=# " .
-	"onclick=\"startMenuRequest('setup&$param');\">" . 
+        $header .= "<li>\n<a href=\"$webroot/admin\">".
 	"&nbsp;&nbsp;&nbsp;Setup&nbsp;&nbsp;&nbsp;</a></li>\n";
     }
 
