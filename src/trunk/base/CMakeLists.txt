@@ -114,10 +114,12 @@ ADD_EXECUTABLE(como ${COMO_SRCS})
 #
 # Make sure modules can see como's symbols
 #
+IF (NOT APPLE)
 SET_TARGET_PROPERTIES(como
   PROPERTIES
   LINK_FLAGS -Wl,--export-dynamic
 )
+ENDIF(NOT APPLE)
 
 #
 # Add profiling information

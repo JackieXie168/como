@@ -50,7 +50,7 @@ char *strndup(const char *s, unsigned int n)
 
 #endif
   
-#if defined(linux) || defined(__CYGWIN32__)
+#if defined(linux) || defined(__CYGWIN32__) || defined(__APPLE__)
         
 /*
  * setproctitle & setproctitle_init come with the following license:
