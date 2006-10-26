@@ -240,7 +240,10 @@ EOF;
         $user = escapeshellcmd($user);
         $password = escapeshellcmd($password);
         $file = escapeshellcmd($this->passwords_file);
-        $command = "/usr/sbin/htpasswd2 -cb $file $user $password";
+        $flags = "";
+        if (! file_exists($file))
+            $flags = '-c';
+        $command = "/usr/sbin/htpasswd2 $flags -b $file $user $password";
         shell_exec($command);
     }
 }
