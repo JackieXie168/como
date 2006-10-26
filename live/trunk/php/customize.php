@@ -36,12 +36,10 @@
         foreach ($allmodules as $m) {
             if ($which == 'main') {
                 if ($node->isModuleMain($m)) {
-                    print "add module $m\n";
                     $mods[] = $m;
                 }
             }
             else if ($node->isModuleSecondary($m)) {
-                    print "add module $m\n";
                 $mods[] = $m;
             }
         }
@@ -49,7 +47,6 @@
         $selected = $node->getConfig($which); 
 
 	for ($i = 0; $i < count($mods); $i++) {
-            print $mods[$i];
 	    $is_selected = in_array($mods[$i], $selected); 
 	    $cl = $is_selected? "module_selected" : "module_normal"; 
 	    $timestr = gmstrftime("%a %b %d %T %Y", 
@@ -135,6 +132,6 @@
 
     $main_info = print_modules($node, 'main');
     $sec_info = print_modules($node, 'secondary');
-    include ("../admin/customize.html");
+    include ("../html/customize.html");
 ?>
 
