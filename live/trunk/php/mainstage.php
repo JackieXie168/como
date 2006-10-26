@@ -1,6 +1,5 @@
-<!--  $Id$  -->
-
 <?php
+    /* $Id$ */
     require_once ("../comolive.conf");
     if (!(isset($G)))
         $G = init_global();
@@ -44,7 +43,7 @@
     $node = new Node($comonode, $G);
     $input_vars = init_env($node);
     $module = $input_vars['module'];
-    $fiter = $input_vars['filter'];
+    $filter = $input_vars['filter'];
     $end = $input_vars['end'];
     $start = $input_vars['start'];
     $format = $input_vars['format'];
@@ -63,7 +62,6 @@
 	$filename = $query->plot_query($data[1], $comonode, $module);
     }
 ?>
-
 <html>
   <head>
     <link rel="stylesheet" type="text/css" name="como" href="../css/live.css">
