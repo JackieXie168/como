@@ -367,7 +367,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	    w = sprintf(urlstr, "%s?", url); 
 	    for (k = 0; k < no_urlargs; k++) 
 		w += sprintf(urlstr + w, "%s&", urlargs[k]);
-	    w += sprintf(urlstr + w ,"ip=%%s");
+	    w += sprintf(urlstr + w ,"mac=%%s");
 	} 
 	    
 	count = 0; 	/* reset count */ 
