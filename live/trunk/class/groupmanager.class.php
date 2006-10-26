@@ -18,7 +18,7 @@ class GroupManager {
 
         if (!file_exists($this->groups_file)) {
             $this->groups = array();
-            $this->createUserDir('admin');
+            $this->createGroupDir('admin');
             $this->addGroup('public');
             $this->save();
         } else {
@@ -53,7 +53,7 @@ class GroupManager {
         if ($this->haveGroup($name))
             return;
 
-        $this->createUserDir($name);
+        $this->createGroupDir($name);
 
         $this->groups[$name] = array();
         $this->save();
@@ -196,19 +196,25 @@ class GroupManager {
             return symlink($a, $b);
     }
 
-    function createUserDir($user)
+    function createGroupDir($user)
     {
         $dir = $this->absroot.'/'.$user.'/';
 
         $this->my_mkdir($dir);
         $this->my_mkdir($dir.'/'.$this->nodedb);
         $this->my_mkdir($dir.'/'.$this->results);
+        $this->my_mkdir($dir.'/java');
 
         $links = array("dashboard.php", "generic_query.php", "index.php",
             "loadcontent.php", "mainstage.php", "sysinfo.php");
 
         foreach ($links as $l)
-            $this->my_symlink('../php/'.$l, $dir. $l);
+            $this->my_symlink("../php/$l", $dir . $l);
+
+        $links = array("getdata.php", "pack.jar", "prefuse.jar");
+
+        foreach ($links as $l)
+            $this->my_symlink("../../java/$l", $dir . "java/$l");
 
         if ($user == 'admin')
             $this->my_symlink('../'.$this->nodedb, $dir.$this->nodedb);

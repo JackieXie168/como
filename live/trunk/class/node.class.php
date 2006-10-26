@@ -337,7 +337,17 @@ class Node {
 	} 
 
 	file_put_contents($filename, "$mainline\n$secline"); 
-    } 
+    }
+
+    /*
+     * -- getModuleFormats
+     *
+     * Return an array of supported formats for a module.
+     */
+    function getModuleFormats($mod)
+    {
+        return split(' ', $this->modinfo[$mod]['formats']);
+    }
 
     /* 
      * -- module_args 

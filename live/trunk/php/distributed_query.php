@@ -6,6 +6,9 @@
      *     that a lot of code has already been running in that file. 
      *     it is in a very experimental stage and doesn't run at the moment. 
      */ 
+
+    exit; // XXX access to this file is not permitted
+
     $numnodes = count($comonode_array);
     $val_data = array ();
     for ($i=0;$i<count($comonode_array);$i++) {

@@ -199,6 +199,7 @@ function write_config($G, $opts, $desc, $outfile) {
     "    \$GLOBAL['BLINCVIEWCMD'] = \"./contrib/blinc/blincview_dst.py\";\n\n" .
     "    /*  If you use BlincView, you will need to \n" .
     "     *  install DOT (http://graphviz.org) and python \n\n" .
+    "     */\n" .
     "    \$GLOBAL['DOT'] = \"/usr/local/bin/dot\";\n" .
     "    \$GLOBAL['PYTHON'] = \"/usr/bin/python\"; \n\n" .
     "    /*  Return the Variable  */\n" .
