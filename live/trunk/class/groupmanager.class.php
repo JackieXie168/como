@@ -5,6 +5,7 @@
 
 class GroupManager {
     var $groups_file;
+    var $passwords_file;
     var $groups;
     var $absroot;
     var $nodedb;
@@ -15,12 +16,14 @@ class GroupManager {
         $this->nodedb = $G['NODEDB'];
         $this->results = $G['RESULTS'];
         $this->groups_file = $G['ABSROOT'].'/'.$G['NODEDB'].'/'.'groups';
+        $this->passwords_file = $G['ABSROOT'].'/'.$G['NODEDB'].'/'.'passwords';
 
         if (!file_exists($this->groups_file)) {
             $this->groups = array();
             $this->createGroupDir('admin');
             $this->addGroup('public');
             $this->save();
+            $this->setPassword('admin', 'admin');
         } else {
             $contents = file($this->groups_file);
             foreach ($contents as $line) {
@@ -218,6 +221,27 @@ class GroupManager {
 
         if ($user == 'admin')
             $this->my_symlink('../'.$this->nodedb, $dir.$this->nodedb);
+
+        // create .htaccess file
+        if ($user != 'public') {
+            $contents = <<<EOF
+AuthName "CoMoLive! - $user" 
+AuthType Basic 
+AuthUserFile $this->passwords_file
+AuthGroupFile /dev/null 
+require valid-user
+EOF;
+            file_put_contents($dir.'.htaccess', $contents); # || die "adsf";
+        }
+    }
+
+    function setPassword($user, $password)
+    {
+        $user = escapeshellcmd($user);
+        $password = escapeshellcmd($password);
+        $file = escapeshellcmd($this->passwords_file);
+        $command = "/usr/sbin/htpasswd2 -cb $file $user $password";
+        shell_exec($command);
     }
 }
 
