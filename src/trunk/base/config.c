@@ -647,7 +647,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	if (m->maxfilesize > 1024*1024*1024) { 
 	    m->maxfilesize = DEFAULT_FILESIZE; 
 	    sprintf(errstr, "'filesize' should be < 1GB --> set to %dMB\n", 
-		   m->maxfilesize / (1024*1024));
+		    (int)(m->maxfilesize / (1024*1024)));
 	    return errstr; 
 	} 
 	break;
