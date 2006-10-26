@@ -1,5 +1,5 @@
-<!--  $Id$  -->
 <?php 
+/* $Id$ */
 /* 
  *  query.php
  * 
@@ -79,7 +79,6 @@ class Query {
     }
 
     function do_query ($comonode, $query_string) {
-
         $r = array(0=> 0,1=>0);
 	$script = file_get_contents("http://$comonode/?$query_string");
 	if (!$script) {
