@@ -88,7 +88,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h> 	/* va_start */
-#include <netinet/ether.h>
 
 #include "como.h"
 
