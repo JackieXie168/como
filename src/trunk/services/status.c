@@ -193,7 +193,9 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
 	} 
     } else {
 	mdl = module_lookup(node->source, 0); /* the source is in the node 0 */
-	node_src_ts = start_timestamp(mdl, storage_fd);
+	if (mdl) {
+	    node_src_ts = start_timestamp(mdl, storage_fd);
+	}
     }
 
     /* send list of loaded modules */
