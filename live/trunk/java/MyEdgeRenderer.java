@@ -29,14 +29,7 @@ public class MyEdgeRenderer extends EdgeRenderer {
 
     protected void getCurveControlPoints(EdgeItem eitem, java.awt.geom.Point2D[] cp, double x1, double y1, double x2, double y2)
     {
-        /*String t = eitem.getString(CT.EDGE_FIELD_TYPE);
-        if (t.equals(CT.EDGE_TYPE_ORG_TO_TRANSMITTER) || t.equals(CT.EDGE_TYPE_ORG_TO_ORG)) {
-            */super.getCurveControlPoints(eitem, cp, x1, y1, x2, y2);/*
-        }
-        else {
-            System.out.println("Type "+eitem.getString(CT.EDGE_FIELD_TYPE));
-            cp[0].setLocation(0, 0);
-        }*/
+        super.getCurveControlPoints(eitem, cp, x1, y1, x2, y2);
     }
 
     public void render(Graphics2D g, VisualItem item)
