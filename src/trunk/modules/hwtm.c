@@ -33,6 +33,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <ctype.h>
 #include "module.h"
 #include "uhash.h"
 #include "macutils.h"
@@ -77,7 +78,7 @@ init(void * self, char *args[])
 
         if (strstr(args[i], "map")) {
 	    char *ptr, *addr; 
-	    int ret, j;
+	    struct ether_addr *eth;
 
 	    if (config->naddr == MAX_ADDRS) {
 		logmsg(LOGWARN, "too many MAC addresses, ignoring: %s\n", 
@@ -85,15 +86,15 @@ init(void * self, char *args[])
 		continue; 
 	    }
 
-	    addr = index(args[i], ' ') + 1; 
-            for (j = 0, ptr = addr; j < MAC_ADDR_SIZE; j++) {
-                 unsigned int ui;
-                 ret = sscanf(ptr, "%2x", &ui);
-                 if (ret != 1 || ui & 0xffffff00)
-                     break;
-                 config->addr_list[config->naddr][j] = (uint8_t) ui;
-                 ptr += 3;
-            }
+	    addr = index(args[i], ' ') + 1;
+	    while (*addr && isspace (*addr)) addr++;
+	    eth = ether_aton(addr);
+	    if (eth == NULL) {
+		logmsg(LOGWARN, "invalid MAC address, ignoring: %s\n", 
+	  	       addr); 
+		continue; 
+	    }
+	    memcpy(config->addr_list[config->naddr], eth, MAC_ADDR_SIZE);
 
 	    ptr = index(addr, ' ') + 1; 
 	    strncpy(config->orgs[config->naddr], ptr, MAX_ORG_LEN); 
@@ -211,7 +212,7 @@ static char *
 print(__unused void * self, char *buf, size_t *len, char * const args[])
 {
     static uint64_t matrix[MAX_ADDRS][MAX_ADDRS];
-    static char s[512];
+    static char s[2048];
     static char * fmt; 
     static int use_bytes = 1; 
     static int64_t count = 0;
