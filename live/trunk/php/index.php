@@ -81,8 +81,26 @@
      * If we are doing a search we need to prepare the list
      * of what nodes actually matched the user's query.
      */
-    if ($_GET['filter']) {
-        print "TODO -- filter=${_GET['filter']}<br>\n";
+    $filter = '';
+    $node_filter = array();
+    if (isset($_GET['filter'])) {
+        $filter = urlencode($_GET['filter']);
+        $time = 3600 * 5;
+        $query = "traffic?time=-${time}s:0&wait=no&filter=$filter&source=tm&format=plain";
+        foreach ($nodes as $node) {
+            if (array_key_exists($node, $node_filter))
+                continue; // done, can happen when isAdmin and a node
+                          // belongs to more that one group
+            $q = "http://$node/" . $query;
+            $output = file($q);
+            $output = $output[0];
+            #print "$query<br>\n";
+            #print " ---> $output<br>\n";
+            $node_filter[$node] = count($output) == 0 ? 0 : 1;
+        }
+    } else {
+        foreach ($nodes as $node)
+            $node_filter[$node]=1;
     }
 
     $header = do_header(NULL, $G);

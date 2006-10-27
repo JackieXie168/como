@@ -1,4 +1,4 @@
-<!--  $Id:$  -->
+<?php /* $Id$ */ ?>
 <html>
   <head>
     <title>CoMolive! - Intel Research Cambridge</title>
@@ -36,7 +36,7 @@
         <td colspan=4 class=separator>
             <form method=get target=new class=search action="<?php #$searchquery ?>"> 
                     Locate from a filter expression:
-                <input type="text" name="filter" size="45"/>
+                <input type="text" name="filter" size="45" value="<?=urldecode($filter)?>"/>
                 &nbsp; &nbsp;
                 <input type=image src=../images/go.jpg>
             </form>
@@ -46,13 +46,15 @@
             require_once("../class/node.class.php");
             $last_group = '';
 
-            if ($isAdmin) foreach($emptygroups as $group) {
+            if ($isAdmin && $filter!='') foreach($emptygroups as $group) {
                 ?><tr><td colspan=4><br><b>Group: <?= $group ?></b>
                   (<a href="manage.php?action=remove_group&group=<?= $group ?>">remove</a>)
                   </td></tr><?
             }
             foreach ($nodes as $node) {
                 $n = new Node($node, $G);
+                if ($node_filter[$node] == 0) // skip modules that do not pass
+                    continue;                 // the user's filter string
 
                 if ($isAdmin) {
                     $group = array_shift($groups);
