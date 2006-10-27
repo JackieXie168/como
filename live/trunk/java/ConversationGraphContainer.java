@@ -198,7 +198,6 @@ public class ConversationGraphContainer {
                 for (int j = 0; j < elem; j++) {
                     if (activity[j] != 1 || traffic[i][j] == 0)
                         continue;
-                    traffic[i][j] = 1;
                     String rtx2 = rtxs[j];
                     System.out.println("Let's add "+rtx1+" -> "+rtx2+" (volume="+traffic[i][j]+")");
                     Edge e = addEdge(m_g,
