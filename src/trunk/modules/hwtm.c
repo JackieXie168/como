@@ -39,7 +39,7 @@
 
 #define FLOWDESC    struct _counter
 FLOWDESC {
-    timestamp_t ts;
+    uint32_t	ts;
     uint8_t     src_addr[MAC_ADDR_SIZE];
     uint8_t     dst_addr[MAC_ADDR_SIZE];
     uint64_t    bytes;
@@ -139,7 +139,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC));
-	x->ts = COMO(ts);
+	x->ts = TS2SEC(COMO(ts));
         memcpy(x->src_addr, &ETH(src), MAC_ADDR_SIZE);
         memcpy(x->dst_addr, &ETH(dst), MAC_ADDR_SIZE);
     }
@@ -162,7 +162,7 @@ store(__unused void * self, void *rp, char *buf)
     FLOWDESC *x = F(rp);
     int i;
 
-    PUTH32(buf, TS2SEC(x->ts));
+    PUTH32(buf, x->ts);
     for (i = 0; i < MAC_ADDR_SIZE; i++)
         PUTH8(buf, x->src_addr[i]);
     for (i = 0; i < MAC_ADDR_SIZE; i++)
@@ -218,7 +218,6 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     config_t * config = CONFIG(self); 
     FLOWDESC rec; 
     int n, x, y;
-    char b1[128], b2[128];
 
     if (buf == NULL && args != NULL) { 
 	*len = 0;
@@ -259,17 +258,15 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     } 
 
     memcpy(&rec, buf, sizeof(FLOWDESC)); 
-    rec.ts = NTOHLL(rec.ts);
+    rec.ts = ntohl(rec.ts);
     rec.bytes = NTOHLL(rec.bytes);
-    rec.bytes = NTOHLL(rec.bytes);
+    rec.pkts = ntohl(rec.pkts);
 
     /* fill the matrix */
 
-    pretty_mac(rec.src_addr, b1, 128, 0);
-    pretty_mac(rec.dst_addr, b2, 128, 0);
     x = locate_addr(config, rec.src_addr);
     y = locate_addr(config, rec.dst_addr);
-    count = use_bytes ? NTOHLL(rec.bytes) : ntohl(rec.pkts);
+    count = use_bytes ? rec.bytes : rec.pkts;
 
     if (x != -1 && y != -1 && x != y) /* fill the traffic matrix */
         matrix[x][y] += count;
@@ -318,7 +315,7 @@ replay(__unused void * self, char *buf, char *out, size_t * len, __unused int pl
     return 0;
 }
 
-MODULE(traffic-matrix) = {
+MODULE(hwtm) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
     st_recordsize: sizeof(FLOWDESC),
