@@ -27,12 +27,9 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id: traffic-matrix.c 922 2006-10-24 17:56:27Z jsanjuas $
  */
 
-/*
- * Traffic Matrix
- */
 
 #include <stdio.h>
 #include <time.h>
@@ -40,22 +37,20 @@
 #include "uhash.h"
 #include "macutils.h"
 
-#define MAX_ADDRS 1024
-#define MAX_ORG_LEN 16
-
 #define FLOWDESC    struct _counter
 FLOWDESC {
     timestamp_t ts;
     uint8_t     src_addr[MAC_ADDR_SIZE];
     uint8_t     dst_addr[MAC_ADDR_SIZE];
     uint64_t    bytes;
-    uint64_t    pkts;
+    uint32_t    pkts;
 };
 
 
-#define CONFIGDESC config_t
+#define MAX_ADDRS 1024
+#define MAX_ORG_LEN 16
+
 typedef struct {
-    int meas_ivl;	/* measurement interval */
     int naddr;          /* number of configured addrs */
     uhash_t uhash;
     uint8_t addr_list[MAX_ADDRS][MAC_ADDR_SIZE];
@@ -66,77 +61,55 @@ static timestamp_t
 init(void * self, char *args[])
 {
     config_t * config; 
-    int i;
-    pkt_t *pkt;
-    metadesc_t *inmd;
+    metadesc_t * inmd;
+    pkt_t * pkt;
+    int meas_ivl, i;
 
-    config = mem_mdl_malloc(self, sizeof(config_t)); 
-    config->meas_ivl = 1;
-    config->naddr = 0;
+    config = mem_mdl_calloc(self, 1, sizeof(config_t)); 
     uhash_initialize(&config->uhash);
 
+    meas_ivl = 60;
     for (i = 0; args && args[i]; i++) {
 	char * wh = index(args[i], '=') + 1;
 
         if (strstr(args[i], "interval"))
-            config->meas_ivl = atoi(wh);
+            meas_ivl = atoi(wh);
 
-        if (strstr(args[i], "cfgfile")) {
-            /*
-             * XXX I am breaking the rules. Modules
-             *     should never do syscalls. To be fixed.
-             *     Do not take as an example.
-             */
-            FILE *fp = fopen(wh, "r");
+        if (strstr(args[i], "map")) {
+	    char *ptr, *addr; 
+	    int ret, j;
 
-            if (fp == NULL) { /* fail to open file */
-                printf("warning: traffic-matrix fails to open config "
-                    "file '%s'\n", wh);
-                continue;
+	    if (config->naddr == MAX_ADDRS) {
+		logmsg(LOGWARN, "too many MAC addresses, ignoring: %s\n", 
+	  	       args[i]); 
+		continue; 
+	    }
+
+	    addr = index(args[i], ' ') + 1; 
+            for (j = 0, ptr = addr; j < MAC_ADDR_SIZE; j++) {
+                 unsigned int ui;
+                 ret = sscanf(ptr, "%2x", &ui);
+                 if (ret != 1 || ui & 0xffffff00)
+                     break;
+                 config->addr_list[config->naddr][j] = (uint8_t) ui;
+                 ptr += 3;
             }
-            for (;;) {
-                char addr[1024], org[1024];
-                char *ptr;
-                int ret, j;
 
-                ret = fscanf(fp, "%1024s %1024s", addr, org);
-                if (ret != 2) /* either parse error or eof */
-                    break;
-                if (config->naddr == MAX_ADDRS) {
-                    printf("warning: too many definitions in file "
-                        "'%s', max definitions set to %d\n", wh, MAX_ADDRS);
-                    break; /* too many defs */
-                }
+	    ptr = index(addr, ' ') + 1; 
+	    strncpy(config->orgs[config->naddr], ptr, MAX_ORG_LEN); 
 
-                for (j = 0, ptr = addr; j < MAC_ADDR_SIZE; j++) {
-                    unsigned int ui;
-                    ret = sscanf(ptr, "%2x", &ui);
-                    if (ret != 1 || ui & 0xffffff00)
-                        break;
-                    config->addr_list[config->naddr][j] = (uint8_t) ui;
-                    ptr += 3;
-                }
-
-                if (j != MAC_ADDR_SIZE)
-                    printf("warning: parse error. cannot parse MAC "
-                            "address '%s'\n", addr);
-                else {
-                    strncpy(config->orgs[config->naddr], org, MAX_ORG_LEN);
-                    config->naddr++;
-                }
-            }
-            fclose(fp);
-        }
+	    config->naddr++;
+	}
     }
-    
+
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
     
     CONFIG(self) = config;
-    return TIME2TS(config->meas_ivl, 0);
+    return TIME2TS(meas_ivl, 0);
 }
 
 static int
@@ -150,7 +123,7 @@ match(__unused void *self, pkt_t *pkt, void *fh)
 static uint32_t
 hash(void *self, pkt_t *pkt)
 {
-    CONFIGDESC * config = CONFIG(self);
+    config_t * config = CONFIG(self);
     uint32_t h;
 
     h = uhash(&config->uhash, (uint8_t*)&ETH(src), MAC_ADDR_SIZE, UHASH_NEW);
@@ -171,12 +144,8 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
         memcpy(x->dst_addr, &ETH(dst), MAC_ADDR_SIZE);
     }
 
-    if (isNF) {
-        x->bytes += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
-        x->pkts += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
-    } else if (isSFLOW) {
-	x->bytes += (uint64_t) COMO(len) * 
-		      (uint64_t) H32(SFLOW(sampling_rate));
+    if (isSFLOW) {
+	x->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
 	x->pkts += H32(SFLOW(sampling_rate));
     } else {
 	x->bytes += COMO(len);
@@ -193,13 +162,13 @@ store(__unused void * self, void *rp, char *buf)
     FLOWDESC *x = F(rp);
     int i;
 
-    PUTH64(buf, x->ts);
+    PUTH32(buf, TS2SEC(x->ts));
     for (i = 0; i < MAC_ADDR_SIZE; i++)
         PUTH8(buf, x->src_addr[i]);
     for (i = 0; i < MAC_ADDR_SIZE; i++)
         PUTH8(buf, x->dst_addr[i]);
     PUTH64(buf, x->bytes);
-    PUTH64(buf, x->pkts);
+    PUTH32(buf, x->pkts);
 
     return sizeof(FLOWDESC);
 }
@@ -212,7 +181,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
         return 0;
     }
 
-    *ts = NTOHLL(((FLOWDESC *)buf)->ts);
+    *ts = TIME2TS(ntohl(((FLOWDESC *)buf)->ts), 0);
     return sizeof(FLOWDESC);
 }
 
@@ -309,6 +278,46 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
     return s;
 }
 
+static int
+replay(__unused void * self, char *buf, char *out, size_t * len, __unused int pleft)
+{
+    FLOWDESC * x;
+    pkt_t * pkt;
+    uint64_t nbytes;
+    int pktsz, paysz;
+  
+    if (buf == NULL) {
+        *len = 0;
+        return 0;               /* nothing to do */
+    }
+ 
+    x = (FLOWDESC *) buf;
+    nbytes = NTOHLL(x->bytes);
+        
+    /* fill the output buffer */
+    paysz = sizeof(struct _como_sflow) + sizeof(struct _como_eth);
+    pktsz = sizeof(pkt_t) + paysz;
+
+    pkt = (pkt_t *) out;
+    pkt->payload = (char *) pkt + sizeof(pkt_t);
+
+    COMO(ts) = TIME2TS(ntohl(x->ts), 0);
+    COMO(len) = nbytes / ntohl(x->pkts);
+    COMO(caplen) = paysz;
+    COMO(type) = COMOTYPE_SFLOW;
+    COMO(l2type) = LINKTYPE_ETH;
+    COMO(l3type) = L3TYPE_NONE;
+    COMO(l4type) = L4TYPE_NONE; 
+
+    N32(SFLOW(sampling_rate)) = x->pkts;
+
+    memcpy(&ETH(src), x->src_addr, MAC_ADDR_SIZE);
+    memcpy(&ETH(dst), x->dst_addr, MAC_ADDR_SIZE);
+
+    *len = pktsz;
+    return 0;
+}
+
 MODULE(traffic-matrix) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0,
@@ -327,7 +336,7 @@ MODULE(traffic-matrix) = {
     store: store,
     load: load,
     print: print,
-    replay: NULL,
+    replay: replay,
     formats: "html plain conversation_graph"
 };
 
