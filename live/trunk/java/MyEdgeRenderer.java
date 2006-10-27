@@ -22,7 +22,10 @@ public class MyEdgeRenderer extends EdgeRenderer {
     {
         if (item.getString(CT.EDGE_FIELD_TYPE).equals(CT.EDGE_TYPE_TRANSMITTER_TO_TRANSMITTER)) {
             double d = (new Double(item.getString(CT.EDGE_FIELD_VOLUME))).doubleValue();
-            return maxWidth * d / totalVolume;
+            double r = maxWidth * d / totalVolume;
+            if (r < 1)
+                r = 1;
+            return r;
         }
         return getDefaultLineWidth();
     }
