@@ -46,6 +46,33 @@
 /* global state */
 extern struct _como map;
 
+static timestamp_t
+start_timestamp(module_t * mdl, int storage_fd)
+{
+    int file_fd = -1;
+    off_t ofs;
+    size_t rlen, sz;
+    timestamp_t ts = 0;
+    char *ptr;
+    
+    file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0, storage_fd);
+    if (file_fd >= 0) {
+	/* get start offset */
+	ofs = csgetofs(file_fd);
+	
+	/* read first record */
+	rlen = mdl->callbacks.st_recordsize;
+	ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
+	if (ptr && rlen > 0) {
+	    /* we got something, give the record to load() */
+	    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
+	}
+    }
+    csclose(file_fd, 0);
+    
+    return ts;
+}
+
 
 /* 
  * -- service_status
@@ -69,6 +96,7 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
     int secs, dd, hh, mm, ss; 
     uint64_t ld_15m = 0, ld_1h = 0, ld_6h = 0, ld_1d = 0;
     int i;
+    timestamp_t node_src_ts = 0;
 
     /* first find the node */ 
     assert(node_id < map.node_count); 
@@ -135,6 +163,13 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
 	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
     /* 
+     * connect to the storage process, open the module output file 
+     * and read the very first timestamp. we will send this information 
+     * to let the user know how much past data is available to each module
+     */
+    storage_fd = ipc_connect(STORAGE); 
+
+    /* 
      * if this is the master node (i.e. node 0) and there 
      * are virtual nodes, send the list of virtual nodes as well
      */ 
@@ -156,23 +191,15 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
 		err(EXIT_FAILURE, "sending status to the client [%d]",
 		    client_fd);
 	} 
-    } 
-
-    /* 
-     * connect to the storage process, open the module output file 
-     * and read the very first timestamp. we will send this information 
-     * to let the user know how much past data is available to each module
-     */
-    storage_fd = ipc_connect(STORAGE); 
+    } else {
+	mdl = module_lookup(node->source, 0); /* the source is in the node 0 */
+	node_src_ts = start_timestamp(mdl, storage_fd);
+    }
 
     /* send list of loaded modules */
-    for (idx = 0; idx <= map.module_last; idx++) { 
-	int file_fd = -1; 
-	off_t ofs; 
-	size_t rlen, sz;
-	timestamp_t ts = 0;
-	char * ptr;
-	alias_t * alias; 
+    for (idx = 0; idx <= map.module_last; idx++) {
+	timestamp_t ts;
+	alias_t * alias;
 
 	mdl = &map.modules[idx]; 
 
@@ -186,20 +213,9 @@ service_status(int client_fd, int node_id, __unused qreq_t * qreq)
 	    /* we now look at the very first record for this module 
     	     * to get an idea on how far in the past a query could go. 
  	     */
-	    file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0, storage_fd);
-	    if (file_fd >= 0) {
-		/* get start offset */
-		ofs = csgetofs(file_fd);
-		
-		/* read first record */
-		rlen = mdl->callbacks.st_recordsize;
-		ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
-		if (ptr && rlen > 0) {
-		    /* we got something, give the record to load() */
-		    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
-		}
-	    }
-	    csclose(file_fd, 0);
+ 	    ts = start_timestamp(mdl, storage_fd);
+	} else {
+	    ts = node_src_ts;
 	}
 	    
 	len = sprintf(buf, "Module: %-15s | %s | %u | %s%s | %s\n",
