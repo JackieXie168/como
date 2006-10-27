@@ -56,6 +56,7 @@ typedef struct {
     uhash_t uhash;
     uint8_t addr_list[MAX_ADDRS][MAC_ADDR_SIZE];
     char orgs[MAX_ADDRS][MAX_ORG_LEN + 1];
+    uint32_t	meas_ivl;
 } config_t;
 
 static timestamp_t 
@@ -64,17 +65,17 @@ init(void * self, char *args[])
     config_t * config; 
     metadesc_t * inmd;
     pkt_t * pkt;
-    int meas_ivl, i;
+    int i;
 
     config = mem_mdl_calloc(self, 1, sizeof(config_t)); 
     uhash_initialize(&config->uhash);
 
-    meas_ivl = 60;
+    config->meas_ivl = 60;
     for (i = 0; args && args[i]; i++) {
 	char * wh = index(args[i], '=') + 1;
 
         if (strstr(args[i], "interval"))
-            meas_ivl = atoi(wh);
+            config->meas_ivl = atoi(wh);
 
         if (strstr(args[i], "map")) {
 	    char *ptr, *addr; 
@@ -105,12 +106,12 @@ init(void * self, char *args[])
 
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(meas_ivl, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
     
     CONFIG(self) = config;
-    return TIME2TS(meas_ivl, 0);
+    return TIME2TS(config->meas_ivl, 0);
 }
 
 static int
@@ -134,13 +135,14 @@ hash(void *self, pkt_t *pkt)
 
 
 static int
-update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
+    config_t * config = CONFIG(self);
     FLOWDESC *x = F(fh);
 
     if (isnew) {
 	bzero(x, sizeof(FLOWDESC));
-	x->ts = TS2SEC(COMO(ts));
+	x->ts = TS2SEC(COMO(ts)) - (TS2SEC(pkt->ts) % config->meas_ivl);
         memcpy(x->src_addr, &ETH(src), MAC_ADDR_SIZE);
         memcpy(x->dst_addr, &ETH(dst), MAC_ADDR_SIZE);
     }
