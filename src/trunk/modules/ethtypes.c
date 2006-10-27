@@ -123,7 +123,7 @@ init(void * self, char *args[])
 	    
 	    type = strtol(val, NULL, base);
 	    
-	    namelen = (val - 2) - (args[i] + 8);
+	    namelen = (val - 1) - (args[i] + 8);
 	    name = strndup(args[i] + 8, namelen);
 	    strchug(strchomp(name));
 	    
