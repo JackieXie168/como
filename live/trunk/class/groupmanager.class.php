@@ -10,6 +10,7 @@ class GroupManager {
     var $absroot;
     var $nodedb;
     var $results;
+    var $htpasswd_bin;
 
     function GroupManager($G) {
         $this->absroot = $G['ABSROOT'];
@@ -17,6 +18,7 @@ class GroupManager {
         $this->results = $G['RESULTS'];
         $this->groups_file = $G['ABSROOT'].'/'.$G['NODEDB'].'/'.'groups';
         $this->passwords_file = $G['ABSROOT'].'/'.$G['NODEDB'].'/'.'passwords';
+	$this->htpasswd_bin = $G['HTPASSWD'];
 
         if (!file_exists($this->groups_file)) {
             $this->groups = array();
@@ -244,7 +246,7 @@ EOF;
         $flags = "";
         if (! file_exists($file))
             $flags = '-c';
-        $command = "/usr/sbin/htpasswd2 $flags -b $file $user $password";
+        $command = $this->htpasswd_bin . " $flags -b $file $user $password";
         shell_exec($command);
     }
 }
