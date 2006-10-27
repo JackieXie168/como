@@ -304,7 +304,11 @@ new_module(como_t * m, char *name, int node, int idx)
     mdl->filter_str = strdup("all");
     mdl->filter_tree = NULL;
     mdl->output = strdup(mdl->name); /* TODO: canonized name */
+#ifndef __APPLE__
     asprintf(&mdl->source, "%s.so", mdl->name);
+#else
+    asprintf(&mdl->source, "%s.dylib", mdl->name);
+#endif 
     
     mdl->running = RUNNING_NORMAL;
 
