@@ -19,7 +19,7 @@ SET(MODULES
   topports
   trace
   traffic
-  traffic-matrix
+  hwtm
   tuple
   unknown-ports
 )
