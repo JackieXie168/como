@@ -115,7 +115,7 @@ init(void * self, char *args[])
 }
 
 static int
-match(__unused void *self, pkt_t *pkt, void *fh)
+match(void *self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     return memcmp(ETH(src), x->src_addr, MAC_ADDR_SIZE) == 0 &&
@@ -160,7 +160,7 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *rp, char *buf)
+store(void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
     int i;
@@ -177,7 +177,7 @@ store(__unused void * self, void *rp, char *buf)
 }
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -211,7 +211,7 @@ locate_addr(config_t *cfg, uint8_t *addr)
 #define HTMLFMT         ""
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static uint64_t matrix[MAX_ADDRS][MAX_ADDRS];
     static char s[2048];
@@ -279,7 +279,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 }
 
 static int
-replay(__unused void * self, char *buf, char *out, size_t * len, __unused int pleft)
+replay(void * self, char *buf, char *out, size_t * len, int pleft)
 {
     FLOWDESC * x;
     pkt_t * pkt;

@@ -154,7 +154,8 @@ sniffer_start(sniffer_t * s)
  * return the number of packets read. 
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
+sniffer_next(sniffer_t * s, int max_pkts,
+             __attribute__((__unused__)) timestamp_t max_ivl,
 	     pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct dag_me *me = (struct dag_me *) s;

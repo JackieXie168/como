@@ -337,7 +337,8 @@ handle_replay_fail(module_t *mdl)
  *
  */
 static void
-qu_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
+qu_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
+                  void * pack, size_t sz)
 {
     module_t tmp;
     module_t * mdl;
@@ -370,8 +371,9 @@ qu_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
  *
  */
 static void
-qu_ipc_start(procname_t sender, __unused int fd, __unused void * buf,
-             __unused size_t len)
+qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
+             __attribute__((__unused__)) void * buf,
+             __attribute__((__unused__)) size_t len)
 {
     /* only SUPERVISOR should send this message */
     assert(sender == map.parent);

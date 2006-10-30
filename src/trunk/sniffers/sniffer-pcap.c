@@ -325,7 +325,7 @@ sniffer_start(sniffer_t * s)
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     __unused pkt_t * first_ref_pkt, int * dropped_pkts) 
+	     __attribute__((__unused__)) pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct pcap_me *me = (struct pcap_me *) s;
     pkt_t *pkt;                 /* CoMo record structure */

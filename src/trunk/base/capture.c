@@ -649,7 +649,8 @@ batch_process(batch_t * batch)
  * 
  */
 static void
-ca_ipc_module_add(procname_t sender, __unused int fd, void *pack, size_t sz)
+ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
+                    void *pack, size_t sz)
 {
     module_t tmp;
     module_t *mdl;
@@ -755,8 +756,8 @@ ca_ipc_module_add(procname_t sender, __unused int fd, void *pack, size_t sz)
  * 
  */
 static void
-ca_ipc_module_del(procname_t sender, __unused int fd, void *buf,
-		  __unused size_t len)
+ca_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
+                    void *buf, __attribute__((__unused__)) size_t len)
 {
     module_t *mdl;
     int idx;
@@ -787,8 +788,9 @@ ca_ipc_module_del(procname_t sender, __unused int fd, void *buf,
  * 
  */
 static void
-ca_ipc_freeze(procname_t sender, __unused int fd, __unused void *buf,
-	      __unused size_t len)
+ca_ipc_freeze(procname_t sender, __attribute__((__unused__)) int fd,
+              __attribute__((__unused__)) void *buf,
+	      __attribute__((__unused__)) size_t len)
 {
     fd_set r;
     int s;
@@ -822,7 +824,8 @@ ca_ipc_freeze(procname_t sender, __unused int fd, __unused void *buf,
  * 
  */
 static void
-ca_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
+ca_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
+             void *buf, size_t len)
 {
     expiredmap_t *em;
 
@@ -855,8 +858,8 @@ ca_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
  * 
  */
 static void
-ca_ipc_start(procname_t sender, __unused int fd, void *buf,
-	     __unused size_t len)
+ca_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void *buf,
+	     __attribute__((__unused__)) size_t len)
 {
     /* only SUPERVISOR or EXPORT should send this message */
     assert(sender == map.parent || sender == sibling(EXPORT));
@@ -889,8 +892,9 @@ ca_ipc_start(procname_t sender, __unused int fd, void *buf,
  * 
  */
 static void
-ca_ipc_exit(procname_t sender, __unused int fd, __unused void *buf,
-	    __unused size_t len)
+ca_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
+            __attribute__((__unused__)) void *buf,
+	    __attribute__((__unused__)) size_t len)
 {
     assert(sender == map.parent);
     ipc_finish();
@@ -986,8 +990,9 @@ cabuf_cl_handle_gone(int fd)
  * message.
  */
 static void
-ca_ipc_cca_open(__unused procname_t sender, int fd, __unused void *buf,
-		__unused size_t len)
+ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
+                int fd, __attribute__((__unused__)) void *buf,
+		__attribute__((__unused__)) size_t len)
 {
     ccamsg_t m;
     cabuf_cl_t *cl;
@@ -1047,8 +1052,9 @@ ca_ipc_cca_open(__unused procname_t sender, int fd, __unused void *buf,
  * state.
  */
 static void
-ca_ipc_cca_ack_batch(__unused procname_t sender, __unused int fd,
-		     void *buf, __unused size_t len)
+ca_ipc_cca_ack_batch(__attribute__((__unused__)) procname_t sender,
+                     __attribute__((__unused__)) int fd,
+		     void *buf, __attribute__((__unused__)) size_t len)
 {
     ccamsg_t *m = (ccamsg_t *) buf;
     cabuf_cl_t *cl;
@@ -1649,7 +1655,8 @@ setup_sniffers(struct timeval *tout)
  *
  */
 void
-capture_mainloop(int accept_fd, int supervisor_fd, __unused int ca_id)
+capture_mainloop(int accept_fd, int supervisor_fd,
+                 __attribute__((__unused__)) int ca_id)
 {
     struct timeval timeout = { 0, 0 };
     source_t *src;

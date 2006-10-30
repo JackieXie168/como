@@ -179,7 +179,7 @@ init(void * self, char *args[])
 
 
 static uint32_t
-hash(__unused void * self, pkt_t *pkt)
+hash(void * self, pkt_t *pkt)
 {
     uint sport, dport; 
 
@@ -197,7 +197,7 @@ hash(__unused void * self, pkt_t *pkt)
 }
 
 static int
-match(__unused void * self, pkt_t *pkt, void *fh)
+match(void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     uint sport, dport; 
@@ -221,7 +221,7 @@ match(__unused void * self, pkt_t *pkt, void *fh)
 }
 
 static int
-update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -271,13 +271,13 @@ compare(const void *efh1, const void *efh2)
 }
 
 static int
-ematch(void __unused *self, void __unused *efh, void __unused *fh)
+ematch(void *self, void *efh, void *fh)
 {
     return 0;
 }
 
 static int
-export(__unused void * self, void *efh, void *fh, int __unused isnew)
+export(void * self, void *efh, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
@@ -287,8 +287,8 @@ export(__unused void * self, void *efh, void *fh, int __unused isnew)
 }
 
 static int
-action(__unused void *self, __unused void *efh, __unused timestamp_t ivl,
-        __unused timestamp_t current_time, __unused int count)
+action(void *self, void *efh, timestamp_t ivl,
+        timestamp_t current_time, int count)
 {
     CONFIGDESC * config = CONFIG(self);
 
@@ -310,7 +310,7 @@ action(__unused void *self, __unused void *efh, __unused timestamp_t ivl,
 
 
 static ssize_t
-store(__unused void * self, void *efh, char *buf)
+store(void * self, void *efh, char *buf)
 {
     FLOWDESC *x = F(efh);
     
@@ -330,7 +330,7 @@ store(__unused void * self, void *efh, char *buf)
 }
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;

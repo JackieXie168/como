@@ -48,7 +48,7 @@ CONFIGDESC {
 
 
 static timestamp_t 
-init(__unused void *self, __unused char *args[])
+init(void *self, char *args[])
 {
     CONFIGDESC * config; 
     int i;
@@ -76,7 +76,7 @@ init(__unused void *self, __unused char *args[])
 
 
 static uint32_t
-hash(__unused void * self, pkt_t *pkt) 
+hash(void * self, pkt_t *pkt) 
 {
     uint64_t x = (uint64_t) N32(NF(exaddr));
     x *= 7;
@@ -85,7 +85,7 @@ hash(__unused void * self, pkt_t *pkt)
 
 
 static int
-match(__unused void * self, pkt_t * pkt, void * fh)
+match(void * self, pkt_t * pkt, void * fh)
 {
     FLOWDESC * x = F(fh);
     return N32(x->exaddr) == N32(NF(exaddr));
@@ -93,7 +93,7 @@ match(__unused void * self, pkt_t * pkt, void * fh)
 
 
 static int
-update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -106,7 +106,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *fh, char *buf)
+store(void * self, void *fh, char *buf)
 {
     FLOWDESC *x = F(fh);
  
@@ -118,7 +118,7 @@ store(__unused void * self, void *fh, char *buf)
 
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -133,7 +133,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt;

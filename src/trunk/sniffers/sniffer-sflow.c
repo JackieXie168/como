@@ -52,7 +52,6 @@
 #include <sys/types.h>
 #include <time.h>
 #include <stdio.h>
-#undef __unused			/* __unused is used in netdb.h */
 #include <netdb.h>
 #include <unistd.h>
 #include <sys/socket.h>

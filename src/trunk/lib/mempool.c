@@ -81,7 +81,8 @@ mempool_free(mempool_t *pool, void *elem)
 {
     if (pool->fi_usage == pool->fi_size) { /* need larger free chunks list */
         pool->fi_size *= 2;
-        pool->free_items = realloc(pool->free_items, sizeof(void *) * pool->fi_size);
+        pool->free_items = realloc(pool->free_items,
+                                   sizeof(void *) * pool->fi_size);
     }
 
     pool->free_items[pool->fi_usage] = elem;

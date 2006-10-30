@@ -138,7 +138,7 @@ error:
 
 
 static void
-sniffer_setup_metadesc(__unused sniffer_t * s)
+sniffer_setup_metadesc(__attribute__((__unused__)) sniffer_t * s)
 {
 }
 
@@ -172,7 +172,8 @@ sniffer_start(sniffer_t * s)
     }
     
     logmsg(V_LOGSNIFFER, "opening file for reading (%s)\n", me->mdl->output);
-    me->sniff.fd = csopen(me->mdl->output, CS_READER_NOBLOCK, 0, me->storage_fd); 
+    me->sniff.fd = csopen(me->mdl->output, CS_READER_NOBLOCK, 0,
+                          me->storage_fd); 
     if (me->sniff.fd < 0) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
 	       "error while opening file %s\n", me->mdl->output);
@@ -210,7 +211,7 @@ error:
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     __unused pkt_t * first_ref_pkt, int * dropped_pkts) 
+	     __attribute__((__unused__)) pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct ondemand_me *me = (struct ondemand_me *) s;
     

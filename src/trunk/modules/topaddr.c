@@ -159,7 +159,7 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 }
 
 static int
-ematch(__unused void * self, void *efh, void *fh)
+ematch(void * self, void *efh, void *fh)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
@@ -168,7 +168,7 @@ ematch(__unused void * self, void *efh, void *fh)
 }
 
 static int
-export(__unused void * self, void *efh, void *fh, int isnew)
+export(void * self, void *efh, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
@@ -219,7 +219,7 @@ action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
 
 
 static ssize_t
-store(__unused void * self, void *efh, char *buf)
+store(void * self, void *efh, char *buf)
 {
     EFLOWDESC *ex = EF(efh);
 
@@ -232,7 +232,7 @@ store(__unused void * self, void *efh, char *buf)
 }
 
 static size_t
-load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
+load(void * self, char *buf, size_t len, timestamp_t *ts)
 {
     if (len < sizeof(EFLOWDESC)) {
         *ts = 0;

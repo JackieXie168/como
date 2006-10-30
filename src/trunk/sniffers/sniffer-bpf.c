@@ -108,7 +108,7 @@ error:
 
 
 static void
-sniffer_setup_metadesc(__unused sniffer_t * s)
+sniffer_setup_metadesc(__attribute__((__unused__)) sniffer_t * s)
 {
     metadesc_t *outmd;
     pkt_t *pkt;
@@ -234,7 +234,8 @@ error:
  *                                      plus alignment padding)
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
+sniffer_next(sniffer_t * s, int max_pkts,
+             __attribute__((__unused__)) timestamp_t max_ivl,
 	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct bpf_me *me = (struct bpf_me *) s;

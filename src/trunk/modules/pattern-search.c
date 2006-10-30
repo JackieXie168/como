@@ -122,7 +122,7 @@ check(void * self, pkt_t *pkt)
 }
 
 static int
-update(void * self, pkt_t *pkt, void *fh, __unused int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     CONFIGDESC *config = CONFIG(self);
     FLOWDESC *x = F(fh);
@@ -139,7 +139,7 @@ update(void * self, pkt_t *pkt, void *fh, __unused int isnew)
 
 
 static ssize_t
-store(__unused void *self, void *fh, char *buf)
+store(void *self, void *fh, char *buf)
 {
     FLOWDESC *x = F(fh);
     pkt_t * pkt; 
@@ -181,7 +181,7 @@ store(__unused void *self, void *fh, char *buf)
 
 
 static size_t
-load(__unused void *self, char * buf, size_t len, timestamp_t * ts)
+load(void *self, char * buf, size_t len, timestamp_t * ts)
 {
     pkt_t * pkt; 
 
@@ -256,8 +256,8 @@ print(void * self, char *buf, size_t *len, char * const args[])
 }
 
 static int  
-replay(__unused void * self, char *buf, char *out, size_t * len,
-        __unused int left)
+replay(void * self, char *buf, char *out, size_t * len,
+        int left)
 {
     pkt_t * pkt = (pkt_t *) buf; 
     size_t need;

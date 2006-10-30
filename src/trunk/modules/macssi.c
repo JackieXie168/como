@@ -53,7 +53,7 @@ FLOWDESC {
 };
 
 static timestamp_t
-init(void * self, __unused char *args[])
+init(void * self, char *args[])
 {
     pkt_t *pkt;
     metadesc_t *inmd;
@@ -68,14 +68,14 @@ init(void * self, __unused char *args[])
 }
 
 static int
-check(__unused void * self, pkt_t *pkt)
+check(void * self, pkt_t *pkt)
 {
     /* cannot handle CTRL packets */
     return IEEE80211_BASE(fc_type) != IEEE80211TYPE_CTRL;
 }
 
 static uint32_t
-hash(__unused void * self, pkt_t *pkt)
+hash(void * self, pkt_t *pkt)
 {
     uint32_t mix = 0;
     uint8_t *mac = IEEE80211_BASE(addr2);
@@ -88,14 +88,14 @@ hash(__unused void * self, pkt_t *pkt)
 }
 
 static int
-match(__unused void * self, pkt_t *pkt, void *fh)
+match(void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     return 0 == memcmp(x->addr, IEEE80211_BASE(addr2), MAC_ADDR_SIZE);
 }
 
 static int
-update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -114,7 +114,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 }
 
 static ssize_t
-store(__unused void * self, void *rp, char *buf)
+store(void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
     int i;
@@ -130,7 +130,7 @@ store(__unused void * self, void *rp, char *buf)
 }
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -142,7 +142,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 }
 
 static char *
-print(__unused void *self, char *buf, size_t *len, __unused char *const args[])
+print(void *self, char *buf, size_t *len, char *const args[])
 {
     static char output[1024];
     char ascii_mac[128];

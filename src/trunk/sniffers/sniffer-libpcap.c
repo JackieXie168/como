@@ -314,7 +314,8 @@ processpkt(u_char * data, const struct pcap_pkthdr * h, const u_char * buf)
  * 
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
+sniffer_next(sniffer_t * s, int max_pkts,
+             __attribute__((__unused__)) timestamp_t max_ivl,
 	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct libpcap_me *me = (struct libpcap_me *) s;

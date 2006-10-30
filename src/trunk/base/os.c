@@ -171,14 +171,16 @@ strcasestr(const char *s1, const char *s2)
 
 
 char *
-ether_ntoa(__unused const struct ether_addr *n)
+ether_ntoa(__attribute__((__unused__)) const struct ether_addr *n)
 {
     return "unimplemented ether_ntoa XXX" ;
 }
 
 const char *
-inet_ntop(__unused int af, __unused const void *src,
-	__unused char *dst, __unused size_t size)
+inet_ntop(__attribute__((__unused__)) int af,
+        __attribute__((__unused__)) const void *src,
+	__attribute__((__unused__)) char *dst,
+        __attribute__((__unused__)) size_t size)
 {
     return "unimplemented inet_ntop XXX";
 }
