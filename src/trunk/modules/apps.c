@@ -267,7 +267,7 @@ store(void * self, void *fh, char *buf)
 
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     size_t sz = sizeof(FLOWDESC);
 

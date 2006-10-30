@@ -212,7 +212,7 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *fh, char *buf)
+store(void * self, void *fh, char *buf)
 {
     CONFIGDESC *config = CONFIG(self);
     FLOWDESC *x = F(fh);
@@ -229,7 +229,7 @@ store(__unused void * self, void *fh, char *buf)
 }
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     size_t sz;
     STREC *x = (STREC *) buf;
@@ -379,7 +379,7 @@ print_plain(QUERYSTATE * qs, CONFIGDESC * config)
 	
 
 static size_t 
-print_pretty(QUERYSTATE * qs, __unused CONFIGDESC * config) 
+print_pretty(QUERYSTATE * qs, CONFIGDESC * config) 
 {
     time_t ts; 
     size_t len; 
@@ -416,7 +416,7 @@ print_pretty(QUERYSTATE * qs, __unused CONFIGDESC * config)
 
 
 static size_t
-print_gnuplot(QUERYSTATE * qs, __unused CONFIGDESC * config) 
+print_gnuplot(QUERYSTATE * qs, CONFIGDESC * config) 
 {
     size_t len; 
     uint64_t bytes_all;

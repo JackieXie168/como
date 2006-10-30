@@ -61,8 +61,8 @@ extern struct _como map;
  * 
  */
 static void 
-su_ipc_echo(procname_t sender, __unused int fd, void * buf, 
-	    __unused size_t len) 
+su_ipc_echo(procname_t sender, __attribute__((__unused__)) int fd, void * buf, 
+	    __attribute__((__unused__)) size_t len) 
 {
     logmsg_t *lmsg = (logmsg_t *) buf;
     displaymsg(stdout, sender, lmsg);
@@ -81,8 +81,9 @@ su_ipc_echo(procname_t sender, __unused int fd, void * buf,
  * 
  */
 static void
-su_ipc_sync(procname_t sender, __unused int fd, __unused void * b, 
-	    __unused size_t l)
+su_ipc_sync(procname_t sender, __attribute__((__unused__)) int fd,
+            __attribute__((__unused__)) void * b, 
+	    __attribute__((__unused__)) size_t l)
 {
     int i; 
     
@@ -123,8 +124,9 @@ su_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
  *
  */
 static void
-su_ipc_record(__unused procname_t sender, __unused int fd, 
-	void * buf, __unused size_t l)
+su_ipc_record(__attribute__((__unused__)) procname_t sender,
+        __attribute__((__unused__)) int fd, void * buf,
+        __attribute__((__unused__)) size_t l)
 {
     assert(map.runmode == RUNMODE_INLINE);  
     fprintf(stdout, "%s", (char *) buf); 
@@ -141,8 +143,10 @@ su_ipc_record(__unused procname_t sender, __unused int fd,
  *
  */
 static void
-su_ipc_done(__unused procname_t sender, __unused int fd, 
-	__unused void * b, __unused size_t l)
+su_ipc_done(__attribute__((__unused__)) procname_t sender,
+        __attribute__((__unused__)) int fd, 
+	__attribute__((__unused__)) void * b,
+        __attribute__((__unused__)) size_t l)
 {
     ipc_send(CAPTURE, IPC_EXIT, NULL, 0); 
     ipc_send(EXPORT, IPC_EXIT, NULL, 0); 
@@ -307,7 +311,7 @@ apply_map_changes(struct _como * x)
  *
  */
 static void
-reconfigure(__unused int si_code)
+reconfigure(__attribute__((__unused__)) int si_code)
 {
     struct _como tmp_map;
 
@@ -324,7 +328,7 @@ reconfigure(__unused int si_code)
  * 
  */
 static void
-defchld(__unused int si_code)
+defchld(__attribute__((__unused__)) int si_code)
 {
     handle_children();
 }

@@ -136,7 +136,7 @@ hash_mac_addr(uint8_t *addr)
 }
 
 static uint32_t
-hash(__unused void *self, pkt_t *pkt)
+hash(void *self, pkt_t *pkt)
 {
     int dir = direction(pkt);
     switch (dir) {
@@ -154,14 +154,14 @@ hash(__unused void *self, pkt_t *pkt)
 }
 
 static int
-check(__unused void *self, pkt_t *pkt)
+check(void *self, pkt_t *pkt)
 {
     return IEEE80211_BASE(fc_type) == IEEE80211TYPE_DATA &&
         direction(pkt) != BOGUS;
 }
 
 static int 
-match(__unused void * self, pkt_t * pkt, void * fh) 
+match(void * self, pkt_t * pkt, void * fh) 
 {
     FLOWDESC * x = F(fh); 
     int dir = direction(pkt);
@@ -244,7 +244,7 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *rp, char *buf)
+store(void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
     int i; 
@@ -263,7 +263,7 @@ store(__unused void * self, void *rp, char *buf)
 
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {   
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -281,7 +281,7 @@ Client                    pkts_up\n"
 #define PLAINFMT	"%d %s %s %u %s %u\n" 
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt;

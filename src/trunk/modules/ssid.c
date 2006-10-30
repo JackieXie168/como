@@ -111,7 +111,7 @@ init(void * self, char *args[])
  * beacons 
  */
 static int
-check(__unused void * self, pkt_t * pkt) 
+check(void * self, pkt_t * pkt) 
 {
     return ((IEEE80211_BASE(fc_type) == IEEE80211TYPE_MGMT) &&
 	   (IEEE80211_BASE(fc_subtype) == MGMT_SUBTYPE_BEACON));
@@ -119,7 +119,7 @@ check(__unused void * self, pkt_t * pkt)
 
 
 static int 
-match(__unused void * self, pkt_t * pkt, void * fh) 
+match(void * self, pkt_t * pkt, void * fh) 
 {
     FLOWDESC * x = F(fh); 
     
@@ -174,7 +174,7 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *rp, char *buf)
+store(void * self, void *rp, char *buf)
 {
     FLOWDESC *x = F(rp);
     int i; 
@@ -196,7 +196,7 @@ store(__unused void * self, void *rp, char *buf)
 
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {   
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -215,7 +215,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 #define PLAINFMT	"%12ld %1d %2d %2d %2d %2d\n" 
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     static char * fmt; 
@@ -261,7 +261,7 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
 
         pretty_mac(x->bssid, bssid, sizeof(bssid), 1);
 	*len = sprintf(s, fmt, asctime(localtime(&t)), sig, noise,
-                                    x->channel, x->samples, wepmode, bssid, ssid);
+                                x->channel, x->samples, wepmode, bssid, ssid);
     } else {
 	*len = sprintf(s, fmt, (long int) t, x->wepmode, 
 		   x->channel, sig, noise, x->samples); 

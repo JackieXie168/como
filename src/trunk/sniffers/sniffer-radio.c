@@ -482,7 +482,7 @@ orinoco_open(const char *dev, int ch, void **data_)
 }
 
 static void
-orinoco_close(const char *dev, __unused void *data_)
+orinoco_close(const char *dev, __attribute__((__unused__)) void *data_)
 {
     orinoco_data_t *data = (orinoco_data_t *) data_;
 
@@ -585,7 +585,9 @@ hostap_open(const char *dev, int ch, void **data_)
 }
 
 static int
-none_open(__unused const char *dev, __unused int ch, __unused void **data_)
+none_open(__attribute__((__unused__)) const char *dev,
+          __attribute__((__unused__)) int ch,
+          __attribute__((__unused__)) void **data_)
 {
     *data_ = NULL;		/* Unused */
 
@@ -593,13 +595,15 @@ none_open(__unused const char *dev, __unused int ch, __unused void **data_)
 }
 
 static void
-none_close(__unused const char *dev, __unused void *data)
+none_close(__attribute__((__unused__)) const char *dev,
+           __attribute__((__unused__)) void *data)
 {
 }
 
 static monitor_t s_monitors[] = {
     {"none", none_open, none_close, NULL, NULL},
-    {"orinoco", orinoco_open, orinoco_close, avs_or_prism2_header_to_como_radio, NULL},
+    {"orinoco", orinoco_open, orinoco_close, avs_or_prism2_header_to_como_radio,
+        NULL},
     {"wlext", wlext_open, wlext_close, NULL, NULL},
     {"hostap", hostap_open, wlext_close, avs_header_to_como_radio, NULL},
     {NULL, NULL, NULL, NULL, NULL}
@@ -905,7 +909,8 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
  * 
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
+sniffer_next(sniffer_t * s, int max_pkts,
+             __attribute__((__unused__)) timestamp_t max_ivl,
 	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct radio_me *me = (struct radio_me *) s;

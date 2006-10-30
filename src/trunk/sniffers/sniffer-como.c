@@ -103,7 +103,7 @@ error:
 
 
 static void
-sniffer_setup_metadesc(__unused sniffer_t * s)
+sniffer_setup_metadesc(__attribute__((__unused__)) sniffer_t * s)
 {
 }
 

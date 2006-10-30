@@ -373,7 +373,8 @@ schedule()
         fprintf(stderr, "OVERALL: ");
         for(r=0;r<RESOURCE_COUNT;r++){
             if (r!=0) fprintf(stderr,"|");
-            fprintf(stderr, "%d:%02.4f", (int)get_usage(&resources[r]), peak_usages[r]);
+            fprintf(stderr, "%d:%02.4f", (int)get_usage(&resources[r]),
+                    peak_usages[r]);
         }
 
         if (over) {

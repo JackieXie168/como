@@ -36,7 +36,6 @@
 #include <string.h>     /* memset, memcpy */
 #include <errno.h>	/* errno values */
 #include <assert.h>
-#undef __unused			/* __unused is used in netdb.h */
 #include <netdb.h>
 
 #include <unistd.h>

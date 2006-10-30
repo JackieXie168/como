@@ -82,7 +82,8 @@ start_timestamp(module_t * mdl, int storage_fd)
  * and some load information (memory usage, no. of modules, average traffic). 
  */
 int
-service_status(int client_fd, int node_id, __unused qreq_t * qreq) 
+service_status(int client_fd, int node_id,
+               __attribute__((__unused__)) qreq_t * qreq) 
 {
     char buf[2048]; 
     char datebuf[30];

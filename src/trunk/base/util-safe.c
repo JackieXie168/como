@@ -38,7 +38,6 @@
 #include <errno.h>
 #include <unistd.h>     
 #include <dlfcn.h>
-#undef __unused        /* XXX linux's netdb.h has a variable with this name */
 #include <netdb.h>                     /* gethostbyname */
 #include <assert.h>
 

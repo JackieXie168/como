@@ -31,6 +31,13 @@ IF(FTLIB_FOUND)
   )
 ENDIF(FTLIB_FOUND)
 
+#
+# Unused variables in modules are ok. If we are doing a debug
+# build, we have -Wall -Werror, so we add -Wno-unused.
+#
+IF(ENABLE_DEBUG)
+  ADD_DEFINITIONS(-Wno-unused)
+ENDIF(ENABLE_DEBUG)
 
 IF(ENABLE_SHARED_MODULES)
   FOREACH(module ${MODULES})

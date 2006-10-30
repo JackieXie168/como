@@ -56,7 +56,7 @@ FLOWDESC {
 static int dhcp_message_type(pkt_t *pkt);
 
 static timestamp_t 
-init(void * self, __unused char *args[])
+init(void * self, char *args[])
 {
     pkt_t *pkt;
     metadesc_t *inmd;
@@ -74,7 +74,7 @@ init(void * self, __unused char *args[])
 static uint8_t cookie[4] = DHCP_OPTIONS_COOKIE;
 
 static int
-check(__unused void * self, pkt_t * pkt)
+check(void * self, pkt_t * pkt)
 {
     if (H16(UDP(src_port)) == DHCP_SERVER_PORT &&
 	H16(UDP(dst_port)) == DHCP_CLIENT_PORT &&
@@ -199,7 +199,7 @@ static int dhcp_message_type(pkt_t *pkt)
 }
 
 static int
-update(__unused void * self, pkt_t *pkt, void *fh, __unused int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *d = F(fh);
     
@@ -213,7 +213,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, __unused int isnew)
 }
 
 static ssize_t
-store(__unused void * self, void *efh, char *buf)
+store(void * self, void *efh, char *buf)
 {
     FLOWDESC *d = F(efh);
     
@@ -230,7 +230,7 @@ store(__unused void * self, void *efh, char *buf)
 }
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -242,12 +242,12 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 }
 
 
-#define PRETTYHDR		\
-    "Date                       Timestamp            Client IP      MAC Address\n"
+#define PRETTYHDR \
+  "Date                       Timestamp            Client IP      MAC Address\n"
 #define PRETTYFMT	"%.24s %12d.%06d %15s %19s\n"
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[512];
     char mac[48];

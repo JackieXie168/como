@@ -51,12 +51,6 @@
 
 #if defined(linux) || defined(__CYGWIN32__)
 /*
- * FreeBSD has __unused defined in the system's header.
- * We redefine it here as we need a shorter form for this anyways.
- */
-#define __unused __attribute__((__unused__))
-
-/*
  * MAP_NOSYNC is unavailble in Linux 
  * XXX: beware! This is not a general solution
  */

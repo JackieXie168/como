@@ -73,7 +73,7 @@ FLOWDESC {
 
 
 static timestamp_t 
-init(__unused void * self, __unused char *args[])
+init(void * self, char *args[])
 {
     pkt_t *pkt;
     metadesc_t *inmd;
@@ -106,7 +106,7 @@ init(__unused void * self, __unused char *args[])
 
 
 static uint32_t
-hash(__unused void * self, pkt_t *pkt)
+hash(void * self, pkt_t *pkt)
 {
     uint sport, dport;
 
@@ -124,7 +124,7 @@ hash(__unused void * self, pkt_t *pkt)
 }
 
 static int
-match(__unused void * self, pkt_t *pkt, void *fh)
+match(void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
     uint sport, dport;
@@ -149,7 +149,7 @@ match(__unused void * self, pkt_t *pkt, void *fh)
 
 
 static int
-update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     timestamp_t end_ts;
@@ -197,7 +197,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *efh, char *buf)
+store(void * self, void *efh, char *buf)
 {
     FLOWDESC *x = F(efh);
     uint32_t src, dst;
@@ -290,7 +290,7 @@ print_tcp_flags(uint8_t flags)
 }
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -367,7 +367,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 #define PRINTDEF        0x01000000
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     char src[20], dst[20], exaddr[20], nexthop[20];
@@ -395,7 +395,8 @@ print(__unused void * self, char *buf, size_t *len, char * const args[])
                 flag=0;
                 if (strstr(args[n], "datetime")){
                     printflags |= PRINTPRETTYTS;
-                    *len += sprintf(s+*len,"Human Readable Timestamp  Duration");
+                    *len += sprintf(s+*len,
+                                    "Human Readable Timestamp  Duration");
                     flag++;
                 }
                 if (strstr(args[n], "timestamp")){
