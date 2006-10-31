@@ -202,6 +202,7 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 	map.sources = src->next; 
 	free(src); 
     } 
+    map.source_count = 0;
 
 //#define REMOTE_QUERY
 #ifdef REMOTE_QUERY
