@@ -297,6 +297,10 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
     sniffer_cb_t *cb;
     source_t *s;
     static int live_sniffers, file_sniffers;
+    
+    if (m->source_count == 0) {
+	live_sniffers = file_sniffers = 0;
+    }
 
     if (device == NULL && args == NULL) {
 	device = index(want, ':');
