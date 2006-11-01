@@ -1,33 +1,27 @@
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 
 SET(MODULES
-  counter
-  utilization
-  topdest
-  topaddr
-  connx
-  application
-  topports
-  ssid
-  list
-  ports
-  active-flows
-  frames
-  trace-nf
-  dhcp
-  nfexlist
-  macssi
-  ipssi
   apps
-  flowcount
-  traffic
-  unknown-ports
-  ewma
-  tuple
-  protocol
-  anomaly-ewma
-  trace
   assoc
+  dhcp
+  ethtypes
+  ewma
+  flowcount
+  frames
+  ipssi
+  macssi
+  nfexlist
+  pattern-search
+  protocol
+  ssid
+  topaddr
+  tophwaddr
+  topports
+  trace
+  traffic
+  hwtm
+  tuple
+  unknown-ports
 )
 
 IF(FTLIB_FOUND)
@@ -37,6 +31,14 @@ IF(FTLIB_FOUND)
   )
 ENDIF(FTLIB_FOUND)
 
+#
+# Unused variables in modules are ok. If we are doing a debug
+# build, we have -Wall -Werror, so we add -Wno-unused.
+#
+IF(ENABLE_DEBUG)
+  ADD_DEFINITIONS(-Wno-unused)
+ENDIF(ENABLE_DEBUG)
+
 IF(ENABLE_SHARED_MODULES)
   FOREACH(module ${MODULES})
     ADD_LIBRARY(${module} SHARED ${module}.c)
@@ -45,6 +47,11 @@ IF(ENABLE_SHARED_MODULES)
       PROPERTIES
       PREFIX ""
     )
+    if(APPLE)
+	SET_TARGET_PROPERTIES(${module}
+	PROPERTIES
+	LINK_FLAGS "-undefined dynamic_lookup")
+    ENDIF(APPLE)
     INSTALL_TARGETS(${INST_LIBDIR} ${module})
   ENDFOREACH(module)
 ELSE(ENABLE_SHARED_MODULES)

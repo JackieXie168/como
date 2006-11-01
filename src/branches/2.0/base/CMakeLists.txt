@@ -36,8 +36,10 @@ SET(COMO_SRCS
   ${COMO_SOURCE_DIR}/lib/hash.c
   ${COMO_SOURCE_DIR}/lib/heap.c
   ${COMO_SOURCE_DIR}/lib/macutils.c
+  ${COMO_SOURCE_DIR}/lib/printpkt.c
   ${COMO_SOURCE_DIR}/lib/mempool.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
+  ${COMO_SOURCE_DIR}/lib/pattern_search.c
 )
 
 IF(ENABLE_PROFILING)
@@ -51,7 +53,8 @@ ENDIF(ENABLE_PROFILING)
 #
 # Create target for the filter parser
 #
-ADD_CUSTOM_TARGET(FilterSintax echo "Creating filter-syntax.c")
+ADD_CUSTOM_TARGET(FilterLexic echo "Creating filter-syntax.c")
+ADD_CUSTOM_TARGET(FilterSyntax echo "Creating filter-syntax.c")
 
 #
 # Create custom command for flex/lex (note the outputs)
@@ -61,7 +64,7 @@ ADD_CUSTOM_COMMAND(
 	COMMAND ${FLEX_EXECUTABLE}
 	ARGS -Pyf -o${COMO_BINARY_DIR}/base/filter-lexic.c
 	    ${COMO_SOURCE_DIR}/base/filter-lexic.l
-	TARGET FilterSintax
+	TARGET FilterLexic
 	OUTPUTS ${COMO_BINARY_DIR}/base/filter-lexic.c
 )
 
@@ -73,7 +76,7 @@ ADD_CUSTOM_COMMAND(
 	COMMAND ${BISON_EXECUTABLE} 
 	ARGS -p yf -y ${COMO_SOURCE_DIR}/base/filter-syntax.y
 	    -o ${COMO_BINARY_DIR}/base/filter-syntax.c
-	TARGET FilterSintax
+	TARGET FilterSyntax
 	DEPENDS ${COMO_BINARY_DIR}/base/filter-lexic.c
 	OUTPUTS ${COMO_BINARY_DIR}/base/filter-syntax.c
 )
@@ -84,11 +87,20 @@ ADD_CUSTOM_COMMAND(
 SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/filter-syntax.c)
 
 #
-# Since filter-syntax.c does not exists yet when cmake is run, mark
+# Since filter-syntax.c does not exist yet when cmake is run, mark
 # it as generated
 #
 SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-lexic.c GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-syntax.c GENERATED)
+
+#
+# Some versions of flex (at least 2.5.33) produce code with comparisons between
+# signed and unsigned vars. This, combined with -Wall and -Werror, prevents CoMo
+# to build. We add -Wno-sign-compare to gcc flags to work around this.
+#
+# (see bug #1468610 for the flex project at http://sf.net/projects/flex)
+#
+SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-syntax.c COMPILE_FLAGS -Wno-sign-compare)
 
 #
 # Include binary directory to include filter-lexic.c and filter-syntax.c
@@ -102,10 +114,12 @@ ADD_EXECUTABLE(como ${COMO_SRCS})
 #
 # Make sure modules can see como's symbols
 #
+IF (NOT APPLE)
 SET_TARGET_PROPERTIES(como
   PROPERTIES
   LINK_FLAGS -Wl,--export-dynamic
 )
+ENDIF(NOT APPLE)
 
 #
 # Add profiling information

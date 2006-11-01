@@ -108,7 +108,7 @@ lookup_builtin_module(const char *name)
  * 
  */
 int
-activate_module(module_t * mdl, __unused char * libdir)
+activate_module(module_t * mdl, __attribute__((__unused__)) char * libdir)
 {
     callbacks_t * cb;
 #ifdef ENABLE_SHARED_MODULES
@@ -137,7 +137,8 @@ activate_module(module_t * mdl, __unused char * libdir)
     /* perform some checks on the callbacks */
 
     if (cb == NULL) {
-        logmsg(LOGWARN, "cannot activate module %s\n", mdl->name, strerror(errno));
+        logmsg(LOGWARN, "cannot activate module %s\n", mdl->name,
+               strerror(errno));
         goto error;
     }
 
@@ -304,7 +305,11 @@ new_module(como_t * m, char *name, int node, int idx)
     mdl->filter_str = strdup("all");
     mdl->filter_tree = NULL;
     mdl->output = strdup(mdl->name); /* TODO: canonized name */
+#ifndef __APPLE__
     asprintf(&mdl->source, "%s.so", mdl->name);
+#else
+    asprintf(&mdl->source, "%s.dylib", mdl->name);
+#endif 
     
     mdl->running = RUNNING_NORMAL;
 
@@ -560,7 +565,7 @@ pack_module(module_t * mdl, int * len)
  * 
  */
 int
-unpack_module(char * p, __unused size_t len, module_t * mdl)
+unpack_module(char * p, __attribute__((__unused__)) size_t len, module_t * mdl)
 {
     module_t * x = (module_t *) p; 
 

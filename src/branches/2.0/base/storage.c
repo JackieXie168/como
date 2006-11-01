@@ -583,8 +583,8 @@ flush_wb(csbytestream_t *bs)
  * 
  */
 static void
-handle_open(__unused procname_t sender, int s, csmsg_t * in,
-	    __unused size_t len)
+handle_open(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
+	    __attribute__((__unused__)) size_t len)
 {
     csbytestream_t *bs; 
     csclient_t *cl;
@@ -734,8 +734,9 @@ client_unlink(csclient_t *cl)
  *
  */
 static void
-handle_close(__unused procname_t sender, __unused int fd, csmsg_t * in,
-	     __unused size_t len)
+handle_close(__attribute__((__unused__)) procname_t sender,
+             __attribute__((__unused__)) int fd, csmsg_t * in,
+	     __attribute__((__unused__)) size_t len)
 {
     csbytestream_t * bs;
     csclient_t * cl;
@@ -867,8 +868,8 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
  *
  */
 static void
-handle_seek(__unused procname_t sender, int s, csmsg_t * in,
-	    __unused size_t len)
+handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
+	    __attribute__((__unused__)) size_t len)
 {
     csfile_t * cf;
     csclient_t * cl;
@@ -1307,8 +1308,9 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
  * 
  */
 static void
-handle_inform(__unused procname_t sender, __unused int fd, csmsg_t * in,
-	      __unused size_t len)
+handle_inform(__attribute__((__unused__)) procname_t sender,
+              __attribute__((__unused__)) int fd, csmsg_t * in,
+	      __attribute__((__unused__)) size_t len)
 {
     csclient_t * cl;
     off_t bs_offset; 
@@ -1362,8 +1364,8 @@ handle_inform(__unused procname_t sender, __unused int fd, csmsg_t * in,
  *
  */
 static void
-handle_region(__unused procname_t sender, int fd, csmsg_t * in,
-	      __unused size_t len)
+handle_region(__attribute__((__unused__)) procname_t sender, int fd,
+              csmsg_t * in, __attribute__((__unused__)) size_t len)
 {
     csclient_t * cl;
 
@@ -1531,8 +1533,9 @@ scheduler(timestamp_t elapsed)
  *
  */
 static void
-st_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
-             __unused size_t len)
+st_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
+             __attribute__((__unused__)) void * buf,
+             __attribute__((__unused__)) size_t len)
 {
     assert(sender == map.parent);  
     exit(EXIT_SUCCESS); 
@@ -1551,7 +1554,8 @@ st_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
  *
  */
 void
-storage_mainloop(int accept_fd, int supervisor_fd, __unused int id)
+storage_mainloop(int accept_fd, int supervisor_fd,
+                 __attribute__((__unused__)) int id)
 {
     int max_fd; 
     fd_set valid_fds; 

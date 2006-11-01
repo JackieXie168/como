@@ -141,7 +141,7 @@ flush(void * self)
 }
 
 static int
-update(__unused void * self, pkt_t *pkt, void *rp, int isnew)
+update(void * self, pkt_t *pkt, void *rp, int isnew)
 {
     config_t * cf = CONFIG(self);
     FLOWDESC *x = F(rp);
@@ -155,14 +155,14 @@ update(__unused void * self, pkt_t *pkt, void *rp, int isnew)
     st->bytes += COMO(len);
     st->pkts++;
 
-    if (isIP) { 
+    if (isIP && hasL3) { 
 	hash = uhash(&cf->hfunc, (uint8_t *) &IP(src_ip), 4, UHASH_NEW);
         hash = uhash(&cf->hfunc, (uint8_t *) &IP(dst_ip), 4, UHASH_APPEND);
         hash = uhash(&cf->hfunc, (uint8_t *) &IP(proto), 1, UHASH_APPEND);
-        if (isTCP) { 
+        if (isTCP && hasL4) { 
             hash = uhash(&cf->hfunc,(uint8_t*) &TCP(src_port),2,UHASH_APPEND);
             hash = uhash(&cf->hfunc, (uint8_t *) &TCP(dst_port),2,UHASH_APPEND);
-	} else if (isUDP) { 
+	} else if (isUDP && hasL4) { 
             hash = uhash(&cf->hfunc,(uint8_t*) &UDP(src_port),2,UHASH_APPEND);
             hash = uhash(&cf->hfunc, (uint8_t *) &UDP(dst_port),2,UHASH_APPEND);
 	} 
@@ -220,8 +220,8 @@ export(void * self, void *erp, void *rp, int isnew)
 }
     
 static int
-action(__unused void * self, void * rp,  __unused timestamp_t ivl,
-       __unused timestamp_t t, __unused int count)
+action(void * self, void * rp,  timestamp_t ivl,
+       timestamp_t t, int count)
 {
     EFLOWDESC *ex = EF(rp);
 
@@ -244,7 +244,7 @@ struct alert_record {
 
 
 static ssize_t
-store(__unused void * self, void *rp, char *buf)
+store(void * self, void *rp, char *buf)
 {
     EFLOWDESC *ex = EF(rp);
 
@@ -261,7 +261,7 @@ store(__unused void * self, void *rp, char *buf)
 }
 
 static size_t
-load(__unused void * self, char * buf, __unused size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     *ts = TIME2TS(ntohl(((struct alert_record *)buf)->ts),0); 
     return sizeof(struct alert_record);
@@ -325,7 +325,7 @@ load(__unused void * self, char * buf, __unused size_t len, timestamp_t * ts)
     "</body></html>\n"                                          
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[2048];
     static char urlstr[2048] = "#";

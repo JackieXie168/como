@@ -38,7 +38,6 @@
 #include <errno.h>
 #include <unistd.h>     
 #include <dlfcn.h>
-#undef __unused        /* XXX linux's netdb.h has a variable with this name */
 #include <netdb.h>                     /* gethostbyname */
 #include <assert.h>
 
@@ -64,7 +63,7 @@ _smalloc(size_t sz, const char * file, int line)
     v = malloc(sz);
     if (v == NULL) {
         fprintf(stderr, "[%2s]  **** PANIC: malloc %u bytes (%s:%d): %s\n",
-            getprocname(map.whoami), sz, file, line, strerror(errno));
+		getprocname(map.whoami), (unsigned int)sz, file, line, strerror(errno));
         abort();
     }
 
@@ -90,7 +89,8 @@ _scalloc(size_t n, size_t sz, const char * file, int line)
     v = calloc(n, sz);
     if (v == NULL) {
 	fprintf(stderr, "[%2s]  **** PANIC: calloc n:%u sz:%u (%s:%d): %s\n", 
-	    getprocname(map.whoami), n, sz, file, line, strerror(errno));
+		getprocname(map.whoami), (unsigned int)n, (unsigned int)sz, 
+		file, line, strerror(errno));
 	abort();
     }
 

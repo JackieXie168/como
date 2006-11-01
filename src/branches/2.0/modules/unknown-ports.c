@@ -292,7 +292,7 @@ store(void * self, void *rp, char *buf)
 }
 
 static size_t
-load(__unused void * self, char *buf, __unused size_t len, timestamp_t *ts)
+load(void * self, char *buf, size_t len, timestamp_t *ts)
 {
     int n;
 
@@ -350,7 +350,7 @@ load(__unused void * self, char *buf, __unused size_t len, timestamp_t *ts)
     "<tr><td>%u/%s</td><td>%u</td><td>%u%c</td><td>%u</td></tr>\n"
 
 static char *
-print(__unused void * self, char *buf, size_t *len, char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     static char s[4096];
     static char * fmt; 

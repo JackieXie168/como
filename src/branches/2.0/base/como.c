@@ -74,18 +74,22 @@ main(int argc, char *argv[])
     /* linux does not support setproctitle. we have our own. */
     setproctitle_init(argc, argv);
 #endif
+#ifdef __APPLE__
+    /* linux does not support setproctitle. we have our own. */
+    setproctitle_init(argc, argv);
+#endif
 
     /* set default values */
     init_map(&map); 
 
     /* write welcome message */ 
-    logmsg(LOGUI, "----------------------------------------------------\n");
-    logmsg(LOGUI, "  CoMo v%s (built %s %s)\n",
+    msg("----------------------------------------------------\n");
+    msg("  CoMo v%s (built %s %s)\n",
 			COMO_VERSION, __DATE__, __TIME__ ); 
-    logmsg(LOGUI, "  Copyright (c) 2004-2005, Intel Corporation\n"); 
-    logmsg(LOGUI, "  All rights reserved.\n"); 
-    logmsg(LOGUI, "----------------------------------------------------\n");
-    logmsg(V_LOGUI, "... workdir %s\n", map.workdir);
+    msg("  Copyright (c) 2004-2005, Intel Corporation\n"); 
+    msg("  All rights reserved.\n"); 
+    msg("----------------------------------------------------\n");
+    notice("... workdir %s\n", map.workdir);
 
     /*
      * parse command line and configuration files
@@ -94,7 +98,7 @@ main(int argc, char *argv[])
     map.av = argv; 
     configure(&map, argc, argv);
 
-    logmsg(V_LOGUI, "log level: %s\n", loglevel_name(map.logflags)); 
+    notice("log level: %s\n", loglevel_name(map.logflags)); 
 
     /*
      * Initialize the shared memory region.

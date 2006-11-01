@@ -181,7 +181,7 @@ update(void * self, pkt_t *pkt, void *rp, int isnew)
 
 
 static int
-export(__unused void * self, void *efh, void *fh, int isnew)
+export(void * self, void *efh, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
@@ -210,8 +210,8 @@ export(__unused void * self, void *efh, void *fh, int isnew)
 
 
 static int
-action(void * self, void *efh,  __unused timestamp_t ivl,
-       timestamp_t current_time, __unused int count)
+action(void * self, void *efh,  timestamp_t ivl,
+       timestamp_t current_time, int count)
 {
     CONFIGDESC * config = CONFIG(self);
 
@@ -309,7 +309,7 @@ store(void * self, void *rp, char *buf)
 }
 
 static size_t
-load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
+load(void * self, char *buf, size_t len, timestamp_t *ts)
 {
     time_t timestamp; 
 

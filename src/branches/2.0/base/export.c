@@ -256,6 +256,7 @@ call_store(module_t * mdl, rec_t *rp)
 		size_t sz;
 		timestamp_t ts;
 		sz = mdl->callbacks.load(mdl, p, ret, &ts);
+		assert(sz > 0 && ts != 0);
 		
 		/* print this record */
 		if (module_db_record_print(mdl, p, NULL, map.inline_fd) < 0)
@@ -483,7 +484,8 @@ store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts)
  * 
  */
 static void
-ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz) 
+ex_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
+                    void * pack, size_t sz) 
 {
     module_t tmp; 
     module_t * mdl;
@@ -552,8 +554,8 @@ ex_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
  * 
  */ 
 static void
-ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
-		  __unused size_t len)
+ex_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
+                    void * buf, __attribute__((__unused__)) size_t len)
 {
     module_t * mdl;
     etable_t * et; 
@@ -602,7 +604,8 @@ ex_ipc_module_del(procname_t sender, __unused int fd, void * buf,
  * 
  */ 
 static void
-ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
+ex_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
+                void *buf, size_t len)
 {
     expiredmap_t *em;
     
@@ -660,7 +663,8 @@ ex_ipc_flush(procname_t sender, __unused int fd, void *buf, size_t len)
  *
  */
 static void
-ex_ipc_start(procname_t sender, __unused int fd, void * buf, size_t len)
+ex_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void * buf,
+                size_t len)
 {
     /* only the parent process should send this message */
     assert(sender == map.parent);
@@ -678,8 +682,9 @@ ex_ipc_start(procname_t sender, __unused int fd, void * buf, size_t len)
  *
  */
 static void
-ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
-	__unused size_t len)
+ex_ipc_done(procname_t sender, __attribute__((__unused__)) int fd,
+            __attribute__((__unused__)) void * buf,
+	__attribute__((__unused__)) size_t len)
 {
     int i;
     
@@ -716,8 +721,9 @@ ex_ipc_done(procname_t sender, __unused int fd, __unused void * buf,
  *
  */
 static void
-ex_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
-             __unused size_t len)
+ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
+             __attribute__((__unused__)) void * buf,
+             __attribute__((__unused__)) size_t len)
 {
     assert(sender == map.parent);  
     exit(EXIT_SUCCESS); 
@@ -738,7 +744,8 @@ ex_ipc_exit(procname_t sender, __unused int fd, __unused void * buf,
  * the action() callback tells us to do (save, discard, etc.).
  */
 void
-export_mainloop(__unused int in_fd, int parent_fd, __unused int id)
+export_mainloop(__attribute__((__unused__)) int in_fd, int parent_fd,
+                __attribute__((__unused__)) int id)
 {
     int capture_fd; 
     int	max_fd;

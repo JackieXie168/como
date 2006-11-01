@@ -52,9 +52,11 @@
 
 DIGIT           [0-9]
 ALFANUMERIC     [a-zA-Z0-9]
+HEXDIGIT	[0-9a-fA-F]
 DIR             src|dst|addr|host
 PORTDIR         sport|dport
 IPADDR          ({DIGIT}{1,3}"."){3}{DIGIT}{1,3}
+MACADDR         ({HEXDIGIT}{1,2}":"){5}{HEXDIGIT}{1,2}
 NETMASK         "/"({DIGIT}){1,2}
 NUMBER          {DIGIT}+
 LEVEL3          ip
@@ -107,6 +109,11 @@ IFACE		input|output
                 yflval.string = safe_strdup(yytext);
                 return(IPADDR); 
                 }
+{MACADDR}       { 
+                /* Copy the dots and numbers notation string */
+                yflval.string = safe_strdup(yytext);
+                return(MACADDR); 
+                }
 {NETMASK}       { 
                 /* Copy the netmask number, get rid of the slash */ 
                 yflval.dword = atoi(yytext + 1);
@@ -142,6 +149,7 @@ exporter        { return(EXPORTER); }
 to_ds           { return(TODS); }
 from_ds         { return(FROMDS); }
 asn		{ return(ASN); }
+ether		{ return(ETHER); }
 
 [ \t\n]+
 

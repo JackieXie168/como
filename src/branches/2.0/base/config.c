@@ -79,7 +79,8 @@ enum tokens {
     TOK_MAXFILESIZE,
     TOK_VIRTUAL,
     TOK_ALIAS,
-    TOK_ASNFILE
+    TOK_ASNFILE,
+    TOK_LIVE_THRESH
 };
 
 
@@ -151,6 +152,7 @@ keyword_t keywords[] = {
     { "virtual-node",TOK_VIRTUAL,     2, CTX_GLOBAL },
     { "alias",       TOK_ALIAS,       2, CTX_GLOBAL },
     { "asnfile",     TOK_ASNFILE,     1, CTX_GLOBAL },
+    { "live-thresh", TOK_LIVE_THRESH, 1, CTX_GLOBAL },
     { NULL,          0,               0, 0 }    /* terminator */
 };
 
@@ -294,6 +296,11 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
 {
     sniffer_cb_t *cb;
     source_t *s;
+    static int live_sniffers, file_sniffers;
+    
+    if (m->source_count == 0) {
+	live_sniffers = file_sniffers = 0;
+    }
 
     if (device == NULL && args == NULL) {
 	device = index(want, ':');
@@ -333,7 +340,29 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
 	free(s); 
 	return; 
     }
+
+    /* check that the sniffer is consistent with the sniffers already
+     * configured */
+    if (((s->sniff->flags & SNIFF_FILE) && live_sniffers > 0) ||
+	(!(s->sniff->flags & SNIFF_FILE) && file_sniffers > 0)) {
+	logmsg(LOGWARN, "impossible to activate sniffer-%s: "
+			"file and live sniffers cannot be used "
+			"at the same time\n", want);
+	s->cb->finish(s->sniff);
+	free(s);
+	return;
+    }
     
+    if (s->sniff->flags & SNIFF_FILE) {
+	file_sniffers++;
+	m->live_thresh = ~0;
+    } else {
+	live_sniffers++;
+    }
+    
+    s->id = m->source_count;
+    m->source_count++;
+
     m->sources = s;
 
     logmsg(LOGUI, "... sniffer [%s] %s\n", cb->name, s->device);
@@ -622,7 +651,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	if (m->maxfilesize > 1024*1024*1024) { 
 	    m->maxfilesize = DEFAULT_FILESIZE; 
 	    sprintf(errstr, "'filesize' should be < 1GB --> set to %dMB\n", 
-		   m->maxfilesize / (1024*1024));
+		    (int)(m->maxfilesize / (1024*1024)));
 	    return errstr; 
 	} 
 	break;
@@ -685,6 +714,8 @@ do_config(struct _como * m, int argc, char *argv[])
 	node_id = m->node_count; 
 	bzero(&m->node[node_id], sizeof(node_t)); 
 	safe_dup(&m->node[node_id].name, argv[1]);
+	m->node[node_id].location = strdup("Unknown");
+	m->node[node_id].type = strdup("Unknown");
 	m->node_count++;
 	scope = CTX_VIRTUAL; 
 	break;
@@ -699,6 +730,10 @@ do_config(struct _como * m, int argc, char *argv[])
 
     case TOK_ASNFILE:
 	safe_dup(&m->asnfile, argv[1]);
+	break;
+
+    case TOK_LIVE_THRESH:
+	m->live_thresh = TIME2TS(0, atoi(argv[1]));
 	break;
 
     default:
@@ -1178,6 +1213,7 @@ init_map(struct _como * m)
     m->node_count = 1;
     m->debug_sleep = 20;
     m->asnfile = NULL;
+    m->live_thresh = TIME2TS(0, 10000); /* default 10 ms */
 }
 
 
@@ -1244,6 +1280,8 @@ configure(struct _como * m, int argc, char ** argv)
 
     if (m->runmode == RUNMODE_INLINE) {
 	char *conf_argv[2];
+	
+	m->exit_when_done = 1;
 	
     	if (cli_args.sniffer != NULL) {
 	    add_sniffer(m, cli_args.sniffer, NULL, NULL);

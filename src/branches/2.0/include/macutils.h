@@ -34,6 +34,8 @@
 #define _MACUTILS_H
 #include "como.h"
 
+#define MAC_ADDR_SIZE 6
+
 void pretty_mac(uint8_t *addr, char *output, size_t size, int lookup_vendor);
 
 #endif

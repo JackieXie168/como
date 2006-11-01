@@ -86,8 +86,11 @@ typedef void (*sniffer_setup_metadesc_fn) (sniffer_t * s);
 typedef int  (*sniffer_start_fn)          (sniffer_t * s);
 typedef int  (*sniffer_next_fn)           (sniffer_t * s,
 					   int max_pkts, timestamp_t max_ivl,
+					   pkt_t * first_ref_pkt,
 					   int * dropped_pkts);
 typedef void (*sniffer_stop_fn)           (sniffer_t * s);
+typedef float (*sniffer_usage_fn)         (sniffer_t * s, pkt_t * first,
+					   pkt_t * last);
 
 struct sniffer_cb {
     char const *		name;
@@ -97,6 +100,7 @@ struct sniffer_cb {
     sniffer_start_fn		start;    /* start the sniffer */
     sniffer_next_fn		next;     /* get next packet */
     sniffer_stop_fn		stop;     /* stop the sniffer */
+    sniffer_usage_fn		usage;
 };
 
 struct sniffer {
@@ -118,6 +122,8 @@ struct source {
     source_t *	next;
     sniffer_cb_t *cb;		/* callbacks */
     sniffer_t *	sniff;		/* sniffer state */
+    int		id;		/* sniffer id */
+    int		fd;		/* descriptor used in the select by capture */
     char *	device;		/* device name */
     char *	args;		/* optional arguments */
     metadesc_t *outdesc;	/* offered output metadesc list */
@@ -130,6 +136,7 @@ struct source {
 #define	SNIFF_SELECT	0x0001	/* device supports select() */
 #define	SNIFF_POLL	0x0002	/* device must be polled */
 #define	SNIFF_FILE	0x0004	/* device reads from file */
+#define	SNIFF_SHBUF	0x0040	/* device has a public buffer in shmem  */
 #define SNIFF_INACTIVE	0x0008	/* inactive, i.e. do not select() */
 #define SNIFF_FROZEN	0x0010	/* frozen to slow down (only for SNIFF_FILE) */
 #define SNIFF_COMPLETE  0x0020  /* complete, i.e. finish the buffer */

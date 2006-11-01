@@ -482,7 +482,7 @@ orinoco_open(const char *dev, int ch, void **data_)
 }
 
 static void
-orinoco_close(const char *dev, __unused void *data_)
+orinoco_close(const char *dev, __attribute__((__unused__)) void *data_)
 {
     orinoco_data_t *data = (orinoco_data_t *) data_;
 
@@ -585,7 +585,9 @@ hostap_open(const char *dev, int ch, void **data_)
 }
 
 static int
-none_open(__unused const char *dev, __unused int ch, __unused void **data_)
+none_open(__attribute__((__unused__)) const char *dev,
+          __attribute__((__unused__)) int ch,
+          __attribute__((__unused__)) void **data_)
 {
     *data_ = NULL;		/* Unused */
 
@@ -593,13 +595,15 @@ none_open(__unused const char *dev, __unused int ch, __unused void **data_)
 }
 
 static void
-none_close(__unused const char *dev, __unused void *data)
+none_close(__attribute__((__unused__)) const char *dev,
+           __attribute__((__unused__)) void *data)
 {
 }
 
 static monitor_t s_monitors[] = {
     {"none", none_open, none_close, NULL, NULL},
-    {"orinoco", orinoco_open, orinoco_close, avs_or_prism2_header_to_como_radio, NULL},
+    {"orinoco", orinoco_open, orinoco_close, avs_or_prism2_header_to_como_radio,
+        NULL},
     {"wlext", wlext_open, wlext_close, NULL, NULL},
     {"hostap", hostap_open, wlext_close, avs_header_to_como_radio, NULL},
     {NULL, NULL, NULL, NULL, NULL}
@@ -618,7 +622,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct radio_me));
     
     me->sniff.max_pkts = 128;
-    me->sniff.flags = SNIFF_SELECT;
+    me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->snaplen = RADIO_DEFAULT_SNAPLEN;
     me->timeout = RADIO_DEFAULT_TIMEOUT;
     me->device = device;
@@ -872,7 +876,10 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
 	    return;
 	}
     } else {
-	/* copy the mgmt frame */
+	/* copy the frame */
+	/* FIXME: caplen can be greater than than me->snaplen if the packet has
+	 * radio information as they are rewritten in the _como_radio struct.
+	 */
 	memcpy(dest, buf, len);
 	COMO(caplen) += len;
     }
@@ -902,13 +909,14 @@ processpkt(u_char * data, const struct pcap_pkthdr *h, const u_char * buf)
  * 
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
-	     int * dropped_pkts)
+sniffer_next(sniffer_t * s, int max_pkts,
+             __attribute__((__unused__)) timestamp_t max_ivl,
+	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct radio_me *me = (struct radio_me *) s;
     int count, x;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
     
     for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
 	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
@@ -919,6 +927,19 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
     me->dropped_pkts = 0;
     
     return (x >= 0) ? 0 : -1;
+}
+
+
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct radio_me *me = (struct radio_me *) s;
+    size_t sz;
+    void * y;
+    
+    y = ((void *) last) + sizeof(pkt_t) + last->caplen;
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    return (float) sz / (float) me->capbuf.size;
 }
 
 
@@ -957,4 +978,5 @@ SNIFFER(radio) = {
     start: sniffer_start,
     next: sniffer_next,
     stop: sniffer_stop,
+    usage: sniffer_usage
 };

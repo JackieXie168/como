@@ -73,56 +73,52 @@ typedef struct _node	node_t;
  * modules and classifiers as well.
  */
 struct _como {
-    procname_t whoami; 		/* process using this instance */
-    procname_t parent; 		/* parent process */
-    runmode_t  runmode;         /* mode of operation */
+    procname_t	whoami;		/* process using this instance */
+    procname_t	parent;		/* parent process */
+    runmode_t	runmode;	/* mode of operation */
 
-    int ac;			/* command line arguments */
-    char **av;			/* command line arguments */
+    int		ac;		/* command line arguments */
+    char **	av;		/* command line arguments */
 
-    char * workdir;		/* work directory for templates etc. */
-    char * dbdir; 	    	/* database directory for output files */
-    char * libdir;		/* base directory for modules */
-    int logflags;       	/* log flags (i.e., what to log) */
-    FILE * logfile;		/* log file */
-    char * asnfile;		/* routing table file giving AS identities */
+    char *	workdir;		/* work directory for templates etc. */
+    char *	dbdir; 	    	/* database directory for output files */
+    char *	libdir;		/* base directory for modules */
+    int		logflags;       /* log flags (i.e., what to log) */
+    FILE *	logfile;	/* log file */
+    char *	asnfile;	/* routing table file giving AS identities */
 
-    size_t mem_size;    	/* memory size for capture/export (MB) */
-    int mem_type;		/* defines how to allocate memory */
+    size_t	mem_size;	/* memory size for capture/export (MB) */
+    int		mem_type;	/* defines how to allocate memory */
 #define COMO_PRIVATE_MEM 	0x01
 #define COMO_SHARED_MEM 	0x02
 
-    node_t * node;		/* node information */
-    int node_count;		/* no. of nodes */
+    node_t *	node;		/* node information */
+    int		node_count;	/* no. of nodes */
 
-    stats_t * stats; 		/* statistic counters */
+    stats_t *	stats; 		/* statistic counters */
 
-    source_t *sources;		/* list of input data feeds (sniffers) */
+    source_t *	sources;	/* list of input data feeds (sniffers) */
+    int		source_count;
 
-    module_t * modules; 	/* array of modules */ 
-    int module_max;  		/* max no. of modules */
-    int module_used; 	  	/* number of used entries */
-    int module_last;  		/* last used entry in modules array */
+    module_t *	modules; 	/* array of modules */ 
+    int		module_max;  	/* max no. of modules */
+    int		module_used;   	/* number of used entries */
+    int		module_last;  	/* last used entry in modules array */
 
-    alias_t * aliases; 		/* module aliases */ 
+    alias_t *	aliases; 	/* module aliases */ 
 
-    size_t maxfilesize; 	/* max file size in one bytestream */
-    int maxqueries;
+    size_t	maxfilesize; 	/* max file size in one bytestream */
 
-    int debug;			/* debug mode */
-    int debug_sleep;		/* how many secs to sleep */
-	/*
-	 * here we simply store a malloced copy of the string
-	 * passed as -x from the command line, then each
-	 * process decides what to do with it, with some string
-	 * matching function.
-	 */
+    int		debug;		/* debug mode */
+    int		debug_sleep;	/* how many secs to sleep */
 
-    module_t * inline_mdl;	/* module that needs to be run in inline
-				 * mode
-				 */
-    int inline_fd;		/* fd of inline client */
-    int exit_when_done;		/* when one causes capture to send IPC_DONE
+    timestamp_t	live_thresh;	/* threshold used to synchronize multiple
+				   sniffers */
+
+    module_t *	inline_mdl;	/* module that runs in inline mode */
+    int		inline_fd;	/* descriptor of inline client */
+
+    int		exit_when_done; /* when set causes capture to send IPC_DONE
 				   message to its parent process when all
 				   the sniffers have terminated */
     struct {
@@ -132,7 +128,10 @@ struct _como {
 	int	query_port_set:1;
 	int	mem_size_set:1;
 	int	logflags_set:1;
-    } cli_args;
+    } cli_args;			/* flags set when the corresponding command
+				   line arguments are set to prevent
+				   overwriting the values set from from the
+				   command line */
 };
 
 

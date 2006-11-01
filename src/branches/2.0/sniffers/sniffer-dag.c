@@ -71,7 +71,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct dag_me));
 
     me->sniff.max_pkts = 8192;
-    me->sniff.flags = SNIFF_POLL;
+    me->sniff.flags = SNIFF_POLL | SNIFF_SHBUF;
     me->sniff.polling = TIME2TS(0, 1000);
     me->device = device;
     me->args = args;
@@ -154,8 +154,9 @@ sniffer_start(sniffer_t * s)
  * return the number of packets read. 
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
-	     int * dropped_pkts) 
+sniffer_next(sniffer_t * s, int max_pkts,
+             __attribute__((__unused__)) timestamp_t max_ivl,
+	     pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct dag_me *me = (struct dag_me *) s;
     pkt_t *pkt;                 /* CoMo record structure */
@@ -174,7 +175,7 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
 
     *dropped_pkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
     
     base = (char *) me->bottom;
     npkts = 0;
@@ -232,7 +233,7 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
 	} 
 
 	/* reserve the space in the buffer for the pkt_t */
-	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sizeof(pkt_t) + len);
+	pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sizeof(pkt_t));
     
         /*
          * ok, data is good now, copy the packet over
@@ -262,6 +263,20 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
     me->bottom = (uint8_t *) base; 
     return 0;
 }
+
+
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct dag_me *me = (struct dag_me *) s;
+    size_t sz;
+    void * y;
+    
+    y = ((void *) last) + sizeof(pkt_t);
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    return (float) sz / (float) me->capbuf.size;
+}
+
 
 static void
 sniffer_stop(sniffer_t * s)
@@ -297,4 +312,5 @@ SNIFFER(dag) = {
     start: sniffer_start,
     next: sniffer_next,
     stop: sniffer_stop,
+    usage: sniffer_usage
 };

@@ -66,8 +66,8 @@ struct erf_me {
     glob_t		files;		/* result of device pattern */
     size_t		file_idx;	/* index of current file in
 					   files.gl_pathv */
-    size_t		file_size;	/* size fo trace file */
-    size_t		nread;
+    off_t		file_size;	/* size fo trace file */
+    off_t		nread;
     size_t		map_size;	/* size of mmap */
     char *		base;		/* mmap addres */
     off_t		off;
@@ -259,7 +259,7 @@ sniffer_start(sniffer_t * s)
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     int * dropped_pkts) 
+	     __attribute__((__unused__)) pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct erf_me *me = (struct erf_me *) s;
     pkt_t *pkt;                 /* packet records */
@@ -295,14 +295,14 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     
     npkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, NULL);
 
     while (npkts < max_pkts) {
 	dag_record_t *rec;	/* DAG record structure */
 	int len;		/* total record length */
 	int l2type;		/* interface type */
 	size_t rs;
-	size_t left = me->file_size - me->nread;
+	off_t left = me->file_size - me->nread;
 	char *base = me->base + me->off;
 
 	if (me->nread > me->remap) {

@@ -38,6 +38,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#ifdef linux 
+#include <netinet/ether.h>
+#else
+#include <net/ethernet.h>
+#endif
 #include <arpa/inet.h>          /* inet_ntop */
 #include <strings.h>            /* bcopy */
 
@@ -437,6 +442,8 @@ set_field(char *ptr, size_t size, uint64_t value)
 #define TIME2TS(s, u)   ((((uint64_t) (s)) << 32) + \
                         ((((uint64_t) (u)) << 32) / 1000000))
 #define TIMEVAL2TS(rec) (TIME2TS((rec)->unix_secs,(rec)->unix_nsecs))
+
+#define TS_MAX	(timestamp_t) (~0)
 
 /*
  * Helper macros

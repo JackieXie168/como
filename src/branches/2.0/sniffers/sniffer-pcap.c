@@ -70,8 +70,8 @@ struct pcap_me {
 					   byte order */
     to_como_radio_fn	to_como_radio;  /* pointer to the radio header
 					   conversion function */
-    size_t		file_size;	/* size fo trace file */
-    size_t		nread;
+    off_t		file_size;	/* size fo trace file */
+    off_t		nread;
     size_t		map_size;	/* size of mmap */
     int			snaplen; 	/* capture length */
     char *		base;		/* mmap addres */
@@ -325,7 +325,7 @@ sniffer_start(sniffer_t * s)
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     int * dropped_pkts) 
+	     __attribute__((__unused__)) pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct pcap_me *me = (struct pcap_me *) s;
     pkt_t *pkt;                 /* CoMo record structure */
@@ -364,7 +364,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
     npkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, NULL);
 
     while (npkts < max_pkts) {
 	timestamp_t ts;
@@ -372,7 +372,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 #ifdef BUILD_FOR_ARM
 	pcap_hdr_t tmp_ph;
 #endif
-	size_t left = me->file_size - me->nread;
+	off_t left = me->file_size - me->nread;
 	int drop_this = 0;
 	char *base = me->base + me->off;
 

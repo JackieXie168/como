@@ -30,37 +30,24 @@
  * $Id$
  */
 
-/* CoMo portability library */
+#ifndef _PATTERN_SEARCH_H
+#define _PATTERN_SEARCH_H
 
-#ifndef LIB_H_
-#define LIB_H_
+#define ASIZE 256
+#define MAX_PATTERN_SIZE 1024
 
-#ifndef lib_malloc
-#warning "lib_malloc not defined: using default libc's malloc"
-#define lib_malloc	malloc
+#include <string.h>
+
+typedef struct _pattern_search pattern_search_t;
+
+struct _pattern_search {
+    char pattern[MAX_PATTERN_SIZE + 1]; /* pattern to match against */
+    size_t patsize;
+    int bmBc[ASIZE];
+    int bmGs[MAX_PATTERN_SIZE];
+};
+
+void pattern_search_initialize(pattern_search_t *ps, char *pattern);
+int pattern_search(pattern_search_t *ps, char *string, size_t len, int *where);
+
 #endif
-
-#ifndef lib_calloc
-#warning "lib_calloc not defined: using default libc's malloc"
-#define lib_calloc	calloc
-#endif
-
-#ifndef lib_realloc
-#warning "lib_realloc not defined: using default libc's malloc"
-#define lib_realloc	realloc
-#endif
-
-typedef int  (*cmp_fn)            (const void *a, const void *b);
-typedef void (*destroy_notify_fn) (void *data);
-
-#include "allocator.h"
-#include "array.h"
-#include "bitmap.h"
-#include "hash.h"
-#include "heap.h"
-#include "mempool.h"
-#include "ptr_array.h"
-#include "uhash.h"
-#include "flowtable.h"
-
-#endif /*LIB_H_*/

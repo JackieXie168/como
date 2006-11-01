@@ -36,7 +36,6 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>     
-#undef __unused        /* XXX linux's netdb.h has a variable with this name */
 #include <netdb.h>                     /* gethostbyname */
 #include <assert.h>
 #include <ctype.h>
@@ -47,11 +46,8 @@
 /* 
  * -- getprotoname
  * 
- * this function is basically getprotobynumber() that needs to 
- * be redefined here because linux's netdb.h uses __unused as  
- * variable name (?!?). In order to avoid the mess, it is easier
- * to rewrite the function from scratch. 
- * 
+ * Our custom getprotobyname()-like function.
+ *
  * Given that we are at it we also fix the problem with /etc/protocols 
  * in Linux that gives uncommon names to common protocols (e.g., protocol 
  * number 50 is better known as ESP than IPV6-CRYPT). 
