@@ -44,6 +44,8 @@ struct cca {
     batch_t *	batch;
     pkt_t **	pktptr;
     int		count;
+    int *	sampling;
+    int		pkts_to_skip;
 };
 
 /**
@@ -77,6 +79,7 @@ cca_open(int cd)
     cca = safe_calloc(1, sizeof(cca_t));
     cca->id = m.open_res.id;
     cca->cd = cd;
+    cca->sampling = m.open_res.sampling;
     
     return cca;
 }
@@ -92,6 +95,26 @@ cca_destroy(cca_t * cca)
     free(cca);
 }
 
+
+/**
+ * -- cca_send_ack
+ */
+static inline void
+cca_send_ack(cca_t * cca)
+{
+    ccamsg_t m;
+    size_t sz;
+
+    m.ack_batch.id = cca->id;
+    m.ack_batch.batch = cca->batch;
+    sz = sizeof(m.ack_batch);
+    if (ipc_send_with_fd(cca->cd, CCA_ACK_BATCH, &m, sz) != IPC_OK) {
+	panic("sending message to capture: %s\n", strerror(errno));
+    }
+    cca->batch = NULL;
+}
+
+
 /**
  * -- cca_next_pkt
  * 
@@ -103,6 +126,7 @@ pkt_t *cca_next_pkt(cca_t * cca)
 {
     pkt_t *pkt;
 
+next_batch:
     if (cca->batch == NULL) {
 	ccamsg_t m;
 	size_t sz;
@@ -114,7 +138,6 @@ pkt_t *cca_next_pkt(cca_t * cca)
 	    panic("receiving message from capture: %s\n", strerror(errno));
 	}
 	if (ret == CCA_NEW_BATCH) {
-	//logmsg(LOGWARN, "new batch\n");
 	    assert(m.new_batch.id == cca->id);
 	    cca->batch = m.new_batch.batch;
 	    cca->pktptr = cca->batch->pkts0;
@@ -124,23 +147,32 @@ pkt_t *cca_next_pkt(cca_t * cca)
 	}
     }
     pkt = *(cca->pktptr);
-    cca->count++;
-    cca->pktptr++;
-    if (cca->count == cca->batch->pkts0_len) {
-	cca->pktptr = cca->batch->pkts1;
+    if (*cca->sampling == 1) {
+	cca->count++;
+	cca->pktptr++;
+	if (cca->count == cca->batch->pkts0_len) {
+	    cca->pktptr = cca->batch->pkts1;
+	}
+    } else {
+	/* random between 1 and cca->sampling */
+	int pkts_to_skip;
+	float s = (float) *cca->sampling;
+	pkts_to_skip = 1 + (int) (s * (rand() / (RAND_MAX + 1.0)));
+	logmsg(LOGWARN, "sampling: skipping %d pkts\n", pkts_to_skip);
+	if (cca->count + pkts_to_skip > cca->batch->count) {
+	    cca_send_ack(cca);
+	    goto next_batch;
+	}
+	cca->count += pkts_to_skip;
+	cca->pktptr += pkts_to_skip;
+	if (cca->pktptr > cca->batch->pkts0 &&
+	    cca->count > cca->batch->pkts0_len) {
+	    cca->pktptr = cca->batch->pkts1 +
+			  (cca->count - cca->batch->pkts0_len);
+	}
     }
     if (cca->count == cca->batch->count) {
-	ccamsg_t m;
-	size_t sz;
-	
-	m.ack_batch.id = cca->id;
-	m.ack_batch.batch = cca->batch;
-	sz = sizeof(m.ack_batch);
-	if (ipc_send_with_fd(cca->cd, CCA_ACK_BATCH, &m, sz) != IPC_OK) {
-	    panic("sending message to capture: %s\n", strerror(errno));
-	}
-	cca->batch = NULL;
-	//logmsg(LOGWARN, "ack\n");
+	cca_send_ack(cca);
     }
     return pkt;
 }

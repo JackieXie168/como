@@ -95,7 +95,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct libpcap_me));
     
     me->sniff.max_pkts = 128;
-    me->sniff.flags = SNIFF_SELECT;
+    me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->promisc = LIBPCAP_DEFAULT_PROMISC;
     me->snaplen = LIBPCAP_DEFAULT_SNAPLEN;
     me->timeout = LIBPCAP_DEFAULT_TIMEOUT;
@@ -314,15 +314,16 @@ processpkt(u_char * data, const struct pcap_pkthdr * h, const u_char * buf)
  * 
  */
 static int
-sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
-	     int * dropped_pkts)
+sniffer_next(sniffer_t * s, int max_pkts,
+             __attribute__((__unused__)) timestamp_t max_ivl,
+	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct libpcap_me *me = (struct libpcap_me *) s;
     int count, x;
     
     *dropped_pkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
     
     for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
 	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
@@ -330,6 +331,19 @@ sniffer_next(sniffer_t * s, int max_pkts, __unused timestamp_t max_ivl,
     }
     
     return (x >= 0) ? 0 : -1;
+}
+
+
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct libpcap_me *me = (struct libpcap_me *) s;
+    size_t sz;
+    void * y;
+    
+    y = ((void *) last) + sizeof(pkt_t) + last->caplen;
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    return (float) sz / (float) me->capbuf.size;
 }
 
 
@@ -367,4 +381,5 @@ SNIFFER(libpcap) = {
     start: sniffer_start,
     next: sniffer_next,
     stop: sniffer_stop,
+    usage: sniffer_usage
 };

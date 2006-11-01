@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2006 Intel Corporation
  * Copyright (c) 2005 Universitat Politecnica de Catalunya 
  * All rights reserved.
  *
@@ -26,20 +27,8 @@
  * $Id$
  */
 
-/*
- * Author: Diego Amores Lopez (damores@ac.upc.edu)
- * 
- * Description:
- * ------------
- *  
- * Snort module for CoMo - Boyer-Moore pattern-matching algorithm
- * 
- */
-
-#include "module.h"       /* logmsg */
-
-#define ASIZE 256       /* anything that can be represented with a char */
-#define OUTPUT(x) logmsg(LOGUI, "SNORT: string match position = %d\n", x) 
+#include "como.h"
+#include "pattern_search.h"
 
 /*
  * -- preBmBc
@@ -47,7 +36,7 @@
  * Precalculate the first jump table
  *
  */
-void
+static void
 preBmBc(char *x, int m, int bmBc[])
 {
     int i;
@@ -65,7 +54,7 @@ preBmBc(char *x, int m, int bmBc[])
  * given string
  *
  */
-void
+static void
 suffixes(char *x, int m, int *suff)
 {
     int f, g, i;
@@ -92,7 +81,7 @@ suffixes(char *x, int m, int *suff)
  * Precalculate the second jump table
  *
  */
-void
+static void
 preBmGs(char *x, int m, int bmGs[])
 {
     int i, j, suff[m];
@@ -122,8 +111,8 @@ preBmGs(char *x, int m, int bmGs[])
  * of the pattern in the string (or 0 if the pattern is not found).
  *
  */
-int 
-BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], uint *found) 
+static int 
+BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], int *found) 
 {
     int i, j, k;
    
@@ -153,3 +142,29 @@ BM(char *x, int m, char *y, int n, int bmBc[], int bmGs[], uint *found)
 
     return 0;
 }
+
+void
+pattern_search_initialize(pattern_search_t *ps, char *pattern)
+{
+    memset(ps, 0, sizeof(pattern_search_t));
+#define __min(a,b) (a) < (b) ? (a) : (b)
+    ps->patsize = __min(strlen(pattern), MAX_PATTERN_SIZE);
+#undef __min
+    strncpy(ps->pattern, pattern, ps->patsize);
+
+    /* precompute the jump tables */
+    preBmBc(ps->pattern, ps->patsize, ps->bmBc);
+    preBmGs(ps->pattern, ps->patsize, ps->bmGs);
+}
+
+int
+pattern_search(pattern_search_t *ps, char *string, size_t len, int *where)
+{
+    int discard, found;
+
+    found = BM(ps->pattern, ps->patsize, string, len,
+                ps->bmBc, ps->bmGs, where ? where : &discard);
+
+    return found;
+}
+

@@ -30,37 +30,16 @@
  * $Id$
  */
 
-/* CoMo portability library */
+#ifndef _PRINTPKT_H
+#define _PRINTPKT_H
 
-#ifndef LIB_H_
-#define LIB_H_
+#define PRINTPKT_L2                 1
+#define PRINTPKT_L3                 2
 
-#ifndef lib_malloc
-#warning "lib_malloc not defined: using default libc's malloc"
-#define lib_malloc	malloc
+int print_pkt_pretty(pkt_t *pkt, char *output, int flags);
+
+int print_pcap_file_header(char *output);
+int print_pkt_pcap(pkt_t *pkt, char *output);
+
 #endif
 
-#ifndef lib_calloc
-#warning "lib_calloc not defined: using default libc's malloc"
-#define lib_calloc	calloc
-#endif
-
-#ifndef lib_realloc
-#warning "lib_realloc not defined: using default libc's malloc"
-#define lib_realloc	realloc
-#endif
-
-typedef int  (*cmp_fn)            (const void *a, const void *b);
-typedef void (*destroy_notify_fn) (void *data);
-
-#include "allocator.h"
-#include "array.h"
-#include "bitmap.h"
-#include "hash.h"
-#include "heap.h"
-#include "mempool.h"
-#include "ptr_array.h"
-#include "uhash.h"
-#include "flowtable.h"
-
-#endif /*LIB_H_*/

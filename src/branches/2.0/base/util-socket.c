@@ -45,7 +45,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <assert.h>
-#undef __unused        /* XXX linux's netdb.h has a variable with this name */
 #include <netdb.h>
 
 #include "como.h"

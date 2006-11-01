@@ -403,9 +403,9 @@ ipc_handle(int fd)
 /* 
  * -- ipc_wait_reply_with_fd
  * 
- * wait for a reply from fd. returns the msg type in type and the msg in read into
- * the area pointed by data for at most sz bytes. after the function exits sz contains
- * the real message length.
+ * wait for a reply from fd. returns the msg type in type and the msg in read
+ * into the area pointed by data for at most sz bytes. after the function exits
+ * sz contains the real message length.
  * 
  */ 
 int

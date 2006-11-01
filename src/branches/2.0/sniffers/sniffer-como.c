@@ -83,7 +83,7 @@ sniffer_init(const char * device, const char * args)
     me = safe_calloc(1, sizeof(struct como_me));
 
     me->sniff.max_pkts = 8192;
-    me->sniff.flags = SNIFF_SELECT;
+    me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->device = device;
     
     /* create the capture buffer */
@@ -103,7 +103,7 @@ error:
 
 
 static void
-sniffer_setup_metadesc(__unused sniffer_t * s)
+sniffer_setup_metadesc(__attribute__((__unused__)) sniffer_t * s)
 {
 }
 
@@ -212,7 +212,7 @@ error:
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     int * dropped_pkts) 
+	     pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct como_me *me = (struct como_me *) s;
     char * base;                /* current position in input buffer */
@@ -222,7 +222,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
     *dropped_pkts = 0;
     
-    capbuf_begin(&me->capbuf);
+    capbuf_begin(&me->capbuf, first_ref_pkt);
     
     avn = me->avn;
     
@@ -294,6 +294,19 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 }
 
 
+static float
+sniffer_usage(sniffer_t * s, pkt_t * first, pkt_t * last)
+{
+    struct como_me *me = (struct como_me *) s;
+    size_t sz;
+    void * y;
+    
+    y = ((void *) last) + sizeof(pkt_t) + last->caplen;
+    sz = capbuf_region_size(&me->capbuf, first, y);
+    return (float) sz / (float) me->capbuf.size;
+}
+
+
 /*
  * -- sniffer_stop
  *
@@ -326,4 +339,5 @@ SNIFFER(como) = {
     start: sniffer_start,
     next: sniffer_next,
     stop: sniffer_stop,
+    usage: sniffer_usage
 };

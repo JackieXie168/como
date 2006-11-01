@@ -31,33 +31,37 @@
  */
 
 /*
- * Top-N destinations Module.
- *
- * This module computes the top-N IP destination addresses
- *
+ * This module ranks addresses in terms of bytes.
+ * The HW addresses can be destination or sources. 
  */
 
 #include <stdio.h>
 #include <time.h>
+#include <string.h>
 #include "module.h"
+#include "uhash.h"
 
-#define FLOWDESC	struct _ca_topdest
+#define FLOWDESC	struct _ranking
 #define EFLOWDESC	FLOWDESC
 
+#define HW_ADDR_SIZE	6
+
 FLOWDESC {
-    uint32_t ts;	/* timestamp of last packet */
-    uint32_t dst_ip;	/* destination IP address */
-    uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
+    uint32_t	ts;			/* timestamp of measurement interval */
+    uint64_t	bytes;			/* number of bytes */
+    uint32_t	pkts;			/* number of packets */
+    uint8_t	addr[HW_ADDR_SIZE];	/* src/dst address */ 
 };
 
-#define CONFIGDESC   struct _topdest_config
+#define CONFIGDESC   struct _ranking_config
 CONFIGDESC {
-    int topn;			/* number of top destinations */
-    uint32_t mask;		/* prefix mask */
-    uint32_t meas_ivl;		/* interval (secs) */
-    uint32_t last_export;	/* last export time */
+    int		use_dst; 	/* set if we should use destination address */ 
+    int		topn;		/* number of top addresses */
+    uint32_t	meas_ivl;	/* interval (secs) */
+    uint32_t	last_export;	/* last export time */
+    uhash_t	hfunc;
 };
+
 
 static timestamp_t
 init(void * self, char *args[])
@@ -68,9 +72,9 @@ init(void * self, char *args[])
     metadesc_t *inmd;
     
     config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
+    config->use_dst = 1; 
     config->meas_ivl = 5;
     config->topn = 20;
-    config->mask = 0xffffffff;
     config->last_export = 0; 
     
     /* 
@@ -84,24 +88,26 @@ init(void * self, char *args[])
 	    config->meas_ivl = atoi(wh); 
 	} else if (!strncmp(args[i], "topn", 4)) {
 	    config->topn = atoi(wh);
-	} else if (!strncmp(args[i], "mask", 4)) {
-	    config->mask <<= atoi(wh); 
 	} else if (!strncmp(args[i], "align-to", 8)) {
 	    config->last_export = atoi(wh); 
+	} else if (!strncmp(args[i], "use-dst", 7)) {
+	    config->use_dst = 1;
+	} else if (!strncmp(args[i], "use-src", 7)) {
+	    config->use_dst = 0;
 	}
     }
-
-    /* align the time of the last export of data */ 
+    
+    uhash_initialize(&config->hfunc);
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
     inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
-    pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
-    IP(proto) = 0xff;
-    N16(IP(len)) = 0xffff;
-    N32(IP(src_ip)) = 0xffffffff;
-    N32(IP(dst_ip)) = 0xffffffff;
+    pkt = metadesc_tpl_add(inmd, "none:~eth:none:none");
+    if (config->use_dst) 
+	memset(&ETH(dst), 0xff, HW_ADDR_SIZE);
+    else 
+	memset(&ETH(src), 0xff, HW_ADDR_SIZE);
 
     CONFIG(self) = config; 
     return TIME2TS(config->meas_ivl, 0);
@@ -109,16 +115,32 @@ init(void * self, char *args[])
 
 
 static uint32_t
-hash(__unused void * self, pkt_t *pkt)
+hash(void * self, pkt_t *pkt)
 {
-    return (H32(IP(dst_ip)));
+    CONFIGDESC * config = CONFIG(self);
+    uint32_t h;
+    if (config->use_dst) {
+	h = uhash(&config->hfunc, (uint8_t *) &ETH(dst),
+		  HW_ADDR_SIZE, UHASH_NEW);
+    } else {
+	h = uhash(&config->hfunc, (uint8_t *) &ETH(src),
+		  HW_ADDR_SIZE, UHASH_NEW);
+    }
+    return h;
 }
 
 static int
-match(__unused void * self, pkt_t *pkt, void *fh)
+match(void * self, pkt_t *pkt, void *fh)
 {
     FLOWDESC *x = F(fh);
-    return (H32(IP(dst_ip)) == x->dst_ip);
+    CONFIGDESC * config = CONFIG(self);
+    uint32_t res;
+    if (config->use_dst) {
+	res = memcmp(&ETH(dst), &x->addr, HW_ADDR_SIZE);
+    } else {
+	res = memcmp(&ETH(src), &x->addr, HW_ADDR_SIZE);
+    }
+    return (res == 0);
 }
 
 static int
@@ -129,19 +151,21 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 
     if (isnew) {
 	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % config->meas_ivl);
-        x->dst_ip = H32(IP(dst_ip)); 
+	if (config->use_dst) {
+	    memcpy(&x->addr, &ETH(dst), HW_ADDR_SIZE);
+	} else {
+	    memcpy(&x->addr, &ETH(src), HW_ADDR_SIZE);
+	}
         x->bytes = 0;
         x->pkts = 0;
     }
 
-    if (COMO(type) == COMOTYPE_NF) { 
-	x->bytes += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
-	x->pkts += H32(NF(pktcount)) * H16(NF(sampling)); 
-    } else if (COMO(type) == COMOTYPE_SFLOW) {
-	x->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
+    if (COMO(type) == COMOTYPE_SFLOW) {
+	x->bytes += (uint64_t) COMO(len) *
+		    (uint64_t) H32(SFLOW(sampling_rate));
 	x->pkts += H32(SFLOW(sampling_rate));
     } else { 
-	x->bytes += H16(IP(len));
+	x->bytes += COMO(len);
 	x->pkts++;
     } 
 
@@ -149,26 +173,23 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 }
 
 static int
-ematch(__unused void * self, void *efh, void *fh)
+ematch(void * self, void *efh, void *fh)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
-//    CONFIGDESC * config = CONFIG(self);
 
-    return (x->dst_ip == ex->dst_ip);
-/*    return (x->dst_ip == ex->dst_ip &&
-	    x->ts < ex->ts + config->meas_ivl);*/
+    return (memcpy(&x->addr, &ex->addr, HW_ADDR_SIZE) == 0);
 }
 
 static int
-export(__unused void * self, void *efh, void *fh, int isnew)
+export(void * self, void *efh, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
 
     if (isnew) {
 	ex->ts = x->ts; 
-        ex->dst_ip = x->dst_ip;
+        memcpy(&ex->addr, &x->addr, HW_ADDR_SIZE);
         ex->bytes = 0;
         ex->pkts = 0;
     }
@@ -185,10 +206,7 @@ compare(const void *efh1, const void *efh2)
     EFLOWDESC *ex1 = CMPEF(efh1);
     EFLOWDESC *ex2 = CMPEF(efh2);
 
-//    if (ex1->ts == ex2->ts)
-	return ((ex1->bytes > ex2->bytes)? -1 : 1);
-
-//    return ((ex1->ts < ex2->ts)? -1 : 1);
+    return ((ex1->bytes > ex2->bytes)? -1 : 1);
 }
 
 static int
@@ -215,20 +233,20 @@ action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
 
 
 static ssize_t
-store(__unused void * self, void *efh, char *buf)
+store(void * self, void *efh, char *buf)
 {
     EFLOWDESC *ex = EF(efh);
 
     PUTH32(buf, ex->ts);
-    PUTH32(buf, ex->dst_ip);
     PUTH64(buf, ex->bytes);
     PUTH32(buf, ex->pkts);
+    memcpy(buf, &ex->addr, HW_ADDR_SIZE);
 
     return sizeof(EFLOWDESC);
 }
 
 static size_t
-load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
+load(void * self, char *buf, size_t len, timestamp_t *ts)
 {
     if (len < sizeof(EFLOWDESC)) {
         *ts = 0;
@@ -241,11 +259,11 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
 
 
 #define PRETTYHDR	\
-    "Date                     Destination IP  Bytes      Packets   \n"
+    "Date                     %-15s Bytes      Packets   \n"
 
-#define PRETTYFMT 	"%.24s %15s %10llu %8u\n"
+#define PRETTYFMT 	"%.24s %d %15s %10llu %8u\n"
 
-#define PLAINFMT	"%12u %15s %10llu %8u\n"
+#define PLAINFMT	"%12u %d %15s %10llu %8u\n"
 
 #define HTMLHDR							\
     "<html>\n"							\
@@ -268,19 +286,35 @@ load(__unused void * self, char *buf, size_t len, timestamp_t *ts)
     "     color: #475677;}\n"                                   \
     "  </style>\n"                                              \
     "</head>\n"                                                 \
-    "<body>\n"							\
+    "<body>\n"							
+
+#define HTMLTITLE 						\
     "<div class=nvtitle style=\"border-top: 1px solid;\">"	\
-    "Top-%d Destinations</div>\n" \
+    "Top-%d %s</div>\n" \
     "<table class=netview>\n"					\
-    "  <tr class=nvtitle><td>IP Address</td>\n"			\
-    "      <td>Mbps</td></tr>\n"						
+    "  <tr class=nvtitle>\n"					\
+    "    <td>#</td>\n" 	                			\
+    "    <td>HW Address</td>\n"					\
+    "    <td>bps</td>\n"					\
+    "    <td>pps</td>\n"					\
+    "  </tr>\n"							
 
 #define HTMLFOOTER						\
     "</table>\n"						\
     "</body></html>\n"						
 
 #define HTMLFMT							\
-    "<tr><td><a href=%s target=_new>%15s</a></td><td>%.2f</td></tr>\n"
+    "<tr><td>%d</td><td><a href=%s target=_new>%15s</a></td>"	\
+    "<td>%.2f%c</td><td>%.2f%c</td></tr>\n"
+
+#define SIDEBOXTITLE 						\
+    "<table class=netview>\n"					\
+    "  <tr class=nvtitle>\n"					\
+    "    <td>#</td>\n"						\
+    "    <td>HW Address</td>\n"					\
+    "    <td>bps</td>\n"					\
+    "    <td>pps</td>\n"					\
+    "  </tr>\n"							
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -288,19 +322,21 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static char s[2048];
     static char * fmt; 
     static char urlstr[2048] = "#"; 
+    static time_t last_ts = 0; 
+    static int count = 0; 
     CONFIGDESC * config = CONFIG(self);
     EFLOWDESC *x; 
-    struct in_addr addr;
     time_t ts;
 
     if (buf == NULL && args != NULL) { 
+	char * what[] = {"Source HW", "Destination HW"};
 	char * url = NULL;
 	char * urlargs[20];
 	int no_urlargs = 0;
 	int n; 
 
         /* by default, pretty print */
-        *len = sprintf(s, PRETTYHDR);  
+        *len = sprintf(s, PRETTYHDR, what[config->use_dst]); 
         fmt = PRETTYFMT; 
 
         /* first call of print, process the arguments and return */
@@ -309,7 +345,13 @@ print(void * self, char *buf, size_t *len, char * const args[])
                 *len = 0; 
                 fmt = PLAINFMT;
             } else if (!strcmp(args[n], "format=html")) {
-                *len = sprintf(s, HTMLHDR, config->topn); 
+                *len = sprintf(s, HTMLHDR); 
+		*len += sprintf(s + *len, HTMLTITLE, config->topn, 
+			        what[config->use_dst]); 
+                fmt = HTMLFMT;
+            } else if (!strcmp(args[n], "format=sidebox")) {
+                *len = sprintf(s, HTMLHDR); 
+                *len += sprintf(s + *len, SIDEBOXTITLE); 
                 fmt = HTMLFMT;
             } else if (!strncmp(args[n], "url=", 4)) {
 		url = args[n] + 4; 
@@ -325,9 +367,10 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	    w = sprintf(urlstr, "%s?", url); 
 	    for (k = 0; k < no_urlargs; k++) 
 		w += sprintf(urlstr + w, "%s&", urlargs[k]);
-	    w += sprintf(urlstr + w ,"ip=%%s/24");
+	    w += sprintf(urlstr + w ,"mac=%%s");
 	} 
 	    
+	count = 0; 	/* reset count */ 
 	return s; 
     } 
 
@@ -335,34 +378,64 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	*len = 0; 
 	if (fmt == HTMLFMT) 
 	    *len = sprintf(s, HTMLFOOTER);  
+	count = 0; 	/* reset count */ 
+        last_ts = 0; 	/* reset timestamp */ 
   	return s; 
     } 
 
     x = (EFLOWDESC *) buf; 
     ts = (time_t) ntohl(x->ts);
-    addr.s_addr = x->dst_ip & htonl(config->mask);
+
+    /* maintain the count */ 
+    if (ts != last_ts) 
+	count = 0; 
+    last_ts = ts; 
+    count++; 
+
     if (fmt == PRETTYFMT) { 
-	*len = sprintf(s, fmt, asctime(localtime(&ts)), inet_ntoa(addr), 
-		   NTOHLL(x->bytes), ntohl(x->pkts));
+	*len = sprintf(s, fmt, asctime(localtime(&ts)), count,
+		       ether_ntoa((struct ether_addr *) &x->addr),
+		       NTOHLL(x->bytes), ntohl(x->pkts));
     } else if (fmt == HTMLFMT) { 
-        float mbps; 
+        float bps, pps; 
+        char bunit = ' '; 
+        char punit = ' '; 
 	char tmp[2048] = "#";
 	
-        mbps = (float) (NTOHLL(x->bytes) * 8) / (float) config->meas_ivl;
-	mbps /= 1000000;
+        bps = (float) (NTOHLL(x->bytes) * 8) / (float) config->meas_ivl;
+	if (bps > 1000000) { 
+	    bunit = 'M'; 
+	    bps /= 1000000;
+	} else  if (bps > 1000) {
+	    bunit = 'K'; 
+	    bps /= 1000; 
+	} 
+
+        pps = (float) ntohl(x->pkts) / (float) config->meas_ivl;
+	if (pps > 1000000) { 
+	    punit = 'M'; 
+	    pps /= 1000000;
+	} else if (pps > 1000) {
+	    punit = 'K'; 
+	    pps /= 1000; 
+	} 
+
 	if (urlstr[0] != '#') 
-	    sprintf(tmp, urlstr, inet_ntoa(addr));
-	*len = sprintf(s, fmt, tmp, inet_ntoa(addr), mbps);
+	    sprintf(tmp, urlstr, ether_ntoa((struct ether_addr *) &x->addr));
+	*len = sprintf(s, fmt, count, tmp,
+		       ether_ntoa((struct ether_addr *) &x->addr),
+		       bps, bunit, pps, punit);
     } else { 
-	*len = sprintf(s, fmt, ts, inet_ntoa(addr), 
-		   NTOHLL(x->bytes), ntohl(x->pkts));
-    } 
-	
+	*len = sprintf(s, fmt, ts, count,
+		       ether_ntoa((struct ether_addr *) &x->addr),
+		       NTOHLL(x->bytes), ntohl(x->pkts));
+    }
+
     return s;
 };
 
 
-MODULE(topdest) = {
+MODULE(tophwaddr) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
     st_recordsize: sizeof(EFLOWDESC),
@@ -381,6 +454,6 @@ MODULE(topdest) = {
     load: load,
     print: print,
     replay: NULL,
-    formats: "plain pretty html",
+    formats: "plain pretty html sidebox",
 };
 

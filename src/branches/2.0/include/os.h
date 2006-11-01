@@ -51,12 +51,6 @@
 
 #if defined(linux) || defined(__CYGWIN32__)
 /*
- * FreeBSD has __unused defined in the system's header.
- * We redefine it here as we need a shorter form for this anyways.
- */
-#define __unused __attribute__((__unused__))
-
-/*
  * MAP_NOSYNC is unavailble in Linux 
  * XXX: beware! This is not a general solution
  */
@@ -118,5 +112,33 @@ extern const char *strcasestr(const char *s1, const char *s2);
 time_t timegm(struct tm * x); 
 
 #endif
+
+
+#ifdef __APPLE__
+
+/* This function is a GNU extension */
+char *strndup(const char *s, unsigned int n);
+
+/*
+ * MAP_NOSYNC is unavailble in Mac OS X 
+ * XXX: beware! This is not a general solution
+ */
+#define MAP_NOSYNC 0
+
+/*
+ * setproctitle(3) is unavailable in Mac OS X; we provide one here
+ * Please call init_setproctitle before calling setproctitle
+ * for the first time.
+ */
+void setproctitle_init (int argc, char **argv);
+void setproctitle      (const char *format, ...);
+
+/*
+ * Unclear if there is a portable solution for NAMLEN. In the meantime
+ * we use the one used in Linux
+ */
+#define _D_EXACT_NAMLEN(f) ((f)->d_namlen)
+
+#endif /* __APPLE__ */
  
 #endif /* _COMO_OS_H_ */

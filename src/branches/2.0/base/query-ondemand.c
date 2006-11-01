@@ -55,8 +55,9 @@ extern struct _como map;
  *
  */
 static void
-qd_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
-            __unused size_t l)
+qd_ipc_sync(procname_t sender, __attribute__((__unused__)) int fd,
+            __attribute__((__unused__)) void * b,
+            __attribute__((__unused__)) size_t l)
 {
     char * pack;
     int sz;
@@ -81,7 +82,8 @@ qd_ipc_sync(procname_t sender, __unused int fd, __unused void * b,
  *
  */  
 static void
-qd_ipc_record(__unused procname_t sender, __unused int fd, 
+qd_ipc_record(__attribute__((__unused__)) procname_t sender,
+        __attribute__((__unused__)) int fd, 
 	void * buf, size_t len)
 {
     int ret; 
@@ -101,8 +103,9 @@ qd_ipc_record(__unused procname_t sender, __unused int fd,
  *
  */
 static void
-qd_ipc_done(procname_t sender, __unused int fd,
-        __unused void * b, __unused size_t l)
+qd_ipc_done(procname_t sender, __attribute__((__unused__)) int fd,
+        __attribute__((__unused__)) void * b,
+        __attribute__((__unused__)) size_t l)
 {
     ipc_send(child(CAPTURE, getprocid(sender)), IPC_EXIT, NULL, 0);
     ipc_send(sender, IPC_EXIT, NULL, 0);
@@ -118,7 +121,7 @@ qd_ipc_done(procname_t sender, __unused int fd,
  * 
  */
 static void
-defchld(__unused int si_code)
+defchld(__attribute__((__unused__)) int si_code)
 {
     if (handle_children())
 	exit(EXIT_FAILURE);
@@ -199,6 +202,7 @@ query_ondemand(int fd, qreq_t * req, int node_id)
 	map.sources = src->next; 
 	free(src); 
     } 
+    map.source_count = 0;
 
 //#define REMOTE_QUERY
 #ifdef REMOTE_QUERY

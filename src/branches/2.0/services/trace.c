@@ -40,7 +40,8 @@
 #include "query.h"
 
 int
-service_trace(int client_fd, __unused int node_id, qreq_t * qreq)
+service_trace(int client_fd, __attribute__((__unused__)) int node_id,
+              qreq_t * qreq)
 {
     int capture_fd;
     cca_t * cca;

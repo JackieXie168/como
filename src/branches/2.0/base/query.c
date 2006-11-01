@@ -337,7 +337,8 @@ handle_replay_fail(module_t *mdl)
  *
  */
 static void
-qu_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
+qu_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
+                  void * pack, size_t sz)
 {
     module_t tmp;
     module_t * mdl;
@@ -370,8 +371,9 @@ qu_ipc_module_add(procname_t src, __unused int fd, void * pack, size_t sz)
  *
  */
 static void
-qu_ipc_start(procname_t sender, __unused int fd, __unused void * buf,
-             __unused size_t len)
+qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
+             __attribute__((__unused__)) void * buf,
+             __attribute__((__unused__)) size_t len)
 {
     /* only SUPERVISOR should send this message */
     assert(sender == map.parent);
@@ -551,65 +553,57 @@ query(int client_fd, int supervisor_fd, int node_id)
 	assert_not_reached();
     }
 
-    switch (req.format) {
-    case QFORMAT_CUSTOM:
-    case QFORMAT_HTML:
-	/* first print callback. we need to make sure that req.args != NULL. 
-	 * if this is not the case we just make something up
-	 */
-	if (req.args == NULL) {
-	    req.args = null_args;
-	}
-	if (module_db_record_print(req.mdl, NULL, req.args, client_fd) < 0)
-	    handle_print_fail(req.mdl);
-	break;
-    case QFORMAT_COMO:
-#if 0
-FIXME
-        /*
-         * transmit the output stream description
-         */
-        ret = como_writen(client_fd, (char*) req.src->callbacks.outdesc,
-                          sizeof(pktdesc_t));
-        if (ret < 0)
-            panic("could not send pktdesc");
-#endif
-	break;
-    default:
-	break;
-    }
-
-    req.src = req.mdl; 	/* the source is the same as the module */
-    
     /* 
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
     storage_fd = ipc_connect(STORAGE);
 
-    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req.src->output); 
+    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req.mdl->output); 
     mode =  req.wait ? CS_READER : CS_READER_NOBLOCK; 
-    file_fd = csopen(req.src->output, mode, 0, storage_fd); 
+    file_fd = csopen(req.mdl->output, mode, 0, storage_fd); 
     if (file_fd < 0) 
-	panic("opening file %s", req.src->output);
-
+	panic("opening file %s", req.mdl->output);
 
     /* seek on the first record */
     ts = TIME2TS(req.start, 0);
     end_ts = TIME2TS(req.end, 0);
-    ofs = module_db_seek_by_ts(req.src, file_fd, ts);
+    ofs = module_db_seek_by_ts(req.mdl, file_fd, ts);
     if (ofs >= 0) {
+	/* at this point at least one record exists as we seek on it */
+	switch (req.format) {
+	case QFORMAT_CUSTOM:
+	case QFORMAT_HTML:
+	    /* first print callback. we need to make sure that req.args != NULL. 
+	     * if this is not the case we just make something up
+	     */
+	    if (req.args == NULL) {
+		req.args = null_args;
+	    }
+	    if (module_db_record_print(req.mdl, NULL, req.args, client_fd) < 0)
+		handle_print_fail(req.mdl);
+	    break;
+	case QFORMAT_COMO:
+#if 0
+	    /*
+	     * TODO:transmit the output stream description
+	     */
+#endif
+	    break;
+	default:
+	    break;
+	}
 	for (;;) { 
 	    char * ptr;
-	    len = req.src->callbacks.st_recordsize;
-	    ptr = module_db_record_get(file_fd, &ofs, req.src, &len, &ts);
+	    len = req.mdl->callbacks.st_recordsize;
+	    ptr = module_db_record_get(file_fd, &ofs, req.mdl, &len, &ts);
 	    if (ptr == NULL) {
 		/* no data, but why ? */
 		if (len == 0) {
 		    break;
 		}
 		panic("reading from file %s ofs %lld len %d",
-		      req.src->output, ofs, len);
+		      req.mdl->output, ofs, len);
 	    }
 	    /*
 	     * Now we have either good data or GR_LOSTSYNC.
@@ -622,11 +616,11 @@ FIXME
 		     * stream to the module
 		     */ 
 		    logmsg(V_LOGQUERY, "reached end of file %s\n",
-			   req.src->output);
+			   req.mdl->output);
 		    break;
 		}
 		logmsg(V_LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
-		       req.src->output, ofs); 
+		       req.mdl->output, ofs); 
 		continue;
 	    }
 	    
@@ -636,8 +630,8 @@ FIXME
 	    
 	    switch (req.format) {
 	    case QFORMAT_COMO: 	
-		if (module_db_record_replay(req.src, ptr, client_fd))
-		    handle_replay_fail(req.src);
+		if (module_db_record_replay(req.mdl, ptr, client_fd))
+		    handle_replay_fail(req.mdl);
 		break;
 
 	    case QFORMAT_RAW: 
@@ -656,15 +650,14 @@ FIXME
 		break;
 	    }
 	}
-    }
-    /* notify the end of stream to the module */
-    if (req.format == QFORMAT_CUSTOM || req.format == QFORMAT_HTML) {
-	/* print the footer */
-	if (module_db_record_print(req.mdl, NULL, NULL, client_fd)) {
-	    handle_print_fail(req.mdl);
+	/* notify the end of stream to the module */
+	if (req.format == QFORMAT_CUSTOM || req.format == QFORMAT_HTML) {
+	    /* print the footer */
+	    if (module_db_record_print(req.mdl, NULL, NULL, client_fd)) {
+		handle_print_fail(req.mdl);
+	    }
 	}
     }
-
     logmsg(LOGQUERY, "query completed\n"); 
     
     /* close the file with STORAGE */

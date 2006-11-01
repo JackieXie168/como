@@ -80,6 +80,8 @@ IF(BUILD_FOR_ARM)
   COMO_BUILD_FOR_ARM()
 ENDIF(BUILD_FOR_ARM)
 
+
+
 #
 # Set installation directories. Note: all are relative to ${CMAKE_INSTALL_PREFIX}
 #
@@ -168,7 +170,7 @@ IF(LINUX)
 ENDIF(LINUX)
 
 #
-# Make sure we os.h is included everywhere
+# Make sure os.h is included everywhere
 #
 ADD_DEFINITIONS(-include ${COMO_SOURCE_DIR}/include/os.h)
 
@@ -187,4 +189,4 @@ ADD_SUBDIRECTORY(man)
 MESSAGE(STATUS "CoMo build type is `${CMAKE_BUILD_TYPE}`.")
 MESSAGE(STATUS "CoMo will be installed in `${CMAKE_INSTALL_PREFIX}`.")
 MESSAGE("Type `make` to build CoMo, `make install` to install CoMo.")
-MESSAGE("Tip: you can get verbose output with `make VERBOSE=1`.")
+MESSAGE("Tip: you can get verbose output with `VERBOSE=1 make`.")

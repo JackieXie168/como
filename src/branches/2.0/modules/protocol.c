@@ -106,7 +106,7 @@ init(void * self, char *args[])
 }
 
 static int
-update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
+update(void * self, pkt_t *pkt, void *fh, int isnew)
 {
     FLOWDESC *x = F(fh);
 
@@ -133,7 +133,7 @@ update(__unused void * self, pkt_t *pkt, void *fh, int isnew)
 
 
 static ssize_t
-store(__unused void * self, void *fh, char *buf)
+store(void * self, void *fh, char *buf)
 {
     FLOWDESC *x = F(fh);
     int i; 
@@ -148,7 +148,7 @@ store(__unused void * self, void *fh, char *buf)
 }
 
 static size_t
-load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
+load(void * self, char * buf, size_t len, timestamp_t * ts)
 {
     if (len < sizeof(FLOWDESC)) {
         *ts = 0;
@@ -203,7 +203,7 @@ load(__unused void * self, char * buf, size_t len, timestamp_t * ts)
 static size_t 
 do_header(char * const args[], CONFIGDESC * config) 
 {
-    size_t len; 
+    size_t len = 0;
     int n;
 
     /* first call of print, process the arguments and return */
@@ -356,7 +356,7 @@ print_gnuplot(CONFIGDESC * config)
 
 
 static char *
-print(void * self, char *buf, size_t *len, __unused char * const args[])
+print(void * self, char *buf, size_t *len, char * const args[])
 {
     CONFIGDESC * config = CONFIG(self);
     FLOWDESC *x;

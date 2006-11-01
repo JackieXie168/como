@@ -684,7 +684,6 @@ rebuild_table(flowtable_t * ftable)
     flowtable_entry_t **oldBuckets;
     flowtable_entry_t **oldChainPtr, **newChainPtr;
     flowtable_entry_t *hPtr;
-    void *key;
 
     oldSize = ftable->numBuckets;
     oldBuckets = ftable->buckets;

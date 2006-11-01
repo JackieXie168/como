@@ -367,7 +367,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 {
     int max_args, nargs;
     char *p, *t;
-    char *uri, *qs;
+    char *uri, *qs = NULL;
 
     p = strchr(buf, '\n');
     *p = '\0';
@@ -388,12 +388,14 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
      * NOTE: max_args will always be at least one (i.e., the NULL entry
      *       to indicate end of the arguments). 
      */
-    max_args = 0; 
-    p = buf; 
-    do { 
-	p = strchr(p+1, '&'); 
-	max_args++; 
-    } while (p != NULL && strlen(p) > 1);
+    max_args = 1; 
+    p = strchr(buf, '?');
+    if (p != NULL) {
+        do { 
+            p = strchr(p+1, '&'); 
+            max_args++; 
+        } while (p != NULL && strlen(p) > 1);
+    }
 
     /* allocate a new request data structures */
     q->args = safe_calloc(max_args, sizeof(char *)); 
@@ -478,7 +480,11 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		/* copy the argument into query args by default */
 		copy_value = 1;
 		*cp = '\0';
-		if (value == cp) {
+		if (value == cp || value == NULL) {
+		    if (strcmp(name, "status") == 0) {
+			q->mode = QMODE_SERVICE;
+			q->service = "status";
+		    }
 		    if (done) {
 			break;
 		    }
