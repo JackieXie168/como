@@ -30,7 +30,8 @@
  * $Id$
  */
 
-#ifdef __FreeBSD__
+//#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #include <stdlib.h>	/* malloc */
 #include <string.h>	/* strlen, memcpy */
 
