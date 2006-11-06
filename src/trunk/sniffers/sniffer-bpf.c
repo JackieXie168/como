@@ -247,7 +247,7 @@ sniffer_next(sniffer_t * s, int max_pkts,
     *dropped_pkts = 0;
     
     capbuf_begin(&me->capbuf, first_ref_pkt);
-    capbuf_begin(&me->pktbuf, first_ref_pkt->payload);
+    capbuf_begin(&me->pktbuf, first_ref_pkt? first_ref_pkt->payload : NULL);
     
     base = capbuf_reserve_space(&me->capbuf, me->read_size);
     /* read packets */
