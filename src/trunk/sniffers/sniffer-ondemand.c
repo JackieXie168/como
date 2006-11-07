@@ -172,8 +172,7 @@ sniffer_start(sniffer_t * s)
     }
     
     logmsg(V_LOGSNIFFER, "opening file for reading (%s)\n", me->mdl->output);
-    me->sniff.fd = csopen(me->mdl->output, CS_READER_NOBLOCK, 0,
-                          me->storage_fd); 
+    me->sniff.fd = csopen(me->mdl->output, CS_READER, 0, me->storage_fd); 
     if (me->sniff.fd < 0) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
 	       "error while opening file %s\n", me->mdl->output);
