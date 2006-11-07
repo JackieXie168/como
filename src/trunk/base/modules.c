@@ -710,8 +710,10 @@ module_lookup(const char *name, int node)
  * finds the one with the closest start time to the requested one. 
  * We do a linear search (instead of a faster binary search) because
  * right now csseek only supports CS_SEEK_FILE_PREV and CS_SEEK_FILE_NEXT. 
- * The function returns the offset of the file to be read or -1 in case
- * of error.
+ * Furthermore, we dont have any idea on how large the records are and we 
+ * have no index for the timestamp. The function returns the offset of 
+ * the file to be read or -1 in case of error.
+ *
  */
 off_t
 module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
@@ -719,20 +721,34 @@ module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
     ssize_t len; 
     load_fn * ld; 
     off_t ofs; 
-    int found;
 
     ld = mdl->callbacks.load;
     len = mdl->callbacks.st_recordsize;
     ofs = csgetofs(fd);
-    found = 0;
-    while (!found) { 
+
+
+    /* 
+     * first, find the right file in the bytestream 
+     */
+    for (;;) { 
 	timestamp_t ts;
 	char * ptr; 
 
 	/* read the first record */
 	ptr = csmap(fd, ofs, &len); 
-	if (ptr == NULL) 
-	    return -1;
+	if (ptr == NULL) { 
+	    if (len == 0) {
+		/* 
+		 * we hit EOF. this can only happen if the file has
+		 * just been created with zero length and no records 
+		 * have been written yet. so, go back one file and 
+		 * use that one as starting point. 
+		 */
+		ofs = csseek(fd, CS_SEEK_FILE_PREV);
+		break; 
+	    }
+	    return -1;	/* error */
+	} 
 
 	/* give the record to load() */
 	ld(mdl, ptr, len, &ts); 
@@ -742,7 +758,6 @@ module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
 	} else {
 	    /* found. go one file back; */
 	    ofs = csseek(fd, CS_SEEK_FILE_PREV);
-	    found = 1;
 	} 
 
 	/* 
@@ -752,10 +767,13 @@ module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
 	 */
 	if (ofs == -1) {
 	    ofs = csgetofs(fd);
-	    found = 1;
+	    break; 
 	}
     }
 
+    /* 
+     * then find the record inside the file 
+     */
     for (;;) {
 	timestamp_t ts;
 	void * ptr;
