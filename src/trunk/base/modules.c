@@ -127,7 +127,11 @@ activate_module(module_t * mdl, __attribute__((__unused__)) char * libdir)
     char *ext;
     cname = strdup(mdl->source);
     /* strip the extension */
+#ifndef __APPLE__
     ext = strstr(mdl->source, ".so");
+#else
+    ext = strstr(mdl->source, ".dylib");
+#endif
     if (ext) {
 	*ext = '\0';
     }
