@@ -928,7 +928,8 @@ handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
 	break;
     }
 
-    if (cf == NULL || cf->cf_size == 0) { /* no more data */
+    if (cf == NULL) { 
+	/* we have gone beyond the bytestream size */
 	logmsg(LOGSTORAGE, "id: %d,%s; seek reached the end of file\n", 
 	    in->id, cl->bs->name); 
 	senderr(s, in->id, ENODATA); 

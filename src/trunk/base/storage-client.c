@@ -239,12 +239,11 @@ _csinform(csfile_t * cf, off_t ofs)
  *     (different only if the region overlaps multiple files). 
  * 
  * this function returns a pointer to the memory mapped region and the size
- * of the region. 
+ * of the region. in case of EOF it returns NULL with *sz = 0. in case of 
+ * error it returns NULL with *sz = -1. 
  *
  * _csmap is the back-end for csmap, csreadp, csseek. 
- *
- * XXX how is the error condition notified/used? just returning NULL? 
- *     or *sz must be -1 as well?  
+ * 
  */
 static void * 
 _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg) 
