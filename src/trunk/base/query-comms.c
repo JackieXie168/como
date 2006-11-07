@@ -335,10 +335,13 @@ parse_timestr(char * str, timestamp_t * base)
         ts = parse_relativetime(str, -1, *base);
 	break; 
 
-    case '+': 		/* XXX the plus sign is converted to space... */ 
-    case ' ': 	
+    case '+': 	
+    case ' ': 		/* XXX the plus sign is converted to space... */ 
         ts = parse_relativetime(str, 1, *base);
 	break;
+
+    case '0':
+	return TS2SEC(*base);
 
     default: 	
 	logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
