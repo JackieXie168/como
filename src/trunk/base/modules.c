@@ -127,11 +127,7 @@ activate_module(module_t * mdl, __attribute__((__unused__)) char * libdir)
     char *ext;
     cname = strdup(mdl->source);
     /* strip the extension */
-#ifndef __APPLE__
-    ext = strstr(mdl->source, ".so");
-#else
-    ext = strstr(mdl->source, ".dylib");
-#endif
+    ext = strstr(mdl->source, SHARED_LIB_EXT);
     if (ext) {
 	*ext = '\0';
     }
@@ -309,11 +305,7 @@ new_module(como_t * m, char *name, int node, int idx)
     mdl->filter_str = strdup("all");
     mdl->filter_tree = NULL;
     mdl->output = strdup(mdl->name); /* TODO: canonized name */
-#ifndef __APPLE__
-    asprintf(&mdl->source, "%s.so", mdl->name);
-#else
-    asprintf(&mdl->source, "%s.dylib", mdl->name);
-#endif 
+    asprintf(&mdl->source, "%s%s", mdl->name, SHARED_LIB_EXT);
     
     mdl->running = RUNNING_NORMAL;
 

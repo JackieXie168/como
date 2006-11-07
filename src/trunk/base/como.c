@@ -70,12 +70,8 @@ main(int argc, char *argv[])
     pid_t pid;
     int supervisor_fd, capture_fd, storage_fd;
 
-#ifdef linux
-    /* linux does not support setproctitle. we have our own. */
-    setproctitle_init(argc, argv);
-#endif
-#ifdef __APPLE__
-    /* linux does not support setproctitle. we have our own. */
+#if defined(linux) || defined(__APPLE__)
+    /* linux/Mac OS X does not support setproctitle. we have our own. */
     setproctitle_init(argc, argv);
 #endif
 
