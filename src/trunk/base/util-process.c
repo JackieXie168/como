@@ -46,7 +46,7 @@
 #ifdef __APPLE__
 #include <monitor.h>
 #include <mach-o/getsect.h>
-#endif
+#endif /* __APPLE__ */
 #endif
 
 /* global state */
