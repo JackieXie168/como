@@ -149,41 +149,6 @@ cleanup()
 }
 
 
-/* 
- * -- create_table 
- * 
- * allocates and initializes a hash table
- */
-static ctable_t *
-create_table(module_t * mdl, timestamp_t ivl)
-{
-    ctable_t *ct;
-    size_t len;
-
-    len = sizeof(ctable_t) + mdl->ca_hashsize * sizeof(void *);
-    ct = alc_malloc(&(mdl->alc), len);
-    if (ct == NULL)
-	return NULL;
-
-    ct->bytes += len;
-
-    ct->size = mdl->ca_hashsize;
-    ct->first_full = ct->size;	/* all records are empty */
-    ct->last_full = 0;		/* all records are empty */
-    ct->records = 0;
-    ct->live_buckets = 0;
-    ct->flexible = 0;
-
-    /*
-     * save the timestamp indicating with flush interval this 
-     * table belongs to. this information will be useful for 
-     * EXPORT when it processes the flushed tables. 
-     */
-    ct->ivl = ivl;
-    return ct;
-}
-
-
 /*
  * -- flush_state
  *
@@ -278,10 +243,6 @@ capture_pkt(module_t * mdl, batch_t * batch, char *which, tailq_t * exp_tables)
     do {
 
 	for (i = 0; i < l; i++, pktptr++, which++, c++) {
-	    rec_t *prev, *cand;
-	    uint32_t hash;
-	    uint bucket;
-
 	    pkt = *pktptr;
 
 	    /* flush the current flow table, if needed */
@@ -331,116 +292,6 @@ capture_pkt(module_t * mdl, batch_t * batch, char *which, tailq_t * exp_tables)
 	    if (*which == 0)
 		continue;	/* no interest in this packet */
 
-	    /*
-	     * check if there are any errors in the packet that
-	     * make it unacceptable for the classifier.
-	     * (if check() is not provided, we take the packet anyway)
-	     */
-	    if (mdl->callbacks.check && !mdl->callbacks.check(mdl, pkt))
-		continue;
-
-	    /*
-	     * find the entry where the information related to
-	     * this packet reside
-	     * (if hash() is not provided, it defaults to 0)
-	     */
-	    hash = (mdl->callbacks.hash) ? mdl->callbacks.hash(mdl, pkt) : 0;
-	    bucket = hash % mdl->ca_hashtable->size;
-
-	    /*
-	     * keep track of the first entry in the table that is used.
-	     * this is useful for the EXPORT process that will have to
-	     * scan the entire hash table later.
-	     */
-	    if (bucket < mdl->ca_hashtable->first_full)
-		mdl->ca_hashtable->first_full = bucket;
-	    if (bucket > mdl->ca_hashtable->last_full)
-		mdl->ca_hashtable->last_full = bucket;
-
-	    prev = NULL;
-	    cand = mdl->ca_hashtable->bucket[bucket];
-	    while (cand) {
-		/* if match() is not provided, any record matches */
-		if (mdl->callbacks.match == NULL ||
-		    mdl->callbacks.match(mdl, pkt, cand))
-		    break;
-		prev = cand;
-		cand = cand->next;
-	    }
-
-	    if (cand != NULL) {
-		/*
-		 * found!
-		 * two things to do first:
-		 *   i) move this record to the front of the bucket to
-		 *      speed up future (and likely) accesses.
-		 *  ii) check if this record was flagged as full and
-		 *      in that case create a new one;
-		 */
-
-		/* move to the front, if needed */
-		if (mdl->ca_hashtable->bucket[bucket] != cand) {
-		    prev->next = cand->next;
-		    cand->next = mdl->ca_hashtable->bucket[bucket];
-		    mdl->ca_hashtable->bucket[bucket] = cand;
-		}
-
-		/* check if this record was flagged as full */
-		if (cand->full) {
-		    rec_t *x;
-
-		    /* allocate a new record */
-		    x = alc_malloc(&(mdl->alc), record_size);
-		    if (x == NULL)
-			continue;	/* XXX no memory, we keep going. 
-					 *     need better solution! */
-
-		    mdl->ca_hashtable->bytes += record_size;
-
-		    x->hash = hash;
-		    x->next = cand->next;
-
-		    /* link the current full one to the list of full records */
-		    x->prev = cand;
-		    cand->next = x;
-
-		    /* we moved cand to the front, now is x */
-		    mdl->ca_hashtable->bucket[bucket] = x;
-
-		    /* done. new empty record ready. */
-		    /* 
-		     * NOTE: we do not increment mdl->ca_hashtable->records
-		     * here because we count this just as a variable size
-		     * record.
-		     */
-
-		    new_record = 1;
-		    mdl->ca_hashtable->filled_records++;
-		    cand = x;
-		} else {
-		    new_record = 0;
-		}
-	    } else {
-		/*
-		 * not found!
-		 * create a new record, update table stats
-		 * and link it to the bucket.
-		 */
-		cand = alc_malloc(&(mdl->alc), record_size);
-		if (cand == NULL)
-		    continue;
-		mdl->ca_hashtable->bytes += record_size;
-
-		cand->hash = hash;
-		cand->next = mdl->ca_hashtable->bucket[bucket];
-
-		mdl->ca_hashtable->records++;
-		mdl->ca_hashtable->bucket[bucket] = cand;
-		if (cand->next == NULL)
-		    mdl->ca_hashtable->live_buckets++;
-
-		new_record = 1;
-	    }
 	    start_tsctimer(map.stats->ca_updatecb_timer);
 	    cand->full = mdl->callbacks.update(mdl, pkt, cand, new_record);
 	    end_tsctimer(map.stats->ca_updatecb_timer);
@@ -551,9 +402,8 @@ batch_process(batch_t * batch)
      * in the batch.  The element of the array is set if the packet is
      * of interest for the given classifier, and it is 0 otherwise.
      */
-    logmsg(V_LOGCAPTURE,
-	   "calling batch_filter with pkts %p, count %d\n",
-	   *batch->pkts0, batch->count);
+    debug("calling batch_filter with pkts %p, count %d\n",
+	  *batch->pkts0, batch->count);
     start_tsctimer(map.stats->ca_filter_timer);
     which = batch_filter(batch);
     end_tsctimer(map.stats->ca_filter_timer);
@@ -574,9 +424,8 @@ batch_process(batch_t * batch)
 	    continue;
 
 	assert(mdl->name != NULL);
-	logmsg(V_LOGCAPTURE,
-	       "sending %d packets to module %s for processing\n",
-	       batch->count, map.modules[idx].name);
+	debug("sending %d packets to module %s for processing\n",
+	      batch->count, map.modules[idx].name);
 
 	start_tsctimer(map.stats->ca_module_timer);
 	capture_pkt(mdl, batch, which, &exp_tables);
@@ -601,7 +450,7 @@ batch_process(batch_t * batch)
 
 	    ivl = mdl->ca_hashtable->ivl;
 	    flush_state(mdl, &exp_tables);
-	    logmsg(LOGCAPTURE, "flexible flush for %s occurred\n", mdl->name);
+	    debug("flexible flush for %s occurred\n", mdl->name);
 
 	    /* reset capture table */
 	    mdl->shared_map = memmap_new(allocator_shared(), 64,
@@ -649,7 +498,7 @@ batch_process(batch_t * batch)
  * 
  */
 static void
-ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
+ca_ipc_module_add(procname_t sender, UNUSED int fd,
                     void *pack, size_t sz)
 {
     module_t tmp;
@@ -660,7 +509,7 @@ ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
 
     /* unpack the received module info */
     if (unpack_module(pack, sz, &tmp)) {
-	logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n");
+	warn("error when unpack module in IPC_MODULE_ADD\n");
 	return;
     }
 
@@ -671,7 +520,7 @@ ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
     clean_module(&tmp);
 
     if (activate_module(mdl, map.libdir)) {
-	logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
+	warn("error when activating module %s\n", mdl->name);
 	return;
     }
 
@@ -692,18 +541,18 @@ ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
 	    metadesc_incompatibility_t *incomps = NULL;
 	    int incomps_count;
 	    if (!src->outdesc) {
-		logmsg(LOGWARN, "sniffer %s does not provide outdesc\n",
-		       src->cb->name);
+		warn("sniffer %s does not provide outdesc\n",
+		     src->cb->name);
 		continue;
 	    }
 	    if (!metadesc_best_match(src->outdesc, mdl->indesc, &bm,
 				     &incomps, &incomps_count)) {
 		int i;
-		logmsg(LOGWARN, "module %s does not get %s packets:\n",
-		       mdl->name, src->cb->name);
+		warn("module %s does not get %s packets:\n",
+		     mdl->name, src->cb->name);
 		for (i = 0; i < incomps_count; i++) {
-		    logmsg(LOGWARN, "%s\n",
-			   metadesc_incompatibility_reason(&incomps[i]));
+		    warn("%s\n",
+			 metadesc_incompatibility_reason(&incomps[i]));
 		}
 		free(incomps);
 		mdl->status = MDL_INCOMPATIBLE;
@@ -734,8 +583,8 @@ ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
     /* Default values for filter stuff */
     mdl->filter_tree = NULL;
 
-    logmsg(LOGCAPTURE, "module %s activated with filter %s\n",
-	   mdl->name, mdl->filter_str);
+    msg("module %s activated with filter %s\n",
+	mdl->name, mdl->filter_str);
 
     /* Parse the filter string from the configuration file */
     parse_filter(mdl->filter_str, &(mdl->filter_tree), NULL);
@@ -756,8 +605,8 @@ ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
-                    void *buf, __attribute__((__unused__)) size_t len)
+ca_ipc_module_del(procname_t sender, UNUSED int fd,
+                    void *buf, UNUSED size_t len)
 {
     module_t *mdl;
     int idx;
@@ -788,9 +637,9 @@ ca_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_freeze(procname_t sender, __attribute__((__unused__)) int fd,
-              __attribute__((__unused__)) void *buf,
-	      __attribute__((__unused__)) size_t len)
+ca_ipc_freeze(procname_t sender, UNUSED int fd,
+              UNUSED void *buf,
+	      UNUSED size_t len)
 {
     fd_set r;
     int s;
@@ -824,7 +673,7 @@ ca_ipc_freeze(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
+ca_ipc_flush(procname_t sender, UNUSED int fd,
              void *buf, size_t len)
 {
     expiredmap_t *em;
@@ -858,8 +707,8 @@ ca_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void *buf,
-	     __attribute__((__unused__)) size_t len)
+ca_ipc_start(procname_t sender, UNUSED int fd, void *buf,
+	     UNUSED size_t len)
 {
     /* only SUPERVISOR or EXPORT should send this message */
     assert(sender == map.parent || sender == sibling(EXPORT));
@@ -880,7 +729,7 @@ ca_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void *buf,
 	    s_min_flush_ivl = TIME2TS(1, 0);
 	}
 
-	logmsg(LOGCAPTURE, "sniffers enabled\n");
+	msg("sniffers enabled\n");
     }
 }
 
@@ -892,9 +741,9 @@ ca_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void *buf,
  * 
  */
 static void
-ca_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
-            __attribute__((__unused__)) void *buf,
-	    __attribute__((__unused__)) size_t len)
+ca_ipc_exit(procname_t sender, UNUSED int fd,
+            UNUSED void *buf,
+	    UNUSED size_t len)
 {
     assert(sender == map.parent);
     ipc_finish();
@@ -947,8 +796,8 @@ cabuf_cl_destroy(int id, cabuf_cl_t * cl)
 static void
 cabuf_cl_handle_failure(int id, cabuf_cl_t * cl)
 {
-    logmsg(LOGWARN, "sending message to capture client (%d): %s\n",
-	   id, strerror(errno));
+    warn("sending message to capture client (%d): %s\n",
+	 id, strerror(errno));
     cabuf_cl_destroy(id, cl);
 }
 
@@ -972,8 +821,8 @@ cabuf_cl_handle_gone(int fd)
 	if (cl == NULL || cl->fd != fd)
 	    continue;
 
-	logmsg(LOGWARN, "capture client is gone (id: `%d`, fd: `%d`)\n",
-	       id, fd);
+	warn("capture client is gone (id: `%d`, fd: `%d`)\n",
+	     id, fd);
 	cabuf_cl_destroy(id, cl);
 	break;
     }
@@ -990,9 +839,9 @@ cabuf_cl_handle_gone(int fd)
  * message.
  */
 static void
-ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
-                int fd, __attribute__((__unused__)) void *buf,
-		__attribute__((__unused__)) size_t len)
+ca_ipc_cca_open(UNUSED procname_t sender,
+                int fd, UNUSED void *buf,
+		UNUSED size_t len)
 {
     ccamsg_t m;
     cabuf_cl_t *cl;
@@ -1000,7 +849,7 @@ ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
     int id;
 
     if (s_cabuf.has_clients_support == 0) {
-	logmsg(LOGWARN, "rejecting capture-client: clients support disabled. "
+	warn("rejecting capture-client: clients support disabled. "
 	       "does sniffer define SNIFF_SHBUF?\n");
 	ipc_send_with_fd(fd, CCA_ERROR, NULL, 0);
 	close(fd);
@@ -1009,7 +858,7 @@ ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
     }
 
     if (s_cabuf.clients_count == CA_MAXCLIENTS) {
-	logmsg(LOGWARN, "rejecting capture-client: too many clients\n");
+	warn("rejecting capture-client: too many clients\n");
 	ipc_send_with_fd(fd, CCA_ERROR, NULL, 0);
 	close(fd);
 	capture_loop_del_fd(fd);
@@ -1052,9 +901,9 @@ ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
  * state.
  */
 static void
-ca_ipc_cca_ack_batch(__attribute__((__unused__)) procname_t sender,
-                     __attribute__((__unused__)) int fd,
-		     void *buf, __attribute__((__unused__)) size_t len)
+ca_ipc_cca_ack_batch(UNUSED procname_t sender,
+                     UNUSED int fd,
+		     void *buf, UNUSED size_t len)
 {
     ccamsg_t *m = (ccamsg_t *) buf;
     cabuf_cl_t *cl;
@@ -1078,7 +927,7 @@ ca_ipc_cca_ack_batch(__attribute__((__unused__)) procname_t sender,
     for (source_id = 0; source_id < map.source_count; source_id++) {
 	cl->sniff_usage[source_id] -= batch->sniff_usage[source_id];
 	if (cl->sniff_usage[source_id] > 2)
-	    logmsg(LOGCAPTURE, "decr usage: %d\n", cl->sniff_usage[source_id]);
+	    msg("decr usage: %d\n", cl->sniff_usage[source_id]);
     }
     
     if (batch->ref_mask == 0) {
@@ -1226,7 +1075,7 @@ batch_export(batch_t * batch)
 	for (source_id = 0; source_id < map.source_count; source_id++) {
 	    cl->sniff_usage[source_id] += batch->sniff_usage[source_id];
 	    if (cl->sniff_usage[source_id] > 2)
-		logmsg(LOGCAPTURE, "incr usage: %d\n", cl->sniff_usage[source_id]);
+		debug("incr usage: %d\n", cl->sniff_usage[source_id]);
 	}
 
 	batch->ref_mask |= cl->ref_mask;
@@ -1250,13 +1099,13 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
     ppbuf_next(ppbuf);
     
     if (pkt->ts < batch->last_pkt_ts) {
-	logmsg(V_LOGCAPTURE,"pkt no. %d: timestamps not increasing "
-			   "(%u.%06u --> %u.%06u)\n",
-			   batch->woff,
-			   TS2SEC(batch->last_pkt_ts),
-			   TS2USEC(batch->last_pkt_ts),
-			   TS2SEC(pkt->ts),
-			   TS2USEC(pkt->ts));
+	notice("pkt no. %d: timestamps not increasing "
+	       "(%u.%06u --> %u.%06u)\n",
+	       batch->woff,
+	       TS2SEC(batch->last_pkt_ts),
+	       TS2USEC(batch->last_pkt_ts),
+	       TS2SEC(pkt->ts),
+	       TS2USEC(pkt->ts));
     }
 
     batch->count++;
@@ -1498,7 +1347,7 @@ cabuf_cl_res_mgmt(int wait_for_clients, int avg_batch_len)
     if (new_wait_for_clients == 0) {
     	if (wait_for_clients) {
 	    source_t *src;
-	    logmsg(LOGCAPTURE, "client rate normal, unfreezing all sniffers\n");
+	    debug("client rate normal, unfreezing all sniffers\n");
 	    for (src = map.sources; src; src = src->next) {
 		sniffer_t *sniff = src->sniff;
 
@@ -1518,7 +1367,7 @@ cabuf_cl_res_mgmt(int wait_for_clients, int avg_batch_len)
 	 */
     	if (wait_for_clients == 0) { 
 	    source_t *src;
-	    logmsg(LOGCAPTURE, "client rate low, freezing all sniffers\n");
+	    debug("client rate low, freezing all sniffers\n");
 	    for (src = map.sources; src; src = src->next) {
 		sniffer_t *sniff = src->sniff;
 
@@ -1638,7 +1487,7 @@ setup_sniffers(struct timeval *tout)
     /* if no sniffers now active then we log this change of state */
 
     if ((active == 0) && (map.runmode == RUNMODE_NORMAL)) {
-	logmsg(LOGWARN, "no sniffers left. waiting for queries\n");
+	msg("no sniffers left. waiting for queries\n");
 	print_timers();
     }
 
@@ -1656,7 +1505,7 @@ setup_sniffers(struct timeval *tout)
  */
 void
 capture_mainloop(int accept_fd, int supervisor_fd,
-                 __attribute__((__unused__)) int ca_id)
+                 UNUSED int ca_id)
 {
     struct timeval timeout = { 0, 0 };
     source_t *src;
@@ -1722,9 +1571,8 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 	if (src->cb->start(sniff) < 0) {
 	    sniff->flags |= SNIFF_INACTIVE;
 
-	    logmsg(LOGWARN,
-		   "error while starting sniffer %s (%s): %s\n",
-		   src->cb->name, src->device, strerror(errno));
+	    warn("error while starting sniffer %s (%s): %s\n",
+		 src->cb->name, src->device, strerror(errno));
 	    continue;
 	}
 
@@ -1836,8 +1684,8 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 			FD_CLR(i, &ipc_fds);
 		    } else {
 			/* an error. close the socket */
-			logmsg(LOGWARN, "error on IPC handle from %d (%d)\n",
-			       i, ipcr);
+			warn("error on IPC handle from %d (%d)\n",
+			     i, ipcr);
 			exit(EXIT_FAILURE);
 		    }
 		}
@@ -1934,8 +1782,8 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 	    map.stats->drops += drops;
 	    src->tot_dropped_pkts += drops;
 
-	    logmsg(V_LOGCAPTURE, "received %d packets from sniffer %s\n",
-		   sniff->ppbuf->captured, src->cb->name);
+	    debug("received %d packets from sniffer %s\n",
+		  sniff->ppbuf->captured, src->cb->name);
 	}
 
 	/* try to create a new batch containing all captured packets */
@@ -1993,8 +1841,7 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 		if (sniff->flags & SNIFF_FROZEN) {
 		    sniff->flags &= ~SNIFF_FROZEN;
 		    sniff->flags |= SNIFF_TOUCHED;
-		    logmsg(V_LOGCAPTURE, "unfreezing sniffer %s\n",
-			   src->cb->name);
+		    notice("unfreezing sniffer %s\n", src->cb->name);
 		}
 	    }
 	} else if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size)) {
@@ -2009,8 +1856,7 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 
 		if (sniff->flags & SNIFF_FILE) {
 		    sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
-		    logmsg(V_LOGCAPTURE, "freezing sniffer %s\n",
-			   src->cb->name);
+		    notice("freezing sniffer %s\n", src->cb->name);
 		}
 	    }
 	}
@@ -2032,7 +1878,7 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 
     }
 
-    logmsg(LOGWARN, "Capture: no sniffers left, terminating.\n");
+    msg("no sniffers left, terminating.\n");
 }
 
 /* end of file */
