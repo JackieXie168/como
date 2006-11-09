@@ -62,7 +62,6 @@ struct ondemand_me {
     sniffer_t		sniff;		/* common fields, must be the first */
     const char *	device;		/* source module name */
     int			fd;		/* cs file descriptor */
-    int			storage_fd;     /* ipc socket */
     module_t *		mdl;		/* source module */
     int			node;		/* node id */
     timestamp_t		start;		/* start timestamp */
@@ -84,7 +83,6 @@ sniffer_init(const char * device, const char * args)
     struct ondemand_me *me;
     
     me = safe_calloc(1, sizeof(struct ondemand_me));
-    me->storage_fd = -1; 
     me->sniff.fd = -1; 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_POLL | SNIFF_FILE;
@@ -159,8 +157,7 @@ sniffer_start(sniffer_t * s)
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
-    me->storage_fd = ipc_connect(STORAGE);
-    if (me->storage_fd == IPC_ERR)
+    if (ipc_connect(STORAGE) == IPC_ERR) 
 	goto error;
     
     /* find the module */
@@ -172,7 +169,7 @@ sniffer_start(sniffer_t * s)
     }
     
     logmsg(V_LOGSNIFFER, "opening file for reading (%s)\n", me->mdl->output);
-    me->sniff.fd = csopen(me->mdl->output, CS_READER, 0, me->storage_fd); 
+    me->sniff.fd = csopen(me->mdl->output, CS_READER, 0); 
     if (me->sniff.fd < 0) {
 	logmsg(LOGWARN, "sniffer-ondemand: "
 	       "error while opening file %s\n", me->mdl->output);
@@ -192,9 +189,6 @@ sniffer_start(sniffer_t * s)
 error:
     if (me->sniff.fd != -1) {
 	csclose(me->sniff.fd, 0);
-    }
-    if (me->storage_fd != -1) {
-    	close(me->storage_fd);
     }
     return -1;
 }

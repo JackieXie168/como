@@ -91,7 +91,7 @@ void capture_mainloop();
 /*
  * capture-client.c
  */
-cca_t * cca_open     (int cd);
+cca_t * cca_open     ();
 void	cca_destroy  (cca_t * cca);
 pkt_t * cca_next_pkt (cca_t * cca);
 

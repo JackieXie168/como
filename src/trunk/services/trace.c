@@ -43,7 +43,6 @@ int
 service_trace(int client_fd, __attribute__((__unused__)) int node_id,
               qreq_t * qreq)
 {
-    int capture_fd;
     cca_t * cca;
     char *http_resp;
     treenode_t *filter = NULL;
@@ -58,14 +57,11 @@ service_trace(int client_fd, __attribute__((__unused__)) int node_id,
     if (ret < 0)
 	goto error;
 
-    capture_fd = ipc_connect(CAPTURE);
-    if (capture_fd < 0)
+    if (ipc_connect(CAPTURE) < 0) 
 	goto error;
     
-    cca = cca_open(capture_fd);
-    if (cca == NULL)
+    if (!cca_open())
 	goto error;
-    
 
     if (qreq->filter_str != NULL &&
 	parse_filter(qreq->filter_str, &filter, NULL) != 0)
@@ -95,9 +91,6 @@ service_trace(int client_fd, __attribute__((__unused__)) int node_id,
 done:
     if (cca)
 	cca_destroy(cca);
-    if (capture_fd)
-	close(capture_fd);
-
     return ret;
 
 error:

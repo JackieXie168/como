@@ -365,7 +365,7 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
  *
  */
 static void
-senderr(int s, int id, int code)
+senderr(procname_t who, int id, int code)
 {
     csmsg_t m;
 
@@ -374,7 +374,7 @@ senderr(int s, int id, int code)
 	panic("storage failing a request without giving a reason");
     m.id = id;
     m.arg = code;
-    if (ipc_send_with_fd(s, S_ERROR, &m, sizeof(m)) != IPC_OK) {
+    if (ipc_send(who, IPC_ERROR, &m, sizeof(m)) != IPC_OK) {
 	panic("sending error message: %s\n", strerror(errno));
     }
 
@@ -389,7 +389,7 @@ senderr(int s, int id, int code)
  *
  */
 static void
-sendack(int s, int id, off_t ofs, size_t sz)
+sendack(procname_t who, int id, off_t ofs, size_t sz)
 {
     csmsg_t m;
 
@@ -397,7 +397,7 @@ sendack(int s, int id, off_t ofs, size_t sz)
     m.id = id;
     m.ofs = ofs;
     m.size = sz;
-    if (ipc_send_with_fd(s, S_ACK, &m, sizeof(m)) != IPC_OK) {
+    if (ipc_send(who, IPC_ACK, &m, sizeof(m)) != IPC_OK) {
 	panic("sending ack: %s\n", strerror(errno));
     }
 
@@ -583,7 +583,7 @@ flush_wb(csbytestream_t *bs)
  * 
  */
 static void
-handle_open(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
+handle_open(procname_t s, csmsg_t * in,
 	    __attribute__((__unused__)) size_t len)
 {
     csbytestream_t *bs; 
@@ -692,8 +692,7 @@ client_unlink(csclient_t *cl)
         return NULL;
 
     /* remove ourselves from the list of clients interested in this file */
-    for (prev = NULL, x = cf->clients; x != cl; prev = x, x = x->next)
-        ;
+    for (prev = NULL, x = cf->clients; x != cl; prev = x, x = x->next) ;
 
     /* now cl is after prev, we unlink it */
     if (prev == NULL)       /* it was the head */
@@ -735,8 +734,7 @@ client_unlink(csclient_t *cl)
  */
 static void
 handle_close(__attribute__((__unused__)) procname_t sender,
-             __attribute__((__unused__)) int fd, csmsg_t * in,
-	     __attribute__((__unused__)) size_t len)
+             csmsg_t * in, __attribute__((__unused__)) size_t len)
 {
     csbytestream_t * bs;
     csclient_t * cl;
@@ -868,8 +866,7 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
  *
  */
 static void
-handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
-	    __attribute__((__unused__)) size_t len)
+handle_seek(procname_t s, csmsg_t * in, __attribute__((__unused__)) size_t len)
 {
     csfile_t * cf;
     csclient_t * cl;
@@ -953,7 +950,7 @@ handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
  *
  */ 
 static void
-region_read(int s, csmsg_t * in, csclient_t *cl)
+region_read(procname_t s, csmsg_t * in, csclient_t *cl)
 {
     csbytestream_t *bs;
     csfile_t *cf;
@@ -1147,7 +1144,7 @@ wakeup_clients(csbytestream_t *bs)
  *   
  */         
 static void
-region_write(int s, csmsg_t * in, csclient_t *cl)   
+region_write(procname_t s, csmsg_t * in, csclient_t *cl)   
 {
     off_t bs_offset, want, have;
     size_t reg_size;
@@ -1310,8 +1307,7 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
  */
 static void
 handle_inform(__attribute__((__unused__)) procname_t sender,
-              __attribute__((__unused__)) int fd, csmsg_t * in,
-	      __attribute__((__unused__)) size_t len)
+              csmsg_t * in, __attribute__((__unused__)) size_t len)
 {
     csclient_t * cl;
     off_t bs_offset; 
@@ -1365,8 +1361,8 @@ handle_inform(__attribute__((__unused__)) procname_t sender,
  *
  */
 static void
-handle_region(__attribute__((__unused__)) procname_t sender, int fd,
-              csmsg_t * in, __attribute__((__unused__)) size_t len)
+handle_region(procname_t sender, csmsg_t * in, 
+	      __attribute__((__unused__)) size_t len)
 {
     csclient_t * cl;
 
@@ -1375,14 +1371,14 @@ handle_region(__attribute__((__unused__)) procname_t sender, int fd,
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
         logmsg(LOGWARN, "S_REGION: invalid id (%d)\n", in->id);
-	senderr(fd, in->id, EINVAL);
+	senderr(sender, in->id, EINVAL);
         return;
     }
         
     cl = cs_state.clients[in->id];
     if (cl == NULL) {
         logmsg(LOGWARN, "S_REGION: client does not exists (id: %d)\n", in->id);
-	senderr(fd, in->id, EBADF);
+	senderr(sender, in->id, EBADF);
         return;
     }
 
@@ -1398,9 +1394,9 @@ handle_region(__attribute__((__unused__)) procname_t sender, int fd,
      */ 
     cl->timeout = CS_DEFAULT_TIMEOUT; 
     if (cl->mode == CS_WRITER)  	/* write mode */
-	region_write(fd, in, cl);
+	region_write(sender, in, cl);
     else
-	region_read(fd, in, cl);
+	region_read(sender, in, cl);
 }
 
 /*
@@ -1534,8 +1530,7 @@ scheduler(timestamp_t elapsed)
  *
  */
 static void
-st_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
-             __attribute__((__unused__)) void * buf,
+st_ipc_exit(procname_t sender, __attribute__((__unused__)) void * buf,
              __attribute__((__unused__)) size_t len)
 {
     assert(sender == map.parent);  
