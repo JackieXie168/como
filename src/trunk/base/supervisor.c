@@ -61,7 +61,7 @@ extern struct _como map;
  * 
  */
 static void 
-su_ipc_echo(procname_t sender, __attribute__((__unused__)) int fd, void * buf, 
+su_ipc_echo(procname_t sender, void * buf, 
 	    __attribute__((__unused__)) size_t len) 
 {
     logmsg_t *lmsg = (logmsg_t *) buf;
@@ -81,8 +81,7 @@ su_ipc_echo(procname_t sender, __attribute__((__unused__)) int fd, void * buf,
  * 
  */
 static void
-su_ipc_sync(procname_t sender, __attribute__((__unused__)) int fd,
-            __attribute__((__unused__)) void * b, 
+su_ipc_sync(procname_t sender, __attribute__((__unused__)) void * b, 
 	    __attribute__((__unused__)) size_t l)
 {
     int i; 
@@ -124,8 +123,7 @@ su_ipc_sync(procname_t sender, __attribute__((__unused__)) int fd,
  *
  */
 static void
-su_ipc_record(__attribute__((__unused__)) procname_t sender,
-        __attribute__((__unused__)) int fd, void * buf,
+su_ipc_record(__attribute__((__unused__)) procname_t sender, void * buf,
         __attribute__((__unused__)) size_t l)
 {
     assert(map.runmode == RUNMODE_INLINE);  
@@ -144,7 +142,6 @@ su_ipc_record(__attribute__((__unused__)) procname_t sender,
  */
 static void
 su_ipc_done(__attribute__((__unused__)) procname_t sender,
-        __attribute__((__unused__)) int fd, 
 	__attribute__((__unused__)) void * b,
         __attribute__((__unused__)) size_t l)
 {
@@ -153,8 +150,6 @@ su_ipc_done(__attribute__((__unused__)) procname_t sender,
     ipc_send(STORAGE, IPC_EXIT, NULL, 0); 
     exit(EXIT_SUCCESS);
 }
-
-
 
 
 /*

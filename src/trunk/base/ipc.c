@@ -96,13 +96,15 @@ static ipc_handler_fn handlers[IPC_MAX] = {0};
  */
 static ipc_dest_t * ipc_dests = NULL; 
 
+
 /*
- * -- ipc_write
+ * -- _ipc_write
  * 
  * keeps writing until complete.
+ * 
  */
 static ssize_t
-ipc_write(int fd, const void *buf, size_t count)
+_ipc_write(int fd, const void *buf, size_t count)
 {
     size_t n = 0;
 
@@ -118,6 +120,120 @@ ipc_write(int fd, const void *buf, size_t count)
     return (ssize_t) n; /* == count */
 }
 
+
+/* 
+ * -- _ipc_wait
+ * 
+ * wait for a message (any message) from the process 'who'. 
+ * 
+ * XXX we should probably wait only for specific messages (e.g., IPC_ACK)
+ *     and discard all others in the meanwhile. check if this change would
+ *     break anything in the program logic.
+ *  
+ */ 
+static void
+_ipc_wait(procname_t who) 
+{
+    fd_set rs;
+    int r, fd;
+    
+    fd = ipc_getfd(who); 
+
+    FD_ZERO(&rs);
+    FD_SET(fd, &rs);
+
+    r = -1;
+    while (r < 0) {
+        r = select(fd + 1, &rs, NULL, NULL, NULL);
+        if (r < 0 && errno != EINTR)
+            panic("select");
+    }
+}
+
+
+/* 
+ * -- _ipc_recv
+ * 
+ * blocking IPC to receive a message from a given process. 
+ * it sits on a read from a socket and returns the message as is. 
+ * this is used by ipc_handle.
+ */ 
+static int
+_ipc_recv(int fd, ipc_msg_t * msg, int max_len) 
+{
+    ipc_dest_t * x;
+    int r;
+    
+    /* read the message header first */
+    r = como_read(fd, (char *) msg, sizeof(ipc_msg_t));
+    if (r != sizeof(ipc_msg_t)) {
+        if (r == 0)
+            return IPC_EOF;
+ 
+        /* find the name for this destination */
+        for (x = ipc_dests; x && x->fd != fd; x = x->next)
+            ;
+ 
+        logmsg(LOGIPC, "error reading IPC (%s): %s\n",
+               x ? getprocfullname(x->name) : "UNKNOWN",
+               strerror(errno));
+
+        return IPC_ERR;
+    }
+    
+    /* check the message is not too big */ 
+    if (msg->len > max_len) { 
+        logmsg(LOGWARN, "IPC message from %s too large: %d\n", 
+               getprocfullname(msg->sender), msg->len); 
+        return IPC_ERR;
+    } 
+	
+    /* read the data part now */
+    if (msg->len > 0) 
+        como_read(fd, msg->data, msg->len);   
+    
+    /*
+     * check if we know about this sender. otherwise
+     * add it to the list of possible destinations.
+     */
+    for (x = ipc_dests; x && x->name != msg->sender; x = x->next)
+        ;
+             
+    if (x == NULL) {
+        x = safe_calloc(1, sizeof(ipc_dest_t));
+        x->name = msg->sender;
+        x->fd = fd;
+        x->next = ipc_dests;
+        ipc_dests = x;
+        logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
+               getprocfullname(msg->sender), fd);
+    } else if (msg->type == IPC_SYNC) {
+        x->fd = fd;
+        logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
+               getprocfullname(msg->sender), fd);
+    }
+
+    return msg->type; 
+}
+
+
+/* 
+ * -- ipc_getfd
+ * 
+ * get the socket descriptor from a process name 
+ * 
+ */ 
+int 
+ipc_getfd(procname_t who)
+{
+    ipc_dest_t * x; 
+
+    /* find the socket for this destination */
+    for (x = ipc_dests; x && x->name != who; x = x->next)
+	;
+
+    return x? x->fd : IPC_ERR; 
+}
 
 /* 
  * -- ipc_listen 
@@ -139,10 +255,11 @@ ipc_listen(procname_t who)
     return fd; 
 }
 
+
 /* 
  * -- ipc_finish 
  * 
- * destroy the process accept socket if any and
+ * destroy the accept socket if any and
  * close any file descriptor used for IPC. Free the memory
  * used to store known peers.
  */
@@ -163,6 +280,7 @@ ipc_finish()
 	ipc_dests = x;
     }
 }
+
 
 /* 
  * -- ipc_connect
@@ -215,6 +333,7 @@ int
 ipc_send(procname_t dst, ipctype_t type, const void *data, size_t sz)
 {
     ipc_dest_t * x; 
+    ipc_msg_t * msg;
 
     /* find the socket for this destination */
     for (x = ipc_dests; x && x->name != dst; x = x->next)
@@ -234,14 +353,6 @@ ipc_send(procname_t dst, ipctype_t type, const void *data, size_t sz)
 	return IPC_ERR; 
     }
     
-    return ipc_send_with_fd(x->fd, type, data, sz);
-}
-
-int
-ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz)
-{
-    ipc_msg_t *msg;
-    
     msg = alloca(sizeof(ipc_msg_t) + sz);
     
     msg->type = type;
@@ -250,9 +361,8 @@ ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz)
     
     memcpy(msg->data, data, sz);
     
-    if (ipc_write(fd, msg, sizeof(ipc_msg_t) + sz) == -1) {
-	return IPC_ERR;
-    }
+    if (_ipc_write(ipc_getfd(dst), msg, sizeof(ipc_msg_t) + sz) == -1) 
+        return IPC_ERR;
     
 #if 0
     /* 
@@ -265,12 +375,12 @@ ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz)
     msg.sender = map.whoami;
     msg.len = sz;
 
-    if (ipc_write(fd, &msg, sizeof(ipc_msg_t)) == -1) {
-	return IPC_ERR;
+    if (_ipc_write(fd, &msg, sizeof(ipc_msg_t)) == -1) {
+       return IPC_ERR;
     }
     
-    if (sz > 0 && ipc_write(fd, data, sz) == -1) {
-	return IPC_ERR;
+    if (sz > 0 && _ipc_write(fd, data, sz) == -1) {
+       return IPC_ERR;
     }
 
 #endif
@@ -289,10 +399,6 @@ ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz)
 int 
 ipc_send_blocking(procname_t dst, ipctype_t type, const void *data, size_t sz) 
 {
-    ipc_dest_t * x;
-    fd_set r;
-    int s;
-
     /* first send the message */
     if (ipc_send(dst, type, data, sz) != IPC_OK) 
 	return IPC_ERR; 
@@ -304,26 +410,43 @@ ipc_send_blocking(procname_t dst, ipctype_t type, const void *data, size_t sz)
      *     to the message sent. 
      * 
      */ 
+    _ipc_wait(dst);
+    return ipc_handle(ipc_getfd(dst));
+} 
 
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->name != dst; x = x->next)
-	;
 
-    if (x == NULL) 
-	panicx("sending message %d to unknown destination", type); 
+/* 
+ * -- ipc_receive
+ * 
+ * receive a message from a given process and within a certain 
+ * timeout. 
+ * 
+ */
+void *
+ipc_receive(procname_t who, ipctype_t *type, size_t *sz, struct timeval *tout)
+{
+    static char buf[MAX_IPC_LEN + sizeof(ipc_msg_t)];
+    ipc_msg_t * msg;
+    fd_set rs;
+    int r, fd;
+    
+    fd = ipc_getfd(who);
+ 
+    FD_ZERO(&rs);
+    FD_SET(fd, &rs);
 
-    FD_ZERO(&r);
-    FD_SET(x->fd, &r);
+    r = select(fd + 1, &rs, NULL, NULL, tout);
+    if (r == 0) 
+	return NULL;
 
-    s = -1;
-    while (s < 0) {
-        s = select(x->fd + 1, &r, NULL, NULL, NULL);
-        if (s < 0 && errno != EINTR)
-            panic("select");
-    }
-        
-    return ipc_handle(x->fd);
-}; 
+    msg = (ipc_msg_t *) buf; 
+    if (_ipc_recv(fd, msg, MAX_IPC_LEN) == IPC_ERR) 
+	return NULL; 
+
+    *type = msg->type;
+    *sz = msg->len;
+    return (void *) msg->data; 
+}
 
 
 /* 
@@ -336,183 +459,23 @@ ipc_send_blocking(procname_t dst, ipctype_t type, const void *data, size_t sz)
 int 
 ipc_handle(int fd)
 {
-    ipc_dest_t * x; 
-    ipc_msg_t msg; 
-    char * buf = NULL; 
-    int r; 
+    char buf[MAX_IPC_LEN + sizeof(ipc_msg_t)]; 
+    ipc_msg_t * msg = (ipc_msg_t *) buf; 
+    int ret; 
 
-    /* read the message header first */
-    r = como_read(fd, (char *) &msg, sizeof(msg)); 
-    if (r != sizeof(msg)) { 
-	if (r == 0)
-	    return IPC_EOF;
-    	
-	/* find the name for this destination */
-	for (x = ipc_dests; x && x->fd != fd; x = x->next)
-	    ;
-
-	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
-	       x ? getprocfullname(x->name) : "UNKNOWN",
-	       strerror(errno));
+    ret = _ipc_recv(fd, msg, MAX_IPC_LEN); 
+    if (ret == IPC_EOF) 
+	return IPC_EOF; 
+    if (ret == IPC_ERR) 
 	return IPC_ERR; 
-    } 
 	    
-    /* read the data part now */ 
-    if (msg.len > 0) { 
-	/*
-	 * NOTE: the assumption is that msgs are small, so alloca is used in
-	 * place of safe_malloc. In future a possible generalization could be
-	 * to use a threshold to split between small and big msgs.
-	 */
-	//buf = safe_malloc(msg.len);
-	buf = alloca(msg.len);
-	como_read(fd, buf, msg.len); 
-    } 
-
-    /* 
-     * check if we know about this sender. otherwise 
-     * add it to the list of possible destinations. 
-     */ 
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->name != msg.sender; x = x->next)
-	;
-
-    if (x == NULL) {
-	x = safe_calloc(1, sizeof(ipc_dest_t)); 
-	x->name = msg.sender; 
-	x->fd = fd;
-	x->next = ipc_dests; 
-	ipc_dests = x; 
-	logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
-	       getprocfullname(msg.sender), fd);
-    } else if (msg.type == IPC_SYNC) {
-	x->fd = fd;
-	logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
-	       getprocfullname(msg.sender), fd);
-    }
-
     /* find the right handler if any */
-    if (handlers[msg.type] != NULL) 
-	handlers[msg.type](msg.sender, fd, buf, msg.len); 
+    if (handlers[msg->type] != NULL) 
+	handlers[msg->type](msg->sender, msg->data, msg->len); 
 
-    //free(buf);
-    
     return IPC_OK;
 }
-
-/* 
- * -- ipc_wait_reply_with_fd
- * 
- * wait for a reply from fd. returns the msg type in type and the msg in read
- * into the area pointed by data for at most sz bytes. after the function exits
- * sz contains the real message length.
- * 
- */ 
-int
-ipc_wait_reply_with_fd(int fd, ipctype_t *type, void *data, size_t *sz)
-{
-    ipc_msg_t msg;
-    fd_set rs;
-    int r;
     
-    FD_ZERO(&rs);
-    FD_SET(fd, &rs);
-
-    r = -1;
-    while (r < 0) {
-        r = select(fd + 1, &rs, NULL, NULL, NULL);
-        if (r < 0 && errno != EINTR)
-            panic("select");
-    }
-    
-    /* read the message header first */
-    r = como_read(fd, (char *) &msg, sizeof(msg)); 
-    if (r != sizeof(msg)) {
-    	ipc_dest_t * x;
-    	
-	if (r == 0)
-	    return IPC_EOF;
-    	
-	/* find the name for this destination */
-	for (x = ipc_dests; x && x->fd != fd; x = x->next)
-	    ;
-
-	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
-	       x ? getprocfullname(x->name) : "UNKNOWN",
-	       strerror(errno));
-	return IPC_ERR; 
-    } 
-    
-    *type = msg.type;
-	    
-    /* read the data part now */ 
-    if (msg.len > 0) {
-	if (msg.len <= (ssize_t) *sz) {
-	    como_read(fd, data, msg.len);
-	} else {
-	    char *t;
-	    como_read(fd, data, *sz);
-	    t = alloca(msg.len - *sz);
-	    como_read(fd, t, msg.len - *sz);
-	}
-	*sz = msg.len;
-    }
-    
-    return IPC_OK;
-}
-
-
-int
-ipc_try_recv_with_fd(int fd, ipctype_t *type, void *data, size_t *sz,
-		     struct timeval *timeout)
-{
-    ipc_msg_t msg;
-    fd_set rs;
-    int r;
-    
-    FD_ZERO(&rs);
-    FD_SET(fd, &rs);
-
-    r = select(fd + 1, &rs, NULL, NULL, timeout);
-    if (r == 0) {
-	return IPC_EAGAIN;
-    }
-    
-    /* read the message header first */
-    r = como_read(fd, (char *) &msg, sizeof(msg)); 
-    if (r != sizeof(msg)) {
-    	ipc_dest_t * x;
-    	
-	if (r == 0)
-	    return IPC_EOF;
-    	
-	/* find the name for this destination */
-	for (x = ipc_dests; x && x->fd != fd; x = x->next)
-	    ;
-
-	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
-	       x ? getprocfullname(x->name) : "UNKNOWN",
-	       strerror(errno));
-	return IPC_ERR; 
-    } 
-    
-    *type = msg.type;
-	    
-    /* read the data part now */ 
-    if (msg.len > 0) {
-	if (msg.len <= (ssize_t) *sz) {
-	    como_read(fd, data, msg.len);
-	} else {
-	    char *t;
-	    como_read(fd, data, *sz);
-	    t = alloca(msg.len - *sz);
-	    como_read(fd, t, msg.len - *sz);
-	}
-	*sz = msg.len;
-    }
-    
-    return IPC_OK;
-}
 
 /* 
  * -- ipc_register
@@ -545,25 +508,6 @@ void
 ipc_clear()
 {
     bzero(handlers, sizeof(handlers)); 
-}
-
-
-/* 
- * -- ipc_getfd
- * 
- * get the socket descriptor from a process name 
- * 
- */ 
-int 
-ipc_getfd(procname_t who)
-{
-    ipc_dest_t * x; 
-
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->name != who; x = x->next)
-	;
-
-    return x ? x->fd : IPC_ERR; 
 }
 
 

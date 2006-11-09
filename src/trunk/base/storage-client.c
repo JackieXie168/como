@@ -106,8 +106,6 @@ four methods, and provides an mmap-like interface.
  * 
  */
 typedef struct { 
-    int sd;			/* unix socket 
-				 * XXX not that nice to have it here */ 
     char * name; 		/* file name, dynamically allocated */
     int mode;			/* file access mode */
     int fd; 			/* OS file descriptor */
@@ -134,10 +132,10 @@ static csfile_t * files[CS_MAXCLIENTS];
  * Obviously the descriptor is not select()-able.
  */ 
 int
-csopen(const char * name, int mode, off_t size, int sd) 
+csopen(const char * name, int mode, off_t size) 
 { 
     csfile_t * cf;
-    csmsg_t m;
+    csmsg_t out, *in;
     int fd;
     ipctype_t ret;
     size_t sz;
@@ -157,24 +155,21 @@ csopen(const char * name, int mode, off_t size, int sd)
      * file descriptor found, prepare and send the request 
      * message to the storage process
      */
-    bzero(&m, sizeof(m));
-    m.arg = mode;
-    m.size = size;
-    strncpy(m.name, name, FILENAME_MAX);
+    bzero(&out, sizeof(out));
+    out.arg = mode;
+    out.size = size;
+    strncpy(out.name, name, FILENAME_MAX);
     
-    sz = sizeof(m);
-    
-    if (ipc_send_with_fd(sd, S_OPEN, &m, sz) != IPC_OK) {
+    if (ipc_send(STORAGE, S_OPEN, &out, sizeof(out)) != IPC_OK)
 	panic("sending message to storage: %s\n", strerror(errno));
-    }
     
-    if (ipc_wait_reply_with_fd(sd, &ret, &m, &sz) != IPC_OK) {
+    in = ipc_receive(STORAGE, &ret, &sz, NULL); 
+    if (in == NULL) 
 	panic("receiving reply from storage: %s\n", strerror(errno));
-    }
     
-    if (ret == S_ERROR) {
-	logmsg(LOGWARN, "error opening file %s: %s\n", name, strerror(m.arg));
-	errno = m.arg;
+    if (ret == IPC_ERROR) {
+	logmsg(LOGWARN, "error opening file %s: %s\n", name, strerror(in->arg));
+	errno = in->arg;
 	return -1;
     }
 
@@ -184,17 +179,16 @@ csopen(const char * name, int mode, off_t size, int sd)
      */
     cf = safe_calloc(1, sizeof(csfile_t)); 
     cf->fd = -1; 
-    cf->sd = sd;
     cf->name = strdup(name);
     cf->mode = mode;
-    cf->id = m.id;
-    cf->off_file = m.ofs;  
+    cf->id = in->id;
+    cf->off_file = in->ofs;  
 
     /* store current offset. m.size is set to 0 by the server if this client
      * is a reader. otherwise it is equal to the size of the bytestream so 
      * that writes are append only. 
      */
-    cf->offset = m.ofs + m.size; 
+    cf->offset = in->ofs + in->size; 
 
     files[fd] = cf;
     return fd; 
@@ -219,7 +213,7 @@ _csinform(csfile_t * cf, off_t ofs)
     m.arg = 0; 
     m.ofs = ofs; 
 
-    if (ipc_send_with_fd(cf->sd, S_INFORM, &m, sizeof(csmsg_t)) != IPC_OK) {
+    if (ipc_send(STORAGE, S_INFORM, &m, sizeof(csmsg_t)) != IPC_OK) {
 	logmsg(LOGWARN, "message to storage: %s\n", strerror(errno)); 
     }
 }
@@ -249,7 +243,7 @@ static void *
 _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg) 
 {
     csfile_t * cf;
-    csmsg_t m;
+    csmsg_t out, *in;
     int flags;
     int diff;
     size_t m_sz;
@@ -258,32 +252,30 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
     cf = files[fd];
 
     /* Package the request and send it to the server */
-    m.id = cf->id;
-    m.arg = arg;
-    m.size = *sz;
-    m.ofs = ofs; /* the map offset */
+    out.id = cf->id;
+    out.arg = arg;
+    out.size = *sz;
+    out.ofs = ofs; /* the map offset */
     
-    m_sz = sizeof(csmsg_t);
-
     /* send the request out */
-    if (ipc_send_with_fd(cf->sd, method, &m, m_sz) != IPC_OK) {
+    if (ipc_send(STORAGE, method, &out, sizeof(out)) != IPC_OK) {
 	logmsg(LOGWARN, "message to storage: %s\n", strerror(errno));
 	*sz = -1;
 	return NULL;
     }
 
     /* block waiting for the acknowledgment */
-    if (ipc_wait_reply_with_fd(cf->sd, &ret, &m, &m_sz) != IPC_OK) {
+    in = ipc_receive(STORAGE, &ret, &m_sz, NULL); 
+    if (in == NULL) 
 	panic("receiving reply from storage: %s\n", strerror(errno));
-    }
 
     switch (ret) {
-    case S_ERROR: 
-	errno = m.arg;
+    case IPC_ERROR: 
+	errno = in->arg;
 	*sz = -1;		
 	return NULL;
 
-    case S_ACK: 
+    case IPC_ACK: 
 	/* 
 	 * The server acknowledged our request,
 	 * unmap the current block (both for csmap and csseek)
@@ -296,7 +288,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
 	     * A zero sized block indicates end-of-bytestream. If so, close
 	     * the current file and return an EOF as well.
 	     */
-	    if (m.size == 0) { 
+	    if (in->size == 0) { 
 		close(cf->fd);
 		*sz = 0;
 		return NULL;
@@ -304,7 +296,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
 	} else {	/* seek variants */
 	    /* the current file is not valid anymore */
 	    close(cf->fd);
-	    cf->off_file = m.ofs;
+	    cf->off_file = in->ofs;
 	    cf->fd = -1;
 	    return NULL;		/* we are done */
 	}
@@ -315,7 +307,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
 	break;
     }
 
-    if ((ssize_t) m.size == -1)
+    if ((ssize_t) in->size == -1)
 	panicx("unexpected return from storage process");
 
     /*
@@ -324,7 +316,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
      * the currently open file. if not, close the current file and 
      * open a new one. 
      */
-    if (cf->fd < 0 || m.ofs != cf->off_file) {
+    if (cf->fd < 0 || in->ofs != cf->off_file) {
 	char * nm;
 
 	if (cf->fd >= 0)
@@ -335,11 +327,11 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
 #else
 	flags = (cf->mode != CS_WRITER)? O_RDONLY : O_WRONLY|O_APPEND; 
 #endif
-	asprintf(&nm, "%s/%016llx", cf->name, m.ofs); 
+	asprintf(&nm, "%s/%016llx", cf->name, in->ofs); 
 	cf->fd = open(nm, flags, 0666);
 	if (cf->fd < 0)
 	    panic("opening file %s acked! (%s)\n", nm, strerror(errno));
-	cf->off_file = m.ofs;
+	cf->off_file = in->ofs;
 	free(nm);
     } 
 	   
@@ -348,7 +340,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
      */
     flags = (cf->mode != CS_WRITER)? PROT_READ : PROT_WRITE; 
     cf->offset = ofs; 
-    cf->size = *sz = m.size;
+    cf->size = *sz = in->size;
 
     /* 
      * align the mmap to the memory pagesize 
@@ -528,9 +520,8 @@ csclose(int fd, off_t ofs)
     m.id = cf->id; 
     m.ofs = ofs;
     
-    if (ipc_send_with_fd(cf->sd, S_CLOSE, &m, sizeof(m)) != IPC_OK) {
+    if (ipc_send(STORAGE, S_CLOSE, &m, sizeof(m)) != IPC_OK) 
 	panic("sending message to storage: %s\n", strerror(errno));
-    }
     
     free(cf);
 }

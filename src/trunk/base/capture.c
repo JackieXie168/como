@@ -74,13 +74,15 @@ static int s_active_modules = 0;
 #define CACLIENT_SAMPLING_THRESH	0.35
 #define CACLIENT_WAIT_THRESH		0.65
 
+
 typedef struct cabuf_cl {
-    int		fd;		/* descriptor to communicate with the client */
+    procname_t  name; 		/* client process name */
     uint64_t	ref_mask;	/* client mask */
     float *	sniff_usage;	/* cumulative client usage of sniffer resources
 				   for each sniffer */
     int *	sampling;	/* current sampling rate */
 } cabuf_cl_t;
+
 
 /*
  * The cabuf is a ring buffer containing pointers to captured packets.
@@ -649,8 +651,7 @@ batch_process(batch_t * batch)
  * 
  */
 static void
-ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
-                    void *pack, size_t sz)
+ca_ipc_module_add(procname_t sender, void *pack, size_t sz)
 {
     module_t tmp;
     module_t *mdl;
@@ -756,8 +757,8 @@ ca_ipc_module_add(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
-                    void *buf, __attribute__((__unused__)) size_t len)
+ca_ipc_module_del(procname_t sender, void *buf, 
+		  __attribute__((__unused__)) size_t len)
 {
     module_t *mdl;
     int idx;
@@ -788,31 +789,17 @@ ca_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_freeze(procname_t sender, __attribute__((__unused__)) int fd,
-              __attribute__((__unused__)) void *buf,
+ca_ipc_freeze(procname_t sender, __attribute__((__unused__)) void *buf,
 	      __attribute__((__unused__)) size_t len)
 {
-    fd_set r;
-    int s;
-
     /* only the parent process should send this message */
     assert(sender == map.parent);
 
     /* send acknowledgement */
-    ipc_send(SUPERVISOR, IPC_ACK, NULL, 0);
+    ipc_send(sender, IPC_ACK, NULL, 0);
 
-    /* wait on an infinite select() */
-    FD_ZERO(&r);
-    FD_SET(fd, &r);
-
-    s = -1;
-    while (s < 0) {
-	s = select(fd + 1, &r, NULL, NULL, NULL);
-	if (s < 0 && errno != EINTR)
-	    panic("select");
-    }
-
-    ipc_handle(fd);		/* FIXME: error handling */
+    /* wait for SUPERVISOR to say something */
+    ipc_handle(ipc_getfd(sender));		/* FIXME: error handling */
 }
 
 /* 
@@ -824,8 +811,7 @@ ca_ipc_freeze(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
-             void *buf, size_t len)
+ca_ipc_flush(procname_t sender, void *buf, size_t len)
 {
     expiredmap_t *em;
 
@@ -858,7 +844,7 @@ ca_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 static void
-ca_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void *buf,
+ca_ipc_start(procname_t sender, void *buf,
 	     __attribute__((__unused__)) size_t len)
 {
     /* only SUPERVISOR or EXPORT should send this message */
@@ -892,8 +878,7 @@ ca_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void *buf,
  * 
  */
 static void
-ca_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
-            __attribute__((__unused__)) void *buf,
+ca_ipc_exit(procname_t sender, __attribute__((__unused__)) void *buf,
 	    __attribute__((__unused__)) size_t len)
 {
     assert(sender == map.parent);
@@ -911,14 +896,17 @@ static void
 cabuf_cl_destroy(int id, cabuf_cl_t * cl)
 {
     batch_t *bi, *bn;
+    int fd; 
 
     /* update s_capbuf */
     s_cabuf.clients[id] = NULL;
     s_cabuf.clients_count--;
-    capture_loop_del_fd(cl->fd);
-    FD_CLR(cl->fd, &s_cabuf.clients_fds);
 
-    close(cl->fd);
+    /* XXX check that this is the right thing to do here */
+    fd = ipc_getfd(cl->name); 
+    capture_loop_del_fd(fd); 
+    FD_CLR(fd, &s_cabuf.clients_fds);
+    close(fd);
 
     bi = TQ_HEAD(&s_cabuf.batches);
     while (bi) {
@@ -959,7 +947,7 @@ cabuf_cl_handle_failure(int id, cabuf_cl_t * cl)
  * Handles a client gone by logging a message and destroying its state.
  */
 static void
-cabuf_cl_handle_gone(int fd)
+cabuf_cl_handle_gone(procname_t who)
 {
     int id;
 
@@ -969,18 +957,17 @@ cabuf_cl_handle_gone(int fd)
 
 	cl = s_cabuf.clients[id];
 	/* skip unwanted clients */
-	if (cl == NULL || cl->fd != fd)
+	if (cl == NULL || cl->name != who)
 	    continue;
 
-	logmsg(LOGWARN, "capture client is gone (id: `%d`, fd: `%d`)\n",
-	       id, fd);
+	logmsg(LOGWARN, "capture client is gone (id: %d)\n", id);
 	cabuf_cl_destroy(id, cl);
 	break;
     }
 }
 
 
-/**
+/*
  * -- ca_ipc_cca_open
  * 
  * Handles a CCA_OPEN message. Accepts the new capture client if possible
@@ -988,31 +975,33 @@ cabuf_cl_handle_gone(int fd)
  * to the client.
  * If it's not possible to accept the new client replies with a CCA_ERROR
  * message.
+ * 
  */
 static void
-ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
-                int fd, __attribute__((__unused__)) void *buf,
+ca_ipc_cca_open(procname_t sender, __attribute__((__unused__)) void *buf,
 		__attribute__((__unused__)) size_t len)
 {
     ccamsg_t m;
     cabuf_cl_t *cl;
     size_t sz;
-    int id;
+    int id, fd;
+
+    fd = ipc_getfd(sender); 
 
     if (s_cabuf.has_clients_support == 0) {
 	logmsg(LOGWARN, "rejecting capture-client: clients support disabled. "
 	       "does sniffer define SNIFF_SHBUF?\n");
-	ipc_send_with_fd(fd, CCA_ERROR, NULL, 0);
-	close(fd);
-	capture_loop_del_fd(fd);
+	ipc_send(sender, CCA_ERROR, NULL, 0);
+	capture_loop_del_fd(fd); 
+	close(fd); 
 	return;
     }
 
     if (s_cabuf.clients_count == CA_MAXCLIENTS) {
 	logmsg(LOGWARN, "rejecting capture-client: too many clients\n");
-	ipc_send_with_fd(fd, CCA_ERROR, NULL, 0);
-	close(fd);
-	capture_loop_del_fd(fd);
+	ipc_send(sender, CCA_ERROR, NULL, 0);
+	capture_loop_del_fd(fd); 
+	close(fd); 
 	return;
     }
 
@@ -1023,7 +1012,7 @@ ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
 
     assert(id < CA_MAXCLIENTS);
     cl = safe_calloc(1, sizeof(cabuf_cl_t));
-    cl->fd = fd;
+    cl->name = sender;
     cl->ref_mask = (1LL << (uint64_t) (id + 1));	/* id 0 -> mask 2 */
     cl->sniff_usage = safe_calloc(map.source_count , sizeof(float));
     cl->sampling = mem_calloc(1, sizeof(int)); /* sampling rate is kept into
@@ -1037,7 +1026,7 @@ ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
     m.open_res.sampling = cl->sampling;
     sz = sizeof(m.open_res);
 
-    if (ipc_send_with_fd(fd, CCA_OPEN_RES, &m, sz) != IPC_OK) {
+    if (ipc_send(sender, CCA_OPEN_RES, &m, sz) != IPC_OK) {
 	cabuf_cl_handle_failure(id, cl);
     }
 
@@ -1053,7 +1042,6 @@ ca_ipc_cca_open(__attribute__((__unused__)) procname_t sender,
  */
 static void
 ca_ipc_cca_ack_batch(__attribute__((__unused__)) procname_t sender,
-                     __attribute__((__unused__)) int fd,
 		     void *buf, __attribute__((__unused__)) size_t len)
 {
     ccamsg_t *m = (ccamsg_t *) buf;
@@ -1217,7 +1205,7 @@ batch_export(batch_t * batch)
 
 	/* send the message */
 
-	if (ipc_send_with_fd(cl->fd, CCA_NEW_BATCH, &m, sz) != IPC_OK) {
+	if (ipc_send(cl->name, CCA_NEW_BATCH, &m, sz) != IPC_OK) {
 	    cabuf_cl_handle_failure(id, cl);
 	    continue;
 	}
@@ -1781,8 +1769,7 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 
 	    if (TQ_HEAD(&exp_tables)) {
 		expiredmap_t *x = TQ_HEAD(&exp_tables);
-		if (ipc_send(sibling(EXPORT), IPC_FLUSH, &x, sizeof(x)) !=
-		    IPC_OK)
+		if (ipc_send(sibling(EXPORT),IPC_FLUSH,&x,sizeof(x)) != IPC_OK)
 		    panic("IPC_FLUSH failed!");
 	    }
 
@@ -1816,7 +1803,7 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 		continue;
 
 	    if (i == accept_fd) {
-		/* an EXPORT process wants to connect */
+		/* an EXPORT or QUERY (capture-client) wants to connect */
 		int fd = accept(accept_fd, NULL, NULL);
 		if (fd < 0)
 		    panic("accepting export process");

@@ -95,7 +95,7 @@ typedef enum {
  * Function prototypes 
  */
 void storage_mainloop();
-int csopen(const char * name, int mode, off_t size, int sd);
+int csopen(const char * name, int mode, off_t size);
 off_t csgetofs(int fd);
 void *csmap(int fd, off_t ofs, ssize_t * sz);
 void cscommit(int fd, off_t ofs);

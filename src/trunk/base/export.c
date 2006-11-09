@@ -51,11 +51,6 @@
 
 extern struct _como map;	/* Global state structure */
 
-int storage_fd;                 /* socket to storage 
-				 * 
-				 * XXX this is temporary until IPC are
-				 *     used to communicate with STORAGE too
-				 */
 
 inline static void
 handle_print_fail(module_t *mdl)
@@ -484,8 +479,7 @@ store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts)
  * 
  */
 static void
-ex_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
-                    void * pack, size_t sz) 
+ex_ipc_module_add(procname_t src, void * pack, size_t sz) 
 {
     module_t tmp; 
     module_t * mdl;
@@ -528,7 +522,7 @@ ex_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
      */
     if (map.runmode == RUNMODE_NORMAL) {
 	logmsg(V_LOGEXPORT, "module %s: opening file\n", mdl->name);
-	mdl->file = csopen(mdl->output, CS_WRITER, mdl->streamsize, storage_fd);
+	mdl->file = csopen(mdl->output, CS_WRITER, mdl->streamsize);
 	if (mdl->file < 0)
 	    panic("cannot open file %s for %s", mdl->output, mdl->name);
 	mdl->offset = csgetofs(mdl->file);
@@ -554,8 +548,8 @@ ex_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
  * 
  */ 
 static void
-ex_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
-                    void * buf, __attribute__((__unused__)) size_t len)
+ex_ipc_module_del(procname_t sender, void * buf, 
+	  	  __attribute__((__unused__)) size_t len)
 {
     module_t * mdl;
     etable_t * et; 
@@ -604,8 +598,7 @@ ex_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */ 
 static void
-ex_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
-                void *buf, size_t len)
+ex_ipc_flush(procname_t sender, void *buf, size_t len)
 {
     expiredmap_t *em;
     
@@ -663,8 +656,7 @@ ex_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
  *
  */
 static void
-ex_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void * buf,
-                size_t len)
+ex_ipc_start(procname_t sender, void * buf, size_t len)
 {
     /* only the parent process should send this message */
     assert(sender == map.parent);
@@ -682,8 +674,7 @@ ex_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void * buf,
  *
  */
 static void
-ex_ipc_done(procname_t sender, __attribute__((__unused__)) int fd,
-            __attribute__((__unused__)) void * buf,
+ex_ipc_done(procname_t sender, __attribute__((__unused__)) void * buf,
 	__attribute__((__unused__)) size_t len)
 {
     int i;
@@ -721,8 +712,7 @@ ex_ipc_done(procname_t sender, __attribute__((__unused__)) int fd,
  *
  */
 static void
-ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
-             __attribute__((__unused__)) void * buf,
+ex_ipc_exit(procname_t sender, __attribute__((__unused__)) void * buf,
              __attribute__((__unused__)) size_t len)
 {
     assert(sender == map.parent);  
@@ -747,7 +737,7 @@ void
 export_mainloop(__attribute__((__unused__)) int in_fd, int parent_fd,
                 __attribute__((__unused__)) int id)
 {
-    int capture_fd; 
+    int capture_fd, storage_fd;              
     int	max_fd;
     fd_set rx;
 

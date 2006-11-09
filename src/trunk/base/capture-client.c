@@ -40,7 +40,6 @@
 
 struct cca {
     int		id;
-    int		cd;
     batch_t *	batch;
     pkt_t **	pktptr;
     int		count;
@@ -55,20 +54,21 @@ struct cca {
  * of client.
  */
 cca_t *
-cca_open(int cd)
+cca_open()
 {
     ipctype_t ret;
-    ccamsg_t m;
+    ccamsg_t * m;
     size_t sz;
     cca_t *cca;
     
-    if (ipc_send_with_fd(cd, CCA_OPEN, NULL, 0) != IPC_OK) {
+    if (ipc_send(CAPTURE, CCA_OPEN, NULL, 0) != IPC_OK) {
 	panic("sending message to capture: %s\n", strerror(errno));
     }
-    sz = sizeof(m);
-    if (ipc_wait_reply_with_fd(cd, &ret, &m, &sz) != IPC_OK) {
+
+    sz = sizeof(ccamsg_t);
+    m = ipc_receive(CAPTURE, &ret, &sz, NULL); 
+    if (m == NULL) 
 	panic("receiving reply from capture: %s\n", strerror(errno));
-    }
     
     if (ret == CCA_ERROR) {
 	logmsg(LOGWARN, "client refused by capture\n");
@@ -77,9 +77,8 @@ cca_open(int cd)
     assert(ret == CCA_OPEN_RES);
     
     cca = safe_calloc(1, sizeof(cca_t));
-    cca->id = m.open_res.id;
-    cca->cd = cd;
-    cca->sampling = m.open_res.sampling;
+    cca->id = m->open_res.id;
+    cca->sampling = m->open_res.sampling;
     
     return cca;
 }
@@ -108,7 +107,7 @@ cca_send_ack(cca_t * cca)
     m.ack_batch.id = cca->id;
     m.ack_batch.batch = cca->batch;
     sz = sizeof(m.ack_batch);
-    if (ipc_send_with_fd(cca->cd, CCA_ACK_BATCH, &m, sz) != IPC_OK) {
+    if (ipc_send(CAPTURE, CCA_ACK_BATCH, &m, sz) != IPC_OK) {
 	panic("sending message to capture: %s\n", strerror(errno));
     }
     cca->batch = NULL;
@@ -128,18 +127,16 @@ pkt_t *cca_next_pkt(cca_t * cca)
 
 next_batch:
     if (cca->batch == NULL) {
-	ccamsg_t m;
+	ccamsg_t * m;
 	size_t sz;
 	ipctype_t ret;
-	int x;
-	sz = sizeof(m);
-	x = ipc_try_recv_with_fd(cca->cd, &ret, &m, &sz, NULL);
-	if (x == IPC_ERR) {
+	m = ipc_receive(CAPTURE, &ret, &sz, NULL);
+	if (m == NULL) 
 	    panic("receiving message from capture: %s\n", strerror(errno));
-	}
+
 	if (ret == CCA_NEW_BATCH) {
-	    assert(m.new_batch.id == cca->id);
-	    cca->batch = m.new_batch.batch;
+	    assert(m->new_batch.id == cca->id);
+	    cca->batch = m->new_batch.batch;
 	    cca->pktptr = cca->batch->pkts0;
 	    cca->count = 0;
 	} else {

@@ -47,7 +47,7 @@
 extern struct _como map;
 
 static timestamp_t
-start_timestamp(module_t * mdl, int storage_fd)
+start_timestamp(module_t * mdl)
 {
     int file_fd = -1;
     off_t ofs;
@@ -55,7 +55,7 @@ start_timestamp(module_t * mdl, int storage_fd)
     timestamp_t ts = 0;
     char *ptr;
     
-    file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0, storage_fd);
+    file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0);
     if (file_fd >= 0) {
 	/* get start offset */
 	ofs = csgetofs(file_fd);
@@ -92,7 +92,6 @@ service_status(int client_fd, int node_id,
     node_t * node;
     time_t start, last; 
     struct tm * timedata; 
-    int storage_fd;
     int ret, len, idx;
     int secs, dd, hh, mm, ss; 
     uint64_t ld_15m = 0, ld_1h = 0, ld_6h = 0, ld_1d = 0;
@@ -168,7 +167,7 @@ service_status(int client_fd, int node_id,
      * and read the very first timestamp. we will send this information 
      * to let the user know how much past data is available to each module
      */
-    storage_fd = ipc_connect(STORAGE); 
+    ipc_connect(STORAGE); 
 
     /* 
      * if this is the master node (i.e. node 0) and there 
@@ -195,7 +194,7 @@ service_status(int client_fd, int node_id,
     } else {
 	mdl = module_lookup(node->source, 0); /* the source is in the node 0 */
 	if (mdl) {
-	    node_src_ts = start_timestamp(mdl, storage_fd);
+	    node_src_ts = start_timestamp(mdl);
 	}
     }
 
@@ -216,7 +215,7 @@ service_status(int client_fd, int node_id,
 	    /* we now look at the very first record for this module 
     	     * to get an idea on how far in the past a query could go. 
  	     */
- 	    ts = start_timestamp(mdl, storage_fd);
+ 	    ts = start_timestamp(mdl);
 	} else {
 	    ts = node_src_ts;
 	}
@@ -259,7 +258,5 @@ service_status(int client_fd, int node_id,
     if (ret < 0)
 	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
-    close(storage_fd);
-    
     return 0;
 }

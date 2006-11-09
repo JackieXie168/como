@@ -55,8 +55,7 @@ extern struct _como map;
  *
  */
 static void
-qd_ipc_sync(procname_t sender, __attribute__((__unused__)) int fd,
-            __attribute__((__unused__)) void * b,
+qd_ipc_sync(procname_t sender, __attribute__((__unused__)) void * b,
             __attribute__((__unused__)) size_t l)
 {
     char * pack;
@@ -83,7 +82,6 @@ qd_ipc_sync(procname_t sender, __attribute__((__unused__)) int fd,
  */  
 static void
 qd_ipc_record(__attribute__((__unused__)) procname_t sender,
-        __attribute__((__unused__)) int fd, 
 	void * buf, size_t len)
 {
     int ret; 
@@ -103,8 +101,7 @@ qd_ipc_record(__attribute__((__unused__)) procname_t sender,
  *
  */
 static void
-qd_ipc_done(procname_t sender, __attribute__((__unused__)) int fd,
-        __attribute__((__unused__)) void * b,
+qd_ipc_done(procname_t sender, __attribute__((__unused__)) void * b,
         __attribute__((__unused__)) size_t l)
 {
     ipc_send(child(CAPTURE, getprocid(sender)), IPC_EXIT, NULL, 0);

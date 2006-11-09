@@ -337,8 +337,7 @@ handle_replay_fail(module_t *mdl)
  *
  */
 static void
-qu_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
-                  void * pack, size_t sz)
+qu_ipc_module_add(procname_t src, void * pack, size_t sz)
 {
     module_t tmp;
     module_t * mdl;
@@ -371,8 +370,7 @@ qu_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
  *
  */
 static void
-qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
-             __attribute__((__unused__)) void * buf,
+qu_ipc_start(procname_t sender, __attribute__((__unused__)) void * buf,
              __attribute__((__unused__)) size_t len)
 {
     /* only SUPERVISOR should send this message */
@@ -414,7 +412,7 @@ void
 query(int client_fd, int supervisor_fd, int node_id)
 {
     qreq_t req;
-    int storage_fd, file_fd;
+    int file_fd;
     off_t ofs; 
     ssize_t len;
     int mode, ret;
@@ -557,11 +555,11 @@ query(int client_fd, int supervisor_fd, int node_id)
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
-    storage_fd = ipc_connect(STORAGE);
+    ipc_connect(STORAGE);
 
     logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req.mdl->output); 
     mode =  req.wait ? CS_READER : CS_READER_NOBLOCK; 
-    file_fd = csopen(req.mdl->output, mode, 0, storage_fd); 
+    file_fd = csopen(req.mdl->output, mode, 0); 
     if (file_fd < 0) 
 	panic("opening file %s", req.mdl->output);
 
@@ -664,6 +662,5 @@ query(int client_fd, int supervisor_fd, int node_id)
     csclose(file_fd, 0);
     /* close the socket and the file */
     close(client_fd);
-    close(storage_fd);
     close(supervisor_fd);
 }
