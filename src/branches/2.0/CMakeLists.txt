@@ -132,6 +132,11 @@ FIND_PACKAGE(BISON REQUIRED)
 FIND_PACKAGE(FLEX REQUIRED)
 
 #
+# Search for mono
+#
+FIND_PACKAGE(MONO)
+
+#
 # Search for libpcap library
 #
 FIND_PACKAGE(PCAP)
@@ -182,6 +187,7 @@ ADD_SUBDIRECTORY(sniffers)
 ADD_SUBDIRECTORY(services)
 ADD_SUBDIRECTORY(base)
 ADD_SUBDIRECTORY(man)
+ADD_SUBDIRECTORY(misc)
 
 #
 # Output configuration messages
