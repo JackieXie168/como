@@ -53,7 +53,7 @@ ENDIF(ENABLE_PROFILING)
 #
 # Create target for the filter parser
 #
-ADD_CUSTOM_TARGET(FilterLexic echo "Creating filter-syntax.c")
+ADD_CUSTOM_TARGET(FilterLexic echo "Creating filter-lexic.c")
 ADD_CUSTOM_TARGET(FilterSyntax echo "Creating filter-syntax.c")
 
 #
