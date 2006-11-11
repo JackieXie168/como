@@ -32,231 +32,243 @@
  * This is the logging facility. 
  */
 
-
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h> 			/* va_start */
 #include <string.h>
-#include <errno.h>
-#include <unistd.h>     
-#include <dlfcn.h>
-#include <assert.h>
+#include <stdlib.h>
 
 #include "como.h"
-#include "ipc.h"
 
-extern struct _como map;	/* root of the data */
 
+typedef struct log_handler {
+    char *	domain;
+    log_fn	user_fn;
+    void *	user_data;
+} log_handler_t;
+
+
+static void
+default_handler(const char * domain, log_level_t level,
+		const char * message, struct timeval tv,
+		UNUSED void * user_data)
+{
+    FILE *o;
+    char *pre;
+
+    if (level & LOG_LEVEL_ERROR) {
+	o = stderr;
+	pre = "FATAL ERROR: ";
+    } else if (level & LOG_LEVEL_WARNING) {
+	o = stderr;
+	pre = "WARNING: ";
+    } else {
+	o = stdout;
+	pre = "";
+    }
+
+    if (domain) {
+	fprintf(o, "[%5ld.%06ld %s] %s%s",
+		tv.tv_sec % 86400, (long int) tv.tv_usec,
+		domain, pre, message);
+    } else {
+	fprintf(o, "[%5ld.%06ld] %s%s",
+		tv.tv_sec % 86400, (long int) tv.tv_usec,
+		pre, message);
+    }
+}
+
+static log_handler_t s_initial_handler = {
+    domain: NULL,
+    user_fn: default_handler,
+    user_data: NULL
+};
+
+/* static state */
+static struct log_static_state {
+    log_level_t		level;
+    log_handler_t *	handlers;
+    int			handlers_count;
+    char *		buf;
+    size_t		buf_len;
+} s_log = {
+    level: LOG_LEVEL_ERROR | LOG_LEVEL_WARNING |
+	   LOG_LEVEL_NOTICE | LOG_LEVEL_MESSAGE | LOG_LEVEL_DEBUG,
+    buf: NULL,
+    buf_len: 0,
+    handlers: &s_initial_handler,
+    handlers_count: 1
+};
+
+
+void
+log_set_level(log_level_t level)
+{
+    s_log.level = level;
+}
+
+
+log_level_t
+log_get_level()
+{
+    return s_log.level;
+}
+
+
+static inline log_handler_t *
+log_handler_lookup(const char * domain)
+{
+    log_handler_t *h;
+    int i;
+    
+    if (s_log.handlers == NULL)
+	return NULL;
+
+    for (h = s_log.handlers, i = 0; i < s_log.handlers_count; h++, i++) {
+	if (domain == NULL && h->domain == NULL)
+	    return h;
+	if (h->domain != NULL && strcmp(h->domain, domain) == 0)
+	    return h;
+    }
+    
+    return s_log.handlers;
+}
+
+
+void
+log_set_handler(const char * domain, log_fn user_fn, void * user_data)
+{
+    log_handler_t *h;
+
+    if (user_fn == NULL)
+	return;
+
+    h = log_handler_lookup(domain);
+    if (h == NULL) {
+	s_log.handlers_count++;
+	if (s_log.handlers != &s_initial_handler) {
+	    s_log.handlers = como_realloc(s_log.handlers, s_log.handlers_count *
+					sizeof(log_handler_t));
+	} else {
+	    s_log.handlers = como_malloc(s_log.handlers_count *
+					sizeof(log_handler_t));
+	    s_log.handlers[0] = s_initial_handler;
+	}
+	h = &s_log.handlers[s_log.handlers_count - 1];
+    }
+    h->domain = como_strdup(domain);
+    h->user_fn = user_fn;
+    h->user_data = user_data; 
+}
+
+
+void
+log_out(const char *domain, log_level_t level,
+	const char *format, ...)
+{
+    va_list ap;
+    size_t len;
+    struct timeval tv;
+    log_handler_t *h;
+
+    if (!(s_log.level & level))
+        return;
+    
+    gettimeofday(&tv, NULL);
+    
+    va_start(ap, format);
+    
+    /* format the message */
+    len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
+    
+    /* manage the message buffer */
+    if (len > s_log.buf_len) {
+    	if (s_log.buf_len * 2 > len) {
+	    s_log.buf_len *= 2;
+    	} else {
+	    s_log.buf_len = len;
+	    if (s_log.buf_len % 4) {
+		s_log.buf_len += 4 - s_log.buf_len % 4;
+	    }
+    	}
+    	s_log.buf = como_realloc(s_log.buf, s_log.buf_len);
+	/* CHECKME: need va_end, va_start? */
+	len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
+    }
+    
+    h = log_handler_lookup(domain);
+    h->user_fn(domain, level, s_log.buf, tv, h->user_data);
+    
+    va_end(ap);
+    
+    if (level & LOG_LEVEL_ERROR)
+	abort();
+}
+
+
+void
+log_outv(const char *domain, log_level_t level, const char *format, va_list ap)
+{
+    size_t len;
+    struct timeval tv;
+    log_handler_t *h;
+
+    if (!(s_log.level & level))
+        return;
+    
+    gettimeofday(&tv, NULL);
+    
+    /* format the message */
+    len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
+    
+    /* manage the message buffer */
+    if (len > s_log.buf_len) {
+    	if (s_log.buf_len * 2 > len) {
+	    s_log.buf_len *= 2;
+    	} else {
+	    s_log.buf_len = len;
+	    if (s_log.buf_len % 4) {
+		s_log.buf_len += 4 - s_log.buf_len % 4;
+	    }
+    	}
+    	s_log.buf = como_realloc(s_log.buf, s_log.buf_len);
+	len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
+    }
+    
+    h = log_handler_lookup(domain);
+    h->user_fn(domain, level, s_log.buf, tv, h->user_data);
+
+    if (level & LOG_LEVEL_ERROR)
+	abort();
+}
 
 /** 
- * -- loglevel_name
+ * -- log_level_name
  * 
  * Returns a string with the log message level. 
  * 
- * XXX It ignores the verbose flags. 
  */
 char *
-loglevel_name(int flags)
+log_level_name(log_level_t level)
 {
-    static char s[1024];
+    static char s[64];
+    char *name = s;
 
-    char *ui= flags & LOGUI ? "UI " : "";
-    char *wa= flags & LOGWARN ? "WARN " : "";
-    char *st= flags & LOGSTORAGE ? "STORAGE " : "";
-    char *ca= flags & LOGCAPTURE ? "CAPTURE " : "";
-    char *ex= flags & LOGEXPORT ? "EXPORT " : "";
-    char *qu= flags & LOGQUERY ? "QUERY " : "";
-    char *sn= flags & LOGSNIFFER ? "SNIFFER " : "";
-    char *ti= flags & LOGTIMER ? "TIMER " : "";
+    if (level & LOG_LEVEL_ERROR)
+	name += sprintf(name, "ERROR ");
 
-    sprintf(s, "%s%s%s%s%s%s%s%s", ui, wa, st, ca, ex, qu, sn, ti);
+    if (level & LOG_LEVEL_WARNING)
+	name += sprintf(name, "WARNING ");
+
+    if (level & LOG_LEVEL_NOTICE)
+	name += sprintf(name, "NOTICE ");
+
+    if (level & LOG_LEVEL_MESSAGE)
+	name += sprintf(name, "MESSAGE ");
+
+    if (level & LOG_LEVEL_DEBUG)
+	name += sprintf(name, "DEBUG ");
+
+    *(name - 1) = '\0';
+    
     return s;
 }
 
-
-void
-displaymsg(FILE *f, procname_t sender, logmsg_t *lmsg)
-{
-    if (lmsg->flags != LOGUI) {
-    	fprintf(f, "[%5ld.%06ld %2s] ",
-		lmsg->tv.tv_sec % 86400, (long int)lmsg->tv.tv_usec,
-		getprocname(sender));
-    }
-    fprintf(f, "%s", lmsg->msg);
-}
-
-
-/** 
- * -- _logmsg
- * 
- * Prints a message to stdout or sends it to the 
- * SUPERVISOR depending on the running loglevel.
- *
- */ 
-void
-_logmsg(const char * file, int line, int flags, const char *fmt, ...)
-{
-    va_list ap;
-    static int printit;	/* one copy per process */
-    int len;
-#define STATIC_BUF_LEN 128
-    static char static_buf[STATIC_BUF_LEN];
-    static logmsg_t *lmsg = (logmsg_t *) static_buf;
-    static int buf_len = STATIC_BUF_LEN - sizeof(logmsg_t);
-    
-    /* last msg variables */
-    static char static_last[STATIC_BUF_LEN];
-    static logmsg_t *last_lmsg = (logmsg_t *) static_last;
-    static const char *last_file;
-    static int last_line;
-    static int seen_count;
-
-    /* fmt = NULL causes logmsg to clean some state */
-    if (fmt == NULL) {
-	last_file = NULL;
-	last_line = 0;
-	seen_count = 0;
-	printit = 0;
-	return;
-    }
-
-    if (flags)
-        printit = (map.logflags & flags);
-    if (!printit)
-        return;
-    
-    gettimeofday(&lmsg->tv, NULL);
-    lmsg->flags = flags;
-    
-    va_start(ap, fmt);
-    
-    /* format the message */
-    len = 1 + vsnprintf(lmsg->msg, buf_len, fmt, ap);
-    
-    /* manage the message buffer */
-    if (len > buf_len) {
-    	if (buf_len * 2 > len) {
-	    buf_len *= 2;
-    	} else {
-	    buf_len = buf_len + len + (buf_len / 4);
-	    if (buf_len % 4) {
-		buf_len += 4 - buf_len % 4;
-	    }
-    	}
-	if (lmsg != (logmsg_t *) static_buf) {
-	    lmsg = safe_realloc(lmsg, buf_len + sizeof(logmsg_t));
-	    last_lmsg = safe_realloc(last_lmsg, buf_len + sizeof(logmsg_t));
-	} else {
-	    lmsg = safe_malloc(buf_len + sizeof(logmsg_t));
-	    memcpy(lmsg, static_buf, sizeof(logmsg_t));
-	    last_lmsg = safe_malloc(buf_len + sizeof(logmsg_t));
-	    memcpy(last_lmsg, static_last, sizeof(logmsg_t));
-	    strcpy(last_lmsg->msg, ((logmsg_t *) static_last)->msg);
-	}
-	/* CHECKME: need va_end, va_start? */
-	len = 1 + vsnprintf(lmsg->msg, buf_len, fmt, ap);
-    }
-    
-    /* detect already printed messages */
-    if (last_line == line && last_file == file) {
-	if (strcmp(last_lmsg->msg, lmsg->msg) == 0) {
-	    seen_count++;
-	    va_end(ap);
-	    return;
-	}
-    }
-    
-    if (seen_count > 0) {
-	logmsg_t *seen_msg;
-	int seen_len;
-	int last_len;
-	/* notify of previoulsy repeated message */
-	last_len = strlen(last_lmsg->msg);
-	seen_len = sizeof(logmsg_t) + last_len + 64;
-	seen_msg = alloca(seen_len);
-	seen_msg->tv = last_lmsg->tv;
-	seen_msg->flags = last_lmsg->flags;
-	strncpy(seen_msg->msg, last_lmsg->msg, last_len);
-	if (*(seen_msg->msg + last_len - 1) != '\n') {
-	    /* add a trailing \n to last msg if there's none */
-	    *(seen_msg->msg + last_len) = '\n';
-	    last_len++;
-	}
-	last_len += snprintf(seen_msg->msg + last_len, 64,
-			     "    -- Last message repeated %d time%s.\n",
-			     seen_count, (seen_count > 1) ? "s" : "");
-	if (map.whoami != SUPERVISOR) 
-	    ipc_send(SUPERVISOR, IPC_ECHO, seen_msg,
-		     sizeof(logmsg_t) + last_len + 1); 
-	else 
-	    displaymsg(stdout, map.whoami, seen_msg);
-	seen_count = 0;
-    }
-    
-    /* save the message */
-    memcpy(last_lmsg, lmsg, sizeof(logmsg_t));
-    last_line = line;
-    last_file = file;
-    strncpy(last_lmsg->msg, lmsg->msg, len);
-    
-    
-    if (map.whoami != SUPERVISOR) 
-        ipc_send(SUPERVISOR, IPC_ECHO, lmsg, sizeof(logmsg_t) + len);
-    else 
-	displaymsg(stdout, map.whoami, lmsg);
-    va_end(ap);
-}
-
-
-/**
- * -- _epanic
- *
- * Not to be called directly, but through panic().
- * Prints the message on LOGUI together with the errno message. 
- * It aborts the program.
- *
- */
-void
-_epanic(const char * file, int line, const char *fmt, ...)
-{           
-    char *fmt1, *buf;
-    va_list ap;
- 
-    asprintf(&fmt1, "[%2s]  **** PANIC: (%s:%d) %s: %s\n",
-        getprocname(map.whoami), file, line, fmt, strerror(errno));
-    va_start(ap, fmt);
-    vasprintf(&buf, fmt1, ap);
-    va_end(ap);
-    logmsg(LOGUI, "%s", buf);
-    free(fmt1);
-    free(buf);   
-    abort();
-}
-
-
-/**
- * -- _epanicx
- * 
- * Not to be called directly, but through panic().
- * Prints the message on LOGUI without errno message 
- * and aborts the program. 
- *
- */
-void
-_epanicx(const char * file, int line, const char *fmt, ...)
-{
-    char *fmt1, *buf;
-    va_list ap;
-
-    asprintf(&fmt1, "[%2s]  **** PANIC: (%s:%d) %s\n",
-	getprocname(map.whoami), file, line, fmt);
-    va_start(ap, fmt);
-    vasprintf(&buf, fmt1, ap);
-    va_end(ap);
-    logmsg(LOGUI, "%s", buf);
-    free(fmt1);
-    free(buf);
-    abort();
-}
-
-/* end of file */
