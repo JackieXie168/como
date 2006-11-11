@@ -168,8 +168,8 @@ main(int argc, char **argv)
     int ret, i;
     FILE *csout, *glueout, *serialout;
 
-    if (argc != 3)
-        errx(1, "args: %s module_name input_file", argv[0]);
+    if (argc < 3)
+        errx(1, "usage: %s mdl_name input_file.h [incdir1 incdir2..]", argv[0]);
 
     module = argv[1];
     input = argv[2];
@@ -189,11 +189,21 @@ main(int argc, char **argv)
     /*
      * run cpp on it to expand definitions/macros
      */
-    ret = asprintf(&command, "cpp %s %s", input, cpp_output);
+    ret = asprintf(&command, "cpp"); /* cpp .. */
+    if (ret < 0)
+        err(1, "out of memory");
+    for (i = 3; i < argc ; i++) {    /* .. args .. */
+        /* we don't care about mem leaks in successive asprintf's */
+        ret = asprintf(&command, "%s -I %s", command, argv[i]);
+        if (ret < 0)
+            err(1, "out of memory");
+    }
+                                    /* .. input and output files */
+    ret = asprintf(&command, "%s %s %s", command, input, cpp_output);
     if (ret < 0)
         err(1, "out of memory");
 
-    ret = system(command);
+    ret = system(command); /* run cpp */
     if (ret < 0)
         err(1, "system() fails");
     if (WEXITSTATUS(ret) != 0)
