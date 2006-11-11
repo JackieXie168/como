@@ -136,6 +136,7 @@ ipc_peer_new(uint8_t class, const char * code, const char * name)
     p->class = class;
     snprintf(p->code, SIZEOF_IPC_PEER_CODE, code);
     snprintf(p->name, SIZEOF_IPC_PEER_NAME, name);
+    return p;
 }
 
 
@@ -332,7 +333,7 @@ ipc_create_socket(const ipc_peer_full_t * p, int is_server)
 	    return IPC_ERR;
 	}
 	listen(fd, SOMAXCONN);
-	notice("Listening connections on peer %s@%s.\n", p->name, p->at);
+	notice("Listening connections on %s@%s.\n", p->name, p->at);
     } else {
 	/* client mode */
 	int i;
@@ -724,7 +725,7 @@ ipc_receive(ipc_peer_t * peer, ipc_type * type, void * data, size_t * sz,
 	    
     /* read the data part now */ 
     if (msg.len > 0) {
-	if (msg.len <= (ssize_t) *sz) {
+	if (msg.len <= *sz) {
 	    /* user provided buffer is suitable to contain the message */
 	    r = (size_t) ipc_read(x->fd, data, msg.len);
 	} else {
