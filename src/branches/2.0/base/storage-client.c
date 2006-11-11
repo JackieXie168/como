@@ -36,12 +36,12 @@ This file implements the client side for processes trying to
 access files in CoMo. The interface to the storage module has
 four methods, and provides an mmap-like interface.
 
-  int csopen(const char * name, int mode, off_t size, int sd)
+  int csopen(const char * name, int mode, off_t size, ipc_peer_t * storage)
 
 	name		is the file name
 	mode		is the access mode, CS_READER or CS_WRITER
  	size		is the max bytestream size (CS_WRITER only)
-	sd		is the (unix-domain) socket used to talk to the
+	storage		is the peer used to talk to the
 			daemon supplying the service.
 
 	Returns an integer to be used as a file descriptor,
@@ -81,19 +81,23 @@ four methods, and provides an mmap-like interface.
  *
  */
 
+#define _GNU_SOURCE
+#include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <assert.h>
 
-
+#define LOG_DOMAIN	"ST-CL"
 #include "como.h"
-#include "storage.h"
-#include "ipc.h"
+
+#include "storagepriv.h"
+
 
 /* 
  * Client-side file descriptor 
@@ -106,18 +110,18 @@ four methods, and provides an mmap-like interface.
  * 
  */
 typedef struct { 
-    int sd;			/* unix socket 
-				 * XXX not that nice to have it here */ 
-    char * name; 		/* file name, dynamically allocated */
-    int mode;			/* file access mode */
-    int fd; 			/* OS file descriptor */
-    int id; 			/* STORAGE file ID */
-    off_t off_file; 		/* start offset of current file */
-    void * addr; 		/* address of memory mapped block */
-    size_t size; 		/* size of memory mapped block */
-    off_t offset; 		/* bytestream offset of the mapped block */
-    off_t readofs; 		/* currently read offset (used by csreadp) */
-    off_t readsz; 		/* currently read size (used by csreadp) */
+    ipc_peer_t *storage;	/* unix socket 
+				   XXX not that nice to have it here */
+    char *	name;		/* file name, dynamically allocated */
+    int		mode;		/* file access mode */
+    int		fd;		/* OS file descriptor */
+    int		id;		/* STORAGE file ID */
+    off_t	off_file;	/* start offset of current file */
+    void *	addr;		/* address of memory mapped block */
+    size_t	size;		/* size of memory mapped block */
+    off_t	offset;		/* bytestream offset of the mapped block */
+    off_t	readofs;	/* currently read offset (used by csreadp) */
+    off_t	readsz;		/* currently read size (used by csreadp) */
 } csfile_t;
 
 
@@ -134,22 +138,24 @@ static csfile_t * files[CS_MAXCLIENTS];
  * Obviously the descriptor is not select()-able.
  */ 
 int
-csopen(const char * name, int mode, off_t size, int sd) 
+csopen(const char * name, csmode_t mode, off_t size, ipc_peer_t * storage)
 { 
     csfile_t * cf;
     csmsg_t m;
     int fd;
-    ipctype_t ret;
+    ipc_type ret;
     size_t sz;
+    int swap;
 
-    assert(mode == CS_READER || mode == CS_WRITER || mode == CS_READER_NOBLOCK);
+    assert(mode == CS_READER || mode == CS_WRITER ||
+	   mode == CS_READER_NOBLOCK);
 
     /* look for an empty file descriptor */
     for (fd = 0; fd < CS_MAXCLIENTS && files[fd] != NULL; fd++)
 	;
 
     if (fd == CS_MAXCLIENTS) {
-	logmsg(LOGWARN, "Too many open files, cannot open %s\n", name); 
+	warn("Can't open %s: Too many open files.\n", name); 
 	return -1;
     } 
 
@@ -164,16 +170,16 @@ csopen(const char * name, int mode, off_t size, int sd)
     
     sz = sizeof(m);
     
-    if (ipc_send_with_fd(sd, S_OPEN, &m, sz) != IPC_OK) {
-	panic("sending message to storage: %s\n", strerror(errno));
+    if (ipc_send(storage, S_OPEN, &m, sz) != IPC_OK) {
+	error("sending message to storage: %s\n", strerror(errno));
     }
     
-    if (ipc_wait_reply_with_fd(sd, &ret, &m, &sz) != IPC_OK) {
-	panic("receiving reply from storage: %s\n", strerror(errno));
+    if (ipc_receive(storage, &ret, &m, &sz, &swap, NULL) != IPC_OK) {
+	error("receiving reply from storage: %s\n", strerror(errno));
     }
     
     if (ret == S_ERROR) {
-	logmsg(LOGWARN, "error opening file %s: %s\n", name, strerror(m.arg));
+	warn("Can't open %s: %s.\n", name, strerror(m.arg));
 	errno = m.arg;
 	return -1;
     }
@@ -182,9 +188,9 @@ csopen(const char * name, int mode, off_t size, int sd)
      * allocate a new file descriptor and initialize it with 
      * the information in the message. 
      */
-    cf = safe_calloc(1, sizeof(csfile_t)); 
-    cf->fd = -1; 
-    cf->sd = sd;
+    cf = como_new0(csfile_t);
+    cf->fd = -1;
+    cf->storage = storage;
     cf->name = strdup(name);
     cf->mode = mode;
     cf->id = m.id;
@@ -219,8 +225,8 @@ _csinform(csfile_t * cf, off_t ofs)
     m.arg = 0; 
     m.ofs = ofs; 
 
-    if (ipc_send_with_fd(cf->sd, S_INFORM, &m, sizeof(csmsg_t)) != IPC_OK) {
-	logmsg(LOGWARN, "message to storage: %s\n", strerror(errno)); 
+    if (ipc_send(cf->storage, S_INFORM, &m, sizeof(csmsg_t)) != IPC_OK) {
+	error("message to storage: %s\n", strerror(errno)); 
     }
 }
 
@@ -254,7 +260,8 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
     int flags;
     int diff;
     size_t m_sz;
-    ipctype_t ret;
+    ipc_type ret;
+    int swap;
 
     cf = files[fd];
 
@@ -267,15 +274,13 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
     m_sz = sizeof(csmsg_t);
 
     /* send the request out */
-    if (ipc_send_with_fd(cf->sd, method, &m, m_sz) != IPC_OK) {
-	logmsg(LOGWARN, "message to storage: %s\n", strerror(errno));
-	*sz = -1;
-	return NULL;
+    if (ipc_send(cf->storage, method, &m, m_sz) != IPC_OK) {
+	error("message to storage: %s\n", strerror(errno));
     }
 
     /* block waiting for the acknowledgment */
-    if (ipc_wait_reply_with_fd(cf->sd, &ret, &m, &m_sz) != IPC_OK) {
-	panic("receiving reply from storage: %s\n", strerror(errno));
+    if (ipc_receive(cf->storage, &ret, &m, &m_sz, &swap, NULL) != IPC_OK) {
+	error("receiving reply from storage: %s\n", strerror(errno));
     }
 
     switch (ret) {
@@ -312,12 +317,12 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
 	break;
 
     default: 
-	panic("unknown msg type %d from storage\n", ret);
+	error("unknown msg type %d from storage\n", ret);
 	break;
     }
 
     if ((ssize_t) m.size == -1)
-	panicx("unexpected return from storage process");
+	error("unexpected return from storage process");
 
     /*
      * now check if the requested block is in the same file (i.e., 
@@ -339,7 +344,7 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
 	asprintf(&nm, "%s/%016llx", cf->name, m.ofs); 
 	cf->fd = open(nm, flags, 0666);
 	if (cf->fd < 0)
-	    panic("opening file %s acked! (%s)\n", nm, strerror(errno));
+	    error("opening file %s acked! (%s)\n", nm, strerror(errno));
 	cf->off_file = m.ofs;
 	free(nm);
     } 
@@ -358,10 +363,10 @@ _csmap(int fd, off_t ofs, ssize_t * sz, int method, int arg)
     cf->offset -= diff; 
     cf->size += diff; 
 
-    cf->addr = mmap(0, cf->size, flags, MAP_NOSYNC|MAP_SHARED, 
-	cf->fd, cf->offset - cf->off_file);
+    cf->addr = mmap(0, cf->size, flags, MAP_NOSYNC | MAP_SHARED, 
+		    cf->fd, cf->offset - cf->off_file);
     if (cf->addr == MAP_FAILED || cf->addr == NULL)
-        panic("mmap got NULL (%s)\n", strerror(errno)); 
+        error("mmap failed: %s\n", strerror(errno));
 
     assert(cf->addr + diff != NULL);
 
@@ -394,9 +399,8 @@ csmap(int fd, off_t ofs, ssize_t * sz)
      * check if we already have mmapped the requested region. 
      */
     if (ofs > cf->offset && ofs + *sz <= cf->offset + cf->size) { 
-        logmsg(V_LOGSTORAGE, 
-	    "ofs %lld sz %d silently approved (%lld:%d)\n", 
-            ofs, *sz, cf->offset, cf->size); 
+        debug("ofs %lld sz %d silently approved (%lld:%d)\n", 
+	      ofs, *sz, cf->offset, cf->size);
 
         return (cf->addr + (ofs - cf->offset));
     } 
@@ -529,8 +533,8 @@ csclose(int fd, off_t ofs)
     m.id = cf->id; 
     m.ofs = ofs;
     
-    if (ipc_send_with_fd(cf->sd, S_CLOSE, &m, sizeof(m)) != IPC_OK) {
-	panic("sending message to storage: %s\n", strerror(errno));
+    if (ipc_send(cf->storage, S_CLOSE, &m, sizeof(m)) != IPC_OK) {
+	error("sending message to storage: %s\n", strerror(errno));
     }
     
     free(cf);
