@@ -356,14 +356,19 @@ gen_csharp_ctor(FILE *out, struct_t *st, char *name)
 }
 
 void
+gen_csharp_class_header(FILE *out)
+{
+    fprintf(out, "/* generated file, do not edit */\n");
+    fprintf(out, "using System;\n");
+    fprintf(out, "using System.Runtime.InteropServices;\n\n");
+}
+
+void
 gen_csharp_class(FILE *out, struct_t *st)
 {
     char *name = csharpize(st->name);
     int i;
 
-    fprintf(out, "/* generated file, do not edit */\n");
-    fprintf(out, "using System;\n");
-    fprintf(out, "using System.Runtime.InteropServices;\n\n");
     fprintf(out, "[StructLayout(LayoutKind.Sequential)]\n");
     fprintf(out, "public class %s\n{\n", name);
     for (i = 0; i < st->n_fields; i++) {

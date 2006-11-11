@@ -131,6 +131,7 @@ gen_csharp_glue_header(FILE *out, char *input)
                  "#include <string.h>\n"
                  "#include <stdlib.h>\n\n"
                  "#include <stdint.h>\n\n"
+                 "#include <err.h>\n\n"
                  "#define como_serializable\n"
                  "#define como_storable\n"
                  "#include \"%s\""

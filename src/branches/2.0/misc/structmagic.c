@@ -237,15 +237,14 @@ main(int argc, char **argv)
     serialout = safe_fopen(str, "w");
     free(str);
 
+    gen_csharp_class_header(csout);
     gen_csharp_glue_header(glueout, full_path_input);
+    gen_serialization_header(serialout, full_path_input);
     
     for (i = 0, st = structs[0]; st != NULL; i++, st = structs[i]) {
         printf("Generating code for struct %s:\n", st->name);
-        //dump_struct(st);
-        if (st->serializable) {
-            gen_serialization_funcs(serialout, st);
-            printf("\tSerialization functions\n");
-        }
+        gen_serialization_funcs(serialout, st);
+        printf("\tSerialization functions\n");
         //if (st->storable) {
         //    gen_store_funcs(st);
         //    printf("\tStore/Load functions");

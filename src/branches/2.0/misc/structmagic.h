@@ -39,11 +39,15 @@ struct _field {
     int  arrlen2; /* if > 0, this is bidimensional array */
 };
 
+
+#define FLAG_TUPLE      1
+#define FLAG_RECORD     2
+#define FLAG_CONFIG     4
+
 #define MAX_ITEMS 1024
 typedef struct _struct struct_t;
 struct _struct {
-    int serializable;
-    int storable;
+    int flags;
     char *name;
     int n_fields;
     field_t fields[MAX_ITEMS];
@@ -65,6 +69,7 @@ char * csharpize(char *name);
 void lookup_type_info(char *ctype, size_t *serlen, char **class, char **lookup);
 
 /* gen-csclass.c */
+void gen_csharp_class_header(FILE *out);
 void gen_csharp_class(FILE *out, struct_t *st);
 
 /* gen-csglue.c */
@@ -72,5 +77,6 @@ void gen_csharp_glue_header(FILE *out, char *input);
 void gen_csharp_glue(FILE *out, char *mdl, struct_t *st);
 
 /* gen-serial.c */
+void gen_serialization_header(FILE *out, char *input);
 void gen_serialization_funcs(FILE *out, struct_t *st);
 
