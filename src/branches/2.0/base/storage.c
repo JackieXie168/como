@@ -30,6 +30,7 @@
  * $Id$
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -48,11 +49,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>	/* AF_UNIX sockets */
 
+#define LOG_DOMAIN "ST"
 #include "como.h"
-#include "comopriv.h"
-#define _COMO_STORAGE_SERVER  /* enables private types in storage.h */
-#include "storage.h"
-#include "ipc.h"
+
+#include "storagepriv.h"
 
 
 /*
@@ -72,12 +72,154 @@
  * ---------------------
  */
 
+/*
+ * This part of the file contains the internal data structures
+ * of the server side of the storage process.
+ * Information is stored in entities called 'bytestreams', whose internal
+ * representation is opaque to the client.
+ * In practice, this code implements a bytestream as a directory
+ * with multiple actual files in it, each one of a given maximum size.
+ * The name of each file is the offset of the file itself within the
+ * bytestream.
+ * 
+ * 
+ * The server concurrently handles requests for multiple bytestreams,
+ * up to a maximum of CS_MAXFILES. Each bytestream is described by
+ * an object of type csinternal_t, and these are accessed through
+ * the array como_st.csdesc[]
+ * 
+ * For each bytestream we can have multiple clients attached to it.
+ * Each client is described by an object of type csclient_t,
+ * and the clients for the same bytestream are in a doubly-linked list
+ * hanging off the csinternal_t.
+ * 
+ * For each client, we can have multiple mapped regions, linked in
+ * a list hanging off the csclient_t. There is at most one regions that
+ * is active, i.e. one on which the client side is operating, and this
+ * is the first one in the list.
+ * 
+ * XXX writer: we need an explicit unmap or a parameter on the close
+ * to record how much of the last region has actually been used.
+ * 
+ */
+
+typedef struct csregion csregion_t;
+typedef struct csclient csclient_t;
+typedef struct csfile csfile_t;
+typedef struct csbytestream csbytestream_t;
+typedef struct csblocked csblocked_t;
+
+/*
+ * Region descriptor
+ *
+ * This data structure contains the state of each region currently
+ * handled (i.e. mmapped) by the STORAGE process.
+ * NOTE: we do not store the 'fd' here because it is not used in
+ * the munmap, which is all we do with this information.
+ * Regions can be linked to a csfile_t or a csclient_t
+ * depending on who is controlling them.
+ */
+struct csregion {
+    csregion_t *next;		/* link field */
+    off_t	bs_offset;	/* bytestream offset of the region */
+    void *	addr;		/* memory address of the mapped region  */
+    size_t	reg_size;	/* size of the mapped region */
+    int		wfd;		/* fd if we need to close(), -1 otherwise */
+    csfile_t *	file;		/* the file this region is from */
+};
+
+
+/* 
+ * Client descriptor.
+ * At any given time, the client has only one open file in the bytestream.
+ * All clients for the same file in the bytestream are linked in a list
+ * hanging off the csfile_t
+ */
+struct csclient { 
+    csclient_t *	next;		/* next client */
+    int			id;		/* client id */
+    int			mode;		/* access mode */
+    int			blocked;	/* set if blocked waiting to write */
+    csbytestream_t *	bs;		/* the bytestream */
+    csfile_t *		file;		/* the current file (readers only) */
+    csregion_t *	region;		/* the memory mapped region */
+    timestamp_t		timeout;	/* watchdog timeout for broken
+					   clients */
+};
+
+
+/*
+ * File descriptor, one for each file in a bytestream.
+ * Because there can be only one writer for a bytestream, and it
+ * MUST operate on the last file, we store the relevant info in the
+ * bytestream descriptor.
+ */
+struct csfile {
+    csfile_t *		next;		/* next file in the bytestream */
+    int			rfd;		/* reader fd */
+    csbytestream_t *	bs;		/* the bytestream */
+    off_t		bs_offset;	/* bytestream offset (used as filename
+					   too) */
+    size_t		cf_size;	/* file size, updated with S_INFORM */ 
+    csclient_t *	clients;	/* list of clients working on this
+					   file */
+};
+
+
+/* 
+ * Blocked client list element. It contains the 
+ * information needed to wake up the client and try the
+ * request again. 
+ */
+struct csblocked { 
+    csblocked_t *	next;		/* next blocked client */
+    csclient_t *	client;		/* reader descriptor */	   
+    csmsg_t		msg;		/* request message */
+    ipc_peer_t *	peer;		/* whom to reply to */
+};
+
+    
+/*
+ * Bytestream descriptor. Active bytestreams are linked in a list
+ * for use by the server.
+ */
+struct csbytestream {
+    csbytestream_t *	next;		/* link field */
+    char *		name;		/* bytestream name 
+					   (i.e., directory name) */
+    off_t		size;		/* bytestream size
+					   (available to readers) */
+    off_t		sizelimit;	/* max allowed bytestream size */
+    csfile_t *		file_first;	/* head of list of files */
+    csfile_t *		file_last;	/* tail of list of files */
+    int			client_count;	/* clients active on this stream */
+    int			wfd;		/* writer fd, if there is a writer */
+    csclient_t *	the_writer;	/* writer client */
+    csregion_t *	wb_head;	/* head of write buffer */
+    csregion_t *	wb_tail;	/* tail of write buffer */
+    csblocked_t *	blocked;	/* list of blocked readers */
+};
+
+
+/*       
+ * The entire state of the storage 
+ * process is described by this data structure.
+ */
+struct como_st {
+    csbytestream_t *	bs;		/* the list of bytestreams */
+    csregion_t *	reg_freelist;	/* region free list */
+    int			client_count;	/* how many in use */
+    csclient_t *	clients[CS_MAXCLIENTS];
+    off_t		maxfilesize;
+    int			supervisor_fd;
+    int			accept_fd;
+    event_loop_t	el;
+};
 
 /* 
  * state variables 
  */
-extern struct _como map;		/* global state */
-static struct _cs_state cs_state;
+static struct como_st s_como_st;
 
 
 static void
@@ -91,7 +233,7 @@ assert_regionlist_acyclic(csregion_t *region)
 	if (ptr1 == NULL)
 	    return;
 	if (ptr1 == ptr2)
-	    panic("writebuffer cyclic");
+	    error("writebuffer cyclic");
 	ptr2 = ptr2->next;
 	ptr1 = ptr1->next;
     }
@@ -102,7 +244,7 @@ assert_region_not_in_list(csregion_t *blk, csregion_t *list)
 {
     while (list != NULL) {
 	if (blk == list)
-	    panic("region unexpectedly in list");
+	    error("region unexpectedly in list");
 	list = list->next;
     }
 }
@@ -119,11 +261,11 @@ new_csregion(off_t bs_offset, size_t reg_size)
 {
     csregion_t *blk;
 
-    blk = cs_state.reg_freelist;
+    blk = s_como_st.reg_freelist;
     if (blk == NULL)
-	blk = safe_calloc(1, sizeof(csregion_t));
+	blk = como_new0(csregion_t);
     else 
-	cs_state.reg_freelist = blk->next;
+	s_como_st.reg_freelist = blk->next;
     blk->next = NULL;
     blk->bs_offset = bs_offset;
     blk->addr = NULL; 
@@ -143,10 +285,10 @@ new_csregion(off_t bs_offset, size_t reg_size)
 static void
 free_region(csregion_t *blk)
 {
-    assert_region_not_in_list(blk, cs_state.reg_freelist);
-    assert_regionlist_acyclic(cs_state.reg_freelist);
-    blk->next = cs_state.reg_freelist;
-    cs_state.reg_freelist = blk;
+    assert_region_not_in_list(blk, s_como_st.reg_freelist);
+    assert_regionlist_acyclic(s_como_st.reg_freelist);
+    blk->next = s_como_st.reg_freelist;
+    s_como_st.reg_freelist = blk;
 }
 
 
@@ -166,7 +308,7 @@ new_csfile(csbytestream_t *bs, off_t off_val, int size)
     csfile_t *x, *prev;
     csfile_t *cf; 
 
-    cf = safe_calloc(1, sizeof(csfile_t));
+    cf = como_new0(csfile_t);
     cf->cf_size = size;
     cf->bs_offset = off_val;
     cf->bs = bs;
@@ -205,7 +347,7 @@ delete_csfile(csfile_t * cf)
     bs->size -= cf->cf_size; 
     bs->file_first = cf->next; 
     if (bs->file_first == NULL) 
-	panicx("reducing bytestream %s to zero size", bs->name); 
+	error("reducing bytestream %s to zero size", bs->name); 
 
     if (cf->rfd >= 0)
 	close(cf->rfd); 
@@ -214,7 +356,7 @@ delete_csfile(csfile_t * cf)
     unlink(nm);
     free(nm);
 
-    logmsg(V_LOGSTORAGE, "resizing bytestream %s (from %lld to %lld)\n", 
+    debug("resizing bytestream %s (from %lld to %lld)\n", 
 	bs->name, bs->size + cf->cf_size, bs->size); 
 
     free(cf);
@@ -236,7 +378,7 @@ open_file(csfile_t *cf, int mode)
     int flags;
     int fd;
 
-    logmsg(V_LOGSTORAGE, "open_file %016llx mode %s rfd %d wfd %d\n",
+    debug("open_file %016llx mode %s rfd %d wfd %d\n",
 	cf->bs_offset, (mode == CS_WRITER ? "CS_WRITER" : "CS_READER"), 
 	cf->rfd, cf->bs->wfd);
 
@@ -266,7 +408,7 @@ open_file(csfile_t *cf, int mode)
     asprintf(&name, FILE_NAMEFMT, cf->bs->name, cf->bs_offset);
     fd = open(name, flags, 0666);
     if (fd < 0) 
-        panic("opening file %s: %s\n", name, strerror(errno));
+        error("opening file %s: %s\n", name, strerror(errno));
     free(name);
 
     if (mode == CS_WRITER)
@@ -304,7 +446,7 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
     struct stat sb;
     int ret;
 
-    logmsg(V_LOGSTORAGE, "getting meta information for %s\n", name); 
+    debug("getting meta information for %s\n", name); 
 
     /* open the directory to see if it is there */
     d = opendir(name);
@@ -315,12 +457,12 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
 	 * assume O_CREAT by default so we create it empty.
          */
 	if (mode != CS_WRITER) { 
-	    logmsg(LOGWARN, "get_fileinfo: file %s does not exist\n", name); 
+	    warn("get_fileinfo: file %s does not exist\n", name); 
 	    return EINVAL; 
 	} 
 	ret = mkdir(name, (mode_t) (S_IRWXU | S_IRWXG | S_IRWXO));
 	if (ret < 0) { 
-	    logmsg(LOGWARN, 
+	    warn(
 		"get_fileinfo: failed creating directory %s: %s\n",
 		name, strerror(errno)); 
             return EACCES;
@@ -353,7 +495,7 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
 	new_csfile(bs, off_val, sb.st_size);
     }
 
-    logmsg(V_LOGSTORAGE, "bytestream %s size %lld\n", bs->name, bs->size); 
+    debug("bytestream %s size %lld\n", bs->name, bs->size); 
     return 0;
 } 
 
@@ -365,20 +507,20 @@ get_fileinfo(csbytestream_t *bs, char *name, int mode)
  *
  */
 static void
-senderr(int s, int id, int code)
+senderr(ipc_peer_t * s, int id, int code)
 {
     csmsg_t m;
 
     memset(&m, 0, sizeof(m));
     if (code == 0)
-	panic("storage failing a request without giving a reason");
+	error("storage failing a request without giving a reason");
     m.id = id;
     m.arg = code;
-    if (ipc_send_with_fd(s, S_ERROR, &m, sizeof(m)) != IPC_OK) {
-	panic("sending error message: %s\n", strerror(errno));
+    if (ipc_send(s, S_ERROR, &m, sizeof(m)) != IPC_OK) {
+	error("sending error message: %s\n", strerror(errno));
     }
 
-    logmsg(LOGSTORAGE, "out: ERROR - id: %d; code: %d;\n", id, code);
+    msg("out: ERROR - id: %d; code: %d;\n", id, code);
 }
 
 
@@ -389,7 +531,7 @@ senderr(int s, int id, int code)
  *
  */
 static void
-sendack(int s, int id, off_t ofs, size_t sz)
+sendack(ipc_peer_t * s, int id, off_t ofs, size_t sz)
 {
     csmsg_t m;
 
@@ -397,11 +539,11 @@ sendack(int s, int id, off_t ofs, size_t sz)
     m.id = id;
     m.ofs = ofs;
     m.size = sz;
-    if (ipc_send_with_fd(s, S_ACK, &m, sizeof(m)) != IPC_OK) {
-	panic("sending ack: %s\n", strerror(errno));
+    if (ipc_send(s, S_ACK, &m, sizeof(m)) != IPC_OK) {
+	error("sending ack: %s\n", strerror(errno));
     }
 
-    logmsg(V_LOGSTORAGE, "out: ACK - id: %d, ofs: %12lld, sz: %8d\n",
+    debug("out: ACK - id: %d, ofs: %12lld, sz: %8d\n",
 		id, ofs, sz);
 }
 
@@ -419,7 +561,7 @@ new_bytestream(csmsg_t *in)
 {
     csbytestream_t *bs; 
 
-    bs = safe_calloc(1, sizeof(csbytestream_t));
+    bs = como_new0(csbytestream_t);
     bs->wfd = -1;
     bs->name = strdup(in->name);
     bs->size = 0; 
@@ -463,12 +605,12 @@ new_id(csclient_t * cl)
     int i;
 
     for (i = 0; i < CS_MAXCLIENTS; i++)
-	if (cs_state.clients[i] == NULL)
+	if (s_como_st.clients[i] == NULL)
 	    break;
     if (i == CS_MAXCLIENTS)
-	panic("too many clients, should not happen!!!\n");
-    cs_state.clients[i] = cl;
-    cs_state.client_count++;
+	error("too many clients, should not happen!!!\n");
+    s_como_st.clients[i] = cl;
+    s_como_st.client_count++;
     return i;
 }
 
@@ -485,7 +627,7 @@ new_csclient(csbytestream_t *bs, int mode)
 {
     csclient_t * cl;
 
-    cl = safe_calloc(1, sizeof(csclient_t));
+    cl = como_new0(csclient_t);
     cl->bs = bs;
     cl->mode = mode;
     cl->timeout = CS_DEFAULT_TIMEOUT; 
@@ -506,7 +648,7 @@ static void
 append_to_wb(csregion_t *r, csbytestream_t *bs)
 {
     if (r == NULL) {
-        logmsg(LOGWARN, "region pointer is NULL. append failed\n");
+        warn("region pointer is NULL. append failed\n");
         return;
     }
 
@@ -529,7 +671,7 @@ append_to_wb(csregion_t *r, csbytestream_t *bs)
 static void
 flush_wb(csbytestream_t *bs)
 {
-    assert_regionlist_acyclic(cs_state.reg_freelist);
+    assert_regionlist_acyclic(s_como_st.reg_freelist);
 
     while (bs->wb_head != NULL) { 
 	csregion_t * wr;
@@ -539,11 +681,11 @@ flush_wb(csbytestream_t *bs)
 
 	wr = bs->wb_head; 
         if (wr->addr == NULL)
-            panic("region in write buffer with addr == NULL\n");
+            error("region in write buffer with addr == NULL\n");
 
 	ret = munmap(wr->addr, wr->reg_size);
 	if (ret < 0)
-	    panic("flush_wb unsuccessful: %s\n", strerror(errno));
+	    error("flush_wb unsuccessful: %s\n", strerror(errno));
 
         if (wr->wfd != -1) {
             /*
@@ -570,7 +712,7 @@ flush_wb(csbytestream_t *bs)
     }
 
     bs->wb_tail = NULL;
-    assert_regionlist_acyclic(cs_state.reg_freelist);
+    assert_regionlist_acyclic(s_como_st.reg_freelist);
 }
 
 
@@ -582,24 +724,24 @@ flush_wb(csbytestream_t *bs)
  * relevant file.
  * 
  */
-static void
-handle_open(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
-	    __attribute__((__unused__)) size_t len)
+static int
+handle_open(ipc_peer_t * sender, csmsg_t * in,
+	    UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
 {
     csbytestream_t *bs; 
     csclient_t *cl;
     off_t ofs_ack;
 
-    logmsg(V_LOGSTORAGE, "in: OPEN [%s] %s\n", in->name,
+    debug("in: OPEN [%s] %s\n", in->name,
 	    in->arg == CS_WRITER ? "CS_WRITER" : "CS_READER"); 
 
     /* 
      * first check if we have too many active clients. 
      */
-    if (cs_state.client_count == CS_MAXCLIENTS) { 
-	logmsg(LOGWARN, "too many clients (%d)\n", cs_state.client_count); 
-	senderr(s, in->id, EMFILE);
-	return; 
+    if (s_como_st.client_count == CS_MAXCLIENTS) { 
+	warn("too many clients (%d)\n", s_como_st.client_count); 
+	senderr(sender, in->id, EMFILE);
+	return IPC_CLOSE;
     }
       
     /*
@@ -608,9 +750,9 @@ handle_open(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
      * QUERY process asks for opening a bytestream). in that case 
      * we just add a client.
      */ 
-    for (bs = cs_state.bs; bs; bs = bs->next) {
+    for (bs = s_como_st.bs; bs; bs = bs->next) {
 	if (strcmp(bs->name, in->name) == 0) { 	/* found it */
-	    logmsg(LOGSTORAGE, "file [%s] found, clients %d, wfd %d\n", 
+	    msg("file [%s] found, clients %d, wfd %d\n", 
 		   in->name, bs->client_count, bs->wfd); 
 	    break;
         } 
@@ -619,21 +761,21 @@ handle_open(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
     if (bs == NULL) {	/* not found */
 	bs = new_bytestream(in);
 	if (bs == NULL) { 
-	    logmsg(LOGWARN, "cannot allocate bytestream [%s]\n", in->name); 
-	    senderr(s, in->id, EMFILE);
-	    return; 
+	    warn("cannot allocate bytestream [%s]\n", in->name); 
+	    senderr(sender, in->id, EMFILE);
+	    return IPC_CLOSE; 
 	}
-	bs->next = cs_state.bs;
-	cs_state.bs = bs;
+	bs->next = s_como_st.bs;
+	s_como_st.bs = bs;
     }
 
     /* 
      * if opened in write mode, fail if there is already a writer 
      */
     if (in->arg == CS_WRITER && bs->the_writer != NULL) {
-	logmsg(LOGWARN, "two writers not allowed [%s]\n", in->name); 
-	senderr(s, in->id, EPERM);
-	return;
+	warn("two writers not allowed [%s]\n", in->name); 
+	senderr(sender, in->id, EPERM);
+	return IPC_CLOSE;
     }
 
     /*
@@ -642,7 +784,7 @@ handle_open(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
      * The id for the new client is generated in new_csclient();
      */
     cl = new_csclient(bs, in->arg);
-    logmsg(LOGSTORAGE, "new client for [%s], id %d\n", in->name, cl->id);
+    msg("new client for [%s], id %d\n", in->name, cl->id);
 
     /* 
      * if this is a writer, link it to the bytestream, 
@@ -665,8 +807,8 @@ handle_open(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
     }
 
     /* send the ack */
-    sendack(s, cl->id, ofs_ack, 0); 
-    return;
+    sendack(sender, cl->id, ofs_ack, 0); 
+    return IPC_OK;
 }
 
 
@@ -733,30 +875,29 @@ client_unlink(csclient_t *cl)
  *     is the case to remove the bytestream. 
  *
  */
-static void
-handle_close(__attribute__((__unused__)) procname_t sender,
-             __attribute__((__unused__)) int fd, csmsg_t * in,
-	     __attribute__((__unused__)) size_t len)
+static int
+handle_close(UNUSED ipc_peer_t * sender, csmsg_t * in,
+	     UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
 {
     csbytestream_t * bs;
     csclient_t * cl;
 
-    logmsg(V_LOGSTORAGE, "CLOSE: %d %lld %d\n", in->id, in->ofs, in->size);
+    debug("CLOSE: %d %lld %d\n", in->id, in->ofs, in->size);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
-	logmsg(LOGWARN, "close: invalid id (%d)\n", in->id); 
-	return;
+	warn("close: invalid id (%d)\n", in->id); 
+	return IPC_CLOSE;
     } 
 
-    cl = cs_state.clients[in->id];
+    cl = s_como_st.clients[in->id];
     if (cl == NULL) { 
-	logmsg(LOGWARN, "close: client does not exist (id: %d)\n", in->id); 
-	return; 
+	warn("close: client does not exist (id: %d)\n", in->id); 
+	return IPC_CLOSE; 
     } 
 
     /* remove client from array of clients */
-    cs_state.clients[in->id] = NULL;
-    cs_state.client_count--;
+    s_como_st.clients[in->id] = NULL;
+    s_como_st.client_count--;
     bs = cl->bs;
     bs->client_count--;
 
@@ -798,23 +939,24 @@ handle_close(__attribute__((__unused__)) procname_t sender,
 	     * in the write buffer. if so we panic. really weird!. 
 	     */ 
 	    if (bs->wb_head != NULL) 
-		panic("write buffer not empty but writer is inactive\n"); 
+		error("write buffer not empty but writer is inactive\n"); 
 	    close(bs->wfd);
 	} 
 
-	logmsg(LOGSTORAGE, "writer removed (bytestream: %x %s)", bs, bs->name);
+	msg("writer removed (bytestream: %x %s)", bs, bs->name);
 	bs->wfd = -1;
 	bs->the_writer = NULL;
 	free(cl);
-	return; /* done! */
+	return IPC_CLOSE; /* done! */
     } 
 
     /* 
      * just a reader. unlink the client from the 
      * file descriptor and free the client descriptor.  
      */ 
-    client_unlink(cl); 
-    free(cl); 
+    client_unlink(cl);
+    free(cl);
+    return IPC_CLOSE;
 }
     
 
@@ -827,7 +969,7 @@ handle_close(__attribute__((__unused__)) procname_t sender,
  * 
  */
 static void
-block_client(csclient_t *cl, csmsg_t *in, int s)
+block_client(csclient_t *cl, csmsg_t *in, ipc_peer_t * s)
 { 
     csbytestream_t * bs; 
     csblocked_t * p; 
@@ -841,17 +983,17 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
     cl->blocked = 1; 
 
     /* create a new blocked element */
-    p = safe_calloc(1, sizeof(csblocked_t)); 
+    p = como_new0(csblocked_t);
     p->client = cl; 
     p->msg = *in; 
-    p->sock = s; 
+    p->peer = s; 
 
     /* link this client to the list of blocked clients */
     bs = cl->bs; 
     p->next = bs->blocked; 
     bs->blocked = p;
    
-    logmsg(LOGSTORAGE, "client %d blocked on ofs: %12lld, sz: %8d\n", 
+    msg("client %d blocked on ofs: %12lld, sz: %8d\n", 
 	in->id, in->ofs, in->size); 
 }
 
@@ -867,39 +1009,40 @@ block_client(csclient_t *cl, csmsg_t *in, int s)
  * avoid the reader to receive an error message later or to block. 
  *
  */
-static void
-handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
-	    __attribute__((__unused__)) size_t len)
+static int
+handle_seek(ipc_peer_t * sender, csmsg_t * in,
+	    UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
 {
     csfile_t * cf;
     csclient_t * cl;
 
-    logmsg(V_LOGSTORAGE, "seek: id %d, arg %d, ofs %lld\n", 
+    debug("seek: id %d, arg %d, ofs %lld\n", 
 	   in->id, in->arg, in->ofs);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
-	logmsg(LOGWARN, "close: invalid id (%d)\n", in->id); 
-        senderr(s, in->id, EINVAL);
-	return;
+	warn("close: invalid id (%d)\n", in->id); 
+        senderr(sender, in->id, EINVAL);
+	return IPC_CLOSE;
     } 
 
-    cl = cs_state.clients[in->id];
+    cl = s_como_st.clients[in->id];
     if (cl == NULL) { 
-	logmsg(LOGWARN, "seek: client does not exist (id: %d)\n", in->id); 
-        senderr(s, in->id, EINVAL);
-	return; 
+	warn("seek: client does not exist (id: %d)\n", in->id); 
+        senderr(sender, in->id, EINVAL);
+	return IPC_CLOSE;
     } 
     if (cl->mode == CS_WRITER) {
-	logmsg(LOGWARN, "seek: writers should not seek (id: %d)\n", in->id); 
-        senderr(s, in->id, EINVAL);
-	return; 
+	warn("seek: writers should not seek (id: %d)\n", in->id); 
+        senderr(sender, in->id, EINVAL);
+	return IPC_CLOSE;
     }
     cf = client_unlink(cl);
     cl->timeout = CS_DEFAULT_TIMEOUT; 
 
     switch (in->arg) {	/* determine where to seek */
     default:
-	panic("invalid argument %d\n", in->arg);
+	warn("invalid argument %d\n", in->arg);
+	return IPC_CLOSE;
 	break;
 
     case CS_SEEK_FILE_NEXT:
@@ -928,11 +1071,12 @@ handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
 	break;
     }
 
-    if (cf == NULL || cf->cf_size == 0) { /* no more data */
-	logmsg(LOGSTORAGE, "id: %d,%s; seek reached the end of file\n", 
+    if (cf == NULL) { 
+	/* we have gone beyond the bytestream size */
+	msg("id: %d,%s; seek reached the end of file\n", 
 	    in->id, cl->bs->name); 
-	senderr(s, in->id, ENODATA); 
-	return;
+	senderr(sender, in->id, ENODATA);
+	return IPC_OK;
     }
 
     /* append this client to the list of clients */
@@ -940,7 +1084,8 @@ handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
     cl->next = cf->clients;
     cf->clients = cl;
     open_file(cl->file, cl->mode);
-    sendack(s, in->id, cf->bs_offset, in->size);
+    sendack(sender, in->id, cf->bs_offset, in->size);
+    return IPC_OK;
 }
 
 /** 
@@ -951,8 +1096,8 @@ handle_seek(__attribute__((__unused__)) procname_t sender, int s, csmsg_t * in,
  * data from the writer. 
  *
  */ 
-static void
-region_read(int s, csmsg_t * in, csclient_t *cl)
+static int
+region_read(ipc_peer_t * sender, csmsg_t * in, csclient_t *cl)
 {
     csbytestream_t *bs;
     csfile_t *cf;
@@ -990,35 +1135,36 @@ region_read(int s, csmsg_t * in, csclient_t *cl)
     /* check the first two easy cases */
     if (bs->file_first == NULL) {	/* no files... */
 	if (bs->the_writer != NULL)
-	    panicx("impossible case in region_read\n");
+	    error("impossible case in region_read\n");
 
 	/* send an EOF */
-	sendack(s, in->id, (off_t)0, (size_t)0); 
-	return;
+	sendack(sender, in->id, (off_t)0, (size_t)0); 
+	return IPC_OK;
     } 
 
     /* 
      * we have files, check request against available data 
      */
-    if (in->ofs < bs->file_first->bs_offset) {	/* before first byte */
-	logmsg(LOGSTORAGE, "id: %d, %s no data available\n", in->id, bs->name);
-	senderr(s, in->id, ENODATA); 
-	return; 
+    if (in->ofs < bs->file_first->bs_offset) {
+	/* before first byte */
+	msg("id: %d, %s no data available\n", in->id, bs->name);
+	senderr(sender, in->id, ENODATA); 
+	return IPC_OK; 
     } else if (in->ofs >= bs->file_first->bs_offset + bs->size) { 
 	/* 
 	 * After current data; if a writer exists, wait for new data;
 	 * otherwise return an ACK with size 0 to indicate end of file. 
 	 */
-	logmsg(V_LOGSTORAGE, 
+	debug(
 	    "S_REGION: bs %x (%s) want ofs %lld have ofs %lld writer %x\n",
 	    bs, bs->name, in->ofs, 
 	    bs->file_first->bs_offset + bs->size, bs->the_writer);
 
 	if (bs->the_writer == NULL || cl->mode == CS_READER_NOBLOCK)
-	    sendack(s, in->id, (off_t)0, (size_t)0); 
+	    sendack(sender, in->id, (off_t)0, (size_t)0); 
 	else 
-	    block_client(cl, in, s); 
-	return; 
+	    block_client(cl, in, sender);
+	return IPC_OK; 
     } 
 
     /*
@@ -1057,7 +1203,7 @@ region_read(int s, csmsg_t * in, csclient_t *cl)
 	    if (in->ofs < cf->bs_offset + cf->cf_size)
 		break;
 	if (cf == NULL)
-	    panic("region not found for file %s off 0x%lld\n",
+	    error("region not found for file %s off 0x%lld\n",
 		cl->bs->name, in->ofs);
 
 	/* found! append this client to the list of clients */
@@ -1091,10 +1237,11 @@ region_read(int s, csmsg_t * in, csclient_t *cl)
     cl->region->addr = mmap(0, in->size + diff, PROT_READ,
 	MAP_SHARED, cf->rfd, in->ofs - cf->bs_offset);
     if (cl->region->addr == MAP_FAILED || cl->region->addr == NULL)
-	panic("mmap got NULL (%s)\n", strerror(errno));  
+	error("mmap got NULL (%s)\n", strerror(errno));  
 
     /* acknowledge the request (cf->bs_offset really tells the file name!) */
-    sendack(s, in->id, cf->bs_offset, in->size);
+    sendack(sender, in->id, cf->bs_offset, in->size);
+    return IPC_OK;
 }
 
 
@@ -1111,7 +1258,7 @@ wakeup_clients(csbytestream_t *bs)
 {
     csblocked_t *waking;
     
-    logmsg(V_LOGSTORAGE, "waking up all clients (%x)\n", bs);
+    debug("waking up all clients (%x)\n", bs);
 
     /* remove the list from the bytestream. we are waking up
      * all clients but some of them may need to block again
@@ -1125,10 +1272,10 @@ wakeup_clients(csbytestream_t *bs)
     while (waking != NULL) {   
         csblocked_t *p = waking;
   
-	logmsg(V_LOGSTORAGE, "waking up id: %d\n", p->client->id); 
+	debug("waking up id: %d\n", p->client->id); 
 	p->client->blocked = 0; 
 	p->client->timeout = CS_DEFAULT_TIMEOUT; 
-        region_read(p->sock, &p->msg, p->client);
+        region_read(p->peer, &p->msg, p->client);
         
         /* free this element and move to next */
         waking = p->next;
@@ -1145,8 +1292,8 @@ wakeup_clients(csbytestream_t *bs)
  * readers that were waiting for new data.
  *   
  */         
-static void
-region_write(int s, csmsg_t * in, csclient_t *cl)   
+static int
+region_write(ipc_peer_t * sender, csmsg_t * in, csclient_t *cl)   
 {
     off_t bs_offset, want, have;
     size_t reg_size;
@@ -1179,17 +1326,17 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
                 
     /* overwriting is not allowed */
     if (in->ofs < bs_offset) {
-	logmsg(LOGSTORAGE, "id: %d, %s; overwriting not allowed\n", 
+	warn("id: %d, %s; overwriting not allowed\n", 
 	    in->id, bs->name); 
-        senderr(s, in->id, EINVAL);
-        return;
+        senderr(sender, in->id, EINVAL);
+        return IPC_CLOSE;
     }
         
     /* gaps are not allowed */
     if (in->ofs > bs_offset + reg_size) {
-	logmsg(LOGSTORAGE, "id: %d, %s; gaps not allowed\n", in->id, bs->name); 
-        senderr(s, in->id, EINVAL);
-        return;
+	warn("id: %d, %s; gaps not allowed\n", in->id, bs->name); 
+        senderr(sender, in->id, EINVAL);
+        return IPC_CLOSE;
     }
             
     /*   
@@ -1224,9 +1371,9 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
         /*
          * Extend the file if possible, or truncate it
          * (at cf->cf_size) and open a new one if we are
-         * exceeding the limit (map.maxfilesize).
+         * exceeding the limit (s_como_st.maxfilesize).
          */
-        if (want - cf->bs_offset > map.maxfilesize) {
+        if (want - cf->bs_offset > s_como_st.maxfilesize) {
             /*
              * if the writer was active, append the region to
              * the write buffer and prepare the region so that
@@ -1257,12 +1404,13 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
         }
 
         /* finally, prepare to extend the file */
-        buf = safe_calloc(1, ext); 
+        buf = como_calloc(1, ext);
         if (write(bs->wfd, buf, ext) < 0) {
-            logmsg(LOGWARN, "id: %d,%s; write to extend file failed: %s\n",
+	    free(buf);
+            warn("id: %d,%s; write to extend file failed: %s\n",
                 in->id, bs->name, strerror(errno));
-            senderr(s, in->id, errno);
-            return;
+            senderr(sender, in->id, errno);
+            return IPC_OK;
         }
         free(buf);
     }
@@ -1282,7 +1430,7 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
     cl->region->addr = mmap(0, in->size + diff, PROT_WRITE,
         MAP_NOSYNC|MAP_SHARED, cl->bs->wfd, in->ofs - cf->bs_offset);
     if (cl->region->addr == MAP_FAILED || cl->region->addr == NULL)
-        panic("mmap got NULL (%s)\n", strerror(errno));
+        error("mmap got NULL (%s)\n", strerror(errno));
 
     /*
      * acknowledge the request sending back the size
@@ -1290,12 +1438,12 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
      * so the client knows whether or not it has to open a different
      * file.
      */
-    sendack(s, in->id, cf->bs_offset, in->size);
+    sendack(sender, in->id, cf->bs_offset, in->size);
 
     /* done! now wakeup blocked clients (if any) */
     wakeup_clients(cl->bs);
 
-    return;
+    return IPC_OK;
 }
 
 
@@ -1307,21 +1455,20 @@ region_write(int s, csmsg_t * in, csclient_t *cl)
  * it is already moving on to write more. No acknowledgement is necessary. 
  * 
  */
-static void
-handle_inform(__attribute__((__unused__)) procname_t sender,
-              __attribute__((__unused__)) int fd, csmsg_t * in,
-	      __attribute__((__unused__)) size_t len)
+static int
+handle_inform(UNUSED ipc_peer_t * sender, csmsg_t * in,
+	    UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
 {
     csclient_t * cl;
     off_t bs_offset; 
     size_t reg_size;
     csfile_t *cf;
 
-    logmsg(V_LOGSTORAGE, "INFORM: %d %lld\n", in->id, in->ofs);
+    debug("INFORM: %d %lld\n", in->id, in->ofs);
  
     assert(in->id >= 0 && in->id < CS_MAXCLIENTS);
 
-    cl = cs_state.clients[in->id];
+    cl = s_como_st.clients[in->id];
     assert(cl != NULL);
     assert(cl->mode == CS_WRITER);
     cl->timeout = CS_DEFAULT_TIMEOUT; 
@@ -1352,6 +1499,7 @@ handle_inform(__attribute__((__unused__)) procname_t sender,
 
     /* done! now wakeup blocked clients (if any) */
     wakeup_clients(cl->bs);
+    return IPC_OK;
 }
    
 
@@ -1363,33 +1511,33 @@ handle_inform(__attribute__((__unused__)) procname_t sender,
  * this is a read or write operation) 
  *
  */
-static void
-handle_region(__attribute__((__unused__)) procname_t sender, int fd,
-              csmsg_t * in, __attribute__((__unused__)) size_t len)
+static int
+handle_region(ipc_peer_t * sender, csmsg_t * in,
+	      UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
 {
     csclient_t * cl;
 
-    logmsg(V_LOGSTORAGE, "S_REGION: id %d; ofs %12lld; size %7d;\n", 
+    debug("S_REGION: id %d; ofs %12lld; size %7d;\n", 
 	in->id, in->ofs, in->size);
 
     if (in->id < 0 || in->id >= CS_MAXCLIENTS) {
-        logmsg(LOGWARN, "S_REGION: invalid id (%d)\n", in->id);
-	senderr(fd, in->id, EINVAL);
-        return;
+        warn("S_REGION: invalid id (%d)\n", in->id);
+	senderr(sender, in->id, EINVAL);
+        return IPC_CLOSE;
     }
         
-    cl = cs_state.clients[in->id];
+    cl = s_como_st.clients[in->id];
     if (cl == NULL) {
-        logmsg(LOGWARN, "S_REGION: client does not exists (id: %d)\n", in->id);
-	senderr(fd, in->id, EBADF);
-        return;
+        warn("S_REGION: client does not exists (id: %d)\n", in->id);
+	senderr(sender, in->id, EBADF);
+        return IPC_CLOSE;
     }
 
     /* one can read/write at most maxfragmentsize bytes */
-    if (in->size > map.maxfilesize)  {
-	logmsg(LOGWARN, "S_REGION size %ld too large, using %ld\n",
-	    (int)(in->size), (int)map.maxfilesize); 
-	in->size = map.maxfilesize;
+    if (in->size > s_como_st.maxfilesize)  {
+	warn("S_REGION size %ld too large, using %ld\n",
+	    (int)(in->size), (int)s_como_st.maxfilesize); 
+	in->size = s_como_st.maxfilesize;
     }
 
     /* 
@@ -1397,9 +1545,9 @@ handle_region(__attribute__((__unused__)) procname_t sender, int fd,
      */ 
     cl->timeout = CS_DEFAULT_TIMEOUT; 
     if (cl->mode == CS_WRITER)  	/* write mode */
-	region_write(fd, in, cl);
+	return region_write(sender, in, cl);
     else
-	region_read(fd, in, cl);
+	return region_read(sender, in, cl);
 }
 
 /*
@@ -1429,7 +1577,7 @@ scheduler(timestamp_t elapsed)
      * structures, emptying the write buffer and keeping the 
      * overall stream size below the limit. 
      */   
-    bs = cs_state.bs; 
+    bs = s_como_st.bs; 
     while (bs != NULL) { 
 
 	/* flush the write buffer */
@@ -1451,7 +1599,7 @@ scheduler(timestamp_t elapsed)
 	    } else if (bs->size > bs->sizelimit * 12 / 10) { 
 		csclient_t * cl;
 
-		logmsg(LOGWARN, "file %s exceeding limit by 20%%\n", bs->name); 
+		warn("file %s exceeding limit by 20%%\n", bs->name); 
 
 		/* remove all clients accessing this file */
 		for (cl = cf->clients; cf->clients; cl = cf->clients)
@@ -1479,10 +1627,10 @@ scheduler(timestamp_t elapsed)
 	    } 
 	    
 	    /* remove the bytestream from the list */
-	    for (p = NULL, q = cs_state.bs; q != bs; p = q, q = q->next)
+	    for (p = NULL, q = s_como_st.bs; q != bs; p = q, q = q->next)
 		; 
 	    if (p == NULL)  
-		cs_state.bs = bs->next; 
+		s_como_st.bs = bs->next; 
 	    else 
 		p->next = bs->next; 
 	    bs = bs->next;
@@ -1498,8 +1646,8 @@ scheduler(timestamp_t elapsed)
      * this is to catch all QUERY processes that died before being 
      * able to send a S_CLOSE message. 
      */
-    for (i = 0; i < cs_state.client_count; i++) { 
-	csclient_t * cl = cs_state.clients[i]; 
+    for (i = 0; i < s_como_st.client_count; i++) { 
+	csclient_t * cl = s_como_st.clients[i]; 
 
 	if (cl == NULL || cl->mode == CS_WRITER || cl->blocked) 
 	    continue; 
@@ -1513,14 +1661,14 @@ scheduler(timestamp_t elapsed)
 	    bs->client_count--;
 
 	    /* remove client from array of clients */
-	    cs_state.clients[cl->id] = NULL;
-	    cs_state.client_count--;
+	    s_como_st.clients[cl->id] = NULL;
+	    s_como_st.client_count--;
 
 	    free(cl);
 
-	    logmsg(V_LOGWARN, 
+	    warn( 
 		"client timeout. file %s, clients %d, total %d\n", 	
-		bs->name, bs->client_count, cs_state.client_count); 
+		bs->name, bs->client_count, s_como_st.client_count); 
 	} 
 
 	cl->timeout -= elapsed; 
@@ -1529,79 +1677,70 @@ scheduler(timestamp_t elapsed)
 
 
 /*
- * -- st_ipc_exit 
+ * -- handle_shutdown 
  *
  */
-static void
-st_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
-             __attribute__((__unused__)) void * buf,
-             __attribute__((__unused__)) size_t len)
+static int
+handle_shutdown(UNUSED ipc_peer_t * sender, UNUSED void * buf,
+		UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
 {
-    assert(sender == map.parent);  
-    exit(EXIT_SUCCESS); 
+    /* TODO: cleanup! */
+    exit(EXIT_SUCCESS);
+    return IPC_OK;
 }
 
 
-/* 
- * -- storage_mainloop 
- * 
- * This is the mainloop of the hf-server process. It waits on a select
- * for a message on any of the open socket and then performs the 
- * action requested by the clients (e.g., release or request a block). 
- * The input parameters are the memory allocated to the process for 
- * mapping open files, the descriptors of all the open sockets and their 
- * number. 
- *
- */
-void
-storage_mainloop(int accept_fd, int supervisor_fd,
-                 __attribute__((__unused__)) int id)
+
+
+static void
+handle_configure(UNUSED ipc_peer_t * sender, UNUSED off_t * maxfilesize,
+		UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
 {
-    int max_fd; 
-    fd_set valid_fds; 
-
-    /* register file descriptors */ 
-    max_fd = 0; 
-    FD_ZERO(&valid_fds); 
-
-    /* register handlers for signals */ 
-    signal(SIGPIPE, exit); 
-    signal(SIGINT, exit);
-    signal(SIGTERM, exit);
-    /* ignore SIGHUP */ 
-    signal(SIGHUP, SIG_IGN); 
+    s_como_st.maxfilesize = *maxfilesize;
     
     /* register handlers for IPC messages */
-    ipc_clear();
     ipc_register(S_CLOSE, (ipc_handler_fn) handle_close);
     ipc_register(S_OPEN, (ipc_handler_fn) handle_open);
     ipc_register(S_REGION, (ipc_handler_fn) handle_region);
     ipc_register(S_SEEK, (ipc_handler_fn) handle_seek);
     ipc_register(S_INFORM, (ipc_handler_fn) handle_inform);
-    ipc_register(IPC_EXIT, st_ipc_exit);
 
     /* accept connections from other processes */
-    max_fd = add_fd(accept_fd, &valid_fds, max_fd);
+    s_como_st.accept_fd = ipc_listen();
+    
+    event_loop_add(&s_como_st.el, s_como_st.accept_fd);
+}
+
+
+/*
+ * This is the mainloop of the storage-server process. It waits on a select
+ * for a message on any of the open socket and then performs the 
+ * action requested by the clients (e.g., release or request a block). 
+ */
+static void
+como_st_run()
+{
+    struct timeval to = { 5, 200000 };	// XXX just to put something?
+    
+    ipc_register(SU_CONFIGURE, (ipc_handler_fn) handle_configure);
+    ipc_register(SU_EXIT, handle_shutdown);
+    
 
     /* listen to SUPERVISOR */
-    max_fd = add_fd(supervisor_fd, &valid_fds, max_fd);
-
-    /* init data structures */
-    bzero(&cs_state, sizeof(cs_state)); 
+    event_loop_add(&s_como_st.el, s_como_st.supervisor_fd);
 
     /* 
      * wait for the debugger to attach
      */
-    DEBUGGER_WAIT_ATTACH(map);
+    //DEBUGGER_WAIT_ATTACH(map);
 
     /*
      * The real main loop.
      */
     for (;;) {
-        fd_set r = valid_fds;
-	struct timeval * pto;
+        fd_set r;
 	struct timeval last; 
-	struct timeval to = { 5, 200000 };	// XXX just to put something?
+
 	timestamp_t elapsed; 
         int n_ready;
 	int i;
@@ -1611,33 +1750,31 @@ storage_mainloop(int accept_fd, int supervisor_fd,
 	 * use a timeout if we have files open. this way the 
 	 * scheduler starts when clients are idle too.
 	 */
-        pto = (cs_state.client_count > 0) ? &to : NULL; 
+        if (s_como_st.client_count > 0) {
+	    event_loop_set_timeout(&s_como_st.el, &to);
+        }
 
-	gettimeofday(&last, 0); 
-	n_ready = select(max_fd, &r, NULL, NULL, pto); 
+	gettimeofday(&last, 0);
+	
+	n_ready = event_loop_select(&s_como_st.el, &r);
 	if (n_ready < 0) {
-	    if (errno == EINTR) {
 		continue;
-	    }
-	    panic("waiting for select (%s)\n", strerror(errno));
 	}
 
-	for (i = 0; n_ready > 0 && i < max_fd; i++) {
+	for (i = 0; n_ready > 0 && i < s_como_st.el.max_fd; i++) {
 
 	    if (!FD_ISSET(i, &r))
 		continue;
 
 	    n_ready--;
 
-	    if (i == accept_fd) {
-		int x;
-
-		x = accept(i, NULL, NULL);
+	    if (i == s_como_st.accept_fd) {
+		int x = accept(i, NULL, NULL);
 		if (x < 0) {
-		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n", 
-			i, x, strerror(errno));
-		} else 
- 		    max_fd = add_fd(x, &valid_fds, max_fd);
+		    warn("Failed on accept(): %s\n", strerror(errno));
+		} else {
+ 		    event_loop_add(&s_como_st.el, x);
+		}
 		continue;
 	    }
 	    
@@ -1645,10 +1782,11 @@ storage_mainloop(int accept_fd, int supervisor_fd,
 	    switch (ipcr) {
 	    case IPC_ERR:
 		/* an error. close the socket */
-		logmsg(LOGWARN, "error on IPC handle from %d\n", i);
+		warn("error on IPC handle from %d\n", i);
 	    case IPC_EOF:
+	    case IPC_CLOSE:
 		close(i);
-		del_fd(i, &valid_fds, max_fd);
+		event_loop_del(&s_como_st.el, i);
 		break;
 	    }
         }       
@@ -1658,7 +1796,7 @@ storage_mainloop(int accept_fd, int supervisor_fd,
 	 * the blocks to be pre-fetched and then prefetch 
 	 * pages into memory. 
 	 */
-	if (cs_state.client_count > 0) {
+	if (s_como_st.client_count > 0) {
 	    struct timeval now; 
 
 	    gettimeofday(&now, 0); 
@@ -1668,4 +1806,41 @@ storage_mainloop(int accept_fd, int supervisor_fd,
 	}
     }
 } 
+
+/* 
+ * -- storage_mainloop 
+ * 
+ *
+ */
+int
+main(int argc, char ** argv)
+{
+    if (argc != 2 || argv[1][0] != '/') {
+	exit(EXIT_FAILURE);
+    }
+    
+    como_init(argc, argv);
+
+    /* init data structures */
+    memset(&s_como_st, 0, sizeof(s_como_st));
+    s_como_st.accept_fd = -1;
+    
+    /* initialize IPC */
+    ipc_init(COMO_ST, argv[1], &s_como_st);
+    
+    s_como_st.supervisor_fd = ipc_connect(COMO_SU);
+    
+    /* register handlers for signals */ 
+    signal(SIGPIPE, exit); 
+    signal(SIGINT, exit);
+    signal(SIGTERM, exit);
+    /* ignore SIGHUP */ 
+    signal(SIGHUP, SIG_IGN); 
+
+    /* run */
+    como_st_run();
+    
+    exit(EXIT_SUCCESS);
+}
+
 /* end of file */
