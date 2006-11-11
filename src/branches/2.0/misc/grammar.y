@@ -42,9 +42,6 @@ int num_structs;
 struct_t *structs[MAX_STRUCTS + 1];
 struct_t *current_struct;
 
-#define SERIALIZABLE 1
-#define STORABLE 2
-
 static void yyerror(char *s);
 int yylex(void);
 
@@ -57,12 +54,12 @@ static void
 generate_error(char *fmt, ...)
 {
     va_list ap;
-    fprintf(stderr, "error: ");
+    fprintf(stderr, "*** structmagic error ***\n");
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
-    fprintf(stderr, "\nParse error at line %d column %d (cpp ouput line %d)\n",
-        line, col, cpp_line);
+    fprintf(stderr, "\nParser aborted at file '%s', line %d, column %d "
+        "[cpp ouput line %d].\n", current_file, line, col, cpp_line);
     exit(1);
 }
 
@@ -113,7 +110,7 @@ save_field(char *type, char *name, int arrlen, int arrlen2)
 
 %token TOK_CHAR TOK_DOUBLE TOK_FLOAT TOK_INT TOK_LONG TOK_SHORT TOK_SIGNED
 %token TOK_STRUCT TOK_TYPEDEF TOK_UNSIGNED TOK_VOID TOK_IDENTIFIER
-%token TOK_SERIALIZABLE TOK_STORABLE TOK_KNOWN_TYPE
+%token TOK_TUPLE TOK_RECORD TOK_CONFIG TOK_KNOWN_TYPE
 %token TOK_NUM_CONSTANT TOK_CONSTANT TOK_TYPE
 
 %start code
@@ -128,21 +125,22 @@ something: relevant_struct_definition | othertokens;
  * (either como_serializable or como_storable) followed by
  * a struct definition with fields of como-supported types.
  */
-relevant_struct_definition /* a complete struct definition */
-        : como_keyword TOK_STRUCT struct_name '{' declaration_list '}' ';'
+relevant_struct_definition:
+        como_keywords TOK_STRUCT struct_name '{' declaration_list '}' ';'
         {
-            switch ($1) {
-                case TOK_STORABLE:
-                    current_struct->storable = 1; /* fallthrough */
-                case TOK_SERIALIZABLE:
-                    current_struct->serializable = 1;
-            }
+            current_struct->flags = $1;
         }
         ;
 
-como_keyword
-        : TOK_SERIALIZABLE  { $$ = TOK_SERIALIZABLE; }
-        | TOK_STORABLE      { $$ = TOK_STORABLE; }
+como_keywords
+        : como_keywords como_keyword { $$ = $1 | $2; }
+        | como_keyword               { $$ = $1; }
+        ;
+
+como_keyword:
+        | TOK_TUPLE  { $$ = FLAG_TUPLE; }
+        | TOK_RECORD { $$ = FLAG_RECORD; }
+        | TOK_CONFIG { $$ = FLAG_CONFIG; }
         ;
 
 struct_name: TOK_IDENTIFIER { new_struct((char *) $1); };
@@ -176,6 +174,12 @@ declaration
             '[' TOK_NUM_CONSTANT ']' '[' TOK_NUM_CONSTANT ']' '['
         {
             generate_error("only uni and bidimensional arrays are supported.");
+        }
+        | TOK_IDENTIFIER
+        {
+            generate_error("Parsing struct '%s': type '%s' not supported. "
+                    "Please switch to a supported type.",
+                    current_struct->name, $1);
         }
         ;
 

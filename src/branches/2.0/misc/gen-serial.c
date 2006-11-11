@@ -60,20 +60,22 @@ macro_particle(char *type)
  * auxiliary functions for gen_serialization_skel (see below)
  */
 static void
-gen_serialization_skel_scalar(FILE *out, field_t *f, char *op, int unroll)
+gen_serialization_skel_scalar(FILE *out, field_t *f, char *op, char *sep,
+        int unroll)
 {
-    fprintf(out, "\t%s_%s(x->%s)%s\n", op, macro_particle(f->type),
+    fprintf(out, "\t%s%s_%s(x->%s)%s\n", sep, op, macro_particle(f->type),
             f->name, unroll ? "" : ";");
 }
 
 static void
-gen_serialization_skel_unidim(FILE *out, field_t *f, char *op, int unroll)
+gen_serialization_skel_unidim(FILE *out, field_t *f, char *op, char *sep,
+        int unroll)
 {
     if (unroll) {
         int a;
         for (a = 0; a < f->arrlen; a++)
-            fprintf(out, "\t%s_%s(x->%s[%d])\n", op, macro_particle(f->type),
-                    f->name, a);
+            fprintf(out, "\t%s%s_%s(x->%s[%d])\n", sep, op,
+                    macro_particle(f->type), f->name, a);
 
     } else {
         fprintf(out, "\tfor (it1 = 0; it1 < %d; it1++)\n"
@@ -84,13 +86,14 @@ gen_serialization_skel_unidim(FILE *out, field_t *f, char *op, int unroll)
 
 
 static void
-gen_serialization_skel_bidim(FILE *out, field_t *f, char *op, int unroll)
+gen_serialization_skel_bidim(FILE *out, field_t *f, char *op, char *sep,
+        int unroll)
 {
     if (unroll) {
         int a, b;
         for (a = 0; a < f->arrlen; a++)
             for (b = 0; b < f->arrlen2; b++)
-                fprintf(out, "\t%s_%s(x->%s[%d][%d])\n", op,
+                fprintf(out, "\t%s%s_%s(x->%s[%d][%d])\n", sep, op,
                         macro_particle(f->type), f->name, a, b);
     } else {
         fprintf(out, "\tfor (it1 = 0; it1 < %d; it1++)\n"
@@ -124,11 +127,11 @@ gen_serialization_skel_bidim(FILE *out, field_t *f, char *op, int unroll)
  */
 static void
 gen_serialization_skel(FILE *out, char *ret_type, char *first_statement,
-        char *last_statement, struct_t *st, char *op, int unroll)
+        char *last_statement, struct_t *st, char *op, char *sep, int unroll)
 {
     int i;
 
-    fprintf(out, "static %s\n%s_%s(char *buffer, struct %s *x)\n{\n", ret_type,
+    fprintf(out, "static %s\n%s_%s(char **buffer, struct %s *x)\n{\n", ret_type,
             op, st->name, st->name);
 
     if (first_statement)
@@ -156,18 +159,20 @@ gen_serialization_skel(FILE *out, char *ret_type, char *first_statement,
             fprintf(out, "\n");
     }
 
+    sep = sep == NULL ? "" : sep;
+
     for (i = 0; i < st->n_fields; i++) {
         field_t *f = &st->fields[i];
         char is_char = !strcmp(f->type, "char");
 
         if (f->dim == 0 || (f->dim == 1 && is_char)) /* not an array */
-            gen_serialization_skel_scalar(out, f, op, unroll);
+            gen_serialization_skel_scalar(out, f, op, sep, unroll);
 
         else if (f->dim == 1 || (f->dim == 2 && is_char)) /* unidim array */
-            gen_serialization_skel_unidim(out, f, op, unroll);
+            gen_serialization_skel_unidim(out, f, op, sep, unroll);
 
         else if (f->dim == 2) /* bidimensional array */
-            gen_serialization_skel_bidim(out, f, op, unroll);
+            gen_serialization_skel_bidim(out, f, op, sep, unroll);
 
         else /* !? */
             errx(1, "Hit a bug. Please contact CoMo developers.");
@@ -175,6 +180,19 @@ gen_serialization_skel(FILE *out, char *ret_type, char *first_statement,
     if (last_statement)
         fprintf(out, "\t%s\n", last_statement);
     fprintf(out, "}\n\n");
+}
+
+/*
+ * -- gen_serialization_header
+ *
+ * Print all the includes and headers for the generated serialization
+ * functions.
+ */
+void
+gen_serialization_header(FILE *out, char *structdef)
+{
+    fprintf(out, "#include \"serialize.h\"\n\n");
+    fprintf(out, "#include \"%s\"\n\n", structdef);
 }
 
 /*
@@ -186,10 +204,9 @@ gen_serialization_skel(FILE *out, char *ret_type, char *first_statement,
 void
 gen_serialization_funcs(FILE *out, struct_t *st)
 {
-    fprintf(out, "#include \"serialization.h\"\n\n");
-    gen_serialization_skel(out, "void", NULL, NULL, st, "serialize", 0);
-    gen_serialization_skel(out, "void", NULL, NULL, st, "deserialize", 0);
-    gen_serialization_skel(out, "int", "return 0", ";", st, "+ sersize", 1);
+    gen_serialization_skel(out, "void", NULL, NULL, st, "serialize", NULL, 0);
+    gen_serialization_skel(out, "void", NULL, NULL, st, "deserialize", NULL, 0);
+    gen_serialization_skel(out, "int", "return 0", ";", st, "sersize", "+", 1);
     fprintf(out,"\n");
 }
 

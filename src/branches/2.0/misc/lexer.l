@@ -61,8 +61,9 @@ IS			(u|U|l|L)*
 
 %%
 
-"como_serializable" { adv(); return(TOK_SERIALIZABLE); }
-"como_storable"     { adv(); return(TOK_STORABLE); }
+"como_tuple"    { adv(); return(TOK_TUPLE); }
+"como_record"   { adv(); return(TOK_RECORD); }
+"como_config"   { adv(); return(TOK_CONFIG); }
 
 "char *"	{ adv(); save_string(); return(TOK_KNOWN_TYPE); }
 "char"		{ adv(); save_string(); return(TOK_KNOWN_TYPE); }
@@ -81,6 +82,7 @@ IS			(u|U|l|L)*
 "n32_t" 	{ adv(); save_string(); return(TOK_KNOWN_TYPE); }
 "n16_t" 	{ adv(); save_string(); return(TOK_KNOWN_TYPE); }
 "int8_t"	{ adv(); save_string(); return(TOK_KNOWN_TYPE); }
+"timestamp_t"	{ adv(); save_string(); return(TOK_KNOWN_TYPE); }
 
 "signed"	{ adv(); return(TOK_SIGNED); }
 "struct"	{ adv(); return(TOK_STRUCT); }
