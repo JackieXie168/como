@@ -31,6 +31,12 @@
  *
  */
 
+#include <string.h>
+#include <sys/select.h>
+#include <errno.h>
+
+#include "como.h"
+
 void
 event_loop_init(event_loop_t * el)
 {
@@ -51,7 +57,7 @@ event_loop_add(event_loop_t * el, int i)
     if (i < 0)
 	return -1;
 
-    FD_SET(i, el->fds);
+    FD_SET(i, &el->fds);
     el->max_fd = (i >= el->max_fd) ? i + 1 : el->max_fd;
     
     return el->max_fd;
@@ -70,15 +76,15 @@ event_loop_del(event_loop_t * el, int i)
     if (i < 0) 
 	return -1; 
 
-    FD_CLR(i, fds);
+    FD_CLR(i, &el->fds);
     if (i < el->max_fd - 1)
         return el->max_fd;
 
     /* we deleted the highest fd, so need to recompute the max */
     for (i = el->max_fd - 1; i >= 0; i--)
-        if (FD_ISSET(i, fds))
+        if (FD_ISSET(i, &el->fds))
             break;
-    el->max_fd i + 1;
+    el->max_fd = i + 1;
 
     return el->max_fd;
 }

@@ -650,13 +650,16 @@ ipc_handle(int fd)
 	    ipc_peer_list_remove(&s_peers, x);
 	    ipc_peer_destroy(x);
 	}
+	assert(ic == IPC_OK);
+	
+	//free(buf);
+	return ic;
     } else {
 	notice("Unhandled IPC message type %hd.\n", msg.type);
-    }
 
-    //free(buf);
-    
-    return IPC_OK;
+	//free(buf);
+	return IPC_OK;
+    }
 }
 
 
