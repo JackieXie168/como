@@ -35,7 +35,7 @@
  *
  * This set of functions enable communications between processes. 
  * Each process initializes the IPC engine using the ipc_register() 
- * call to register the handlers for all IPC messages of interest. 
+ * call to register the s_handlers for all IPC messages of interest. 
  * 
  * Each message carries a type to identify the handler and an id 
  * to identify the senders. Several types have been defined. 
@@ -45,9 +45,11 @@
  * processes to send/receive complex data structures. 
  * 
  * Exception handling is managed by the individual processes
- * in the handlers. 
+ * in the s_handlers. 
  */
 
+#define _GNU_SOURCE
+#include <stdio.h>
 #include <string.h>     /* strlen */
 #include <errno.h>
 #include <unistd.h>
@@ -55,46 +57,144 @@
 #include <sys/time.h>   /* FD_SET */
 #include <sys/types.h>
 #include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/un.h>			/* sockaddr unix */
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
+#define LOG_DOMAIN	"IPC"
 
 #include "como.h"
 #include "ipc.h"
 
-extern struct _como map;
+#define IPC_CONNECT	0
+
+#include "ipc_peer_list.h"
+
+struct PACKED ipc_peer_t {
+    uint8_t	class;
+    uint8_t	parent_class;
+    uint16_t	id;
+};
+
+#define SIZEOF_IPC_PEER_CODE	4
+#define SIZEOF_IPC_PEER_NAME	12
+
+struct ipc_peer_full_t {
+    uint8_t			class;
+    uint8_t			parent_class;
+    uint16_t			id;
+    char			code[SIZEOF_IPC_PEER_CODE];
+    char			name[SIZEOF_IPC_PEER_NAME];
+    char *			at;
+    int				fd;
+    int				swap;
+    ipc_peer_list_entry_t	next;
+};
 
 /*
  * IPC messages exchanged between processes.
  */
-typedef struct ipc_msg_t {
-    ipctype_t type;             /* message type */
-    procname_t sender;          /* sender's name */
-    int len;                    /* payload length */
-    char data[0];               /* payload */
+typedef struct PACKED ipc_msg {
+    ipc_type	type;		/* message type */
+    ipc_peer_t	sender;		/* sender */
+    uint32_t	len;		/* payload length */
+    uint8_t	data[0];	/* payload */
 } ipc_msg_t;
 
+
+typedef struct PACKED ipc_connect_msg {
+    char	code[SIZEOF_IPC_PEER_CODE]; /* code of connecting peer */
+    char	name[SIZEOF_IPC_PEER_NAME]; /* name of connecting peer */
+} ipc_connect_msg_t;
+
+
+static ipc_peer_full_t s_me;
+static void * s_user_data;
+
 /* 
- * destinations. we keep track of their names 
- * and fd so that ipc_send can operate by just 
- * pointing to the process name. 
- *
+ * IPC peers.
+ * information about connected peers.
  */
-typedef struct ipc_dest_t {
-    struct ipc_dest_t * next; 
-    procname_t name; 
-    int fd; 
-} ipc_dest_t;
 
+static ipc_peer_list_t s_peers;
 
 /* 
- * IPC messages handlers. 
+ * IPC messages s_handlers. 
  * if NULL, the message is ignored. 
  */
-static ipc_handler_fn handlers[IPC_MAX] = {0}; 
+/* TODO: replace with hash table */
+static ipc_handler_fn s_handlers[65536] = {0};
+
+
+ipc_peer_full_t *
+ipc_peer_new(uint8_t class, const char * code, const char * name)
+{
+    ipc_peer_full_t *p;
+    p = como_new0(ipc_peer_full_t);
+    p->class = class;
+    snprintf(p->code, SIZEOF_IPC_PEER_CODE, code);
+    snprintf(p->name, SIZEOF_IPC_PEER_NAME, name);
+}
+
+
+void
+ipc_peer_destroy(ipc_peer_full_t * p)
+{
+    if (p == NULL)
+	return;
+    free(p->at);
+    if (p->fd != -1)
+	close(p->fd);
+    free(p);
+}
+
+
+ipc_peer_full_t *
+ipc_peer_at(const ipc_peer_full_t * p, const char * at)
+{
+    ipc_peer_full_t *p2;
+    p2 = como_new(ipc_peer_full_t);
+    *p2 = *p;
+    p2->fd = -1;
+    p2->at = como_strdup(at);
+    p2->swap = FALSE;
+    return p2;
+}
+
 
 /* 
- * IPC destinations. this is used to translate
- * process names to socket.  
- */
-static ipc_dest_t * ipc_dests = NULL; 
+ * -- ipc_peer_get_fd
+ * 
+ * get the socket descriptor from a peer
+ * 
+ */ 
+int
+ipc_peer_get_fd(const ipc_peer_t * p_)
+{
+    ipc_peer_full_t * p = (ipc_peer_full_t *) p_;
+
+    return p->fd;
+}
+
+
+static char *
+ipc_peer_connection_point(const ipc_peer_full_t * p)
+{
+    char *cp;
+    assert(p->at != NULL);
+    if (p->at[0] == '/') {
+	if (p->parent_class == 0) {
+	    asprintf(&cp, "%s/%s.sock", p->at, p->name);
+	} else {
+	    asprintf(&cp, "%s/%s-%d.sock", p->at, p->name, p->id);
+	}
+    } else {
+	cp = strdup(p->at);
+    }
+    return cp;
+}
 
 /*
  * -- ipc_write
@@ -102,7 +202,7 @@ static ipc_dest_t * ipc_dests = NULL;
  * keeps writing until complete.
  */
 static ssize_t
-ipc_write(int fd, const void *buf, size_t count)
+ipc_write(int fd, const void * buf, size_t count)
 {
     size_t n = 0;
 
@@ -112,12 +212,208 @@ ipc_write(int fd, const void *buf, size_t count)
 	if (ret == -1)
 	    return -1;
 
-        n += ret;
+        n += (size_t) ret;
     }
    
     return (ssize_t) n; /* == count */
 }
 
+
+static inline void
+swap_msg(ipc_msg_t * msg)
+{
+    msg->type = SWAP16(msg->type);
+    msg->sender.id = SWAP16(msg->sender.id);
+    msg->len = SWAP32(msg->len);
+}
+
+
+static inline ipc_peer_full_t *
+lookup_peer(int fd)
+{
+    ipc_peer_full_t *x;
+    ipc_peer_list_foreach(x, &s_peers) {
+	if (x->fd == fd)
+	    return x;
+    }
+    return NULL;
+}
+
+
+static int
+ipc_create_socket(const ipc_peer_full_t * p, int is_server)
+{
+    struct sockaddr_un sun;
+    struct sockaddr_in saddr;
+    struct sockaddr *sa;
+    int fd, r;
+    size_t l;
+    int is_tcp = TRUE;
+    char *cp;
+
+    assert(p->at != NULL);
+    if (p->at[0] == '/') {
+	is_tcp = FALSE;
+    }
+    
+    cp = ipc_peer_connection_point(p);
+
+    if (is_tcp) {
+	/* TCP socket */
+	int opt;
+	char *host;
+	char *port;
+
+	bzero(&saddr, sizeof(saddr));
+	saddr.sin_family = AF_INET;
+	
+	port = strchr(cp, ':');
+	if (port == NULL) {
+	    error("Missing port number in %s.\n", cp);
+	}
+	
+	*port = '\0';
+	port += 1;
+	host = cp;
+	
+	if (is_server && strcmp(host, "localhost") == 0) {
+	    saddr.sin_addr.s_addr = INADDR_ANY;
+	} else if (!inet_aton(host, &saddr.sin_addr)) {
+	    /* not numeric */
+	    struct hostent *hp = gethostbyname(host) ;
+
+	    if (hp == NULL) {
+		warn("gethostbyname() failed: %s\n", hstrerror(h_errno));
+		free(cp);
+		return IPC_ERR;
+	    }
+
+	    saddr.sin_addr = *((struct in_addr *) hp->h_addr);
+	}
+
+	
+	saddr.sin_port = htons(atoi(port));
+
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	/* allow local address reuse in TIME_WAIT */
+	opt = 1;
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+	sa = (struct sockaddr *) &saddr;
+	l = sizeof(saddr);
+    } else {
+	/* unix domain */
+	bzero(&sun, sizeof(sun));
+	sun.sun_family = AF_UNIX;
+	strncpy(sun.sun_path, cp, sizeof(sun.sun_path));
+
+	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+	sa = (struct sockaddr *) &sun;
+	l = sizeof(sun);
+    }
+    if (is_server) {
+	int i;
+	i = is_tcp ? 1 : 2;
+	while (i--) {
+	    r = bind(fd, sa, l);
+	    if (r == 0)
+		break;
+
+	    /*
+	     * try to unlink path before giving up. maybe the previous
+	     * process has died without cleaning up the socket file
+	     */
+	    unlink(cp);
+	}
+	if (r < 0) {
+	    warn("Can't bind socket: %s\n", strerror(errno));
+	    free(cp);
+	    return IPC_ERR;
+	}
+	listen(fd, SOMAXCONN);
+	notice("Listening connections on peer %s@%s.\n", p->name, p->at);
+    } else {
+	/* client mode */
+	int i;
+	i = 10;
+	while (i--) {
+	    r = connect(fd, sa, l);
+	    if (r == 0)
+		break;
+	}
+	if (r < 0) {
+	    warn("Can't connect to peer %s@%s: %s.\n", p->name, p->at,
+		 strerror(errno));
+	    free(cp);
+	    return IPC_ERR;
+	}
+	notice("Connected to peer %s@%s.\n", p->name, p->at);
+    }
+    free(cp);
+    
+    return fd;
+}
+
+
+static int
+ipc_destroy_socket(const ipc_peer_full_t * p)
+{
+    int is_tcp = TRUE;
+
+    assert(p->at != NULL);
+    if (p->at[0] == '/') {
+	is_tcp = FALSE;
+    }
+
+    if (is_tcp == FALSE) {
+	char *cp;
+	int r;
+	cp = ipc_peer_connection_point(p);
+	r = unlink(cp);
+	free(cp);
+	return r;
+    }
+    return 0;
+}
+
+
+/*
+ * -- ipc_read
+ * 
+ * keeps writing until complete.
+ */
+static ssize_t
+ipc_read(int fd, void * buf, size_t count)
+{
+    size_t n = 0;
+    
+    while (n < count) {
+        ssize_t ret = read(fd, buf + n, count - n);
+        if (ret == -1)
+            return -1;
+        if (ret == 0) /* EOF */
+            break;
+        
+        n += (size_t) ret;
+    }
+    
+    return (ssize_t) n; /* <= count */
+}
+
+
+
+void
+ipc_init(ipc_peer_full_t * me, const char * ipc_dir, void * user_data)
+{
+    memset(s_handlers, 0, sizeof(s_handlers));
+    free(s_me.at);
+
+    s_me = *me;
+    s_me.at = como_strdup(ipc_dir);
+    s_me.fd = -1;
+    s_user_data = user_data;
+}
 
 /* 
  * -- ipc_listen 
@@ -128,15 +424,12 @@ ipc_write(int fd, const void *buf, size_t count)
  * 
  */
 int 
-ipc_listen(procname_t who)
+ipc_listen()
 {
-    char * sname; 
-    int fd; 
+    assert(s_me.fd == -1);
+    s_me.fd = ipc_create_socket(&s_me, TRUE);
 
-    asprintf(&sname, "S:%s.sock", getprocfullname(who)); 
-    fd = create_socket(sname, NULL); 
-    free(sname); 
-    return fd; 
+    return s_me.fd;
 }
 
 /* 
@@ -149,18 +442,19 @@ ipc_listen(procname_t who)
 void
 ipc_finish()
 {
-    char *sname;
-    ipc_dest_t * x;
+    ipc_peer_full_t *x;
     
-    asprintf(&sname, "%s.sock", getprocfullname(map.whoami));
-    destroy_socket(sname);
-    free(sname);
+    if (s_me.fd != -1) {
+	ipc_destroy_socket(&s_me);
+	close(s_me.fd);
+	s_me.fd = -1;
+    }
+    free(s_me.at);
     
-    while (ipc_dests) {
-	x = ipc_dests->next;
-	close(ipc_dests->fd);
-	free(ipc_dests);
-	ipc_dests = x;
+    while (!ipc_peer_list_empty(&s_peers)) {
+	x = ipc_peer_list_first(&s_peers);
+	ipc_peer_list_remove_head(&s_peers);
+	ipc_peer_destroy(x); /* also closes fd */
     }
 }
 
@@ -172,85 +466,50 @@ ipc_finish()
  * it returns the socket. 
  * 
  */
-int 
-ipc_connect(procname_t dst) 
+int
+ipc_connect(ipc_peer_full_t * dst)
 {
-    ipc_dest_t * x;
-    char * sname; 
-
-    /* set socket name */
-    asprintf(&sname, "%s.sock", getprocfullname(dst)); 
-
-    x = safe_calloc(1, sizeof(ipc_dest_t)); 
-    x->name = dst; 
-    x->fd = create_socket(sname, NULL); 
-    free(sname); 
-
-    /* link to existing list of destinations */
-    x->next = ipc_dests; 
-    ipc_dests = x; 
-
-    /* send the SYNC message to the destination that 
-     * can populate its database of destinations 
-     */ 
-    if (ipc_send(dst, IPC_SYNC, NULL, 0) != IPC_OK) {
-	logmsg(LOGWARN, "Can't send IPC_SYNC from ipc_connect.\n");
-	ipc_dests = ipc_dests->next;
-	free(x);
-	return IPC_ERR;
+    if (dst->at == NULL) {
+	dst->at = como_strdup(s_me.at);
     }
 
-    return x->fd; 
+    /* set socket name */
+    dst->fd = ipc_create_socket(dst, FALSE);
+
+    if (dst->fd != -1) {
+	/* add to existing list of destinations */
+	ipc_peer_list_insert_head(&s_peers, dst);
+    }
+
+    return dst->fd;
 }
 
 
 /* 
  * -- ipc_send
  * 
- * package a ipcmsg_t and send it to destination. 
- * it returns 0 in case of success and 1 in case of failure.
+ * sends a message to a peer
+ * it returns IPC_OK in case of success and IPC_ERR in case of failure.
  *
  */
 int
-ipc_send(procname_t dst, ipctype_t type, const void *data, size_t sz)
-{
-    ipc_dest_t * x; 
-
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->name != dst; x = x->next)
-	;
-
-    /* unknown destination */
-    if (x == NULL) {
-	if (dst != SUPERVISOR) { 
-	    /* 
-	     * if the destination is not SUPERVISOR we can try 
-	     * to write something in the logs. otherwise, there
-	     * is no way we can get to SUPERVISOR (we failed right here)
-	     * and therefore we have to fail silently. 
-	     */
-	    logmsg(LOGIPC, "unknown destination (%d)\n", dst); 
-	} 
-	return IPC_ERR; 
-    }
-    
-    return ipc_send_with_fd(x->fd, type, data, sz);
-}
-
-int
-ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz)
+ipc_send(ipc_peer_t * dst_, ipc_type type, const void * data, size_t sz)
 {
     ipc_msg_t *msg;
+    ipc_peer_full_t * dst = (ipc_peer_full_t *) dst_;
+    ipc_peer_t *me = (ipc_peer_t *) &s_me;
+    
+    assert(type != IPC_CONNECT);
     
     msg = alloca(sizeof(ipc_msg_t) + sz);
     
     msg->type = type;
-    msg->sender = map.whoami;
+    msg->sender = *me;
     msg->len = sz;
     
     memcpy(msg->data, data, sz);
     
-    if (ipc_write(fd, msg, sizeof(ipc_msg_t) + sz) == -1) {
+    if (ipc_write(dst->fd, msg, sizeof(ipc_msg_t) + sz) == -1) {
 	return IPC_ERR;
     }
     
@@ -260,70 +519,27 @@ ipc_send_with_fd(int fd, ipctype_t type, const void *data, size_t sz)
      * It's better to not use it until the reason for the deadlock is found.
      */
     ipc_msg_t msg;
+    ipc_peer_full_t * dst = (ipc_peer_full_t *) dst_;
+    ipc_peer_t *me = (ipc_peer_t *) s_me;
+    
+    assert(type != IPC_CONNECT);
 
     msg.type = type;
-    msg.sender = map.whoami;
+    msg.sender = *me;
     msg.len = sz;
 
-    if (ipc_write(fd, &msg, sizeof(ipc_msg_t)) == -1) {
+    if (ipc_write(dst->fd, &msg, sizeof(ipc_msg_t)) == -1) {
 	return IPC_ERR;
     }
     
-    if (sz > 0 && ipc_write(fd, data, sz) == -1) {
+    if (sz > 0 && ipc_write(dst->fd, data, sz) == -1) {
 	return IPC_ERR;
     }
 
 #endif
     return IPC_OK; 
+
 }
-
-
-/* 
- * -- ipc_send_blocking
- * 
- * package a ipcmsg_t and send it to destination. wait for 
- * an acknowledgement from the destination. 
- * it returns 0 in case of success and 1 in case of failure.
- * 
- */
-int 
-ipc_send_blocking(procname_t dst, ipctype_t type, const void *data, size_t sz) 
-{
-    ipc_dest_t * x;
-    fd_set r;
-    int s;
-
-    /* first send the message */
-    if (ipc_send(dst, type, data, sz) != IPC_OK) 
-	return IPC_ERR; 
-
-    /* now wait for an IPC_ACK from the destination. 
-     * 
-     * XXX we don't have sequence numbers in messages so 
-     *     there is no way to tell if this ACK is related 
-     *     to the message sent. 
-     * 
-     */ 
-
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->name != dst; x = x->next)
-	;
-
-    if (x == NULL) 
-	panicx("sending message %d to unknown destination", type); 
-
-    FD_ZERO(&r);
-    FD_SET(x->fd, &r);
-
-    s = -1;
-    while (s < 0) {
-        s = select(x->fd + 1, &r, NULL, NULL, NULL);
-        if (s < 0 && errno != EINTR)
-            panic("select");
-    }
-        
-    return ipc_handle(x->fd);
-}; 
 
 
 /* 
@@ -336,178 +552,202 @@ ipc_send_blocking(procname_t dst, ipctype_t type, const void *data, size_t sz)
 int 
 ipc_handle(int fd)
 {
-    ipc_dest_t * x; 
-    ipc_msg_t msg; 
-    char * buf = NULL; 
-    int r; 
+    ipc_peer_full_t *x = NULL;
+    ipc_msg_t msg;
+    void *buf = NULL;
+    size_t r;
+    int swap = FALSE;
 
     /* read the message header first */
-    r = como_read(fd, (char *) &msg, sizeof(msg)); 
-    if (r != sizeof(msg)) { 
+    r = (size_t) ipc_read(fd, &msg, sizeof(ipc_msg_t)); 
+    if (r != sizeof(ipc_msg_t)) {
 	if (r == 0)
 	    return IPC_EOF;
     	
-	/* find the name for this destination */
-	for (x = ipc_dests; x && x->fd != fd; x = x->next)
-	    ;
-
-	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
-	       x ? getprocfullname(x->name) : "UNKNOWN",
-	       strerror(errno));
-	return IPC_ERR; 
-    } 
+	/* find the sender of the message */
+	x = lookup_peer(fd);
+	if (x != NULL) {
+	    warn("Malformed IPC message received from %s@%s on fd %d.\n",
+		 x->name, x->at, fd);
+	} else {
+	    warn("Invalid IPC message received on fd %d.\n", fd);
+	    debug("Have you callend ipc_handle on a non-IPC fd?\n");
+	}
+	return IPC_ERR;
+    }
 	    
+    if (msg.type == IPC_CONNECT) {
+	/* NOTE: this works regardless of byte ordering as IPC_CONNECT is 0 */
+	if (msg.len != sizeof(ipc_connect_msg_t)) {
+	    if (ntohl(msg.len) != sizeof(ipc_connect_msg_t)) {
+		warn("Invalid IPC connection message received on fd %d.\n",
+		     fd);
+		return IPC_ERR;
+	    }
+	    swap = TRUE;
+	}
+    } else {
+	/* find the sender of the message */
+	x = lookup_peer(fd);
+	if (x == NULL) {
+	    warn("IPC message received from unknown peer on fd %d.\n", fd);
+	    debug("Have you callend ipc_handle on a non-IPC fd?\n");
+	    return IPC_ERR;
+	}
+	swap = x->swap;
+    }
+    
+    if (swap == TRUE) {
+	swap_msg(&msg);
+    }
+
     /* read the data part now */ 
-    if (msg.len > 0) { 
+    if (msg.len > 0) {
 	/*
 	 * NOTE: the assumption is that msgs are small, so alloca is used in
 	 * place of safe_malloc. In future a possible generalization could be
 	 * to use a threshold to split between small and big msgs.
 	 */
-	//buf = safe_malloc(msg.len);
+	//buf = como_malloc(msg.len);
 	buf = alloca(msg.len);
-	como_read(fd, buf, msg.len); 
-    } 
-
-    /* 
-     * check if we know about this sender. otherwise 
-     * add it to the list of possible destinations. 
-     */ 
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->name != msg.sender; x = x->next)
-	;
-
-    if (x == NULL) {
-	x = safe_calloc(1, sizeof(ipc_dest_t)); 
-	x->name = msg.sender; 
+	r = (size_t) ipc_read(fd, buf, msg.len);
+	if (r != msg.len) {
+	    if (x != NULL) {
+		warn("Can't read entire IPC message from %s@%s on fd %d.\n",
+		     x->name, x->at, fd);
+	    } else {
+		warn("Can't read entire IPC message from fd %d.\n", fd);
+	    }
+	}
+    }
+    
+    if (msg.type == IPC_CONNECT) {
+	/* this is the connection message */
+	ipc_connect_msg_t *cm;
+	
+	cm = (ipc_connect_msg_t *) buf;
+	x = ipc_peer_new(msg.sender.class, cm->code, cm->name);
 	x->fd = fd;
-	x->next = ipc_dests; 
-	ipc_dests = x; 
-	logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
-	       getprocfullname(msg.sender), fd);
-    } else if (msg.type == IPC_SYNC) {
-	x->fd = fd;
-	logmsg(LOGIPC, "new connection from peer %s on fd %d\n",
-	       getprocfullname(msg.sender), fd);
+	x->at = strdup("unknown");
+	ipc_peer_list_insert_head(&s_peers, x);
+	
+	notice("New connection from peer %s on fd %d\n", x->name, fd);
+	return IPC_OK;
+    }
+    
+    if (x->class != msg.sender.class) {
+	warn("Sender class mismatch in IPC message from %s@%s on fd %d.\n",
+	     x->name, x->at, fd);
     }
 
     /* find the right handler if any */
-    if (handlers[msg.type] != NULL) 
-	handlers[msg.type](msg.sender, fd, buf, msg.len); 
+    if (s_handlers[msg.type] != NULL) {
+	int ic;
+	ic = s_handlers[msg.type](&msg.sender, buf, msg.len, swap, s_user_data);
+	if (ic == IPC_CLOSE) {
+	    notice("Closing connection to peer %s on fd %d\n", x->name, fd);
+	    ipc_peer_list_remove(&s_peers, x);
+	    ipc_peer_destroy(x);
+	}
+    } else {
+	notice("Unhandled IPC message type %hd.\n", msg.type);
+    }
 
     //free(buf);
     
     return IPC_OK;
 }
 
+
 /* 
- * -- ipc_wait_reply_with_fd
+ * -- ipc_receive
  * 
- * wait for a reply from fd. returns the msg type in type and the msg in read
- * into the area pointed by data for at most sz bytes. after the function exits
- * sz contains the real message length.
+ * receive a message from a given peer and within a certain 
+ * timeout. 
  * 
- */ 
+ */
 int
-ipc_wait_reply_with_fd(int fd, ipctype_t *type, void *data, size_t *sz)
+ipc_receive(ipc_peer_t * peer, ipc_type * type, void * data, size_t * sz,
+	    int * swap, const struct timeval * timeout)
 {
+    ipc_peer_full_t *x = (ipc_peer_full_t *) peer;
     ipc_msg_t msg;
     fd_set rs;
-    int r;
+    int n;
+    struct timeval to, *toptr;
+    size_t r;
+    
+    /* if data != NULL then sz must not be NULL */
+    assert(data == NULL || sz != NULL);
     
     FD_ZERO(&rs);
-    FD_SET(fd, &rs);
+    FD_SET(x->fd, &rs);
 
-    r = -1;
-    while (r < 0) {
-        r = select(fd + 1, &rs, NULL, NULL, NULL);
-        if (r < 0 && errno != EINTR)
-            panic("select");
+    for (;;) {
+	if (timeout != NULL) {
+	    to = *timeout;
+	    toptr = &to;
+	} else {
+	    toptr = NULL;
+	}
+        n = select(x->fd + 1, &rs, NULL, NULL, toptr);
+        if (n == 1) {
+	    break;
+        }
+        if (n < 0) {
+	    if (errno == EAGAIN) {
+		return IPC_EAGAIN;
+	    } else if (errno != EINTR) {
+		return IPC_ERR;
+	    }
+        }
     }
-    
+
     /* read the message header first */
-    r = como_read(fd, (char *) &msg, sizeof(msg)); 
-    if (r != sizeof(msg)) {
-    	ipc_dest_t * x;
-    	
+    r = (size_t) ipc_read(x->fd, &msg, sizeof(ipc_msg_t)); 
+    if (r != sizeof(ipc_msg_t)) {
 	if (r == 0)
 	    return IPC_EOF;
     	
-	/* find the name for this destination */
-	for (x = ipc_dests; x && x->fd != fd; x = x->next)
-	    ;
-
-	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
-	       x ? getprocfullname(x->name) : "UNKNOWN",
-	       strerror(errno));
-	return IPC_ERR; 
-    } 
+	warn("Malformed IPC message received from %s@%s on fd %d.\n",
+	     x->name, x->at, x->fd);
+	return IPC_ERR;
+    }
     
+    if (x->swap == TRUE) {
+	swap_msg(&msg);
+    }
+    assert(msg.type != IPC_CONNECT);
+
     *type = msg.type;
+    *swap = x->swap;
 	    
     /* read the data part now */ 
     if (msg.len > 0) {
 	if (msg.len <= (ssize_t) *sz) {
-	    como_read(fd, data, msg.len);
+	    /* user provided buffer is suitable to contain the message */
+	    r = (size_t) ipc_read(x->fd, data, msg.len);
 	} else {
-	    char *t;
-	    como_read(fd, data, *sz);
-	    t = alloca(msg.len - *sz);
-	    como_read(fd, t, msg.len - *sz);
+	    /* user provided buffer is NOT suitable to contain the message */
+	    r = (size_t) ipc_read(x->fd, data, *sz);
+	    if (r == *sz) {
+		void *buf;
+		size_t r2;
+		buf = alloca(msg.len - *sz);
+		r2 = (size_t) ipc_read(x->fd, buf, msg.len - *sz);
+		if (r2 == msg.len - *sz) {
+		    r += r2;
+		} else {
+		    r = (size_t) -1;
+		}
+	    }
 	}
-	*sz = msg.len;
-    }
-    
-    return IPC_OK;
-}
-
-
-int
-ipc_try_recv_with_fd(int fd, ipctype_t *type, void *data, size_t *sz,
-		     struct timeval *timeout)
-{
-    ipc_msg_t msg;
-    fd_set rs;
-    int r;
-    
-    FD_ZERO(&rs);
-    FD_SET(fd, &rs);
-
-    r = select(fd + 1, &rs, NULL, NULL, timeout);
-    if (r == 0) {
-	return IPC_EAGAIN;
-    }
-    
-    /* read the message header first */
-    r = como_read(fd, (char *) &msg, sizeof(msg)); 
-    if (r != sizeof(msg)) {
-    	ipc_dest_t * x;
-    	
-	if (r == 0)
-	    return IPC_EOF;
-    	
-	/* find the name for this destination */
-	for (x = ipc_dests; x && x->fd != fd; x = x->next)
-	    ;
-
-	logmsg(LOGIPC, "error reading IPC (%s): %s\n",
-	       x ? getprocfullname(x->name) : "UNKNOWN",
-	       strerror(errno));
-	return IPC_ERR; 
-    } 
-    
-    *type = msg.type;
-	    
-    /* read the data part now */ 
-    if (msg.len > 0) {
-	if (msg.len <= (ssize_t) *sz) {
-	    como_read(fd, data, msg.len);
-	} else {
-	    char *t;
-	    como_read(fd, data, *sz);
-	    t = alloca(msg.len - *sz);
-	    como_read(fd, t, msg.len - *sz);
+	if (r != msg.len) {
+	    warn("Can't read entire IPC message from %s@%s on fd %d.\n",
+		 x->name, x->at, x->fd);
 	}
+    }
+    if (sz) {
 	*sz = msg.len;
     }
     
@@ -517,75 +757,13 @@ ipc_try_recv_with_fd(int fd, ipctype_t *type, void *data, size_t *sz,
 /* 
  * -- ipc_register
  * 
- * copy the information of the handle functions in the 
- * global handlers variable. 
+ * register a user provided handler for a given ipc type. 
  * 
  */ 
 void 
-ipc_register(ipctype_t type, ipc_handler_fn fn)
+ipc_register(ipc_type type, ipc_handler_fn fn)
 {
-    assert(type < IPC_MAX); 
-    handlers[type] = fn; 
+    assert(type != IPC_CONNECT);
+    s_handlers[type] = fn;
 }
 
-
-/* 
- * -- ipc_clear
- * 
- * clear all information we know about handlers. this is 
- * used before starting to register new handlers (very useful
- * after a fork). 
- * 
- * XXX note that we don't clear the list of known destination. 
- *     we can still make use of those given that the we still 
- *     have the file descriptors open. 
- * 
- */ 
-void 
-ipc_clear()
-{
-    bzero(handlers, sizeof(handlers)); 
-}
-
-
-/* 
- * -- ipc_getfd
- * 
- * get the socket descriptor from a process name 
- * 
- */ 
-int 
-ipc_getfd(procname_t who)
-{
-    ipc_dest_t * x; 
-
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->name != who; x = x->next)
-	;
-
-    return x ? x->fd : IPC_ERR; 
-}
-
-
-/* 
- * -- ipc_getdest
- * 
- * get the process name from a socket descriptor 
- * 
- */ 
-int 
-ipc_getdest(int fd, procname_t * who)
-{
-    ipc_dest_t * x; 
-
-    /* find the socket for this destination */
-    for (x = ipc_dests; x && x->fd != fd; x = x->next)
-	;
-
-    if (x != NULL) {
-	*who = x->name;
-	return IPC_OK;
-    }
-    
-    return IPC_ERR; 
-}

@@ -35,68 +35,43 @@
 
 #include <sys/time.h>
 
-typedef enum _ipc_types		ipctype_t; 
-typedef void (*ipc_handler_fn)(procname_t who, int fd, void *buf, size_t len);
+typedef uint16_t		ipc_type;
 
-enum _ipc_types {
-   IPC_ERROR, 
-   IPC_SYNC,
-   IPC_ACK, 
-   IPC_ECHO, 
-   IPC_MODULE_ADD, 
-   IPC_MODULE_DEL,
-   IPC_MODULE_START, 
-   IPC_FREEZE,
-   IPC_FLUSH,
-   IPC_RECORD, 
-   IPC_DONE,
-   IPC_EXIT,
+typedef struct ipc_peer_full_t	ipc_peer_full_t;
+typedef struct ipc_peer_t	ipc_peer_t;
 
-  /* storage IPCs */
-   S_ERROR, 
-   S_NODATA, 
-   S_ACK, 
-   S_OPEN, 
-   S_CLOSE, 
-   S_REGION, 
-   S_SEEK, 
-   S_INFORM,
+typedef int (*ipc_handler_fn) (ipc_peer_t * peer, void * buf, size_t len,
+			       int swap, void * user_data);
 
-   /* capture client IPCs */
-   CCA_ERROR,
-   CCA_OPEN,
-   CCA_OPEN_RES,
-   CCA_CLOSE,
-   CCA_NEW_BATCH,
-   CCA_ACK_BATCH,
-
-   IPC_MAX 	/* this must be last */
-}; 
 
 #define IPC_OK		0
 #define IPC_ERR		-1
 #define IPC_EOF		-2
 #define IPC_EAGAIN	-3
 
+#define IPC_CLOSE	0xC105E
 /* 
  * function prototypes 
  */
-int  ipc_listen             ();
-int  ipc_connect            (procname_t name);
-void ipc_finish             ();
-int  ipc_send               (procname_t name, ipctype_t type, const void *data,
-			     size_t sz);
-int  ipc_send_with_fd       (int fd, ipctype_t type, const void *data,
-			     size_t sz);
-int  ipc_send_blocking      (procname_t name, ipctype_t type, const void *data,
-			     size_t sz);
-int  ipc_handle             (int fd);
-void ipc_register           (ipctype_t type, ipc_handler_fn fn);
-void ipc_clear              ();
-int  ipc_getfd              (procname_t who);
-int  ipc_getdest            (int fd, procname_t * who);
-int  ipc_wait_reply_with_fd (int fd, ipctype_t *type, void *data, size_t *sz);
-int  ipc_try_recv_with_fd   (int fd, ipctype_t *type, void *data, size_t *sz,
-			     struct timeval *timeout);
+ipc_peer_full_t * ipc_peer_new     (uint8_t class, const char * code,
+				    const char * name);
+void              ipc_peer_destroy (ipc_peer_full_t * p);
+ipc_peer_full_t * ipc_peer_at      (const ipc_peer_full_t * p,
+				    const char * at);
+int               ipc_peer_get_fd  (const ipc_peer_t * p_);
+
+
+
+void ipc_init     (ipc_peer_full_t * me, const char * ipc_dir,
+		   void * user_data);
+void ipc_finish   ();
+void ipc_register (ipc_type type, ipc_handler_fn fn);
+int  ipc_listen   ();
+int  ipc_connect  (ipc_peer_full_t * dst);
+int  ipc_send     (ipc_peer_t * dst, ipc_type type, const void * data,
+		   size_t sz);
+int  ipc_handle   (int fd);
+int  ipc_receive  (ipc_peer_t * peer, ipc_type * type, void * data,
+		   size_t * sz, int * swap, const struct timeval * timeout);
 
 #endif	/* _COMO_IPC_H_ */
