@@ -137,8 +137,8 @@ como_keywords
         | como_keyword               { $$ = $1; }
         ;
 
-como_keyword:
-        | TOK_TUPLE  { $$ = FLAG_TUPLE; }
+como_keyword
+        : TOK_TUPLE  { $$ = FLAG_TUPLE; }
         | TOK_RECORD { $$ = FLAG_RECORD; }
         | TOK_CONFIG { $$ = FLAG_CONFIG; }
         ;
