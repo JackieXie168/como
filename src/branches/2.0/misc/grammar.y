@@ -1,6 +1,6 @@
 %{
 /* 
- * Copyright (c) 2004-2006, Intel Corporation 
+ * Copyright (c) 2006, Intel Corporation 
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or 
