@@ -166,7 +166,7 @@ main(int argc, char **argv)
     char *command, *input, *cpp_output, *str, *module, *full_path_input;
     struct_t *st;
     int ret, i;
-    FILE *csout, *glueout, *serialout;
+    FILE *csout, *glueout, *serialout, *tnout;
 
     if (argc < 3)
         errx(1, "usage: %s mdl_name input_file.h [incdir1 incdir2..]", argv[0]);
@@ -237,11 +237,21 @@ main(int argc, char **argv)
     serialout = safe_fopen(str, "w");
     free(str);
 
+    asprintf(&str, "%s/gen-typenames.c", getcwd(NULL, 0));
+    tnout = safe_fopen(str, "w");
+    free(str);
+
     gen_csharp_class_header(csout);
     gen_csharp_glue_header(glueout, full_path_input);
     gen_serialization_header(serialout, full_path_input);
     
     for (i = 0, st = structs[0]; st != NULL; i++, st = structs[i]) {
+        if (st->flags & FLAG_TUPLE)
+            fprintf(tnout, "char * tuple_type = \"%s\";\n", st->name);
+        if (st->flags & FLAG_RECORD)
+            fprintf(tnout, "char * record_type = \"%s\";\n", st->name);
+        if (st->flags & FLAG_CONFIG)
+            fprintf(tnout, "char * config_type = \"%s\";\n", st->name);
         printf("Generating code for struct %s:\n", st->name);
         gen_serialization_funcs(serialout, st);
         printf("\tSerialization functions\n");
@@ -257,6 +267,9 @@ main(int argc, char **argv)
         printf("ok\n");
     }
 
+    ret = unlink(cpp_output);
+    if (ret != 0)
+        warn("cannot unlink %s", cpp_output);
     exit(0);
 }
 

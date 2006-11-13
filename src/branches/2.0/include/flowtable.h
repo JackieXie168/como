@@ -57,6 +57,10 @@ typedef struct flowtable_t flowtable_t;
 typedef struct flowtable_iter_t  flowtable_iter_t;
 typedef unsigned int flowhash_t;
 
+/*
+ * All records for the flowtable must have a 32bit initial
+ * record which is interpreted as the hash of the record.
+ */
 typedef struct flow {
     flowhash_t	hash;
 } flow_t;
