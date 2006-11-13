@@ -1,45 +1,48 @@
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/base)
 
-SET(COMO_SRCS
-  como.c
-  logging.c
-  memory.c
-  config.c
-  inline.c
-  os.c
-  util-io.c
-  util-safe.c
-  util-misc.c
-  util-socket.c
-  util-process.c
-  ipc.c
-  modules.c
-  query.c
-  query-comms.c
-  query-ondemand.c
-  services.c
-  metadesc.c
-  pktmeta.c
-  headerinfo.c
-  capture.c
-  capture-client.c
-  export.c
-  supervisor.c
+SET(STORAGE_SRCS
   storage.c
-  storage-client.c
-  sniffers.c
-  ieee80211frames.c
-  radio.c
-  asn.c
-  ${COMO_SOURCE_DIR}/lib/bitmap.c
-  ${COMO_SOURCE_DIR}/lib/hash.c
-  ${COMO_SOURCE_DIR}/lib/heap.c
-  ${COMO_SOURCE_DIR}/lib/macutils.c
-  ${COMO_SOURCE_DIR}/lib/printpkt.c
-  ${COMO_SOURCE_DIR}/lib/mempool.c
-  ${COMO_SOURCE_DIR}/lib/uhash.c
-  ${COMO_SOURCE_DIR}/lib/pattern_search.c
+)
+
+SET(COMO_SRCS
+  storage.c
+#  memory.c
+#  config.c
+#  inline.c
+#  os.c
+#  util-io.c
+#  util-safe.c
+#  util-misc.c
+#  util-socket.c
+#  util-process.c
+#  ipc.c
+#  modules.c
+#  query.c
+#  query-comms.c
+#  query-ondemand.c
+#  services.c
+#  metadesc.c
+#  pktmeta.c
+#  headerinfo.c
+#  capture.c
+#  capture-client.c
+#  export.c
+#  supervisor.c
+#  storage.c
+#  storage-client.c
+#  sniffers.c
+#  ieee80211frames.c
+#  radio.c
+#  asn.c
+#  ${COMO_SOURCE_DIR}/lib/bitmap.c
+#  ${COMO_SOURCE_DIR}/lib/hash.c
+#  ${COMO_SOURCE_DIR}/lib/heap.c
+#  ${COMO_SOURCE_DIR}/lib/macutils.c
+#  ${COMO_SOURCE_DIR}/lib/printpkt.c
+#  ${COMO_SOURCE_DIR}/lib/mempool.c
+#  ${COMO_SOURCE_DIR}/lib/uhash.c
+#  ${COMO_SOURCE_DIR}/lib/pattern_search.c
 )
 
 IF(ENABLE_PROFILING)
@@ -84,7 +87,7 @@ ADD_CUSTOM_COMMAND(
 #
 # Add filter-syntax.c to COMO_SRCS
 #
-SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/filter-syntax.c)
+#SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/filter-syntax.c)
 
 #
 # Since filter-syntax.c does not exist yet when cmake is run, mark
@@ -111,6 +114,9 @@ INCLUDE_DIRECTORIES(${COMO_BINARY_DIR}/base)
 # Define the como executable
 #
 ADD_EXECUTABLE(como ${COMO_SRCS})
+
+ADD_EXECUTABLE(como-storage ${STORAGE_SRCS})
+
 #
 # Make sure modules can see como's symbols
 #
@@ -143,6 +149,10 @@ TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/sniffers/libsniffers.a)
 TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
 
 TARGET_LINK_LIBRARIES(como m)
+
+TARGET_LINK_LIBRARIES(como comolib)
+
+TARGET_LINK_LIBRARIES(como-storage comolib)
 
 IF(LINUX)
   TARGET_LINK_LIBRARIES(como dl)

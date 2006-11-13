@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, Intel Corporation
+ * Copyright (c) 2004-2006, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -29,36 +29,77 @@
  *
  * $Id$
  */
+#define _GNU_SOURCE
+#include <stdio.h>
 
-/* CoMo portability library */
+#include <string.h>
+#include <dlfcn.h>	/* dlopen, dlclose, etc. */
 
-#ifndef LIB_H_
-#define LIB_H_
+#include "como.h"
 
-#ifndef lib_malloc
-#warning "lib_malloc not defined: using default libc's malloc"
-#define lib_malloc	malloc
+#ifdef WIN32
+#  define SHOBJ_SUFFIX		"dll"
+#else
+#  ifdef __APPLE__
+#    define SHOBJ_SUFFIX	"dynlib"
+#  else
+#    define SHOBJ_SUFFIX	"so"
+#  endif
 #endif
 
-#ifndef lib_calloc
-#warning "lib_calloc not defined: using default libc's malloc"
-#define lib_calloc	calloc
-#endif
+struct shobj {
+    char *	name;
+    void *	handle;
+};
 
-#ifndef lib_realloc
-#warning "lib_realloc not defined: using default libc's malloc"
-#define lib_realloc	realloc
-#endif
+char *
+shobj_build_path(const char * directory, const char * name)
+{
+    char *res;
+    asprintf(&res, "%s/%s.%s", directory, name, SHOBJ_SUFFIX);
+    return res;
+}
 
 
-#include "allocator.h"
-#include "array.h"
-#include "bitmap.h"
-#include "hash.h"
-#include "heap.h"
-#include "mempool.h"
-#include "ptr_array.h"
-#include "uhash.h"
-#include "flowtable.h"
+shobj_t *
+shobj_open(const char * filename)
+{
+    shobj_t *shobj;
+    void *handle;
+    
+    handle = dlopen(filename, RTLD_NOW);
+    if (handle == NULL) {
+	warn("Can't open shared object %s: %s\n", filename, dlerror());
+	return NULL;
+    }
+    
+    shobj = como_new(shobj_t);
+    shobj->name = como_strdup(como_basename(filename));
+    shobj->handle = handle;
+    
+    return shobj;
+}
 
-#endif /*LIB_H_*/
+
+void *
+shobj_symbol(shobj_t * shobj, const char * symbol)
+{
+    void *sym;
+    sym = dlsym(shobj->handle, symbol);
+    if (sym == NULL) {
+        warn("Can't find symbol %s in shared object %s: %s\n",
+	     symbol, shobj->name, dlerror());
+    }
+    return sym;
+}
+
+
+int
+shobj_close(shobj_t * shobj)
+{
+    int res;
+    res = dlclose(shobj->handle);
+    free(shobj->name);
+    free(shobj);
+    return res;
+}

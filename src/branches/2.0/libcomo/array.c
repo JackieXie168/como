@@ -61,7 +61,7 @@
 
 #include <string.h>
 
-#include "corlib.h"
+#include "como.h"
 
 #ifndef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -85,7 +85,7 @@ array_grow(array_t * array, int length)
     }
 
     array->size = MAX(array->size, 16);
-    array->base = lib_realloc(array->base, array->size * array->element_size);
+    array->base = como_realloc(array->base, array->size * array->element_size);
     array->data = array->base + off;
 }
 
@@ -98,7 +98,7 @@ array_new(size_t element_size)
 array_t *
 array_sized_new(size_t element_size, int reserved_size)
 {
-    array_t *array = lib_calloc(1, sizeof(array_t));
+    array_t *array = como_new0(array_t);
 
     array->element_size = element_size;
     

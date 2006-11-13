@@ -214,6 +214,62 @@ uri_validate(char **uri)
 
 
 /* 
+ * parse_relativetime
+ * 
+ * parses string of the form -3h5m10s from a given timestamp (base). 
+ * 
+ */ 
+static time_t 
+parse_relativetime(char * str, int multiplier, timestamp_t base)
+{
+    struct tm timeinfo; 
+    time_t ts;
+    int len; 
+
+    /* get the base timestamp */
+    ts = TS2SEC(base);
+    gmtime_r(&ts, &timeinfo); 
+
+    len = strlen(str); 
+
+    /* skip first character */
+    str++; len--; 
+
+    /* check for one letter (in [dhms]) at a time */ 
+    while (len > 0) { 
+	int x; 
+	int val; 
+
+	val = atoi(str); 
+	x = strspn(str, "1234567890"); 
+	str += x; 
+	len -= x; 
+
+	if (str[0] == 'd') 			/* day */
+	    timeinfo.tm_mday += multiplier*val; 
+	else if (str[0] == 'h') 		/* hour */
+	    timeinfo.tm_hour += multiplier*val; 
+	else if (str[0] == 'm')             /* minute */
+	    timeinfo.tm_min += multiplier*val;
+	else if (str[0] == 's') 		/* seconds */
+	    timeinfo.tm_sec += multiplier*val; 
+	else 				/* error */
+	    break; 				
+
+	/* skip letter */
+	str++; len--;
+    } 
+    
+    if (len > 0) {
+	logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
+	return ts; 
+    }
+
+    return (time_t) timegm(&timeinfo); 
+} 
+
+
+/* 
  * -- parse_timestr()
  * 
  * This function parse the time string of a query. The string is made of 
@@ -233,20 +289,15 @@ parse_timestr(char * str, timestamp_t * base)
     struct tm timeinfo; 
     time_t ts;
     size_t len;
-    int adding; 
 
     assert(str != NULL); 
     assert(base != NULL); 
 
-    ts = TS2SEC(*base);
-    gmtime_r(&ts, &timeinfo); 
-
-    /* look if this is a start or end */
-    len = strlen(str); 
-    adding = 0; 
-
     switch (str[0]) { 
     case '@': 		/* absolute timestamp */
+	ts = TS2SEC(*base);
+	gmtime_r(&ts, &timeinfo); 
+	len = strlen(str); 
 	for (str++, len--; len > 0; str += 2, len -= 2) { 
 	    char val[3] = {0}; 
 
@@ -280,51 +331,18 @@ parse_timestr(char * str, timestamp_t * base)
 	*base = TIME2TS(ts, 0);
 	break; 
 	
-    case '+': 		/* relative timestamp (after current time) */
-	adding = 2; 
-	/* pass thru */
-
     case '-': 		/* relative timestamp (before current time) */
-	adding--; 
-	
-        /* skip first character */
-	str++; len--; 
-
-	/* check for one letter (in [dhms]) at a time */ 
-	while (len > 0) { 
-	    int x; 
-	    int val; 
-
-	    val = atoi(str); 
- 	    x = strspn(str, "1234567890"); 
-	    str += x; 
-	    len -= x; 
-
-	    if (str[0] == 'd') 			/* day */
-                timeinfo.tm_mday += adding*val; 
-            else if (str[0] == 'h') 		/* hour */
-                timeinfo.tm_hour += adding*val; 
-            else if (str[0] == 'm')             /* minute */
-                timeinfo.tm_min += adding*val;
-            else if (str[0] == 's') 		/* seconds */
-                timeinfo.tm_sec += adding*val; 
-	    else 				/* error */
-		break; 				
-
-	    /* skip letter */
-	    str++; len--;
-	} 
-	
-	if (len > 0) {
-	    logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
-	    return (uint32_t) timegm(&timeinfo); 
-	} 
-
-	ts = timegm(&timeinfo); 
+        ts = parse_relativetime(str, -1, *base);
 	break; 
 
-    default: 		/* nothing set, use current time */
+    case '+': 		/* XXX the plus sign is converted to space... */ 
+    case ' ': 	
+        ts = parse_relativetime(str, 1, *base);
 	break;
+
+    default: 	
+	logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
+	return TS2SEC(*base);
     } 
 
     return (uint32_t) ts; 

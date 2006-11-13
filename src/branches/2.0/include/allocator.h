@@ -47,12 +47,12 @@ typedef void * (*alc_free_fn)   (void *ptr,
 				 const char * file, int line,
 				 void *data);
 
-typedef struct allocator {
+typedef struct alc {
     alc_malloc_fn	malloc;
     alc_calloc_fn	calloc;
     alc_free_fn		free;
     void *		data;
-} allocator_t;
+} alc_t;
 
 #define alc_malloc(alc, size)		\
     (alc)->malloc(size, __FILE__, __LINE__, (alc)->data)

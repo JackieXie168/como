@@ -97,6 +97,15 @@ static struct {
 } s_cabuf;
 
 
+struct como_ca {
+    array_t		modules;
+    sniffer_list_t	sniffers;
+    /* capbuf */
+    como_stats *	stats;
+    event_loop_t	el;
+};
+
+
 static inline void capture_loop_del_fd(int fd);
 
 
@@ -498,9 +507,18 @@ batch_process(batch_t * batch)
  * 
  */
 static void
-ca_ipc_module_add(procname_t sender, UNUSED int fd,
-                    void *pack, size_t sz)
+ca_ipc_add_module(peer_t peer, void * sbuf, size_t sz)
 {
+    mdl_t *h;
+    allocator_t *alc;
+    
+    mdl_deserialize((uint8_t *) sbuf, &h, alc);
+
+    comoca_add_module(s_comoca, h);
+    
+    alc_free(alc, h);
+    
+    
     module_t tmp;
     module_t *mdl;
 
@@ -1643,34 +1661,31 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 	}
 
 	/* wait for messages, sniffers or up to the polling interval */
-
-	r = s_valid_fds;
-	t = timeout;
-	n_ready = select(s_max_fd, &r, NULL, NULL, active_sniff ? &t : NULL);
+	if (active_sniff > 0) {
+	    event_loop_set_timeout(&s_como_ca.el, &timeout);
+	}
+	n_ready = event_loop_select(&s_como_ca.el, &r);
 	if (n_ready < 0) {
-	    if (errno == EINTR)
-		continue;
-
-	    panic("select");
+	    continue;
 	}
 
 	/* process any IPC messages that have turned up */
 
 	start_tsctimer(map.stats->ca_loop_timer);
 
-	for (i = 0; n_ready > 0 && i < s_max_fd; i++) {
+	for (i = 0; n_ready > 0 && i < s_como_ca.el.max_fd; i++) {
 
 	    if (!FD_ISSET(i, &r))
 		continue;
 
 	    if (i == accept_fd) {
-		/* an EXPORT process wants to connect */
 		int fd = accept(accept_fd, NULL, NULL);
 		if (fd < 0)
-		    panic("accepting export process");
-
-		capture_loop_add_fd(fd);
-		FD_SET(fd, &ipc_fds);
+		    warn("Failed on accept(): %s\n", strerror(errno));
+		} else {
+ 		    event_loop_add(&s_como_st.el, x);
+		    FD_SET(fd, &ipc_fds);
+		}
 
 		n_ready--;
 	    }

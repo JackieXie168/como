@@ -36,12 +36,80 @@
 #include <stdio.h>
 #include <sys/time.h>   /* struct timeval */
 
+#define HAS_COMO_BUILD
+#ifdef HAS_COMO_BUILD
 #include "como-build.h"
+#endif
+
+#ifdef __GNUC__
+#define PACKED	__attribute__ ((packed))
+#define UNUSED	__attribute__ ((unused))
+#define DEPREC	__attribute__ ((deprecated))
+#else
+#define PACKED
+#define UNUSED
+#define DEPREC
+#endif
+
+#ifndef TRUE
+#define TRUE	1
+#endif
+
+#ifndef FALSE
+#define FALSE	0
+#endif
+
 #include "comotypes.h"
 #include "comofunc.h"
 #include "sniffers.h"
+#include "log.h"
+#include "ipc.h"
+#include "eventloop.h"
+
+#define ALIGN(size, boundary) \
+    (((size) + ((boundary) - 1)) & ~((boundary) - 1))
+#define ALIGN_DEFAULT(size) ALIGN(size, 8)
+
+#define SWAP32(x) x = (uint32_t)((x >> 24 & 0xff) | (x >> 8 & 0xff00) | \
+		      (x << 8 & 0xff0000) | (x << 24 & 0xff000000))
+#define SWAP16(x) x = (uint16_t)((x << 8 & 0xff00) | (x >> 8 & 0xff))
 
 #define ROUND_32(n) (((n) + 3) & ~3)
+
+#define como_malloc	malloc
+#define como_calloc	calloc
+#define como_realloc	realloc
+#define como_strdup	strdup
+
+#define como_new(type)	((type *) como_malloc(sizeof(type)))
+#define como_new0(type)	((type *) como_calloc(1, sizeof(type)))
+
+#define como_basename	basename
+
+void setproctitle_init(int argc, char **argv);
+void setproctitle(const char *format, ...);
+
+enum {
+    COMO_SU_CLASS = 1,
+    COMO_CA_CLASS = 2,
+    COMO_EX_CLASS = 3,
+    COMO_ST_CLASS = 4,
+    COMO_QU_CLASS = 5,
+};
+
+extern ipc_peer_full_t *COMO_SU;
+extern ipc_peer_full_t *COMO_CA;
+extern ipc_peer_full_t *COMO_EX;
+extern ipc_peer_full_t *COMO_ST;
+extern ipc_peer_full_t *COMO_QU;
+
+enum {
+    SU_CONFIGURE = 1,
+    SU_EXIT = 2
+};
+
+void como_init(int argc, char ** argv);
+
 
 /* 
  * this structure contains the node specific 
@@ -52,18 +120,18 @@
  * different port. a virtual node may apply a filter on 
  * all packets before the module process them. 
  */
-struct _node { 
-    char * name; 
-    char * location; 
-    char * type; 
-    char * comment;
-    int query_port;		/* port for incoming queries */
-    char * source;		/* source module for all virtual modules */
-    char * filter_str;          /* filter expression */
-    char ** args;               /* parameters for the modules */
-};
+typedef struct como_node { 
+    char *	name;
+    char *	location;
+    char *	type;
+    char *	comment;
+    char *	source;		/* source module for all virtual modules */
+    char *	filter;		/* filter expression */
+    char **	args;		/* parameters for the modules */
+    uint16_t	query_port;	/* port for incoming queries */
+    int		query_fd;	/* socket accepting queries */
+} como_node_t;
 
-typedef struct _node	node_t; 
 
     
 /*
@@ -92,7 +160,7 @@ struct _como {
 #define COMO_PRIVATE_MEM 	0x01
 #define COMO_SHARED_MEM 	0x02
 
-    node_t *	node;		/* node information */
+    como_node_t *	node;		/* node information */
     int		node_count;	/* no. of nodes */
 
     stats_t *	stats; 		/* statistic counters */

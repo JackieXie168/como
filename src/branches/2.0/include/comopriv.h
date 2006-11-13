@@ -87,12 +87,12 @@ typedef enum memmap_policy_t {
 } memmap_policy_t;
 
 void          allocator_init_module(module_t *mdl);
-allocator_t * allocator_safe();
-allocator_t * allocator_shared();
+alc_t * allocator_safe();
+alc_t * allocator_shared();
 
 void       memory_init(uint chunk);
 
-memmap_t * memmap_new(allocator_t *alc, uint entries, memmap_policy_t pol);
+memmap_t * memmap_new(alc_t *alc, uint entries, memmap_policy_t pol);
 void       memmap_destroy(memmap_t *ml);
 
 /* never call those function directly, use the macros below */
