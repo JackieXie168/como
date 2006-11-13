@@ -150,10 +150,8 @@ int asn_test(const uint32_t addr, const uint16_t asn);
 /*
  * util-socket.c
  */
-int create_socket(const char *path, char **arg);
-int destroy_socket(const char *path);
-int del_fd(int i, fd_set * fds, int max_fd);
-int add_fd(int i, fd_set * fds, int max_fd);
+int create_socket  (const char * path, int is_server);
+int destroy_socket (const char * path);
 
 /*
  * util-io.c

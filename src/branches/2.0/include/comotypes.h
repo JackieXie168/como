@@ -42,11 +42,15 @@
 typedef int  (*cmp_fn)            (const void *a, const void *b);
 typedef void (*destroy_notify_fn) (void *data);
 
+typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
+
 #include "stdpkt.h"
 #include "filter.h"
 #include "allocator.h"
 #include "array.h"
 #include "shobj.h"
+
+#include "mdl.h"
 
 /*
  * New definitions of object types
@@ -77,7 +81,6 @@ typedef struct _como_headerinfo headerinfo_t;
 
 typedef struct cca		cca_t;
 
-typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
 typedef uint16_t		asn_t;		/* ASN values */
 

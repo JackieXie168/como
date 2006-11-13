@@ -57,11 +57,6 @@
 #include <sys/time.h>   /* FD_SET */
 #include <sys/types.h>
 #include <sys/select.h>
-#include <sys/socket.h>
-#include <sys/un.h>			/* sockaddr unix */
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 
 #define LOG_DOMAIN	"IPC"
 
@@ -253,115 +248,14 @@ lookup_peer(int fd)
 static int
 ipc_create_socket(const ipc_peer_full_t * p, int is_server)
 {
-    struct sockaddr_un sun;
-    struct sockaddr_in saddr;
-    struct sockaddr *sa;
-    int fd, r;
-    size_t l;
-    int is_tcp = TRUE;
+    int fd;
     char *cp;
-
-    assert(p->at != NULL);
-    if (p->at[0] == '/') {
-	is_tcp = FALSE;
-    }
     
     cp = ipc_peer_connection_point(p);
-
-    if (is_tcp) {
-	/* TCP socket */
-	int opt;
-	char *host;
-	char *port;
-
-	bzero(&saddr, sizeof(saddr));
-	saddr.sin_family = AF_INET;
-	
-	port = strchr(cp, ':');
-	if (port == NULL) {
-	    error("Missing port number in %s.\n", cp);
-	}
-	
-	*port = '\0';
-	port += 1;
-	host = cp;
-	
-	if (is_server && strcmp(host, "localhost") == 0) {
-	    saddr.sin_addr.s_addr = INADDR_ANY;
-	} else if (!inet_aton(host, &saddr.sin_addr)) {
-	    /* not numeric */
-	    struct hostent *hp = gethostbyname(host) ;
-
-	    if (hp == NULL) {
-		warn("gethostbyname() failed: %s\n", hstrerror(h_errno));
-		free(cp);
-		return IPC_ERR;
-	    }
-
-	    saddr.sin_addr = *((struct in_addr *) hp->h_addr);
-	}
-
-	
-	saddr.sin_port = htons(atoi(port));
-
-	fd = socket(AF_INET, SOCK_STREAM, 0);
-	/* allow local address reuse in TIME_WAIT */
-	opt = 1;
-	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-	sa = (struct sockaddr *) &saddr;
-	l = sizeof(saddr);
-    } else {
-	/* unix domain */
-	bzero(&sun, sizeof(sun));
-	sun.sun_family = AF_UNIX;
-	strncpy(sun.sun_path, cp, sizeof(sun.sun_path));
-
-	fd = socket(AF_UNIX, SOCK_STREAM, 0);
-
-	sa = (struct sockaddr *) &sun;
-	l = sizeof(sun);
-    }
-    if (is_server) {
-	int i;
-	i = is_tcp ? 1 : 2;
-	while (i--) {
-	    r = bind(fd, sa, l);
-	    if (r == 0)
-		break;
-
-	    /*
-	     * try to unlink path before giving up. maybe the previous
-	     * process has died without cleaning up the socket file
-	     */
-	    unlink(cp);
-	}
-	if (r < 0) {
-	    warn("Can't bind socket: %s\n", strerror(errno));
-	    free(cp);
-	    return IPC_ERR;
-	}
-	listen(fd, SOMAXCONN);
-	notice("Listening connections on %s@%s.\n", p->name, p->at);
-    } else {
-	/* client mode */
-	int i;
-	i = 10;
-	while (i--) {
-	    r = connect(fd, sa, l);
-	    if (r == 0)
-		break;
-	}
-	if (r < 0) {
-	    warn("Can't connect to peer %s@%s: %s.\n", p->name, p->at,
-		 strerror(errno));
-	    free(cp);
-	    return IPC_ERR;
-	}
-	notice("Connected to peer %s@%s.\n", p->name, p->at);
-    }
-    free(cp);
     
+    fd = create_socket(cp, is_server);
+    
+    free(cp);
     return fd;
 }
 
@@ -369,22 +263,14 @@ ipc_create_socket(const ipc_peer_full_t * p, int is_server)
 static int
 ipc_destroy_socket(const ipc_peer_full_t * p)
 {
-    int is_tcp = TRUE;
-
-    assert(p->at != NULL);
-    if (p->at[0] == '/') {
-	is_tcp = FALSE;
-    }
-
-    if (is_tcp == FALSE) {
-	char *cp;
-	int r;
-	cp = ipc_peer_connection_point(p);
-	r = unlink(cp);
-	free(cp);
-	return r;
-    }
-    return 0;
+    int r;
+    char *cp;
+    
+    cp = ipc_peer_connection_point(p);
+    r = destroy_socket(cp);
+    free(cp);
+    
+    return r;
 }
 
 
@@ -438,7 +324,9 @@ ipc_listen()
 {
     assert(s_me.fd == -1);
     s_me.fd = ipc_create_socket(&s_me, TRUE);
-
+    if (s_me.fd != -1) {
+	notice("Listening connections on %s@%s.\n", s_me.name, s_me.at);
+    }
     return s_me.fd;
 }
 
@@ -483,10 +371,9 @@ ipc_connect(ipc_peer_full_t * dst)
 	dst->at = como_strdup(s_me.at);
     }
 
-    /* set socket name */
     dst->fd = ipc_create_socket(dst, FALSE);
-
     if (dst->fd != -1) {
+	notice("Connected to peer %s@%s.\n", dst->name, dst->at);
 	/* add to existing list of destinations */
 	ipc_peer_list_insert_head(&s_peers, dst);
     }
