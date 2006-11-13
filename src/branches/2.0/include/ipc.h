@@ -40,6 +40,12 @@ typedef uint16_t		ipc_type;
 typedef struct ipc_peer_full_t	ipc_peer_full_t;
 typedef struct ipc_peer_t	ipc_peer_t;
 
+struct PACKED ipc_peer_t {
+    uint8_t	class;
+    uint8_t	parent_class;
+    uint16_t	id;
+};
+
 typedef int (*ipc_handler_fn) (ipc_peer_t * peer, void * buf, size_t len,
 			       int swap, void * user_data);
 
@@ -59,7 +65,7 @@ void              ipc_peer_destroy (ipc_peer_full_t * p);
 ipc_peer_full_t * ipc_peer_at      (const ipc_peer_full_t * p,
 				    const char * at);
 int               ipc_peer_get_fd  (const ipc_peer_t * p_);
-
+ipc_peer_full_t * ipc_peer_child   (const ipc_peer_full_t * kind, uint16_t id);
 
 
 void ipc_init     (ipc_peer_full_t * me, const char * ipc_dir,

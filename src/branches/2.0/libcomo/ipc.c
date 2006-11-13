@@ -72,11 +72,6 @@
 
 #include "ipc_peer_list.h"
 
-struct PACKED ipc_peer_t {
-    uint8_t	class;
-    uint8_t	parent_class;
-    uint16_t	id;
-};
 
 #define SIZEOF_IPC_PEER_CODE	4
 #define SIZEOF_IPC_PEER_NAME	12
@@ -161,6 +156,7 @@ ipc_peer_at(const ipc_peer_full_t * p, const char * at)
     p2->fd = -1;
     p2->at = como_strdup(at);
     p2->swap = FALSE;
+    memset(&p2->next, 0, sizeof(p2->next));
     return p2;
 }
 
@@ -177,6 +173,19 @@ ipc_peer_get_fd(const ipc_peer_t * p_)
     ipc_peer_full_t * p = (ipc_peer_full_t *) p_;
 
     return p->fd;
+}
+
+
+ipc_peer_full_t *
+ipc_peer_child(const ipc_peer_full_t * kind, uint16_t id)
+{
+    ipc_peer_full_t *p;
+    p = como_new(ipc_peer_full_t);
+    *p = *kind;
+    p->parent_class = s_me.class;
+    p->id = id;
+    memset(&p->next, 0, sizeof(p->next));
+    return p;
 }
 
 
@@ -681,6 +690,7 @@ ipc_receive(ipc_peer_t * peer, ipc_type * type, void * data, size_t * sz,
     struct timeval to, *toptr;
     size_t r;
     
+    assert(type != NULL);
     /* if data != NULL then sz must not be NULL */
     assert(data == NULL || sz != NULL);
     
@@ -724,7 +734,9 @@ ipc_receive(ipc_peer_t * peer, ipc_type * type, void * data, size_t * sz,
     assert(msg.type != IPC_CONNECT);
 
     *type = msg.type;
-    *swap = x->swap;
+    if (swap) {
+	*swap = x->swap;
+    }
 	    
     /* read the data part now */ 
     if (msg.len > 0) {
