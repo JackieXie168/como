@@ -40,27 +40,22 @@
 
 #include <stdio.h>
 #include <time.h>
-#include "module.h"
+#include "como.h"
 #include "data.h"
 
-#define mdl_t void
-#define mdl_allocate_tuple_mem(self, size) NULL
-#define mdl_set_ca_state(self, size) NULL
-#define mdl_get_ca_state(self) NULL
-#define mdl_get_config(self) NULL
+void *
+ca_init(mdl_t * self, timestamp_t ts)
+{
+    tuple_t *t = mdl_alloc_tuple(self, tuple_t);
+    t->ts = ts;
+    return t; /* all state we need is the current tuple */
+}
 
 void
-update(mdl_t * self, pkt_t *pkt)
+capture(mdl_t * self, pkt_t * pkt, void * state)
 {
-    config_t *cf = (config_t *) mdl_get_config(self);
-    tuple_t *t = (tuple_t *) mdl_get_ca_state(self);
-
-    if (t == NULL) { /* state is null, create a new one */
-        t = mdl_allocate_tuple_mem(self, sizeof(tuple_t));
-	bzero(t, sizeof(tuple_t));
-        mdl_set_ca_state(self, t); /* all state we need is the current tuple */
-	t->ts = COMO(ts);
-    }
+    const config_t *cf = mdl_get_config(self, config_t);
+    tuple_t *t = (tuple_t *) state;
 
     if (COMO(type) == COMOTYPE_NF) {
 	if (cf->iface == -1 || H16(NF(input)) == cf->iface) {
