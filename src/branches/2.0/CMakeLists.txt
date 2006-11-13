@@ -183,7 +183,7 @@ ADD_DEFINITIONS(-include ${COMO_SOURCE_DIR}/include/os.h)
 # Add subdirs
 #
 ADD_SUBDIRECTORY(misc)
-#ADD_SUBDIRECTORY(modules)
+ADD_SUBDIRECTORY(modules)
 #ADD_SUBDIRECTORY(sniffers)
 #ADD_SUBDIRECTORY(services)
 ADD_SUBDIRECTORY(base)
