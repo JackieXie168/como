@@ -38,6 +38,7 @@
  * space between them.
  */
 #include <stdio.h>
+#include <string.h>
 #include "grammar.h"
 
 //extern void *yylval;
