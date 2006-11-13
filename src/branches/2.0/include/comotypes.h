@@ -38,9 +38,15 @@
 
 #include <inttypes.h>
 #include <sys/time.h>
+
+typedef int  (*cmp_fn)            (const void *a, const void *b);
+typedef void (*destroy_notify_fn) (void *data);
+
 #include "stdpkt.h"
 #include "filter.h"
 #include "allocator.h"
+#include "array.h"
+#include "shobj.h"
 
 /*
  * New definitions of object types
@@ -53,7 +59,7 @@ typedef struct _callbacks       callbacks_t;    /* callbacks */
 typedef struct _callbacks       module_cb_t;    /* callbacks */
 typedef struct _flushmsg        flushmsg_t;     /* message capture/export */
 
-typedef struct memmap_t         memmap_t;      /* opaque, memory manager */
+typedef struct memmap           memmap_t;      /* opaque, memory manager */
 typedef struct _expiredmap	expiredmap_t;	/* expired list of mem maps */
 
 typedef struct _record 	        rec_t;          /* table record header */
@@ -340,7 +346,7 @@ struct _module {
     metadesc_t *indesc;		/* requested input metadesc list */
     metadesc_t *outdesc;	/* offered output metadesc list */
 
-    allocator_t alc;
+    alc_t alc;
     
     memmap_t * init_map;       /* memory map used in init() */
     memmap_t * shared_map;     /* memory map currently used in sh memory */
@@ -548,7 +554,7 @@ struct _como_metatpl {
 
 struct _como_metadesc {
     struct _como_metadesc *_next;
-    allocator_t *_alc;
+    alc_t *_alc;
     uint32_t _tpl_count;
     struct _como_metatpl *_first_tpl;
     timestamp_t ts_resolution;

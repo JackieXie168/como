@@ -27,7 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id:log.c 1009 2006-11-13 13:39:55 +0000 (Mon, 13 Nov 2006) m_canini $
  *
  * This is the logging facility. 
  */

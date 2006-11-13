@@ -91,6 +91,7 @@ static sniffer_t *
 sniffer_init(const char * device, const char * args)
 {
     struct libpcap_me *me;
+    char* libpcap_name = NULL;
 
     me = safe_calloc(1, sizeof(struct libpcap_me));
     
@@ -127,10 +128,12 @@ sniffer_init(const char * device, const char * args)
 	   device, me->promisc, me->snaplen, me->timeout);
 
     /* link the libpcap library */
-    me->handle = dlopen("libpcap.so", RTLD_NOW);
+    asprintf(&libpcap_name, "libpcap%s", SHARED_LIB_EXT);
+    me->handle = dlopen(libpcap_name, RTLD_NOW);
+
     if (me->handle == NULL) { 
-	logmsg(LOGWARN, "sniffer-libpcap: error opening libpcap.so: %s\n",
-	       dlerror());
+	logmsg(LOGWARN, "sniffer-libpcap: error opening %s: %s\n",
+	       libpcap_name, dlerror());
 	goto error;
     } 
 
@@ -151,6 +154,8 @@ error:
 	dlclose(me->handle);
     }
     free(me);
+    if (libpcap_name != NULL)
+      free(libpcap_name);
     return NULL;
 }
 

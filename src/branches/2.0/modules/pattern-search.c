@@ -28,7 +28,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id:pattern-search.c 978 2006-11-01 15:23:18 +0000 (Wed, 01 Nov 2006) m_canini $
  */
 
 /*
@@ -309,7 +309,7 @@ replay(void * self, char *buf, char *out, size_t * len,
 }
 
 
-callbacks_t callbacks = {
+MODULE(pattern_search) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: 0, 
     st_recordsize: sizeof(FLOWDESC),

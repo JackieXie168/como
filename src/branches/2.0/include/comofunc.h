@@ -70,7 +70,7 @@ int match_module(module_t * a, module_t * b);
 uint memory_usage();
 uint memory_peak();
 
-allocator_t * allocator_safe();
+alc_t * allocator_safe();
 
 void * mem_mdl_smalloc(size_t sz, const char * file, int line, module_t * mdl);
 void * mem_mdl_scalloc(size_t n, size_t sz, const char *, int, module_t * mdl);
@@ -110,6 +110,7 @@ void supervisor_mainloop();
  */
 void querymode_init();
 
+#if 0
 /* 
  * logging.c 
  */
@@ -130,6 +131,8 @@ void _epanicx (const char * file, int line, const char *fmt, ...);
 #define logmsg(flags,fmt...)	_logmsg(__FILE__, __LINE__, flags, fmt)
 #define panic(fmt...)		_epanic(__FILE__, __LINE__, fmt)
 #define panicx(fmt...)		_epanicx(__FILE__, __LINE__, fmt)
+
+#endif
 
 /* 
  * filter-syntax.c

@@ -43,7 +43,6 @@
 #define EFLOWDESC	FLOWDESC
 
 FLOWDESC {
-    uint32_t ts;	/* timestamp of measurement interval */
     uint32_t addr;  	/* src/dst address */ 
     uint64_t bytes;	/* number of bytes */
     uint32_t pkts;	/* number of packets */
@@ -96,8 +95,6 @@ init(void * self, char *args[])
 	}
     }
 
-    /* align the time of the last export of data */ 
-    
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
     inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
@@ -113,7 +110,6 @@ init(void * self, char *args[])
     CONFIG(self) = config; 
     return TIME2TS(config->meas_ivl, 0);
 }
-
 
 static uint32_t
 hash(void * self, pkt_t *pkt)
@@ -138,7 +134,11 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
     CONFIGDESC * config = CONFIG(self);
 
     if (isnew) {
-	x->ts = TS2SEC(pkt->ts) - (TS2SEC(pkt->ts) % config->meas_ivl);
+	/* 
+	 * we need to make sure that the timestamp is aligned for 
+         * all the records of the same interval. force alignment if 
+	 * needed. 
+	 */ 
         x->addr = config->use_dst? H32(IP(dst_ip)) : H32(IP(src_ip)); 
         x->bytes = 0;
         x->pkts = 0;
@@ -174,7 +174,6 @@ export(void * self, void *efh, void *fh, int isnew)
     EFLOWDESC *ex = EF(efh);
 
     if (isnew) {
-	ex->ts = x->ts; 
         ex->addr = x->addr;
         ex->bytes = 0;
         ex->pkts = 0;
@@ -194,6 +193,7 @@ compare(const void *efh1, const void *efh2)
 
     return ((ex1->bytes > ex2->bytes)? -1 : 1);
 }
+
 
 static int
 action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
@@ -218,29 +218,37 @@ action(void * self, void *efh, timestamp_t ivl, timestamp_t current_time,
 }
 
 
+struct disk_record { 
+    uint32_t ts; 
+    uint32_t addr;  	/* src/dst address */ 
+    uint64_t bytes;	/* number of bytes */
+    uint32_t pkts;	/* number of packets */
+};
+
 static ssize_t
 store(void * self, void *efh, char *buf)
 {
     EFLOWDESC *ex = EF(efh);
+    CONFIGDESC *config = CONFIG(self); 
 
-    PUTH32(buf, ex->ts);
+    PUTH32(buf, config->last_export); 
     PUTH32(buf, ex->addr);
     PUTH64(buf, ex->bytes);
     PUTH32(buf, ex->pkts);
 
-    return sizeof(EFLOWDESC);
+    return sizeof(struct disk_record);
 }
 
 static size_t
 load(void * self, char *buf, size_t len, timestamp_t *ts)
 {
-    if (len < sizeof(EFLOWDESC)) {
+    if (len < sizeof(struct disk_record)) {
         *ts = 0;
         return 0; 
     }
 
-    *ts = TIME2TS(ntohl(((EFLOWDESC *)buf)->ts), 0);
-    return sizeof(EFLOWDESC);
+    *ts = TIME2TS(ntohl(((struct disk_record *)buf)->ts), 0);
+    return sizeof(struct disk_record);
 }
 
 
@@ -311,7 +319,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     static time_t last_ts = 0; 
     static int count = 0; 
     CONFIGDESC * config = CONFIG(self);
-    EFLOWDESC *x; 
+    struct disk_record *x; 
     struct in_addr addr;
     time_t ts;
 
@@ -370,7 +378,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
   	return s; 
     } 
 
-    x = (EFLOWDESC *) buf; 
+    x = (struct disk_record *) buf; 
     ts = (time_t) ntohl(x->ts);
 
     /* maintain the count */ 
@@ -424,7 +432,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 MODULE(topaddr) = {
     ca_recordsize: sizeof(FLOWDESC),
     ex_recordsize: sizeof(EFLOWDESC),
-    st_recordsize: sizeof(EFLOWDESC),
+    st_recordsize: sizeof(struct disk_record),
     capabilities: {has_flexible_flush: 1, 0},
     init: init,
     check: NULL,

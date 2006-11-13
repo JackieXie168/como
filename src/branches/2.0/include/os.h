@@ -37,6 +37,14 @@
 #ifndef _COMO_OS_H_
 #define _COMO_OS_H_
 
+/* 
+ * This sets the general dynamic library extension that is then
+ * custonised for specific architectures that aren't .so
+ */
+#define SHARED_LIB_EXT ".so"
+
+
+
     /***					***/
     /***		Linux			***/
     /***					***/
@@ -138,6 +146,11 @@ void setproctitle      (const char *format, ...);
  * we use the one used in Linux
  */
 #define _D_EXACT_NAMLEN(f) ((f)->d_namlen)
+
+
+/* shared libraries have the extension .dylib on Mac OS X */
+#undef SHARED_LIB_EXT
+#define SHARED_LIB_EXT ".dylib"
 
 #endif /* __APPLE__ */
  
