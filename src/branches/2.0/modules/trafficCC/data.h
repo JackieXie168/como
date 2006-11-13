@@ -1,6 +1,6 @@
 #include "como.h"
 
-como_record struct traffic_tuple {
+como_tuple como_record struct traffic_tuple {
     timestamp_t ts;
     uint64_t    bytes[2];
     uint32_t    pkts[2];
