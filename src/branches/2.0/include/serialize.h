@@ -45,61 +45,61 @@ typedef struct serializable {
     sersize_fn		sersize;
 } serializable_t;
 
-#define serialize_type_value(value, type) do {      \
+#define serialize_type_value(sbuf,value,type) do {      \
     type __ser_value = (value);                     \
-    memcpy(*buffer, &__ser_value, sizeof(type));    \
-    *buffer += sizeof(type);                        \
+    memcpy(*sbuf, &__ser_value, sizeof(type));    \
+    *sbuf += sizeof(type);                        \
     } while (0)
 
-#define serialize_uint64_t(x) serialize_type_value(x, uint64_t)
-#define serialize_uint32_t(x) serialize_type_value(x, uint32_t)
-#define serialize_uint16_t(x) serialize_type_value(x, uint16_t)
-#define serialize_uint8_t(x)  serialize_type_value(x, uint8_t)
+#define serialize_uint64_t(sbuf,x) serialize_type_value(sbuf, x, uint64_t)
+#define serialize_uint32_t(sbuf,x) serialize_type_value(sbuf, x, uint32_t)
+#define serialize_uint16_t(sbuf,x) serialize_type_value(sbuf, x, uint16_t)
+#define serialize_uint8_t(sbuf,x)  serialize_type_value(sbuf, x, uint8_t)
 
-#define serialize_int64_t(x) serialize_type_value(x, int64_t)
-#define serialize_int32_t(x) serialize_type_value(x, int32_t)
-#define serialize_int16_t(x) serialize_type_value(x, int16_t)
-#define serialize_int8_t(x)  serialize_type_value(x, int8_t)
+#define serialize_int64_t(sbuf,x) serialize_type_value(sbuf, x, int64_t)
+#define serialize_int32_t(sbuf,x) serialize_type_value(sbuf, x, int32_t)
+#define serialize_int16_t(sbuf,x) serialize_type_value(sbuf, x, int16_t)
+#define serialize_int8_t(sbuf,x)  serialize_type_value(sbuf, x, int8_t)
 
 #define serialize_timestamp_t serialize_uint64_t
 #define serialize_int serialize_int32_t
 
-#define serialize_string(buffer,val) do {	\
+#define serialize_string(sbuf,val) do {	\
     size_t sz;					\
     sz = strlen(val);				\
-    serialize_uint32_t(buffer, sz);		\
-    memcpy(*buffer, val, sz);			\
-    *buffer += sz;				\
+    serialize_uint32_t(sbuf, sz);		\
+    memcpy(*sbuf, val, sz);			\
+    *sbuf += sz;				\
 } while(0)
 
 
-#define deserialize_type_value(where, type) do {    \
-    memcpy(&(where), *buffer, sizeof(type));        \
-    *buffer += sizeof(type);                        \
+#define deserialize_type_value(sbuf,where,type) do {    \
+    memcpy(where, *sbuf, sizeof(type));        \
+    *sbuf += sizeof(type);                        \
     } while(0)
 
-#define deserialize_uint64_t(x) deserialize_type_value(x, uint64_t)
-#define deserialize_uint32_t(x) deserialize_type_value(x, uint32_t)
-#define deserialize_uint16_t(x) deserialize_type_value(x, uint16_t)
-#define deserialize_uint8_t(x)  deserialize_type_value(x, uint8_t)
+#define deserialize_uint64_t(sbuf,x) deserialize_type_value(sbuf, x, uint64_t)
+#define deserialize_uint32_t(sbuf,x) deserialize_type_value(sbuf, x, uint32_t)
+#define deserialize_uint16_t(sbuf,x) deserialize_type_value(sbuf, x, uint16_t)
+#define deserialize_uint8_t(sbuf,x)  deserialize_type_value(sbuf, x, uint8_t)
 
-#define deserialize_int64_t(x) deserialize_type_value(x, int64_t)
-#define deserialize_int32_t(x) deserialize_type_value(x, int32_t)
-#define deserialize_int16_t(x) deserialize_type_value(x, int16_t)
-#define deserialize_int8_t(x)  deserialize_type_value(x, int8_t)
+#define deserialize_int64_t(sbuf,x) deserialize_type_value(sbuf, x, int64_t)
+#define deserialize_int32_t(sbuf,x) deserialize_type_value(sbuf, x, int32_t)
+#define deserialize_int16_t(sbuf,x) deserialize_type_value(sbuf, x, int16_t)
+#define deserialize_int8_t(sbuf,x)  deserialize_type_value(sbuf, x, int8_t)
 
-#define deserialize_timestamp_t serialize_uint64_t
+#define deserialize_timestamp_t deserialize_uint64_t
 #define deserialize_int deserialize_int32_t
 
-#define deserialize_string(buffer,val_out,alc) do { \
+#define deserialize_string(sbuf,val_out,alc) do { \
     size_t sz;					\
     char *val;					\
-    sbuf = deserialize_uint32_t(buffer, &sz);	\
+    deserialize_uint32_t(sbuf, &sz);		\
     val = alc_malloc(alc, sz + 1);		\
     memcpy(val, sbuf, sz);			\
     val[sz] = '\0';				\
     *val_out = val;				\
-    *buffer += sz;				\
+    *sbuf += sz;				\
 } while(0)
 
 
