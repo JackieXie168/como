@@ -12,6 +12,7 @@ SET(COMOLIB_SRCS
   array.c
   shobj.c
   socket.c
+  mdl.c
 )
 
 ADD_LIBRARY(comolib STATIC ${COMOLIB_SRCS})
