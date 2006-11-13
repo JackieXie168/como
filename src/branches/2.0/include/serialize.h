@@ -34,6 +34,17 @@
 #define _SERIALIZE_H
 #include <string.h>
 
+typedef void   (*serialize_fn)   (uint8_t ** sbuf, const void * data);
+typedef void   (*deserialize_fn) (uint8_t ** sbuf, void ** data_out,
+				  alc_t * alc);
+typedef size_t (*expose_len_fn)  (const void * src);
+
+typedef struct serializable {
+    serialize_fn	serialize;
+    deserialize_fn	deserialize;
+    expose_len_fn	expose_len;
+} serializable_t;
+
 #define serialize_type_value(value, type) do {      \
     type __ser_value = (value);                     \
     memcpy(*buffer, &__ser_value, sizeof(type));    \
@@ -53,6 +64,16 @@
 #define serialize_timestamp_t serialize_uint64_t
 #define serialize_int serialize_int32_t
 
+#define serialize_string(buffer,val) do {
+    size_t sz;
+    sz = strlen(val);
+    
+    serialize_uint32_t(buffer, sz);
+    memcpy(*buffer, val, sz);
+    *buffer += sz;
+} while(0)
+
+
 #define deserialize_type_value(where, type) do {    \
     memcpy(&(where), *buffer, sizeof(type));        \
     *buffer += sizeof(type);                        \
@@ -71,6 +92,19 @@
 #define deserialize_timestamp_t serialize_uint64_t
 #define deserialize_int deserialize_int32_t
 
+#define deserialize_string(buffer,val_out,alc) do {
+    size_t sz;
+    char *val;
+    
+    sbuf = deserialize_uint32_t(buffer, &sz);
+    val = alc_malloc(alc, sz + 1);
+    memcpy(val, sbuf, sz);
+    val[sz] = '\0';
+    *val_out = val;
+    *buffer += sz;
+} while(0)
+
+
 #define sersize_type(type) sizeof(type)
 #define sersize_uint64_t(x) sersize_type(uint64_t)
 #define sersize_uint32_t(x) sersize_type(uint32_t)
@@ -85,5 +119,6 @@
 #define sersize_timestamp_t sersize_uint64_t
 #define sersize_int sersize_int32_t
 
+#define sersize_string(val) (sersize_uint32_t(x) + strlen(val))
 
 #endif
