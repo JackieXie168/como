@@ -52,7 +52,7 @@ void      array_sort       (array_t * array, cmp_fn cmFn);
 void      array_clear      (array_t * array, int reserved_size, int zero_seg);
 void *    array_shift_     (array_t * array);
 
-#define   array_at(a,t,i)  (((t *) a->data)[i])
+#define   array_at(a,t,i)  (&((t *) a->data)[i])
 #define   array_shift(a,t) ((t *) array_shift_(a))
 
 #endif

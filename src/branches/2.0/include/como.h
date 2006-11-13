@@ -121,6 +121,7 @@ void como_init(int argc, char ** argv);
  * all packets before the module process them. 
  */
 typedef struct como_node { 
+    int		id;
     char *	name;
     char *	location;
     char *	type;
