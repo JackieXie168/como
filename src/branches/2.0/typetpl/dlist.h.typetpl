@@ -1,0 +1,56 @@
+#ifndef <name>_H_
+#define <name>_H_
+
+#include "c_queue.h"
+
+/*
+ * Doubly-linked List definitions.
+ */
+
+typedef struct <name> {
+	<type> *lh_first;	/* first element */
+} <name>_t;
+ 
+#define	<name>_head_initializer(head)					\
+	{ NULL }
+ 
+typedef struct <name>_entry {
+        <type> *le_next;   /* next element */                      \
+        <type> **le_prev;  /* address of previous next element */  
+} <name>_entry_t;
+ 
+/*
+ * Singly-linked List access methods.
+ */
+#define	<name>_first(head)		C_LIST_FIRST(head)
+#define	<name>_end(head)		C_LIST_END(head)
+#define	<name>_empty(head)		C_LIST_EMPTY(head)
+#define	<name>_next(elm)		C_LIST_NEXT(elm, <field>)
+
+#define	<name>_foreach(var, head)	\
+	C_LIST_FOREACH(var, head, <field>)
+
+#define	<name>_foreach_prevptr(var, varp, head)	\
+	C_LIST_FOREACH_PREVPTR(var, varp, head, <field>)
+
+/*
+ * Doubly-linked List functions.
+ */
+#define	<name>_init(head)	C_SLIST_INIT(head)
+
+#define	<name>_insert_after(slistelm, elm)	\
+	C_LIST_INSERT_AFTER(slistelm, elm, <field>)
+
+#define	<name>_insert_head(head, elm)	\
+	C_LIST_INSERT_HEAD(head, elm, <field>)
+
+#define	<name>_remove_next(head, elm)	\
+	C_LIST_REMOVE_NEXT(head, elm, <field>)
+
+#define	<name>_remove_head(head)	\
+	C_LIST_REMOVE_HEAD(head, <field>)
+
+#define <name>_remove(head, elm)	\
+	C_LIST_REMOVE(head, elm, <type>, <field>)
+
+#endif /*<name>_H_*/
