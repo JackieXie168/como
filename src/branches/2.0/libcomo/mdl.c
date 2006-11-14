@@ -37,6 +37,8 @@
 #include "como.h"
 #include "comopriv.h"
 #include "storage.h"
+#include "serialize.h"
+#include "shobj.h"
 
 
 typedef struct strec strec_t;
@@ -67,21 +69,12 @@ strec_t * strec_get_uint64(strec_t * r, uint64_t *val) WARN_UNUSED_RESULT;
 
 */
 
-
-
-
-
-
-
-
-
 serializable_t *
-mdl_get_config_ser(const mdl_t * h)
+mdl_get_config_ser(const mdl_t * mdl)
 {
-    mdl_priv_t * type;
-    type = (mdl_priv_t *) h->priv;
+    return &mdl->priv->mdl_config;
 
-    switch (*type) {
+    /*switch (*type) {
     case PRIV_ISUPERVISOR:
 	return ((mdl_isupervisor_t *) h->priv)->mdl_config;
     case PRIV_ICAPTURE:
@@ -93,7 +86,7 @@ mdl_get_config_ser(const mdl_t * h)
     }
 
     error("Can't access config serialization info\n");
-    return NULL;
+    return NULL;*/
 }
 
 
@@ -150,48 +143,73 @@ mdl_deserialize(uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc)
 mdl_icapture_t *
 mdl_get_icapture(mdl_t * h)
 {
-    mdl_priv_t * type;
-    type = (mdl_priv_t *) h->priv;
-    if (type == NULL || *type != PRIV_ICAPTURE)
-	error("Can't access ICapture for module `%s`\n", h->name);
-
-    return (mdl_icapture_t *) h->priv;
+    return h->priv->proc.ca;
 }
 
 
 mdl_isupervisor_t *
 mdl_get_isupervisor(mdl_t * h)
 {
-    mdl_priv_t * type;
-    type = (mdl_priv_t *) h->priv;
-    if (type == NULL || *type != PRIV_ISUPERVISOR)
-	error("Can't access ISupervisor for module `%s`\n", h->name);
-
-    return (mdl_isupervisor_t *) h->priv;
+    return h->priv->proc.su;
 }
 
 
 mdl_iexport_t *
 mdl_get_iexport(mdl_t * h)
 {
-    mdl_priv_t * type;
-    type = (mdl_priv_t *) h->priv;
-    if (type == NULL || *type != PRIV_IEXPORT)
-	error("Can't access IExport for module `%s`\n", h->name);
-
-    return (mdl_iexport_t *) h->priv;
+    return h->priv->proc.ex;
 }
 
 
 mdl_iquery_t *
 mdl_get_iquery(mdl_t * h)
 {
-    mdl_priv_t * type;
-    type = (mdl_priv_t *) h->priv;
-    if (type == NULL || *type != PRIV_IQUERY)
-	error("Can't access IQuery for module `%s`\n", h->name);
+    return h->priv->proc.qu;
+}
 
-    return (mdl_iquery_t *) h->priv;
+int
+mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
+{
+    char *structname;
+    int i;
+
+    structname = (char *) shobj_symbol(shobj, what);
+    if (structname == NULL) {
+        warn("symbol '%s' not found, cannot determine "
+            "module's structure serialization functions");
+        return -1;
+    }
+
+    for (i = 0; i < 3; i++) {
+        char *op, *str;
+        void *sym;
+        int ret;
+
+        switch(i) {
+        case 0: op = "serialize"; break;
+        case 1: op = "deserialize"; break;
+        case 2: op = "sersize"; break;
+        }
+
+        ret = asprintf(&str, "%s_", structname);
+        if (ret < 0)
+            error("out of memory");
+        sym = (serialize_fn *) shobj_symbol(shobj, str);
+        if (sym == NULL) {
+            warn("symbol '%s' not found", str);
+            free(str);
+            return -1;
+        }
+        free(str);
+
+        switch(i) {
+        case 0: out->serialize = (serialize_fn *) sym;
+        case 1: out->deserialize = (deserialize_fn *) sym;
+        case 2: out->sersize = (sersize_fn *) sym;
+        }
+    }
+
+    return 0;
 }
 
 int
@@ -200,23 +218,28 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
     mdl_ibase_t *ib;
     char *filename;
     const char *libdir;
+    int ret;
+
+    ib = como_new0(mdl_ibase_t);
+    ib->type = priv;
     
     switch (priv) {
     case PRIV_ISUPERVISOR:
-	ib = (mdl_ibase_t *) como_new0(mdl_isupervisor_t);
+	ib->proc.su = como_new0(mdl_isupervisor_t);
 	break;
     case PRIV_ICAPTURE:
-	ib = (mdl_ibase_t *) como_new0(mdl_icapture_t);
+	ib->proc.ca = como_new0(mdl_icapture_t);
 	break;
     case PRIV_IEXPORT:
-	ib = (mdl_ibase_t *) como_new0(mdl_iexport_t);
+	ib->proc.ex = como_new0(mdl_iexport_t);
+	break;
+    case PRIV_ISTORAGE:
+	ib->proc.ex = como_new0(mdl_iexport_t);
 	break;
     case PRIV_IQUERY:
-	ib = (mdl_ibase_t *) como_new0(mdl_iquery_t);
+	ib->proc.qu = como_new0(mdl_iquery_t);
 	break;
     }
-    
-    ib->type = priv;
     
     libdir = como_env_libdir();
     filename = shobj_build_path(libdir, h->mdlname);
@@ -225,7 +248,15 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
 	free(ib);
 	return -1;
     }
-    
+
+    ret = mdl_load_serializable(&ib->mdl_config, ib->shobj, "config_type");
+    ret += mdl_load_serializable(&ib->mdl_config, ib->shobj, "tuple_type");
+    ret += mdl_load_serializable(&ib->mdl_config, ib->shobj, "record_type");
+    if (ret < 0) { /* any at least one of the above failed */
+        warn("module %s misses functions to handle its struct types");
+        return -1;
+    }
+
     return 0;
 }
 

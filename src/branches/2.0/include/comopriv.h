@@ -186,10 +186,17 @@ const char * como_env_libdir();
 
 typedef struct collection collection_t;
 
+typedef struct mdl_icapture     mdl_icapture_t;
+typedef struct mdl_iexport      mdl_iexport_t;
+typedef struct mdl_istorage     mdl_istorage_t;
+typedef struct mdl_isupervisor  mdl_isupervisor_t;
+typedef struct mdl_iquery       mdl_iquery_t;
+
 typedef enum mdl_priv {
     PRIV_ISUPERVISOR = 1,
     PRIV_ICAPTURE,
     PRIV_IEXPORT,
+    PRIV_ISTORAGE,
     PRIV_IQUERY
 } mdl_priv_t;
 
@@ -198,9 +205,14 @@ struct mdl_ibase {
     shobj_t *		shobj;
     serializable_t	mdl_config;
     serializable_t	mdl_rec;
+    union {
+        mdl_icapture_t  *ca;
+        mdl_iexport_t   *ex;
+        mdl_istorage_t  *st;
+        mdl_isupervisor_t *su;
+        mdl_iquery_t    *qu;
+    } proc;
 };
-
-typedef struct mdl_ibase mdl_ibase_t;
 
 struct mdl_icapture {
     mdl_priv_t	type;
@@ -213,50 +225,29 @@ struct mdl_icapture {
     flush_fn	flush;
     capture_fn	capture;
 
-    serializable_t * mdl_config;
-
-    
     alc_t	alc;
     alc_t	shalc;
     
     treenode_t * filter;
 };
 
-typedef struct mdl_icapture mdl_icapture_t;
-
-
 struct mdl_isupervisor {
     mdl_priv_t	type;
     shobj_t *	shobj;
     su_init_fn	init;
 
-    serializable_t * mdl_config;
-
 };
 
-typedef struct mdl_isupervisor mdl_isupervisor_t;
-
 struct mdl_iexport {
-
     int		cs_writer;
     size_t	cs_cisz;
     off_t	woff;
 
-    serializable_t * mdl_config;
-
 };
-
-typedef struct mdl_iexport mdl_iexport_t;
-
 
 struct mdl_iquery {
-
-
-    serializable_t * mdl_config;
-
 };
 
-typedef struct mdl_iquery mdl_iquery_t;
 
 
 mdl_isupervisor_t * mdl_get_isupervisor (mdl_t * h);
