@@ -33,6 +33,7 @@ typedef void * (*flush_fn)   (mdl_t * h, timestamp_t ts);
  */
 typedef int    (*capture_fn) (mdl_t * h, pkt_t * pkt, void * state);
 
+typedef struct mdl_ibase        mdl_ibase_t;
 
 struct mdl {
     /* public fields */
@@ -43,7 +44,7 @@ struct mdl {
     char *	mdlname;
     void *	config;
     /* private state */
-    void *	priv;
+    mdl_ibase_t * priv;
 };
 
 #define mdl_get_config(h, type) \
