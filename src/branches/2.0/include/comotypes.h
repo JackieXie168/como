@@ -49,6 +49,7 @@ typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 #include "allocator.h"
 #include "array.h"
 #include "shobj.h"
+#include "hash.h"
 
 #include "serialize.h"
 #include "mdl.h"

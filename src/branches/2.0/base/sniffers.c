@@ -49,7 +49,6 @@ sniffer_cb_lookup(const char *name)
 	    return g_como_builtin_sniffers[i];
 	}
     }
-    logmsg(LOGWARN, "sniffer %s is not built in\n", name);
     return NULL;
 }
 

@@ -88,7 +88,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "corlib.h"
+#include "como.h"
 
 /*
  * When there are this many entries per bucket, on average, rebuild
@@ -157,7 +157,7 @@ struct hash_t {
     compare_hash_keys_fn compareKeysFn;
     destroy_notify_fn keyDestroyFn;
     destroy_notify_fn valueDestroyFn;
-    allocator_t *alc;		/* Allocator of the hash table. */
+    alc_t *alc;			/* Allocator of the hash table. */
 };
 
 /* 
@@ -217,21 +217,21 @@ static void rebuild_table(hash_t * tablePtr);
  */
 
 hash_t *
-hash_new(allocator_t * alc, int keyType, hash_key_fn hashKeyFn,
+hash_new(alc_t * alc, int keyType, hash_key_fn hashKeyFn,
 	 compare_hash_keys_fn compareKeysFn)
 {
     return hash_new_full(alc, keyType, hashKeyFn, compareKeysFn, NULL, NULL);
 }
 
 hash_t *
-hash_new_full(allocator_t * alc, int keyType, hash_key_fn hashKeyFn,
+hash_new_full(alc_t * alc, int keyType, hash_key_fn hashKeyFn,
 	      compare_hash_keys_fn compareKeysFn,
 	      destroy_notify_fn keyDestroyFn, destroy_notify_fn valueDestroyFn)
 {
     hash_t *tablePtr;
 
     assert(alc != NULL);
-    tablePtr = alc_calloc(alc, 1, sizeof(hash_t));
+    tablePtr = alc_new0(alc, hash_t);
 
 #if (SMALL_HASH_TABLE != 4)
 #error "SMALL_HASH_TABLE must be 4!"

@@ -43,6 +43,7 @@
 #include <net/if.h>
 #include <assert.h>
 
+#define LOG_DOMAIN "sniffer-pcap"
 #include "como.h"
 #include "sniffers.h"
 #include "pcap.h"
@@ -113,13 +114,19 @@ swaps(uint16_t x)
     return (((x & 0x00ff) << 8) | ((x >> 8) & 0x00ff));
 }
 
+static int sniffer_start(sniffer_t * s);
+static int sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
+			pkt_t * first_ref_pkt, int * dropped_pkts);
+static void sniffer_stop(sniffer_t * s);
+
+
 
 /*
  * -- sniffer_init
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args, alc_t * alc)
+sniffer_init(int id, const char * device, const char * args, alc_t * alc)
 {
     struct pcap_me *me;
     struct pcap_file_header pf;
@@ -127,6 +134,13 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
     size_t sz;
     
     me = alc_new0(alc, struct pcap_me);
+
+    me->sniff.id = id;
+    me->sniff.device = alc_strdup(alc, device);
+
+    me->sniff.start = sniffer_start;
+    me->sniff.next = sniffer_next;
+    me->sniff.stop = sniffer_stop;
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
@@ -151,14 +165,14 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
     /* open the trace file */
     me->sniff.fd = open(device, O_RDONLY);
     if (me->sniff.fd < 0) {
-	logmsg(LOGWARN, "sniffer-pcap: error while opening file %s: %s\n",
+	warn("error while opening file %s: %s\n",
 	       device, strerror(errno));
 	goto error;
     }
     
     /* get the trace file size */
     if (fstat(me->sniff.fd, &trace_stat) < 0) {
-	logmsg(LOGWARN, "sniffer-pcap: failed to stat file %s: %s\n",
+	warn("failed to stat file %s: %s\n",
 	       device, strerror(errno));
 	goto error;
     }
@@ -167,7 +181,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
     /* read the pcap file header */    
     sz = sizeof(struct pcap_file_header);
     if ((size_t) read(me->sniff.fd, &pf, sz) != sz) {
-	logmsg(LOGWARN, "sniffer-pcap: error while reading file %s: %s\n",
+	warn("error while reading file %s: %s\n",
 	       device, strerror(errno));
 	goto error;
     }
@@ -175,7 +189,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
     /* check the pcap file header and byte endianness */
     if (pf.magic != PCAP_MAGIC) { 
         if (pf.magic != swapl(PCAP_MAGIC)) {
-            logmsg(LOGWARN, "sniffer-pcap: invalid pcap file %s\n",
+            warn("invalid pcap file %s\n",
 		   device);
 	    goto error;
         } else {
@@ -193,44 +207,41 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
     /* check data link type */
     switch (pf.linktype) { 
     case DLT_EN10MB: 
-	logmsg(LOGSNIFFER, "datalink Ethernet (%d)\n", pf.linktype); 
+	notice("datalink Ethernet (%d)\n", pf.linktype); 
 	me->type = COMOTYPE_LINK;
 	me->l2type = LINKTYPE_ETH;
 	break;
     case DLT_C_HDLC: 
-	logmsg(LOGSNIFFER, "datalink HDLC (%d)\n", pf.linktype); 
+	notice("datalink HDLC (%d)\n", pf.linktype); 
 	me->type = COMOTYPE_LINK;
 	me->l2type = LINKTYPE_HDLC;
 	break;
     case DLT_IEEE802_11: 
-	logmsg(LOGSNIFFER, "datalink 802.11 (%d)\n", pf.linktype); 
+	notice("datalink 802.11 (%d)\n", pf.linktype); 
 	me->type = COMOTYPE_LINK;
 	me->l2type = LINKTYPE_80211;
 	break;
     case DLT_IEEE802_11_RADIO:
-        logmsg(LOGSNIFFER, "datalink 802.11_radiotap (%d)\n", pf.linktype);
+        notice("datalink 802.11_radiotap (%d)\n", pf.linktype);
         me->type = COMOTYPE_RADIO;
 	me->l2type = LINKTYPE_80211;
         me->to_como_radio = radiotap_header_to_como_radio;
         break;
     case DLT_IEEE802_11_RADIO_AVS:
-	logmsg(LOGSNIFFER,
-	       "datalink 802.11 with AVS header (%d)\n", pf.linktype);
+	notice("datalink 802.11 with AVS header (%d)\n", pf.linktype);
 	me->type = COMOTYPE_LINK;
 	me->l2type = LINKTYPE_80211;
 	me->to_como_radio = avs_header_to_como_radio;
 	break;
     case DLT_PRISM_HEADER:
-	logmsg(LOGSNIFFER,
-	       "datalink 802.11 with Prism header (%d)\n", pf.linktype);
+	notice("datalink 802.11 with Prism header (%d)\n", pf.linktype);
 	me->type = COMOTYPE_RADIO;
 	me->l2type = LINKTYPE_80211;
 	me->to_como_radio = avs_or_prism2_header_to_como_radio;
 	break;
     default: 
-	logmsg(LOGWARN, 
-	       "sniffer-pcap: unrecognized datalink (%d) in file %s\n", 
-	       pf.linktype, device);
+	warn("unrecognized datalink (%d) in file %s\n", 
+	     pf.linktype, device);
 	goto error;
     }
 
@@ -292,8 +303,7 @@ sniffer_start(sniffer_t * s)
     me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
 			     me->sniff.fd, 0);
     if (me->base == MAP_FAILED) {
-	logmsg(LOGWARN, "sniffer-pcap: mmap failed: %s\n",
-	       strerror(errno));
+	warn("mmap failed: %s\n", strerror(errno));
 	close(me->sniff.fd);
 	return -1;
     }
@@ -325,7 +335,7 @@ sniffer_start(sniffer_t * s)
  */
 static int
 sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
-	     __attribute__((__unused__)) pkt_t * first_ref_pkt, int * dropped_pkts) 
+	     UNUSED pkt_t * first_ref_pkt, int * dropped_pkts) 
 {
     struct pcap_me *me = (struct pcap_me *) s;
     pkt_t *pkt;                 /* CoMo record structure */
@@ -354,7 +364,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 				 PROT_READ, MAP_PRIVATE,
 				 me->sniff.fd, me->remap);
 	if (me->base == MAP_FAILED) {
-	    logmsg(LOGWARN, "sniffer-pcap: mmap failed: %s\n",
+	    warn("mmap failed: %s\n",
 		   strerror(errno));
 	    return -1;
 	}
@@ -565,7 +575,4 @@ SNIFFER(pcap) = {
     init: sniffer_init,
     finish: sniffer_finish,
     setup_metadesc: sniffer_setup_metadesc,
-    start: sniffer_start,
-    next: sniffer_next,
-    stop: sniffer_stop,
 };

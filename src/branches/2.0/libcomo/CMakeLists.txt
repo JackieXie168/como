@@ -14,6 +14,8 @@ SET(COMOLIB_SRCS
   socket.c
   mdl.c
   shmem.c
+  alc.c
+  hash.c
 )
 
 ADD_LIBRARY(comolib STATIC ${COMOLIB_SRCS})

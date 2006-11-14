@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, Intel Corporation
+ * Copyright (c) 2004-2006, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -27,32 +27,23 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id:como.c 1032 2006-11-14 13:29:01Z m_canini $
  */
 
-/* CoMo portability library */
+#include <string.h>
 
-#ifndef ARRAY_H_
-#define ARRAY_H_
+#define LOG_DOMAIN "ALC"
+#include "como.h"
 
-typedef struct array {
-    void *	data;
-    int		len;
-    int		size;
-    void *	base;
-    size_t	element_size;
-} array_t;
-
-
-array_t * array_new        (size_t element_size);
-array_t * array_sized_new  (size_t element_size, int reserved_size);
-void **   array_free       (array_t * array, int free_seg);
-void      array_add        (array_t * array, void *data);
-void      array_sort       (array_t * array, cmp_fn cmFn);
-void      array_clear      (array_t * array, int reserved_size, int zero_seg);
-void *    array_shift_     (array_t * array);
-
-#define   array_at(a,t,i)  (((t *) a->data)[i])
-#define   array_shift(a,t) ((t *) array_shift_(a))
-
-#endif
+char *
+alc_strdup(alc_t * alc, const char * s)
+{
+    char * o;
+    
+    size_t l;
+    l = strlen(s);
+    o = alc_malloc(alc, l + 1);
+    strcpy(o, s);
+    
+    return o;
+}

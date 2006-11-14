@@ -66,6 +66,10 @@ IF(FREEBSD)
   )
 ENDIF(FREEBSD)
 
+SET(SNIFFERS
+  pcap
+)
+
 #
 # Write sniffers-list.h
 #

@@ -36,8 +36,6 @@
 #ifndef HASH_H_
 #define HASH_H_
 
-#include "corlib.h"
-
 /** Hash iterator object. The iterator is on the stack, but its real
  * fields are hidden privately.
  */
@@ -76,10 +74,10 @@ typedef enum {
 	HASHKEYS_POINTER =	2
 } HASHKEYS;
 
-hash_t *hash_new          (allocator_t *alc,
+hash_t *hash_new          (alc_t *alc,
 			   int keyType, hash_key_fn hashKeyFn,
 			   compare_hash_keys_fn compareKeysFn);
-hash_t *hash_new_full     (allocator_t *alc,
+hash_t *hash_new_full     (alc_t *alc,
 			   int keyType, hash_key_fn hashKeyFn,
 			   compare_hash_keys_fn compareKeysFn,
 			   destroy_notify_fn keyDestroyFn,
