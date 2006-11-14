@@ -260,7 +260,7 @@ main(int argc, char **argv)
         }
         if (st->flags & FLAG_CONFIG) {
             fprintf(tnout, "char * config_type = \"%s\";\n", st->name);
-            printf("%srecord", sep);
+            printf("%sconfig", sep);
         }
         printf("):\n");
         gen_serialization_funcs(serialout, st);
