@@ -40,7 +40,7 @@ typedef uint16_t		ipc_type;
 typedef struct ipc_peer_full_t	ipc_peer_full_t;
 typedef struct ipc_peer_t	ipc_peer_t;
 
-struct PACKED ipc_peer_t {
+struct __attribute__((packed)) ipc_peer_t {
     uint8_t	class;
     uint8_t	parent_class;
     uint16_t	id;
