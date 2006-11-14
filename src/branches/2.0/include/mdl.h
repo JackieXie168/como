@@ -1,6 +1,8 @@
 #ifndef MDL_H_
 #define MDL_H_
 
+#include "serialize.h"
+
 typedef struct mdl mdl_t;
 
 /*
@@ -69,19 +71,21 @@ typedef int    (ca_init_fn)(mdl_t *self);
 typedef void * (ca_update_fn)(mdl_t *self, pkt_t *pkt);
 typedef void   (ca_flush_fn)(mdl_t *self);
 
-typedef int (ca_tuple_serlen)(mdl_t *self, void *tuple);
-typedef int (ca_tuple_serialize)(mdl_t *self, void *tuple, uint8_t *buffer);
-
 struct _ca_module_callbacks {
     ca_init_fn   * init;    /* initialize capture state (optional) */
     ca_update_fn * update;  /* update capture state */
     ca_flush_fn  * flush;   /* flush current available data (optional) */
-    ca_tuple_serlen  * serlen;       /* min bufsize to serialize a tuple */
-    ca_tuple_serialize  * serialize; /* serialize a tuple */
+    sersize_fn   * serlen;       /* min bufsize to serialize a tuple */
+    serialize_fn * serialize; /* serialize a tuple */
 };
 
 struct _ex_module_callbacks {
-
+    deserialize_fn * deserialize_tuple; /* deserialize a tuple */
+    sersize_fn   * sersize_record;      /* serialize / deserialize a record */
+    serialize_fn * serialize_record;
+    deserialize_fn * deserialize_record;
+    //ex_init_fn * init;                /* initialize export state */
+    //ex_update_fn * update;            /* update export state */
 };
 
 struct _qu_module_callbacks {

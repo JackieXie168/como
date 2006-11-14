@@ -62,7 +62,7 @@ print_type(FILE *out, field_t *f)
 }
 
 static void
-gen_csharp_serlen_scalar(FILE *out, field_t *f, size_t *fixed_len)
+gen_csharp_sersize_scalar(FILE *out, field_t *f, size_t *fixed_len)
 {
     size_t s;
 
@@ -76,7 +76,7 @@ gen_csharp_serlen_scalar(FILE *out, field_t *f, size_t *fixed_len)
 }
 
 static void
-gen_csharp_serlen_arr1(FILE *out, field_t *f, size_t *fixed_len)
+gen_csharp_sersize_arr1(FILE *out, field_t *f, size_t *fixed_len)
 {
     size_t s;
 
@@ -91,7 +91,7 @@ gen_csharp_serlen_arr1(FILE *out, field_t *f, size_t *fixed_len)
 }
 
 static void
-gen_csharp_serlen_arr2(FILE *out, field_t *f, size_t *fixed_len)
+gen_csharp_sersize_arr2(FILE *out, field_t *f, size_t *fixed_len)
 {
     size_t s;
 
@@ -107,20 +107,20 @@ gen_csharp_serlen_arr2(FILE *out, field_t *f, size_t *fixed_len)
 }
 
 static void
-gen_csharp_serlen(FILE *out, struct_t *st)
+gen_csharp_sersize(FILE *out, struct_t *st)
 {
     int i;
     size_t fixed = 0;
 
-    fprintf(out, "\tpublic int serlen()\n\t{\n");
+    fprintf(out, "\tpublic int sersize()\n\t{\n");
     fprintf(out, "\t\tint len = 0;\n");
     for (i = 0; i < st->n_fields; i++) {
         field_t *f = &st->fields[i];
         int realdim = (!strcmp(f->type, "char")) ? f->dim - 1: f->dim;
         switch(realdim) {
-        case 0: gen_csharp_serlen_scalar(out, f, &fixed); break;
-        case 1: gen_csharp_serlen_arr1(out, f, &fixed); break;
-        case 2: gen_csharp_serlen_arr2(out, f, &fixed); break;
+        case 0: gen_csharp_sersize_scalar(out, f, &fixed); break;
+        case 1: gen_csharp_sersize_arr1(out, f, &fixed); break;
+        case 2: gen_csharp_sersize_arr2(out, f, &fixed); break;
         }
     }
     fprintf(out, "\t\treturn len + %d;\n", fixed);
@@ -381,7 +381,7 @@ gen_csharp_class(FILE *out, struct_t *st)
     fprintf(out, "\n\n\t/* constructors */\n");
     gen_csharp_ctor(out, st, name);
     fprintf(out, "\n\n\t/* serialized length */\n");
-    gen_csharp_serlen(out, st);
+    gen_csharp_sersize(out, st);
     fprintf(out, "\n\n\t/* serialization function */\n");
     gen_csharp_serialize(out, st);
     fprintf(out, "\n\n\t/* deserialization function */\n");

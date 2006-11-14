@@ -55,9 +55,9 @@ struct _struct {
 
 typedef struct _cstype_conv cstype_conv_t;
 struct _cstype_conv {
-    size_t serlen; /* length of the serialized type. 0 means variable  */
-    char *ctype;   /* name of the type in C */
-    char *cstype;  /* name of the type when monoized */
+    size_t sersize; /* size of the serialized type. 0 means variable  */
+    char *ctype;    /* name of the type in C */
+    char *cstype;   /* name of the type when monoized */
     char *class_lookup_fn; /* name of the function that gets the mono type */
 };
 
@@ -66,7 +66,7 @@ void parse(char *file);
 
 /* structmagic.c */
 char * csharpize(char *name);
-void lookup_type_info(char *ctype, size_t *serlen, char **class, char **lookup);
+void lookup_type_info(char *ctype, size_t *sersize, char **class, char **lookup);
 
 /* gen-csclass.c */
 void gen_csharp_class_header(FILE *out);

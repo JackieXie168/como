@@ -81,15 +81,15 @@ cstype_conv_t cstypes[] = {
  * caller is not interested in some output values).
  */
 void
-lookup_type_info(char *ctype, size_t *serlen, char **class, char **lookup)
+lookup_type_info(char *ctype, size_t *sersize, char **class, char **lookup)
 {
     cstype_conv_t *t;
     for (t = cstypes; t->ctype != NULL; t++)
         if (! strcmp(t->ctype, ctype))
             break;
 
-    if (serlen != NULL)
-        *serlen = t->serlen;
+    if (sersize != NULL)
+        *sersize = t->sersize;
     if (class != NULL)
         *class = t->cstype;
     if (lookup != NULL)
