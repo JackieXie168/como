@@ -61,9 +61,9 @@ ppbuf_new(int size, int id)
 {
     ppbuf_t *ppbuf;
     
-    ppbuf = safe_calloc(1, sizeof(ppbuf_t));
+    ppbuf = como_new0(ppbuf_t);
     ppbuf->size = size;
-    ppbuf->pp = safe_calloc(size, sizeof(pkt_t *));
+    ppbuf->pp = como_calloc(size, sizeof(pkt_t *));
     ppbuf->id = id;
     
     return ppbuf;

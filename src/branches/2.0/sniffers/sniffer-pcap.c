@@ -119,14 +119,14 @@ swaps(uint16_t x)
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, alc_t * alc)
 {
     struct pcap_me *me;
     struct pcap_file_header pf;
     struct stat trace_stat;
     size_t sz;
     
-    me = safe_calloc(1, sizeof(struct pcap_me));
+    me = alc_new0(alc, struct pcap_me);
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
@@ -244,7 +244,7 @@ error:
     if (me->sniff.fd >= 0) {
 	close(me->sniff.fd);
     }
-    free(me);
+    alc_free(alc, me);
     return NULL;
 }
 
@@ -551,12 +551,12 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, alc_t * alc)
 {
     struct pcap_me *me = (struct pcap_me *) s;
 
     capbuf_finish(&me->capbuf);
-    free(me);
+    alc_free(alc, me);
 }
 
 
