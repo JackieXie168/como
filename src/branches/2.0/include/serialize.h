@@ -36,15 +36,15 @@
 #include <stdint.h>
 #include "allocator.h"
 
-typedef void   (*serialize_fn)   (uint8_t ** sbuf, const void * data);
-typedef void   (*deserialize_fn) (uint8_t ** sbuf, void ** data_out,
+typedef void   (serialize_fn)   (uint8_t ** sbuf, const void * data);
+typedef void   (deserialize_fn) (uint8_t ** sbuf, void ** data_out,
 				  alc_t * alc);
-typedef size_t (*sersize_fn)  (const void * src);
+typedef size_t (sersize_fn)  (const void * src);
 
 typedef struct serializable {
-    serialize_fn	serialize;
-    deserialize_fn	deserialize;
-    sersize_fn		sersize;
+    serialize_fn	* serialize;
+    deserialize_fn	* deserialize;
+    sersize_fn		* sersize;
 } serializable_t;
 
 #define serialize_type_value(sbuf, val, type) do {  \
