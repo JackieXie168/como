@@ -38,19 +38,19 @@ typedef struct <name>_entry {
  */
 #define	<name>_init(head)	C_SLIST_INIT(head)
 
-#define	<name>_insert_after(slistelm, elm)	\
-	C_LIST_INSERT_AFTER(slistelm, elm, <field>)
+#define	<name>_insert_after(dlistelm, elm)	\
+	C_LIST_INSERT_AFTER(dlistelm, elm, <field>)
+#
+#define	<name>_insert_before(dlistelm, elm)	\
+	C_LIST_INSERT_BEFORE(dlistelm, elm, <field>)
 
 #define	<name>_insert_head(head, elm)	\
 	C_LIST_INSERT_HEAD(head, elm, <field>)
 
-#define	<name>_remove_next(head, elm)	\
-	C_LIST_REMOVE_NEXT(head, elm, <field>)
-
-#define	<name>_remove_head(head)	\
-	C_LIST_REMOVE_HEAD(head, <field>)
-
-#define <name>_remove(head, elm)	\
-	C_LIST_REMOVE(head, elm, <type>, <field>)
+#define <name>_remove(elm)	\
+	C_LIST_REMOVE(elm, <field>)
+#
+#define <name>_replace(elm, elm2)	\
+	C_LIST_REPLACE(elm, elm2, <field>)
 
 #endif /*<name>_H_*/

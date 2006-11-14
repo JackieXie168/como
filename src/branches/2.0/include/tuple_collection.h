@@ -39,19 +39,19 @@ typedef struct tuple_collection_entry {
  */
 #define	tuple_collection_init(head)	C_SLIST_INIT(head)
 
-#define	tuple_collection_insert_after(slistelm, elm)	\
-	C_LIST_INSERT_AFTER(slistelm, elm, entry)
+#define	tuple_collection_insert_after(dlistelm, elm)	\
+	C_LIST_INSERT_AFTER(dlistelm, elm, entry)
+#
+#define	tuple_collection_insert_before(dlistelm, elm)	\
+	C_LIST_INSERT_BEFORE(dlistelm, elm, entry)
 
 #define	tuple_collection_insert_head(head, elm)	\
 	C_LIST_INSERT_HEAD(head, elm, entry)
 
-#define	tuple_collection_remove_next(head, elm)	\
-	C_LIST_REMOVE_NEXT(head, elm, entry)
-
-#define	tuple_collection_remove_head(head)	\
-	C_LIST_REMOVE_HEAD(head, entry)
-
-#define tuple_collection_remove(head, elm)	\
-	C_LIST_REMOVE(head, elm, tuple_collection_item_t, entry)
+#define tuple_collection_remove(elm)	\
+	C_LIST_REMOVE(elm, entry)
+#
+#define tuple_collection_replace(elm, elm2)	\
+	C_LIST_REPLACE(elm, elm2, entry)
 
 #endif /*tuple_collection_H_*/

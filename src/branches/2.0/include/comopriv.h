@@ -227,7 +227,10 @@ struct mdl_icapture {
     timestamp_t	ivl_start;
     timestamp_t	ivl_end;
     void *	ivl_state;
-    tuple_collection_t *tuples;
+
+    tuple_collection_t tuples;
+    tuple_collection_item_t *last_tuple;
+
     flush_fn	flush;
     capture_fn	capture;
 

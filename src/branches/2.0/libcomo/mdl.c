@@ -40,7 +40,6 @@
 #include "serialize.h"
 #include "shobj.h"
 
-
 typedef struct strec strec_t;
 
 struct strec {
@@ -273,13 +272,38 @@ mdl__alloc_config(mdl_t * h, size_t sz, serializable_t * ser)
 
 
 void *
-mdl__alloc_rec(mdl_t * h, size_t sz)
+mdl__alloc_tuple(mdl_t * mdl, size_t sz)
 {
-    /* allocate the record of size sz and keep track of it */
     mdl_icapture_t *ic;
-    
-    ic = mdl_get_icapture(h);
-    return alc_malloc(&ic->alc, sz);
+    tuple_collection_item_t *it;
+
+    ic = mdl_get_icapture(mdl);
+
+    /* allocate sz + space for the tuple collection-specific fields */
+    it = alc_malloc(&ic->alc, sz + sizeof(tuple_collection_item_t));
+
+    if (ic->last_tuple == NULL) {
+        ic->last_tuple = it;
+        tuple_collection_insert_head(&ic->tuples, it);
+    } else
+        tuple_collection_insert_after(ic->last_tuple, it);
+
+    return it->data;
+}
+
+void
+mdl__free_tuple(mdl_t *mdl, void *ptr)
+{
+    mdl_icapture_t *ic = mdl_get_icapture(mdl);
+    tuple_collection_item_t *it;
+
+    it = (tuple_collection_item_t *)
+            (((char *)ptr) - sizeof(tuple_collection_item_t));
+
+    assert(it->data == ptr);
+    assert(! tuple_collection_empty(&ic->tuples));
+
+    tuple_collection_remove(it);
 }
 
 
