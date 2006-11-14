@@ -9,6 +9,7 @@ SET(COMO_SRCS
   supervisor.c
   util-process.c
   capture.c
+  asn.c
 #  memory.c
 #  config.c
 #  inline.c
@@ -35,7 +36,6 @@ SET(COMO_SRCS
 #  sniffers.c
 #  ieee80211frames.c
 #  radio.c
-#  asn.c
 #  ${COMO_SOURCE_DIR}/lib/bitmap.c
 #  ${COMO_SOURCE_DIR}/lib/hash.c
 #  ${COMO_SOURCE_DIR}/lib/heap.c
@@ -88,7 +88,7 @@ ADD_CUSTOM_COMMAND(
 #
 # Add filter-syntax.c to COMO_SRCS
 #
-#SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/filter-syntax.c)
+SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/filter-syntax.c)
 
 #
 # Since filter-syntax.c does not exist yet when cmake is run, mark

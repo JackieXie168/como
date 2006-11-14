@@ -63,7 +63,11 @@ typedef struct como_su {
 					   structure */
     alc_t *		alc;		/* the pool's allocator */
 
+    shmem_t *		shmem;		/* main shared memory used to store
+					   capture data structures, stats */
+
     FILE *		logfile;	/* log file */
+    stats_t *		stats;
 } como_su_t;
 
 
@@ -143,6 +147,32 @@ su_ipc_sync(ipc_peer_t * peer, UNUSED void * b, UNUSED size_t l,
     return IPC_OK;
 }
 
+#if 0
+typedef struct ipc_ca_sniffer_initialized {
+    int		id;
+    metadesc_t *outdesc; /* outdesc is in shared memory */
+} ipc_ca_sniffer_initialized_t;
+
+static int
+su_ipc_ca_sniffer_initialized(ipc_peer_t * peer,
+			      ipc_ca_sniffer_initialized_t * si,
+			      UNUSED size_t l, UNUSED int swap,
+			      como_su_t * como_su)
+{
+    como_node_t *node0;
+    sniffer_list_t *sniffers;
+    sniffer_t *sniff;
+    
+    node0 = array_at(como_su->nodes, como_node_t, 0);
+    
+    sniffers = node0->sniffers;
+    
+    sniff = sniffer_list_find_by_id(sniffers, si->id);
+    sniff->priv->outdesc = si->outdesc;
+    
+    return IPC_OK;
+}
+#endif
 
 /*  
  * -- su_ipc_done 
@@ -182,10 +212,13 @@ static void
 cleanup()
 {
     char *cmd;
+    const char *workdir;
+    
+    workdir = como_env_workdir();
  
     msg("\n\n\n--- about to exit... remove work directory %s\n",
-        map.workdir);
-    asprintf(&cmd, "rm -rf %s\n", map.workdir);
+        workdir);
+    asprintf(&cmd, "rm -rf %s\n", workdir);
     system(cmd);
     free(cmd);
     msg("--- done, thank you for using CoMo\n");
@@ -513,7 +546,7 @@ como_su_run(como_su_t * como_su)
          * user interface. just one line... 
          */
 	gettimeofday(&now, NULL);
-	secs = 1 + now.tv_sec - map.stats->start.tv_sec; 
+	secs = 1 + now.tv_sec - como_su->stats->start.tv_sec;
  	dd = secs / 86400; 
         hh = (secs % 86400) / 3600; 
         mm = (secs % 3600) / 60;
@@ -524,11 +557,14 @@ como_su_run(como_su_t * como_su)
 		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); "
 		"pkts %llu drops %d; mdl %d/%d\r", 
 		dd, hh, mm, ss,
-		    (unsigned int)map.stats->mem_usage_cur/(1024*1024), 
-		    (unsigned int)map.stats->mem_usage_peak/(1024*1024), 
-		    (unsigned int)map.mem_size, map.stats->table_queue,
-		map.stats->pkts, map.stats->drops,
-		map.stats->modules_active, map.module_used);
+		    (unsigned int)como_su->stats->mem_usage_cur/(1024*1024), 
+		    (unsigned int)como_su->stats->mem_usage_peak/(1024*1024), 
+		    shmem_size(como_su->shmem)/(1024*1024),
+		    como_su->stats->table_queue,
+		    como_su->stats->pkts,
+		    como_su->stats->drops,
+		    como_su->stats->modules_active,
+		    mdls->len);
 	}
 
 	n_ready = event_loop_select(&como_su->el, &r);
@@ -625,9 +661,12 @@ main(int argc, char ** argv)
 
     /*
      * Initialize the shared memory region.
-     * All processes will be able to see it.
+     * CAPTURE and QUERY processes will be able to see it.
      */
-    //memory_init(map.mem_size);
+#define SHMEM_SIZE 8*1024*1024
+    como_su->shmem = shmem_create(SHMEM_SIZE, NULL);
+    //mem_init(como_su->shmem);
+
 
     /* initialize IPC */
     ipc_init(ipc_peer_at(COMO_SU, como_su->env.workdir), como_su);

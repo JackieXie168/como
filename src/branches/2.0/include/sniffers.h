@@ -97,6 +97,7 @@ typedef float (*sniffer_usage_fn)         (sniffer_t * s, pkt_t * first,
 struct sniffer_cb {
     sniffer_init_fn		init;     /* initialize the sniffer */
     sniffer_finish_fn		finish;   /* finalize the sniffer */
+    sniffer_setup_metadesc_fn	setup_metadesc; /* setup the out metadesc */
 };
 
 typedef struct sniffer_priv sniffer_priv_t;
@@ -111,7 +112,6 @@ struct sniffer_t {
     timestamp_t			polling; /* polling interval, if needed */
     ppbuf_t *			ppbuf;	/* ring buffer of pkt pointers */
     sniffer_start_fn		start;	/* start the sniffer */
-    sniffer_setup_metadesc_fn	setup_metadesc; /* setup the out metadesc */
     sniffer_next_fn		next;	/* get next packet */
     sniffer_stop_fn		stop;	/* stop the sniffer */
     sniffer_usage_fn		usage;

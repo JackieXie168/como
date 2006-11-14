@@ -98,6 +98,12 @@ typedef struct como_ca {
     event_loop_t	el;
     int			ready;
     timestamp_t		min_flush_ivl;
+    shmem_t *		shmem;
+    alc_t		shalc;
+
+    timestamp_t		live_th;
+
+    stats_t *		stats;
 } como_ca_t;
 
 como_ca_t *s_como_ca;
@@ -113,7 +119,7 @@ static void
 ppbuf_free(sniffer_t * sniff)
 {
     ppbuf_destroy(sniff->ppbuf);
-    sniff->flags |= SNIFF_INACTIVE | SNIFF_TOUCHED;
+    sniff->priv->state = SNIFF_INACTIVE;
 }
 
 
@@ -125,7 +131,7 @@ ppbuf_free(sniffer_t * sniff)
 static inline void
 batch_free(batch_t * batch)
 {
-    mem_free(batch);
+    alc_free(&s_como_ca->shalc, batch);
 }
 
 
@@ -313,14 +319,16 @@ capture_pkt(module_t * mdl, batch_t * batch, char *which, tailq_t * exp_tables)
  *
  */
 UNUSED static char *
-batch_filter(batch_t * batch, int active_modules)
+batch_filter(batch_t * batch, como_ca_t * como_ca)
 {
-    static char *which;
-    static int size;
+    array_t *mdls;
     int i, c, l;
     char *out;
     int idx;
     int first_done = 0;
+    
+    static int size;
+    static char *which;
     static uint64_t ld_bytes;	/* bytes seen in one minute */
     static timestamp_t ld_ts;	/* end of load meas interval */
     static uint32_t ld_idx;	/* index of load meas interval */
@@ -329,25 +337,29 @@ batch_filter(batch_t * batch, int active_modules)
 	ld_ts = (*batch->pkts0)->ts + TIME2TS(60, 0);
     }
 
-    i = batch->count * active_modules;	/* size of the output bitmap */
+    mdls = como_ca->mdls;
+    i = batch->count * mdls->len;	/* size of the output bitmap */
 
     if (size < i) {
 	size = i;
-	which = safe_realloc(which, i);
+	which = como_realloc(which, i);
     }
 
     bzero(which, i);
 
     out = which;
 
-    for (idx = 0; idx <= map.module_last; idx++) {
-	module_t *mdl = &map.modules[idx];
+    for (idx = 0; idx < mdls->len; idx++) {
+	mdl_t *mdl = *array_at(mdls, mdl_t *, idx);
+	mdl_icapture_t *ic;
 	pkt_t *pkt, **pktptr;
 
-	if (mdl->status != MDL_ACTIVE) {
+	if (mdl == NULL) {
 	    continue;
 	}
 
+	ic = mdl_get_icapture(mdl);
+	
 	c = 0;
 	pktptr = batch->pkts0;
 	l = MIN(batch->pkts0_len, batch->count);
@@ -355,15 +367,15 @@ batch_filter(batch_t * batch, int active_modules)
 	    for (i = 0; i < l; i++, pktptr++, out++, c++) {
 		pkt = *pktptr;
 
-		*out = evaluate(mdl->filter_tree, pkt);
+		*out = evaluate(ic->filter, pkt);
 		if (first_done == 0) {
 		    if (COMO(ts) < ld_ts) {
 			ld_bytes += (uint64_t) COMO(len);
 		    } else {
-			map.stats->load_15m[ld_idx % 15] = ld_bytes;
-			map.stats->load_1h[ld_idx % 60] = ld_bytes;
-			map.stats->load_6h[ld_idx % 360] = ld_bytes;
-			map.stats->load_1d[ld_idx] = ld_bytes;
+			como_ca->stats->load_15m[ld_idx % 15] = ld_bytes;
+			como_ca->stats->load_1h[ld_idx % 60] = ld_bytes;
+			como_ca->stats->load_6h[ld_idx % 360] = ld_bytes;
+			como_ca->stats->load_1d[ld_idx] = ld_bytes;
 			ld_idx = (ld_idx + 1) % 1440;
 			ld_bytes = (uint64_t) COMO(len);
 			ld_ts += TIME2TS(60, 0);
@@ -700,7 +712,6 @@ cabuf_cl_destroy(int id, cabuf_cl_t * cl, como_ca_t * como_ca)
 	bi->ref_mask &= ~cl->ref_mask;
 	if (bi->ref_mask == 0) {
 	    TQ_POP(&s_cabuf.batches, bi, next);
-	    map.stats->batch_queue--;
 	    batch_free(bi);
 	}
 	bi = bn;
@@ -708,8 +719,6 @@ cabuf_cl_destroy(int id, cabuf_cl_t * cl, como_ca_t * como_ca)
 
     free(cl->sniff_usage);
     free(cl);
-
-    map.stats->ca_clients = s_cabuf.clients_count;
 }
 
 
@@ -795,8 +804,8 @@ ca_ipc_cca_open(ipc_peer_t * peer, UNUSED void * buf, UNUSED size_t len,
     cl->peer = peer;
     cl->ref_mask = (1LL << (uint64_t) (id + 1));	/* id 0 -> mask 2 */
     cl->sniff_usage = como_calloc(como_ca->sniffers_count , sizeof(float));
-    cl->sampling = mem_calloc(1, sizeof(int)); /* sampling rate is kept into
-						  shared memory */
+    cl->sampling = alc_new0(&como_ca->shalc, int); /* sampling rate is kept
+						      into shared memory */
 
     s_cabuf.clients[id] = cl;
     s_cabuf.clients_count++;
@@ -854,7 +863,6 @@ ca_ipc_cca_ack_batch(UNUSED ipc_peer_t * peer, void * buf, UNUSED size_t len,
     if (batch->ref_mask == 0) {
 	assert(batch == TQ_HEAD(&s_cabuf.batches));
 	TQ_POP(&s_cabuf.batches, batch, next);
-	map.stats->batch_queue--;
 	batch_free(batch);
     }
     
@@ -869,16 +877,19 @@ ca_ipc_cca_ack_batch(UNUSED ipc_peer_t * peer, void * buf, UNUSED size_t len,
  * 
  */
 static void
-cabuf_init(size_t size, sniffer_list_t * sniffers)
+cabuf_init(como_ca_t * como_ca, size_t size)
 {
     sniffer_t *sniff;
+    sniffer_list_t *sniffers;
+    
+    sniffers = como_ca->sniffers;
 
     /*
      * allocate the buffer of pointers to captured packets in shared
      * memory.
      */
     s_cabuf.size = size;
-    s_cabuf.pp = mem_calloc(s_cabuf.size, sizeof(pkt_t *));
+    s_cabuf.pp = alc_calloc(&como_ca->shalc, s_cabuf.size, sizeof(pkt_t *));
     s_cabuf.has_clients_support = 1;
 
     sniffer_list_foreach(sniff, sniffers) {
@@ -1008,7 +1019,6 @@ batch_export(batch_t * batch, como_ca_t * como_ca)
     if (batch->ref_mask > 1) {
 	/* append the batch to the queue of active batches */
 	TQ_APPEND(&s_cabuf.batches, batch, next);
-	map.stats->batch_queue++;
     }
 }
 
@@ -1048,7 +1058,7 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
  *
  */
 static batch_t *
-batch_create(int force_batch, sniffer_list_t * sniffers)
+batch_create(int force_batch, como_ca_t * como_ca)
 {
     batch_t *batch;
     sniffer_t *sniff;
@@ -1057,10 +1067,12 @@ batch_create(int force_batch, sniffer_list_t * sniffers)
     timestamp_t max_last_pkt_ts = 0;
     int pc = 0;
     static timestamp_t prev_last_pkt_ts;
-
-    const timestamp_t live_th = map.live_thresh;
-
     int one_full_flag = 0;
+    sniffer_list_t * sniffers;
+    timestamp_t live_th;
+    
+    sniffers = como_ca->sniffers;
+    live_th = como_ca->live_th;
     
     ppbuf_list_init(&ppblist);
 
@@ -1069,9 +1081,6 @@ batch_create(int force_batch, sniffer_list_t * sniffers)
      * find max(last packet timestamp)
      * determine if any sniffer has filled its buffer
      */
-
-    
-
     sniffer_list_foreach(sniff, sniffers) {
 	if (sniff->priv->state == SNIFF_INACTIVE)
 	    continue;
@@ -1119,12 +1128,16 @@ batch_create(int force_batch, sniffer_list_t * sniffers)
 
     /* create the batch structure */
 
-    batch = mem_calloc(1, sizeof(batch_t));
+    batch = alc_new0(&como_ca->shalc, batch_t);
     batch->last_pkt_ts = prev_last_pkt_ts;
     cabuf_reserve(batch, pc);
     if (s_cabuf.clients_count > 0) {
-	batch->first_ref_pkts = mem_calloc(map.source_count, sizeof(pkt_t *));
-	batch->sniff_usage = mem_calloc(map.source_count, sizeof(float));
+	batch->first_ref_pkts = alc_calloc(&como_ca->shalc,
+					   como_ca->sniffers_count,
+					   sizeof(pkt_t *));
+	batch->sniff_usage = alc_calloc(&como_ca->shalc,
+					como_ca->sniffers_count,
+					sizeof(float));
 	
 	ppbuf_list_foreach (ppbuf, &ppblist) {
 	    if (ppbuf->count > 0)
@@ -1209,7 +1222,7 @@ batch_create(int force_batch, sniffer_list_t * sniffers)
 
 static int
 cabuf_cl_res_mgmt(int wait_for_clients, int avg_batch_len,
-		  sniffer_list_t * sniffers)
+		  sniffer_list_t * sniffers, int sniffers_count)
 {
     int id;
     int new_wait_for_clients = 0;
@@ -1230,7 +1243,7 @@ cabuf_cl_res_mgmt(int wait_for_clients, int avg_batch_len,
 	if (cl == NULL)
 	    continue;
 
-	for (src_id = 0; src_id < map.source_count; src_id++) {
+	for (src_id = 0; src_id < sniffers_count; src_id++) {
 	    float u = cl->sniff_usage[src_id];
 #ifdef DEBUG
 	    if (u > CACLIENT_WAIT_THRESH) {
@@ -1413,7 +1426,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
  *
  */
 void
-capture(ipc_peer_full_t * peer, int supervisor_fd,
+capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
 	UNUSED int client_fd, como_node_t * node)
 {
     como_ca_t como_ca;
@@ -1426,9 +1439,12 @@ capture(ipc_peer_full_t * peer, int supervisor_fd,
     sniffer_t *sniff;
     sniffer_list_t *sniffers;
     
+    
     memset(&como_ca, 0, sizeof(como_ca_t));
     s_como_ca = &como_ca; /* used only by cleanup */
-
+    
+    //como_ca.shmem = shmem;
+    
     /* wait for the debugger to attach */
     DEBUGGER_WAIT_ATTACH(peer);
 
@@ -1474,7 +1490,7 @@ capture(ipc_peer_full_t * peer, int supervisor_fd,
 	sniff->priv->state = SNIFFER_ACTIVE;
 
 	/* setup the sniffer metadesc */
-	sniff->setup_metadesc(sniff);
+	//sniff->setup_metadesc(sniff);
 
 	sum_max_pkts += sniff->max_pkts;
 	
@@ -1483,7 +1499,7 @@ capture(ipc_peer_full_t * peer, int supervisor_fd,
     }
 
     /* initialize the capture buffer */
-    cabuf_init(sum_max_pkts, sniffers);
+    cabuf_init(&como_ca, sum_max_pkts);
     
     /* notify SUPERVISOR that all the sniffers are ready */
     ipc_send((ipc_peer_t *) COMO_SU, CA_SNIFFERS_INITIALIZED, NULL, 0);
@@ -1595,7 +1611,8 @@ capture(ipc_peer_full_t * peer, int supervisor_fd,
 	if (s_cabuf.clients_count > 0) {
 	    wait_for_clients = cabuf_cl_res_mgmt(wait_for_clients,
 						 avg_batch_len,
-						 sniffers);
+						 sniffers,
+						 como_ca.sniffers_count);
 	    if (wait_for_clients)
 		continue; /* skip capturing more packets */
 	}
@@ -1671,7 +1688,7 @@ capture(ipc_peer_full_t * peer, int supervisor_fd,
 
 	    /* update drop statistics */
 
-	    map.stats->drops += drops;
+	    como_ca.stats->drops += drops;
 	    sniff->stats->tot_dropped_pkts += drops;
 
 	    debug("received %d packets from sniffer %s\n",
@@ -1680,7 +1697,7 @@ capture(ipc_peer_full_t * peer, int supervisor_fd,
 
 	/* try to create a new batch containing all captured packets */
 
-	batch = batch_create(force_batch, sniffers);
+	batch = batch_create(force_batch, &como_ca);
 
 	if (batch) {
 	    if (avg_batch_len == 0)
@@ -1698,10 +1715,10 @@ capture(ipc_peer_full_t * peer, int supervisor_fd,
 	    end_tsctimer(map.stats->ca_pkts_timer);
 
 	    /* update the stats */
-	    map.stats->pkts += batch->count;
+	    como_ca.stats->pkts += batch->count;
 
-	    if (map.stats->ts < map.stats->first_ts)
-		map.stats->first_ts = map.stats->ts;
+	    if (como_ca.stats->ts < como_ca.stats->first_ts)
+		como_ca.stats->first_ts = como_ca.stats->ts;
 
 	    if (batch->ref_mask != 1)
 		batch->ref_mask &= ~1LL;

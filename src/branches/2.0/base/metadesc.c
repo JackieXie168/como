@@ -38,10 +38,6 @@
 
 #include "como.h"
 #include "comopriv.h"
-#include "corlib.h"
-
-/* global state */
-extern struct _como map;
 
 static metadesc_t *
 metadesc_new_va(allocator_t *alc, int pktmeta_count, va_list ap)
@@ -49,7 +45,7 @@ metadesc_new_va(allocator_t *alc, int pktmeta_count, va_list ap)
     metadesc_t *md;
     int i = 0;
     
-    md = alc_calloc(alc, 1, sizeof(metadesc_t));
+    md = alc_new0(alc, metadesc_t);
 
     md->_next = NULL;
     md->_alc = alc;
@@ -152,20 +148,13 @@ metadesc_define_sniffer_out(sniffer_t * s, int pktmeta_count, ...)
 {
     va_list ap;
     metadesc_t *md;
-    source_t *src;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(allocator_safe(), pktmeta_count, ap);
+    md = metadesc_new_va(como_shmem_alc(), pktmeta_count, ap);
     va_end(ap);
     
-    /* find the source corresponding to s */
-    for (src = map.sources; src != NULL; src = src->next) {
-	if (src->sniff == s)
-		break;
-    }
-    assert(src != NULL);
-    md->_next = src->outdesc;
-    src->outdesc = md;
+    md->_next = s->priv->outdesc;
+    s->priv->outdesc = md;
     
     return md;
 }

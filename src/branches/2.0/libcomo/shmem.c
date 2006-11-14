@@ -322,7 +322,7 @@ shmem_baseaddr(const shmem_t * m)
 }
 
 size_t
-shmem_size_get(const shmem_t * m)
+shmem_size(const shmem_t * m)
 {
     return m->reqsize;
 }

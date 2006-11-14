@@ -106,12 +106,12 @@ IFACE		input|output
                 }
 {IPADDR}        { 
                 /* Copy the dots and numbers notation string */
-                yflval.string = safe_strdup(yytext);
+                yflval.string = como_strdup(yytext);
                 return(IPADDR); 
                 }
 {MACADDR}       { 
                 /* Copy the dots and numbers notation string */
-                yflval.string = safe_strdup(yytext);
+                yflval.string = como_strdup(yytext);
                 return(MACADDR); 
                 }
 {NETMASK}       { 

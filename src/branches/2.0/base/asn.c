@@ -38,6 +38,7 @@
 #include <string.h>
 #include <assert.h>
 
+#define LOG_DOMAIN "ASN"
 #include "como.h"
 #include "comopriv.h"
 
@@ -163,14 +164,14 @@ add_new_prefix(const uint32_t prefix, const uint32_t mask,
 		if (ptr->as1 == 0)
 		    ptr->as1 = origin;
 		else
-		    logmsg(LOGWARN,
-			   "asn: ignoring further announcement of %u.%u.%u.%u/%u by AS %u!\n",
-			   (prefix >> 24) & 0xFF,
-			   (prefix >> 16) & 0xFF,
-			   (prefix >> 8)  & 0xFF,
-			    prefix        & 0xFF,
-			    subnet,
-			   origin);
+		    warn("ignoring further announcement of %u.%u.%u.%u/%u "
+			 "by AS %u!\n",
+			 (prefix >> 24) & 0xFF,
+			 (prefix >> 16) & 0xFF,
+			 (prefix >> 8)  & 0xFF,
+			  prefix        & 0xFF,
+			  subnet,
+			 origin);
 
 		/* no need to make another node, so done */
 
@@ -222,7 +223,7 @@ build_tree(prefix_t * const ptr, const int count)
 
     switch (count) {
     case 0:
-	panic("asn: zero length tree range!");
+	error("zero length tree range!");
 
     case 1:			/* just a single item, so return it */
 	temp->left = NULL;
@@ -360,8 +361,8 @@ asn_readfile(const char *filename)
 
     if (filename) {
 	if ((fd = open(filename, O_RDONLY)) < 0) {
-	    logmsg(LOGWARN, "asn: error while opening file %s: %s\n",
-		   filename, strerror(errno));
+	    warn("error while opening file %s: %s\n",
+		 filename, strerror(errno));
 	    return;
 	}
 
@@ -525,28 +526,26 @@ asn_readfile(const char *filename)
 	    }
 
 	    if (subnet < 8 || subnet > 32) {
-		logmsg(LOGWARN,
-		       "asn: ignoring %u.%u.%u.%u/%u as clearly an error!\n",
-		       (prefix >> 24) & 0xFF,
-		       (prefix >> 16) & 0xFF,
-		       (prefix >>  8) & 0xFF,
-			prefix        & 0xFF,
-			subnet);
+		warn("ignoring %u.%u.%u.%u/%u as clearly an error!\n",
+		     (prefix >> 24) & 0xFF,
+		     (prefix >> 16) & 0xFF,
+		     (prefix >>  8) & 0xFF,
+		      prefix        & 0xFF,
+		      subnet);
 	    } else {
 		uint32_t mask = maskval[subnet - 1];
 
 		if ((prefix & mask) != prefix)
-		    logmsg(LOGWARN,
-			   "asn: ignoring %u.%u.%u.%u/%u as non-aligned!\n",
-			   (prefix >> 24) & 0xFF, (prefix >> 16) & 0xFF,
-			   (prefix >> 8) & 0xFF, prefix & 0xFF, subnet);
+		    warn("ignoring %u.%u.%u.%u/%u as non-aligned!\n",
+			 (prefix >> 24) & 0xFF, (prefix >> 16) & 0xFF,
+			 (prefix >> 8) & 0xFF, prefix & 0xFF, subnet);
 		else
 		    add_new_prefix(prefix, mask, subnet, origin);
 	    }
 	}
 
 	if (fail)
-	    logmsg(LOGWARN, "asn: error in MST file: %s\n", fail);
+	    warn("error in MST file: %s\n", fail);
 
 	close(fd);
     }

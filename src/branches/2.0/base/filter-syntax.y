@@ -89,6 +89,7 @@
 #include <string.h>
 #include <stdarg.h> 	/* va_start */
 
+#define LOG_DOMAIN "FILTER"
 #include "como.h"
 
 #define YYERROR_VERBOSE
@@ -218,7 +219,7 @@ parse_nm(int i, uint32_t *nm)
 char *
 append_string(char *dest, char *src)
 {
-    dest = (char *)safe_realloc(dest, strlen(dest) + strlen(src) + 1);
+    dest = (char *)como_realloc(dest, strlen(dest) + strlen(src) + 1);
     strcat(dest, src);
     return dest;
 }
@@ -235,11 +236,11 @@ tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
 {
     treenode_t *t;
     
-    t = (treenode_t *)safe_malloc(sizeof(treenode_t));
+    t = (treenode_t *)como_malloc(sizeof(treenode_t));
     t->type = type;
     if (t->type == Tpred) {
         t->pred_type = pred_type;
-        t->data = (nodedata_t *)safe_malloc(sizeof(nodedata_t));
+        t->data = (nodedata_t *)como_malloc(sizeof(nodedata_t));
         switch(t->pred_type) {
         case Tip:
             asprintf(&(t->string), "%d ip %d/%d",
@@ -315,15 +316,15 @@ list_add(listnode_t *list, char *s)
     listnode_t *laux;
     
     if (!list) {
-        list = (listnode_t *)safe_malloc(sizeof(listnode_t));
+        list = (listnode_t *)como_malloc(sizeof(listnode_t));
         list->next = NULL;
         list->prev = NULL;
-        list->string = safe_strdup(s);
+        list->string = como_strdup(s);
     }
     else {
         if (strcmp(s, list->string) <= 0) {
-            laux = (listnode_t *)safe_malloc(sizeof(listnode_t));
-            laux->string = safe_strdup(s);
+            laux = (listnode_t *)como_malloc(sizeof(listnode_t));
+            laux->string = como_strdup(s);
             laux->next = list;
             laux->prev = list->prev;
             list->prev = laux;
@@ -409,7 +410,7 @@ tree_to_string(treenode_t *tree)
     case Tand:
         list = list_make(NULL, Tand, tree->left);
         list = list_merge(list, list_make(NULL, Tand, tree->right));
-        s = safe_strdup("(");
+        s = como_strdup("(");
         for (laux = list; laux->next; laux = laux->next) {
             s = append_string(s, laux->string);
             s = append_string(s, " && ");
@@ -427,7 +428,7 @@ tree_to_string(treenode_t *tree)
 	case Tor:
         list = list_make(NULL, Tor, tree->left);
         list = list_merge(list, list_make(NULL, Tor, tree->right));
-        s = safe_strdup("(");
+        s = como_strdup("(");
         for (laux = list; laux->next; laux = laux->next) {
             s = append_string(s, laux->string);
             s = append_string(s, " || ");
@@ -443,11 +444,11 @@ tree_to_string(treenode_t *tree)
         } while (laux);
         break;
 	case Tnot:
-        s = safe_strdup("!");
+        s = como_strdup("!");
         s = append_string(s, tree_to_string(tree->left));
         break;
     case Tpred:
-        s = safe_strdup(tree->string);
+        s = como_strdup(tree->string);
         break;
     }
     
@@ -1046,7 +1047,7 @@ void yferror(char *fmt, ...)
     
     va_start(ap, fmt);
     vsnprintf(error, sizeof(error), fmt, ap);
-    logmsg(LOGWARN, "Filter parser error: %s\n", error);
+    warn("Filter parser error: %s\n", error);
     va_end(ap);
 }
 
