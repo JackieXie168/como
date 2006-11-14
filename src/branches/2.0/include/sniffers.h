@@ -81,9 +81,12 @@ int ppbuf_get_count (ppbuf_t * ppbuf);
  */
 
 /* sniffer callbacks */
-typedef sniffer_t * (*sniffer_init_fn)    (const char * device,
-					   const char * args);
-typedef void (*sniffer_finish_fn)         (sniffer_t * s);
+typedef sniffer_t * (*sniffer_init_fn)    (int id,
+					   const char * device,
+					   const char * args,
+					   alc_t * alc);
+typedef void (*sniffer_finish_fn)         (sniffer_t * s,
+					   alc_t * alc);
 typedef void (*sniffer_setup_metadesc_fn) (sniffer_t * s);
 typedef int  (*sniffer_start_fn)          (sniffer_t * s);
 typedef int  (*sniffer_next_fn)           (sniffer_t * s,
@@ -95,8 +98,9 @@ typedef float (*sniffer_usage_fn)         (sniffer_t * s, pkt_t * first,
 					   pkt_t * last);
 
 struct sniffer_cb {
-    sniffer_init_fn		init;     /* initialize the sniffer */
-    sniffer_finish_fn		finish;   /* finalize the sniffer */
+    char *			name;	/* name of the sniffer */
+    sniffer_init_fn		init;	/* initialize the sniffer */
+    sniffer_finish_fn		finish;	/* finalize the sniffer */
     sniffer_setup_metadesc_fn	setup_metadesc; /* setup the out metadesc */
 };
 
@@ -104,7 +108,9 @@ typedef struct sniffer_priv sniffer_priv_t;
 typedef struct sniffer_stats sniffer_stats_t;
 
 struct sniffer_t {
+    int				id;     /* id of the sniffer */
     char *			name;	/* name of the sniffer */
+    char *			device;	/* device of the sniffer */
     int				fd;	/* file descriptor we are using */
     int				flags;	/* sniffer flags */
     int				max_pkts; /* maximum number of pkts captured

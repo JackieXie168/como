@@ -10,6 +10,12 @@ SET(COMO_SRCS
   util-process.c
   capture.c
   asn.c
+  sniffers.c
+  ieee80211frames.c
+  radio.c
+  metadesc.c
+  pktmeta.c
+  headerinfo.c
 #  memory.c
 #  config.c
 #  inline.c
@@ -24,18 +30,12 @@ SET(COMO_SRCS
 #  query-comms.c
 #  query-ondemand.c
 #  services.c
-#  metadesc.c
-#  pktmeta.c
-#  headerinfo.c
 #  capture.c
 #  capture-client.c
 #  export.c
 #  supervisor.c
 #  storage.c
 #  storage-client.c
-#  sniffers.c
-#  ieee80211frames.c
-#  radio.c
 #  ${COMO_SOURCE_DIR}/lib/bitmap.c
 #  ${COMO_SOURCE_DIR}/lib/hash.c
 #  ${COMO_SOURCE_DIR}/lib/heap.c

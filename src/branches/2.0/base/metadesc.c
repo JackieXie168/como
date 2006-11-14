@@ -40,7 +40,7 @@
 #include "comopriv.h"
 
 static metadesc_t *
-metadesc_new_va(allocator_t *alc, int pktmeta_count, va_list ap)
+metadesc_new_va(alc_t *alc, int pktmeta_count, va_list ap)
 {
     metadesc_t *md;
     int i = 0;
@@ -84,7 +84,7 @@ metadesc_new(int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(allocator_safe(), pktmeta_count, ap);
+    md = metadesc_new_va(como_alc(), pktmeta_count, ap);
     va_end(ap);
     
     return md;
@@ -103,7 +103,7 @@ metadesc_list_new(metadesc_t *head, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(allocator_safe(), pktmeta_count, ap);
+    md = metadesc_new_va(como_alc(), pktmeta_count, ap);
     va_end(ap);
     
     md->_next = head;
@@ -150,7 +150,7 @@ metadesc_define_sniffer_out(sniffer_t * s, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(como_shmem_alc(), pktmeta_count, ap);
+    md = metadesc_new_va(como_alc(), pktmeta_count, ap);
     va_end(ap);
     
     md->_next = s->priv->outdesc;
@@ -167,7 +167,7 @@ metadesc_list_free(metadesc_t *head)
 {
     metadesc_t *d;
     metatpl_t *t;
-    allocator_t *alc;
+    alc_t *alc;
     
     while (head) {
     	alc = head->_alc;
@@ -202,7 +202,7 @@ parse_protos(const char *protos, struct parsed_protos_t *pp)
     const headerinfo_t *hi;
     layer_t l;
     const char d[] = ":";
-    char *protos_copy = safe_strdup(protos);
+    char *protos_copy = como_strdup(protos);
     char *t, *s;
     t = s = protos_copy;
 
@@ -509,7 +509,7 @@ metadesc_try_match(metadesc_t * out, metadesc_t * in,
 	for (outit = out; outit != NULL; outit = outit->_next) {
 	    affinity = metadesc_try_match_pair(outit, init);
 	    if (affinity > 0) {
-		res = safe_realloc(res, (matches_count + 1) *
+		res = como_realloc(res, (matches_count + 1) *
 				   sizeof(metadesc_match_t));
 		
 		res[matches_count].in = init;
@@ -517,7 +517,7 @@ metadesc_try_match(metadesc_t * out, metadesc_t * in,
 		res[matches_count].affinity = affinity;
 		matches_count++;
 	    } else {
-		incomps = safe_realloc(incomps, (incomps_count + 1) *
+		incomps = como_realloc(incomps, (incomps_count + 1) *
 				       sizeof(metadesc_incompatibility_t));
 		incomps[incomps_count].in = init;
 		incomps[incomps_count].out = outit;
@@ -596,7 +596,7 @@ metadesc_determine_filter(metadesc_t * md)
     layers[L2] = NULL;
     
     for (l = L3; l <= L4; l++)
-	layers[l] = safe_calloc(md->_tpl_count, sizeof(int));
+	layers[l] = como_calloc(md->_tpl_count, sizeof(int));
     
     /*
      * Iterate over the template list and keep the information of used
@@ -627,7 +627,7 @@ metadesc_determine_filter(metadesc_t * md)
     	hash_t *seen;
 	if (layers[l][0] == -1) continue;
 	
-	seen = hash_new(allocator_safe(), HASHKEYS_POINTER, NULL, NULL);
+	seen = hash_new(como_alc(), HASHKEYS_POINTER, NULL, NULL);
 	
 	if (filter_initialized == 0) {
 	    asprintf(&filter, "(");
@@ -695,7 +695,7 @@ metadesc_determine_filter(metadesc_t *md)
     layers[0] = NULL;
     
     for (l = LCOMO; l <= L4; l++)
-	layers[l] = safe_calloc(md->_tpl_count, sizeof(int));
+	layers[l] = como_calloc(md->_tpl_count, sizeof(int));
     
     /*
      * Iterate over the template list and keep the information of used

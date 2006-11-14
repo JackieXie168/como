@@ -94,6 +94,8 @@ typedef struct como_node como_node_t;
 
 alc_t * como_alc();
 
+char *  alc_strdup(alc_t * alc, const char * s);
+
 
 void setproctitle_init(int argc, char **argv);
 void setproctitle(const char *format, ...);
@@ -163,6 +165,7 @@ struct como_node {
     array_t *	mdls;		/* module information */
     sniffer_list_t	sniffers;
     int			sniffers_count;
+    timestamp_t		live_thresh;
 };
 
 

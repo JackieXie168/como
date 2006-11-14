@@ -41,16 +41,18 @@
 
 #include "como.h"
 #include "comopriv.h"
-#include "storage.h"
 #include "query.h"	// XXX query();
 #include "ipc.h"
 
+typedef struct sniffer_def {
+    char *	name;
+    char *	device;
+    char *	args;
+} sniffer_def_t;
 
-/* global state */
-extern struct _como map;
-
-
-
+typedef struct como_config {
+    array_t *		sniffer_defs;
+} como_config_t;
 
 typedef struct como_su {
     como_env_t		env;
@@ -68,6 +70,7 @@ typedef struct como_su {
 
     FILE *		logfile;	/* log file */
     stats_t *		stats;
+    como_config_t *	config;
 } como_su_t;
 
 
@@ -116,7 +119,7 @@ su_ipc_sync(ipc_peer_t * peer, UNUSED void * b, UNUSED size_t l,
     como_node_t *node0;
     array_t * mdls;
     
-    node0 = array_at(como_su->nodes, como_node_t, 0);
+    node0 = &array_at(como_su->nodes, como_node_t, 0);
     mdls = node0->mdls;
     
     if (peer->class == COMO_CA_CLASS) {
@@ -132,7 +135,7 @@ su_ipc_sync(ipc_peer_t * peer, UNUSED void * b, UNUSED size_t l,
 	    uint8_t *buf, *sbuf;
 	    size_t sz;
 
-	    mdl = array_at(mdls, mdl_t, i);
+	    mdl = &array_at(mdls, mdl_t, i);
 	    sz = mdl_sersize(mdl);
 	    buf = sbuf = como_malloc(sz);
 
@@ -386,7 +389,7 @@ como_node_lookup_by_fd(array_t * nodes, int fd)
     
     for (i = 0; i < nodes->len; i++) {
 	como_node_t *node;
-	node = array_at(nodes, como_node_t, i);
+	node = &array_at(nodes, como_node_t, i);
 	if (node->query_fd == fd)
 	    return node;
     }
@@ -483,18 +486,18 @@ como_su_run(como_su_t * como_su)
      */
     for (i = 0; i < como_su->nodes->len; i++) {
 	como_node_t *node;
-	node = array_at(como_su->nodes, como_node_t, i);
+	node = &array_at(como_su->nodes, como_node_t, i);
 	como_node_listen(node);
 	event_loop_add(&como_su->el, node->query_fd);
 	FD_SET(node->query_fd, &nodes_fds);
     }
 
     /* initialize all modules */ 
-    node0 = array_at(como_su->nodes, como_node_t, 0);
+    node0 = &array_at(como_su->nodes, como_node_t, 0);
     mdls = node0->mdls;
     for (i = 0; i < mdls->len; i++) {
 	mdl_t *mdl;
-	mdl = array_at(mdls, mdl_t, i);
+	mdl = &array_at(mdls, mdl_t, i);
 
 /*
 	if (mdl_init(mdl)) {
@@ -610,6 +613,86 @@ como_su_run(como_su_t * como_su)
 }
 
 
+void
+como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
+			alc_t * alc)
+{
+    sniffer_list_t *sniffers;
+    
+    int live_sniffers, file_sniffers;
+    int i;
+    int sniffer_id = 0;
+    
+    sniffers = &node->sniffers;
+
+    for (i = 0; i < sniffer_defs->len; i++) {
+	sniffer_cb_t *cb;
+	sniffer_t *s;
+	sniffer_def_t *def;
+	
+	def = &array_at(sniffer_defs, sniffer_def_t, i);
+	
+	cb = sniffer_cb_lookup(def->name);
+	if (cb == NULL) {
+	    warn("Can't find sniffer `%s`.\n", def->name);
+	    continue;
+	}
+
+	/* initialize the sniffer */
+	s = cb->init(sniffer_id, def->device, def->args, alc);
+	if (s == NULL) {
+	    warn("Initialization of sniffer `%s` on device `%s` failed.\n",
+		 def->name, def->device);
+	    continue;
+	}
+
+	/* check that the sniffer is consistent with the sniffers already
+	 * configured */
+	if (((s->flags & SNIFF_FILE) && live_sniffers > 0) ||
+	    (!(s->flags & SNIFF_FILE) && file_sniffers > 0)) {
+	    warn("Can't activate sniffer `%s`: "
+		 "file and live sniffers cannot be used "
+		 "at the same time\n", def->name);
+	    cb->finish(s, alc);
+	    continue;
+	}
+
+	if (s->flags & SNIFF_FILE) {
+	    file_sniffers++;
+	    node->live_thresh = ~0;
+	} else {
+	    live_sniffers++;
+	}
+	
+	notice("Initialized sniffer `%s` on device `%s`.\n",
+	       def->name, def->device);
+    
+	sniffer_list_insert_head(sniffers, s);
+	sniffer_id++;
+	node->sniffers_count++;
+    }
+
+}
+
+static como_config_t *
+fake_config()
+{
+    static como_config_t config;
+    
+    array_t *sniffer_defs;
+    sniffer_def_t s;
+    sniffer_defs = array_new(sizeof(sniffer_def_t));
+
+    s.name = como_strdup("pcap");
+    s.device = como_strdup("/trace/trace_eth_1");
+    s.args = NULL;
+    array_add(sniffer_defs, &s);
+
+    config.sniffer_defs = sniffer_defs;
+    
+    return &config;    
+}
+
 
 /*
  * -- main
@@ -646,6 +729,7 @@ main(int argc, char ** argv)
      * parse command line and configuration files
      */
     //configure(&map, argc, argv);
+    como_su->config = fake_config();
 
     /* write welcome message */ 
     msg("----------------------------------------------------\n");
@@ -674,7 +758,7 @@ main(int argc, char ** argv)
     /* prepare the SUPERVISOR socket */
     como_su->accept_fd = ipc_listen();
     
-    node0 = array_at(como_su->nodes, como_node_t, 0);
+    node0 = &array_at(como_su->nodes, como_node_t, 0);
 
     /* start the CAPTURE process */
     if (node0->sniffers_count > 0) {

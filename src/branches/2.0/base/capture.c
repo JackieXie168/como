@@ -350,7 +350,7 @@ batch_filter(batch_t * batch, como_ca_t * como_ca)
     out = which;
 
     for (idx = 0; idx < mdls->len; idx++) {
-	mdl_t *mdl = *array_at(mdls, mdl_t *, idx);
+	mdl_t *mdl = array_at(mdls, mdl_t *, idx);
 	mdl_icapture_t *ic;
 	pkt_t *pkt, **pktptr;
 

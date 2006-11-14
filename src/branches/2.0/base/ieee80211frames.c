@@ -219,8 +219,7 @@ ieee80211_hdrlen(pkt_t * pkt)
 	    return 24 + LLC_HDR_LEN;
 	break;
     default:
-	logmsg(LOGWARN, "ieee802.11 frame type unknown\n");
-	assert_not_reached();
+	error("ieee802.11 frame type unknown\n");
 	break;
     }
     return 0;			/* XXX */

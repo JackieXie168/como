@@ -35,7 +35,6 @@
 
 #include "como.h"
 #include "comopriv.h"
-#include "corlib.h"
 
 static hash_t *s_registered_types = NULL;
 static pktmeta_type_t s_type_counter = 0;
@@ -47,7 +46,7 @@ pktmeta_type_from_name(const char *name)
     void *o;
     
     if (s_registered_types == NULL) {
-	s_registered_types = hash_new(allocator_shared(),
+	s_registered_types = hash_new(como_alc(),
 				      HASHKEYS_STRING, NULL, NULL);
     }
     

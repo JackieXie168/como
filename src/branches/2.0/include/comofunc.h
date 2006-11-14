@@ -278,6 +278,6 @@ const headerinfo_t * headerinfo_lookup_with_type_and_layer(uint32_t type,
 
 
 #define assert_not_reached()	\
-    assert((logmsg(LOGWARN, "should not be reached.\n"), 0))
+    error("%s:%d should not be reached.\n", __FILE__, __LINE__)
 
 #endif /* _COMO_FUNC_H */
