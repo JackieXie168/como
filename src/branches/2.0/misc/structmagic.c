@@ -246,13 +246,23 @@ main(int argc, char **argv)
     gen_serialization_header(serialout, full_path_input);
     
     for (i = 0, st = structs[0]; st != NULL; i++, st = structs[i]) {
-        if (st->flags & FLAG_TUPLE)
+        char *sep = "(";
+        printf("Generating code for struct %s ", st->name);
+        if (st->flags & FLAG_TUPLE) {
             fprintf(tnout, "char * tuple_type = \"%s\";\n", st->name);
-        if (st->flags & FLAG_RECORD)
+            printf("%stuple", sep);
+            sep = ", ";
+        }
+        if (st->flags & FLAG_RECORD) {
             fprintf(tnout, "char * record_type = \"%s\";\n", st->name);
-        if (st->flags & FLAG_CONFIG)
+            printf("%srecord", sep);
+            sep = ", ";
+        }
+        if (st->flags & FLAG_CONFIG) {
             fprintf(tnout, "char * config_type = \"%s\";\n", st->name);
-        printf("Generating code for struct %s:\n", st->name);
+            printf("%srecord", sep);
+        }
+        printf("):\n");
         gen_serialization_funcs(serialout, st);
         printf("\tSerialization functions\n");
         //if (st->storable) {
