@@ -35,6 +35,7 @@
 
 #include <string.h>		/* memcpy */
 
+#include "como.h"
 #include "como-build.h"
 
 #include "stdpkt.h"

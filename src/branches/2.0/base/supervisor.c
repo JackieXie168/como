@@ -643,7 +643,7 @@ main(int argc, char ** argv)
 	pid_t pid;
 	
 	ca = ipc_peer_child(COMO_CA, 0);
-	pid = start_child(ca, capture, -1, node0);
+	pid = 0;//start_child(ca, capture, -1, node0);
 	if (pid < 0) {
 	    warn("Can't start CAPTURE\n");
 	}
