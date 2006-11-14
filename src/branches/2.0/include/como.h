@@ -70,6 +70,7 @@ typedef struct como_node como_node_t;
 #include "log.h"
 #include "eventloop.h"
 #include "pool.h"
+#include "shmem.h"
 
 #define ALIGN(size, boundary) \
     (((size) + ((boundary) - 1)) & ~((boundary) - 1))
