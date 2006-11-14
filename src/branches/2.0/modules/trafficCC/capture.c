@@ -52,7 +52,7 @@ ca_init(mdl_t * self, timestamp_t ts)
 }
 
 void
-capture(mdl_t * self, pkt_t * pkt, void * state)
+update(mdl_t * self, pkt_t * pkt, void * state)
 {
     const config_t *cf = mdl_get_config(self, config_t);
     tuple_t *t = (tuple_t *) state;

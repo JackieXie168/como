@@ -86,8 +86,8 @@ void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
 /*
  * capture.c
  */
-void capture (ipc_peer_full_t * peer, int supervisor_fd,
-	      int client_fd, como_node_t * node);
+void capture (/*ipc_peer_full_t * peer,*/ int supervisor_fd,
+	      int client_fd/*, como_node_t * node*/);
 
 
 /*
