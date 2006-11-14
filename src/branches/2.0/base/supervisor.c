@@ -50,13 +50,6 @@
 extern struct _como map;
 
 
-typedef struct como_env {
-    runmode_t	runmode;	/* mode of operation */
-    char *	workdir;	/* work directory for templates etc. */
-    char *	dbdir; 	    	/* database directory for output files */
-    char *	libdir;		/* base directory for modules */
-    log_level_t logflags;	/* log flags (i.e., what to log) */
-} como_env_t;
 
 
 typedef struct como_su {
@@ -65,24 +58,23 @@ typedef struct como_su {
     int			accept_fd;
 
     array_t *		nodes;		/* node information */
+    
+    pool_t *		pool;		/* the pool used to allocate this
+					   structure */
+    alc_t *		alc;		/* the pool's allocator */
 
     FILE *		logfile;	/* log file */
 } como_su_t;
 
 
-static void
-como_env_init(como_env_t * env)
-{
-    memset(env, 0, sizeof(como_env_t));
-    env->runmode = RUNMODE_NORMAL;
-    env->workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
-    env->dbdir = strdup(DEFAULT_DBDIR);
-    env->libdir = strdup(DEFAULT_LIBDIR);
-    env->logflags = LOG_LEVEL_ERROR | LOG_LEVEL_WARNING |
-		    LOG_LEVEL_NOTICE | LOG_LEVEL_MESSAGE |
-		    LOG_LEVEL_DEBUG;
-}
 
+#define SIZEOF_LOGMSG_DOMAIN	8
+
+typedef struct logmsg {
+    char	domain[SIZEOF_LOGMSG_DOMAIN];
+    log_level_t	level;
+    char	message[0];
+} logmsg_t;
 
 /*
  * -- ipc_echo_handler()
@@ -94,14 +86,12 @@ como_env_init(como_env_t * env)
  *     files and better disk scheduling.
  * 
  */
-static void 
-su_ipc_echo(procname_t sender, UNUSED int fd, void * buf, 
-	    UNUSED size_t len) 
+static int 
+su_ipc_echo(UNUSED ipc_peer_t * sender, logmsg_t * m, UNUSED size_t len,
+	    UNUSED int swap, UNUSED void * user_data)
 {
-    logmsg_t *lmsg = (logmsg_t *) buf;
-    displaymsg(stdout, sender, lmsg);
-    if (map.logfile != NULL) 
-	displaymsg(map.logfile, sender, lmsg);
+    log_out(m->domain, m->level, m->message);
+    return IPC_OK;
 }
 
 
@@ -114,35 +104,43 @@ su_ipc_echo(procname_t sender, UNUSED int fd, void * buf,
  * which modules should be running. 
  * 
  */
-static void
-su_ipc_sync(peer_t peer,
-            UNUSED void * b, 
-	    UNUSED size_t l)
+static int
+su_ipc_sync(ipc_peer_t * peer, UNUSED void * b, UNUSED size_t l,
+	    UNUSED int swap, como_su_t * como_su)
 {
     int i;
+    como_node_t *node0;
+    array_t * mdls;
     
-    array_t * mdls = comosu_get_modules();
+    node0 = array_at(como_su->nodes, como_node_t, 0);
+    mdls = node0->mdls;
     
-    /* 
-     * initialize all modules and send the start signal to 
-     * the other processes 
-     */
-    for (i = 0; i < mdls->len; i++) {
-	mdl_t *m;
-	uint8_t *sbuf;
-	size_t sz;
+    if (peer->class == COMO_CA_CLASS) {
+	ipc_type t;
+	ipc_send(peer, CA_INITIALIZE_SNIFFERS, NULL, 0);
+	ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
+	assert(t == CA_SNIFFERS_INITIALIZED);
 	
-	m = array_at(mdls, mdl_t, i);
-	sz = mdl_expose_len(m);
-	sbuf = como_malloc(sz);
+	/* TODO: metadesc comparison here */
 	
-	mdl_serialize(sbuf, m);
-	
-	ipc_send(peer, ADD_MODULE, sbuf, sz);
-    }
+	for (i = 0; i < mdls->len; i++) {
+	    mdl_t *mdl;
+	    uint8_t *buf, *sbuf;
+	    size_t sz;
 
-    /* now we can send the start message */
-    ipc_send(sender, IPC_MODULE_START, &map.stats, sizeof(void *));
+	    mdl = array_at(mdls, mdl_t, i);
+	    sz = mdl_sersize(mdl);
+	    buf = sbuf = como_malloc(sz);
+
+	    mdl_serialize(&sbuf, mdl);
+
+	    ipc_send(peer, CA_ADD_MODULE, buf, sz);
+	    free(buf);
+	}
+	
+	ipc_send(peer, CA_START, NULL, 0);
+    }
+    return IPC_OK;
 }
 
 
@@ -155,16 +153,17 @@ su_ipc_sync(peer_t peer,
  * children as well).
  *
  */
-static void
-su_ipc_done(UNUSED procname_t sender,
-        UNUSED int fd, 
-	UNUSED void * b,
-        UNUSED size_t l)
+static int
+su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
+	    UNUSED int swap, UNUSED como_su_t * como_su)
 {
+/* TODO
     ipc_send(CAPTURE, IPC_EXIT, NULL, 0); 
     ipc_send(EXPORT, IPC_EXIT, NULL, 0); 
     ipc_send(STORAGE, IPC_EXIT, NULL, 0); 
+*/
     exit(EXIT_SUCCESS);
+    return IPC_OK;
 }
 
 
@@ -184,17 +183,12 @@ cleanup()
 {
     char *cmd;
  
-    if (map.whoami != SUPERVISOR) {
-        logmsg(V_LOGWARN, "%s terminating normally\n", 
-		getprocfullname(map.whoami));
-        return;
-    }
-    map.logflags |= LOGUI; /* make sure the message is visible */
-    logmsg(LOGUI, "\n\n\n--- about to exit... remove work directory %s\n",
+    msg("\n\n\n--- about to exit... remove work directory %s\n",
         map.workdir);
     asprintf(&cmd, "rm -rf %s\n", map.workdir);
     system(cmd);
-    logmsg(LOGUI, "--- done, thank you for using como\n");
+    free(cmd);
+    msg("--- done, thank you for using CoMo\n");
 }
   
 
@@ -212,6 +206,8 @@ cleanup()
  * XXX this function doesn't handle multiple virtual nodes. 
  *
  */
+#if 0
+/* TODO */
 static void
 apply_map_changes(struct _como * x)
 {
@@ -336,6 +332,7 @@ reconfigure(UNUSED int si_code)
     configure(&tmp_map, map.ac, map.av);
     apply_map_changes(&tmp_map);
 }
+#endif
 
 /*
  * -- defchld
@@ -349,6 +346,55 @@ defchld(UNUSED int si_code)
     handle_children();
 }
 
+static como_node_t *
+como_node_lookup_by_fd(array_t * nodes, int fd)
+{
+    int i;
+    
+    for (i = 0; i < nodes->len; i++) {
+	como_node_t *node;
+	node = array_at(nodes, como_node_t, i);
+	if (node->query_fd == fd)
+	    return node;
+    }
+    return NULL;
+}
+
+
+static void
+como_node_handle_query(como_node_t * node)
+{
+    struct sockaddr_in addr;
+    ipc_peer_full_t *peer;
+    socklen_t len;
+    int cd;
+    
+    len = sizeof(addr);
+    cd = accept(node->query_fd, (struct sockaddr *) &addr, &len);
+    if (cd < 0) {
+	/* check if accept was unblocked by a signal */
+	warn("Failed on accept(): %s\n", strerror(errno));
+	return;
+    }
+    
+    notice("query from %s on fd %d\n", inet_ntoa(addr.sin_addr), cd);
+    /* 
+     * start a query process. 
+     */
+    peer = ipc_peer_child(COMO_QU, cd);
+    //start_child(peer, query, cd, node);
+    close(cd);
+}
+
+
+static void
+como_node_listen(como_node_t * node)
+{
+    char *cp;
+    asprintf(&cp, "%s:%hd", "localhost", node->query_port);
+    node->query_fd = create_socket(cp, TRUE);
+    free(cp);
+}
 
 /*
  * -- como_su_run
@@ -357,75 +403,72 @@ defchld(UNUSED int si_code)
  * Also take care of processes dying. XXX update this comment
  */
 void
-como_su_run(como_su * como_su)
+como_su_run(como_su_t * como_su)
 {
-    fd_set valid_fds;
-    int i; 
+    fd_set nodes_fds;
+    int i;
+    como_node_t *node0;
+    array_t *mdls;
+    runmode_t runmode;
     
     /* catch some signals */
     signal(SIGINT, exit);               /* catch SIGINT to clean up */
     signal(SIGTERM, exit);              /* catch SIGTERM to clean up */
     signal(SIGCHLD, defchld);		/* catch SIGCHLD (defunct children) */
+
+#if 0
+    /* TODO */
     if (como_su->env.runmode == RUNMODE_NORMAL)
 	signal(SIGHUP, reconfigure);    /* catch SIGHUP to update config */
+#endif
 
     /* register a handler for exit */
     atexit(cleanup);
 
     /* register handlers for IPC */
-    ipc_register(IPC_ECHO, su_ipc_echo); 
-    ipc_register(IPC_SYNC, su_ipc_sync); 
-    ipc_register(IPC_RECORD, su_ipc_record); 
-    ipc_register(IPC_DONE, su_ipc_done); 
+    ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync);
+    ipc_register(SU_DONE, (ipc_handler_fn) su_ipc_done);
+    ipc_register(SU_ECHO, (ipc_handler_fn) su_ipc_echo);
     
-    /* SU - CA IPC */
-    ipc_register(CA_CONNECT, su_ipc_ca_connect);
-    ipc_register(CA_SNIFFER_INITIALIZED, su_ipc_ca_sniffer_initialized);
-    ipc_register(CA_SNIFFERS_READY, su_ipc_ca_sniffers_ready);
-    ipc_register(CA_DONE, su_ipc_ca_done);
-
+#if 0
+    /* TODO */
     if (como_su->env.runmode == RUNMODE_INLINE) {
         inline_mainloop(accept_fd); 
 	return; 
     } 
+#endif
 
     event_loop_init(&como_su->el);
 
     /* accept connections from other processes */
     event_loop_add(&como_su->el, como_su->accept_fd);
 
+    FD_ZERO(&nodes_fds);
     /* 
      * create sockets and accept connections from the outside world. 
      * they are queries that can be destined to any of the virtual nodes. 
      */
-    for (i = 0; i < como_su->nodes->len; i++) { 
-	como_node_listen(array_at(como_su->nodes, como_node_t, i));
-    }
-
-    external_fd = como_calloc(map.node_count, sizeof(int));
-    for (i = 0; i < map.node_count; i++) { 
-	char *buf;
-
-	asprintf(&buf, "S:http://localhost:%d/", map.node[i].query_port);
-	external_fd[i] = create_socket(buf, NULL);
-	if (external_fd[i] < 0)
-	    panic("creating the socket %s", buf);
-	max_fd = add_fd(external_fd[i], &valid_fds, max_fd);
-	free(buf);
+    for (i = 0; i < como_su->nodes->len; i++) {
+	como_node_t *node;
+	node = array_at(como_su->nodes, como_node_t, i);
+	como_node_listen(node);
+	event_loop_add(&como_su->el, node->query_fd);
+	FD_SET(node->query_fd, &nodes_fds);
     }
 
     /* initialize all modules */ 
-    for (i = 0; i <= map.module_last; i++) {
-	module_t * mdl = &map.modules[i]; 
+    node0 = array_at(como_su->nodes, como_node_t, 0);
+    mdls = node0->mdls;
+    for (i = 0; i < mdls->len; i++) {
+	mdl_t *mdl;
+	mdl = array_at(mdls, mdl_t, i);
 
-	if (mdl->status != MDL_LOADING) 
-	    continue;
-
-	if (activate_module(mdl, map.libdir)) {
-	    logmsg(LOGWARN, "cannot start module %s\n", mdl->name); 
+/*
+	if (mdl_init(mdl)) {
 	    remove_module(&map, mdl);
 	    continue; 
   	} 
+
 
 	if (mdl->running != RUNNING_ON_DEMAND) {
 	    if (init_module(mdl)) { 
@@ -436,10 +479,13 @@ como_su_run(como_su * como_su)
 
 	    map.stats->modules_active++;
 	}
+*/
     } 
 
     /* initialize resource management */
     resource_mgmt_init();
+    
+    runmode = como_env_runmode();
 
     for (;;) { 
 #ifdef RESOURCE_MANAGEMENT
@@ -458,9 +504,10 @@ como_su_run(como_su * como_su)
         int secs, dd, hh, mm, ss;
 	struct timeval now;
 	int n_ready;
-	int ipcr;
 	
-	fd_set r = valid_fds;
+	fd_set r;
+	
+	event_loop_set_timeout(&como_su->el, &to);
 
 	/* 
          * user interface. just one line... 
@@ -472,7 +519,7 @@ como_su_run(como_su * como_su)
         mm = (secs % 3600) / 60;
         ss = secs % 60; 
 
-	if (map.runmode == RUNMODE_NORMAL) {
+	if (runmode == RUNMODE_NORMAL) {
 	    fprintf(stderr, 
 		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); "
 		"pkts %llu drops %d; mdl %d/%d\r", 
@@ -484,79 +531,48 @@ como_su_run(como_su * como_su)
 		map.stats->modules_active, map.module_used);
 	}
 
-	n_ready = select(max_fd, &r, NULL, NULL, &to);
-	if (map.runmode == RUNMODE_NORMAL) {
+	n_ready = event_loop_select(&como_su->el, &r);
+	if (runmode == RUNMODE_NORMAL) {
 	    fprintf(stderr, "%78s\r", ""); /* clean the line */
 	}
 
-	for (i = 0; n_ready > 0 && i < max_fd; i++) {
-	    int id;
+	for (i = 0; n_ready > 0 && i < como_su->el.max_fd; i++) {
 	    
 	    if (!FD_ISSET(i, &r))
 		continue;
 
-	    if (i == accept_fd) {
+	    if (i == como_su->accept_fd) {
 		int x;
 		x = accept(i, NULL, NULL);
 		if (x < 0) {
-		    logmsg(LOGWARN, "accept fd[%d] got %d (%s)\n",
-			    i, x, strerror(errno));
+		    warn("Failed on accept(): %s\n", strerror(errno));
 		} else {
-		    max_fd = add_fd(x, &valid_fds, max_fd);
+		    event_loop_add(&como_su->el, x);
 		}
-		goto next_one;
-	    }
-
-	    for (id = 0; id < map.node_count; id++) {
-		struct sockaddr_in addr;
-		procname_t who; 
-		socklen_t len;
-		int cd;
-	    
-		if (i != external_fd[id]) 
-		    continue; 
-
-		len = sizeof(addr);
-		cd = accept(external_fd[id], (struct sockaddr *)&addr, &len); 
-		if (cd < 0) {
-		    /* check if accept was unblocked by a signal */
-		    if (errno == EINTR)
-			continue;
-
-		    logmsg(LOGWARN, "accepting connection: %s\n",
-			strerror(errno));
+	    } else if (FD_ISSET(i, &nodes_fds)) {
+		como_node_t *node = como_node_lookup_by_fd(como_su->nodes, i);
+		como_node_handle_query(node);
+	    } else {
+		/* this is IPC */
+		int ipcr;
+		ipcr = ipc_handle(i);
+		switch (ipcr) {
+		case IPC_ERR:
+		    /* an error. close the socket */
+		    warn("error on IPC handle from %d\n", i);
+		case IPC_CLOSE:
+		case IPC_EOF:
+		    close(i);
+		    event_loop_del(&como_su->el, i);
+		    break;
 		}
-
-		logmsg(LOGQUERY,
-		       "query from %s on fd %d\n", 
-		       inet_ntoa(addr.sin_addr), cd); 
-
-		/* 
-		 * start a query process. 
-	   	 */
-		who = buildtag(map.whoami, QUERY, cd);
-		start_child(who, COMO_PRIVATE_MEM, query, cd, id); 
-		close(cd);
-		goto next_one;
 	    }
-
-	    /* this is internal. use ipc handler */
-	    ipcr = ipc_handle(i);
-	    switch (ipcr) {
-	    case IPC_ERR:
-		/* an error. close the socket */
-		logmsg(LOGWARN, "error on IPC handle from %d\n", i);
-	    case IPC_EOF:
-		close(i);
-		max_fd = del_fd(i, &valid_fds, max_fd);
-		break;
-	    }
-  next_one:
 	    n_ready--;
 	}
 	schedule(); /* resource management */
     }
 }
+
 
 
 /*
@@ -571,18 +587,24 @@ como_su_run(como_su * como_su)
 int
 main(int argc, char ** argv)
 {
-    //pid_t pid;
-    como_su_t como_su;
+    como_su_t *como_su;
+    como_node_t *node0;
     
-
-
+    /* create a global pool */
+    pool_t *pool = pool_create();
+    alc_t alc;
+    
+    pool_alc_init(pool, &alc);
+    como_su = alc_new0(&alc, como_su_t);
+    como_su->pool = pool;
+    como_su->alc = &alc;
+    
     como_init(argc, argv);
     
-    memset(&como_su, 0, sizeof(como_su_t));
     como_su->nodes = array_new(sizeof(como_node_t));
     
     /* set default values */
-    como_env_init(&como_su.env);
+    como_env_init(&como_su->env);
     
     /*
      * parse command line and configuration files
@@ -596,7 +618,7 @@ main(int argc, char ** argv)
     msg("  Copyright (c) 2004-2006, Intel Corporation\n"); 
     msg("  All rights reserved.\n"); 
     msg("----------------------------------------------------\n");
-    notice("... workdir %s\n", como_su.env.workdir);
+    notice("... workdir %s\n", como_su->env.workdir);
 
 
     notice("log level: %s\n", log_level_name(log_get_level())); 
@@ -608,23 +630,29 @@ main(int argc, char ** argv)
     //memory_init(map.mem_size);
 
     /* initialize IPC */
-    ipc_init(COMO_SU, como_su.env.workdir, &como_su);
+    ipc_init(ipc_peer_at(COMO_SU, como_su->env.workdir), como_su);
     
-/*    ipc_connect(COMO_SU);
-    ipc_connect(COMO_SU_at("10.212.4.100:44444"));
-    ipc_connect(COMO_SU_at("/tmp/comoaaaa"));*/
-
+    /* prepare the SUPERVISOR socket */
+    como_su->accept_fd = ipc_listen();
     
-    /* prepare the SUPERVISOR. STORAGE and CAPTURE sockets */
-    como_su.accept_fd = ipc_listen();
+    node0 = array_at(como_su->nodes, como_node_t, 0);
 
     /* start the CAPTURE process */
-    //pid = start_child(como_ca_init);
+    if (node0->sniffers_count > 0) {
+	ipc_peer_full_t *ca;
+	pid_t pid;
+	
+	ca = ipc_peer_child(COMO_CA, 0);
+	pid = start_child(ca, capture, -1, node0);
+	if (pid < 0) {
+	    warn("Can't start CAPTURE\n");
+	}
+    }
     
     /* move to the SUPERVISOR process (we don't fork here) */
     //setproctitle("%s", getprocfullname(map.whoami));
 
-    como_su_run(&como_su);
+    como_su_run(como_su);
 
     return EXIT_SUCCESS;
 }

@@ -19,7 +19,7 @@ SET(MODULES
 #  topports
 #  trace
   trafficCC
-  trafficCCS
+#  trafficCCS
 #  hwtm
 #  tuple
 #  unknown-ports

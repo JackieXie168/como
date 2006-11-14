@@ -50,6 +50,7 @@ typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 #include "array.h"
 #include "shobj.h"
 
+#include "serialize.h"
 #include "mdl.h"
 
 /*
@@ -103,74 +104,6 @@ typedef enum running_t {
     RUNNING_ON_DEMAND			/* running in query on demand */
 } running_t;
 
-
-
-/*
- * Module callbacks
- */
-
-/**
- * init_fn() does whatever is needed to initialize a module,
- * For the time being, just initialize the private memory for the module,
- * and take arguments from the config file.
- * Returns the capture flush interval on success, 0 on failure. 
- * Not mandatory, default does nothing and returns DEFAULT_CAPTURE_IVL.
- */
-typedef timestamp_t (init_fn)(void * self, char * args[]);
-
-/**
- * check_fn() ... checks for the validity of a packet before
- * trying to hash/match it. It can be used to implement an additional
- * filter after the one in the config file (eg to avoid to re-do
- * the checks every time in hash(), because we cannot trust the
- * user-supplied filter in the config file to be correct).
- * 
- * Returns 1 on success, 0 on failure.
- * Not mandatory, default returns 1.
- */
-typedef int (check_fn)(void * self, pkt_t *pkt);
-
-/**
- * hash_fn() computes a 32-bit hash value for a packet.
- * Not mandatory, the default returns 0 (which makes further classification
- * steps potentially very expensive).
- */
-typedef uint32_t (hash_fn)(void * self, pkt_t *pkt);
-
-/**
- * match_fn() checks that a packet belongs to the record passed as second
- * argument.
- * Returns 1 on success, 0 on failure.
- * Not mandatory, default returns 1. XXX luigi is not convinced.
- */
-typedef int (match_fn)(void * self, pkt_t *pkt, void *fh);
-
-/**
- * update_fn() run from capture to update *fh with the info from *pkt.
- * is_new is 1 if *fh was never used before hence needs to be
- * initialized.
- * fs points to current flush state.
- * Returns 1 if *fh becomes full after the call, 0 otherwise (failure is
- * not contemplated).
- * Mandatory.
- */
-typedef int (update_fn)(void * self, pkt_t *pkt, void *fh, int is_new);
-
-/**
- * flush_fn() run from capture at every flush interval to obtain a clean
- * flush state.
- * Not mandatory, default module state is NULL.
- */
-typedef void * (flush_fn)(void * self);
-
-/**
- * ematch_fn() same as match_fn() but now it uses the current capture
- * record instead of the packet.
- * Returns 1 on match, 0 on no-match.
- * Not mandatory, default returns 1; useless if there's no export_fn().
- * Called by export upon receipt of *eh from capture.
- */
-typedef int (ematch_fn)(void * self, void *eh, void *fh);
 
 /**
  * export_fn() same as update_fn(), is the core of export's processing.
@@ -285,7 +218,7 @@ struct _callbacks {
     size_t st_recordsize;
     
     capabilities_t capabilities;
-    
+#if 0    
     /* callbacks called by the supervisor process */
     init_fn     * init;
 
@@ -307,7 +240,7 @@ struct _callbacks {
     load_fn     * load;
     print_fn    * print;
     replay_fn   * replay;
-
+#endif
     char * formats; 
 };
 

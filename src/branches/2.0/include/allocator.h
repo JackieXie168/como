@@ -63,4 +63,7 @@ typedef struct alc {
 #define alc_free(alc, ptr)		\
     (alc)->free(ptr, __FILE__, __LINE__, (alc)->data)
 
+#define alc_new(alc, type)	alc_malloc(alc, sizeof(type))
+#define alc_new0(alc, type)	alc_calloc(alc, 1, sizeof(type))
+
 #endif /*ALLOCATOR_H_*/

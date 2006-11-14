@@ -69,8 +69,11 @@ pktmeta_type_t pktmeta_type_from_name(const char * name);
 /*
  * util-process.c
  */
-typedef void (*mainloop_fn) (int out_fd, int in_fd, int id);
-pid_t start_child (procname_t who, int mtype, mainloop_fn mainloop, int, int);
+typedef void (*mainloop_fn) (ipc_peer_full_t * p, int supervisor_fd,
+			     int client_fd, como_node_t * node);
+
+pid_t start_child (ipc_peer_full_t * child, mainloop_fn mainloop,
+		   int client_fd, como_node_t * node);
 int handle_children ();
 
 /*
@@ -162,5 +165,105 @@ typedef union ccamsg_t {
 	int		id;
     } close;
 } ccamsg_t;
+
+/* como.c */
+
+typedef struct como_env {
+    runmode_t	runmode;	/* mode of operation */
+    char *	workdir;	/* work directory for templates etc. */
+    char *	dbdir; 	    	/* database directory for output files */
+    char *	libdir;		/* base directory for modules */
+} como_env_t;
+
+void         como_env_init();
+como_env_t * como_env();
+runmode_t    como_env_runmode();
+const char * como_env_workdir();
+const char * como_env_dbdir();
+const char * como_env_libdir();
+
+/* mdl.c */
+
+typedef struct collection collection_t;
+
+typedef enum mdl_priv {
+    PRIV_ISUPERVISOR = 1,
+    PRIV_ICAPTURE,
+    PRIV_IEXPORT,
+    PRIV_IQUERY
+} mdl_priv_t;
+
+struct mdl_ibase {
+    mdl_priv_t		type;
+    shobj_t *		shobj;
+    serializable_t	mdl_config;
+    serializable_t	mdl_rec;
+};
+
+typedef struct mdl_ibase mdl_ibase_t;
+
+struct mdl_icapture {
+    mdl_priv_t	type;
+    shobj_t *	shobj;
+
+    timestamp_t	ivl_start;
+    timestamp_t	ivl_end;
+    void *	ivl_state;
+    collection_t *records;
+    flush_fn	flush;
+    capture_fn	capture;
+
+    serializable_t * mdl_config;
+
+    
+    alc_t	alc;
+    alc_t	shalc;
+    
+    treenode_t * filter;
+};
+
+typedef struct mdl_icapture mdl_icapture_t;
+
+
+struct mdl_isupervisor {
+    mdl_priv_t	type;
+    shobj_t *	shobj;
+    su_init_fn	init;
+
+    serializable_t * mdl_config;
+
+};
+
+typedef struct mdl_isupervisor mdl_isupervisor_t;
+
+struct mdl_iexport {
+
+    int		cs_writer;
+    size_t	cs_cisz;
+    off_t	woff;
+
+    serializable_t * mdl_config;
+
+};
+
+typedef struct mdl_iexport mdl_iexport_t;
+
+
+struct mdl_iquery {
+
+
+    serializable_t * mdl_config;
+
+};
+
+typedef struct mdl_iquery mdl_iquery_t;
+
+
+mdl_isupervisor_t * mdl_get_isupervisor (mdl_t * h);
+mdl_icapture_t *    mdl_get_icapture    (mdl_t * h);
+mdl_iexport_t *     mdl_get_iexport     (mdl_t * h);
+mdl_iquery_t *      mdl_get_iquery      (mdl_t * h);
+
+int mdl_load (mdl_t * h, mdl_priv_t priv);
 
 #endif /*COMOPRIV_H_*/

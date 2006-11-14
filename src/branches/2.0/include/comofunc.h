@@ -86,7 +86,9 @@ void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
 /*
  * capture.c
  */
-void capture_mainloop();
+void capture (ipc_peer_full_t * peer, int supervisor_fd,
+	      int client_fd, como_node_t * node);
+
 
 /*
  * capture-client.c
@@ -165,18 +167,6 @@ int como_writen(int fd, const char *buf, size_t len);
 char * getprotoname (int proto);
 char * strchug      (char *str);
 char * strchomp     (char *str);
-
-/* 
- * util-process.c
- */
-char * getprocname(procname_t);
-char * getprocfullname(procname_t);
-procname_t sibling(procname_t who);
-procname_t child(procname_t who, int id);
-procname_t buildtag(procname_t parent, procname_t who, int id);
-procname_t getprocclass(procname_t who);
-int getprocid(procname_t who);
-int isvalidproc(procname_t who);
 
 
 /*

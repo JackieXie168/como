@@ -309,7 +309,7 @@ allocator_free(allocator_t *allocator, memnode_t *node)
 /*
  * Structures
  */
-typedef struct pool_t pool_t;
+
 
 /* The ref field in the pool_t struct holds a
  * pointer to the pointer referencing this pool.

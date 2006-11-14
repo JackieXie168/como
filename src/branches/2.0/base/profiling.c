@@ -36,10 +36,38 @@
  *
  */
 
+#include <sys/gmon.h>
+#ifdef __APPLE__
+#include <monitor.h>
+#include <mach-o/getsect.h>
+#endif /* __APPLE__ */
+
 #include "como.h"
 #include "comotypes.h"
 
 extern struct _como map;		/* global state */
+
+
+static void
+enable_profiling()
+{
+    /* To get timing information after fork() the child has to call
+     * monstartup().
+     * 
+     * http://gcc.gnu.org/ml/gcc-bugs/2001-09/msg00156.html
+     */
+#ifndef __APPLE__
+    extern void _start (void), etext (void);
+    monstartup ((u_long) &_start, (u_long) &etext);
+#else
+    /* There is no etext symbol in mach-o binaries, instead there's
+     * a function call used to get the equivelent pointed.
+     */
+    unsigned long etext = get_etext();
+    extern void _start (void);
+    monstartup ((char*)&_start, (char*)etext);
+#endif /* __APPLE__*/
+}
 
 
 /*  

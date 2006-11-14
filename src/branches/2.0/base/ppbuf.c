@@ -98,12 +98,12 @@ int
 ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
 {
     if (pkt->ts == 0) {
-	logmsg(LOGCAPTURE, "dropping pkt no. %d: invalid timestamp\n",
+	warn("dropping pkt no. %d: invalid timestamp\n",
 	       ppbuf->woff);
 	return 0;
     }
     if (pkt->ts < ppbuf->last_pkt_ts) {
-	logmsg(V_LOGCAPTURE,"pkt no. %d: timestamps not increasing "
+	notice("pkt no. %d: timestamps not increasing "
 			   "(%u.%06u --> %u.%06u)\n",
 			   ppbuf->woff,
 			   TS2SEC(ppbuf->last_pkt_ts),

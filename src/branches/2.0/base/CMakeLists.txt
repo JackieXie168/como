@@ -6,7 +6,9 @@ SET(STORAGE_SRCS
 )
 
 SET(COMO_SRCS
-  storage.c
+  supervisor.c
+  util-process.c
+  capture.c
 #  memory.c
 #  config.c
 #  inline.c
@@ -15,7 +17,6 @@ SET(COMO_SRCS
 #  util-safe.c
 #  util-misc.c
 #  util-socket.c
-#  util-process.c
 #  ipc.c
 #  modules.c
 #  query.c

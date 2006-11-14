@@ -39,7 +39,9 @@
 /* sniffer-related typedefs */
 typedef struct source		source_t;
 typedef struct sniffer_cb	sniffer_cb_t;
-typedef struct sniffer		sniffer_t;
+typedef struct sniffer_t	sniffer_t;
+
+#include "sniffer_list.h"
 
 #define SNIFFER(name) sniffer_cb_t como_ ## name ## _sniffer
 
@@ -93,23 +95,29 @@ typedef float (*sniffer_usage_fn)         (sniffer_t * s, pkt_t * first,
 					   pkt_t * last);
 
 struct sniffer_cb {
-    char const *		name;
     sniffer_init_fn		init;     /* initialize the sniffer */
     sniffer_finish_fn		finish;   /* finalize the sniffer */
-    sniffer_setup_metadesc_fn	setup_metadesc; /* setup the out metadesc */
-    sniffer_start_fn		start;    /* start the sniffer */
-    sniffer_next_fn		next;     /* get next packet */
-    sniffer_stop_fn		stop;     /* stop the sniffer */
-    sniffer_usage_fn		usage;
 };
 
-struct sniffer {
-    int		fd;		/* file descriptor we are using */
-    uint32_t	flags;		/* sniffer flags */
-    int		max_pkts;	/* maximum number of pkts captured for each
-				   call to sniffer_next_fn() */
-    timestamp_t	polling;	/* polling interval, if needed */
-    ppbuf_t *	ppbuf;		/* ring buffer of pkt pointers */
+typedef struct sniffer_priv sniffer_priv_t;
+typedef struct sniffer_stats sniffer_stats_t;
+
+struct sniffer_t {
+    char *			name;	/* name of the sniffer */
+    int				fd;	/* file descriptor we are using */
+    int				flags;	/* sniffer flags */
+    int				max_pkts; /* maximum number of pkts captured
+					     for each call to next() */
+    timestamp_t			polling; /* polling interval, if needed */
+    ppbuf_t *			ppbuf;	/* ring buffer of pkt pointers */
+    sniffer_start_fn		start;	/* start the sniffer */
+    sniffer_setup_metadesc_fn	setup_metadesc; /* setup the out metadesc */
+    sniffer_next_fn		next;	/* get next packet */
+    sniffer_stop_fn		stop;	/* stop the sniffer */
+    sniffer_usage_fn		usage;
+    sniffer_list_entry_t	entry;
+    sniffer_priv_t *		priv;
+    sniffer_stats_t *		stats;
 };
 
 /*
@@ -118,15 +126,27 @@ struct sniffer {
  * used to keep state between successive calls of the sniffer
  * callbacks.
  */
-struct source {
-    source_t *	next;
+struct sniffer_priv {
     sniffer_cb_t *cb;		/* callbacks */
-    sniffer_t *	sniff;		/* sniffer state */
     int		id;		/* sniffer id */
     int		fd;		/* descriptor used in the select by capture */
     char *	device;		/* device name */
     char *	args;		/* optional arguments */
     metadesc_t *outdesc;	/* offered output metadesc list */
+    int		touched;
+    enum {
+	SNIFFER_UNINITIALIZED = 0,
+	SNIFFER_INITIALIZED,
+	SNIFFER_ACTIVE,
+	SNIFFER_RUNNING,
+	SNIFFER_FROZEN,
+	SNIFFER_COMPLETED,
+	SNIFFER_INACTIVE,
+	SNIFFER_ERROR,
+    }		state;
+};
+
+struct sniffer_stats {
     uint64_t	tot_cap_pkts;	/* packets captured by the sniffer */
     uint64_t	tot_dropped_pkts; /* packets dropped by the sniffer */
 };

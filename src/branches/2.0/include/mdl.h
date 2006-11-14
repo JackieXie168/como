@@ -38,6 +38,7 @@ struct mdl {
     char *	name;
     char *	description;
     char *	filter;
+    char *	mdlname;
     void *	config;
     /* private state */
     void *	priv;
@@ -57,9 +58,9 @@ void * mdl__alloc_tuple(mdl_t * h, size_t sz);
 char * mdl_alloc_string(mdl_t * h, size_t sz);
 
 
-uint8_t * mdl_serialize   (uint8_t * sbuf, const mdl_t * h);
-size_t    mdl_expose_len  (const mdl_t * src);
-uint8_t * mdl_deserialize (uint8_t * sbuf, mdl_t ** h_out, alc_t * alc);
+void   mdl_serialize   (uint8_t ** sbuf, const mdl_t * h);
+size_t mdl_sersize     (const mdl_t * src);
+void   mdl_deserialize (uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc);
 
 
 /* Module callbacks */
