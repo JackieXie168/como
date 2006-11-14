@@ -141,7 +141,7 @@ capbuf_reserve_space(struct capbuf * capbuf, size_t s)
     assert(s > 0);
     capbuf->ofcheck += s;
     if (capbuf->ofcheck > capbuf->size)
-	panic("capbuf overflow");
+	error("capbuf overflow");
     
     end = capbuf->tail + s;
     if (end > capbuf->end) {
