@@ -185,6 +185,12 @@ const char * como_env_libdir();
 /* mdl.c */
 
 typedef struct collection collection_t;
+typedef struct tuple_collection_item_t tuple_collection_item_t;
+#include "tuple_collection.h"
+struct tuple_collection_item_t {
+    tuple_collection_entry_t entry;
+    uint8_t data[0]; /* variable size */
+};
 
 typedef struct mdl_icapture     mdl_icapture_t;
 typedef struct mdl_iexport      mdl_iexport_t;
@@ -221,7 +227,7 @@ struct mdl_icapture {
     timestamp_t	ivl_start;
     timestamp_t	ivl_end;
     void *	ivl_state;
-    collection_t *records;
+    tuple_collection_t *tuples;
     flush_fn	flush;
     capture_fn	capture;
 
@@ -235,20 +241,16 @@ struct mdl_isupervisor {
     mdl_priv_t	type;
     shobj_t *	shobj;
     su_init_fn	init;
-
 };
 
 struct mdl_iexport {
     int		cs_writer;
     size_t	cs_cisz;
     off_t	woff;
-
 };
 
 struct mdl_iquery {
 };
-
-
 
 mdl_isupervisor_t * mdl_get_isupervisor (mdl_t * h);
 mdl_icapture_t *    mdl_get_icapture    (mdl_t * h);
