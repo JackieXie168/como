@@ -42,13 +42,15 @@
 #endif
 
 #ifdef __GNUC__
-#define PACKED	__attribute__ ((packed))
-#define UNUSED	__attribute__ ((unused))
-#define DEPREC	__attribute__ ((deprecated))
+#define PACKED			__attribute__ ((packed))
+#define UNUSED			__attribute__ ((unused))
+#define DEPREC			__attribute__ ((deprecated))
+#define WARN_UNUSED_RESULT	__attribute__ ((warn_unused_result))
 #else
 #define PACKED
 #define UNUSED
 #define DEPREC
+#define WARN_UNUSED_RESULT
 #endif
 
 #ifndef TRUE
@@ -59,12 +61,15 @@
 #define FALSE	0
 #endif
 
+typedef struct como_node como_node_t;
+
 #include "comotypes.h"
+#include "ipc.h"
 #include "comofunc.h"
 #include "sniffers.h"
 #include "log.h"
-#include "ipc.h"
 #include "eventloop.h"
+#include "pool.h"
 
 #define ALIGN(size, boundary) \
     (((size) + ((boundary) - 1)) & ~((boundary) - 1))
@@ -85,6 +90,9 @@
 #define como_new0(type)	((type *) como_calloc(1, sizeof(type)))
 
 #define como_basename	basename
+
+alc_t * como_alc();
+
 
 void setproctitle_init(int argc, char **argv);
 void setproctitle(const char *format, ...);
@@ -110,6 +118,25 @@ enum {
 
 void como_init(int argc, char ** argv);
 
+enum {
+    SU_CONNECT = 1,
+    SU_ECHO,
+    SU_DONE,
+    
+    CA_INITIALIZE_SNIFFERS = 0x100,
+    CA_SNIFFER_INITIALIZED,
+    CA_SNIFFERS_INITIALIZED,    
+    CA_ADD_MODULE,
+    CA_START,
+    CA_EXIT,
+    
+    CCA_OPEN,
+    CCA_OPEN_RES,
+    CCA_ERROR,
+    CCA_NEW_BATCH,
+    CCA_ACK_BATCH,
+};
+
 
 /* 
  * this structure contains the node specific 
@@ -120,7 +147,8 @@ void como_init(int argc, char ** argv);
  * different port. a virtual node may apply a filter on 
  * all packets before the module process them. 
  */
-typedef struct como_node { 
+
+struct como_node { 
     int		id;
     char *	name;
     char *	location;
@@ -131,7 +159,10 @@ typedef struct como_node {
     char **	args;		/* parameters for the modules */
     uint16_t	query_port;	/* port for incoming queries */
     int		query_fd;	/* socket accepting queries */
-} como_node_t;
+    array_t *	mdls;		/* module information */
+    sniffer_list_t	sniffers;
+    int			sniffers_count;
+};
 
 
     
@@ -261,14 +292,18 @@ struct _como {
 
 #define DEBUGCLASS(c)	(1 << ((c >> 16) - 1))
 
-#define DEBUGGER_WAIT_ATTACH(map) \
-    if (DEBUGCLASS(getprocclass(map.whoami)) & map.debug) { \
-	logmsg(V_LOGWARN, \
-	       "%s (%d): waiting %ds for the debugger to attach\n", \
-	       getprocfullname(map.whoami), getpid(), map.debug_sleep); \
-	sleep(map.debug_sleep); \
-	logmsg(V_LOGWARN, "wakeup, ready to work\n"); \
-    }
+#define DEBUG_SLEEP	20 /* how many seconds */
+#define DEBUGGER_WAIT_ATTACH(peer) do {		\
+    const char *debug = getenv("COMO_DEBUG");	\
+    const char *code = ipc_peer_get_code((ipc_peer_t *) peer); \
+    if (strstr(debug, code) != NULL) {		\
+	msg("%s (%d): waiting %ds for the debugger to attach\n", \
+	    ipc_peer_get_name((ipc_peer_t *) peer), getpid(), \
+	    DEBUG_SLEEP);			\
+	sleep(DEBUG_SLEEP);			\
+	msg("wakeup, ready to work\n");		\
+    }						\
+} while(0)
 
 
 /* The "memory" bit is a gcc-ism saying that any pending writes to

@@ -1826,7 +1826,7 @@ main(int argc, char ** argv)
     s_como_st.accept_fd = -1;
     
     /* initialize IPC */
-    ipc_init(COMO_ST, argv[1], &s_como_st);
+    ipc_init(ipc_peer_at(COMO_ST, argv[1]), &s_como_st);
     
     s_como_st.supervisor_fd = ipc_connect(COMO_SU);
     

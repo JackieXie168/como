@@ -31,15 +31,12 @@
  *
  */
 
-typedef uint8_t * (*serialize_fn)   (uint8_t * sbuf, const void * data);
-typedef uint8_t * (*deserialize_fn) (uint8_t * sbuf, void ** data_out, allocator_t * alc);
-typedef size_t (*expose_len_fn)     (const void * src);
+#include <string.h>
+#include <assert.h>
 
-typedef struct serializable {
-    serialize_fn	serialize;
-    deserialize_fn	deserialize;
-    expose_len_fn	expose_len;
-} serializable_t;
+#include "como.h"
+#include "comopriv.h"
+#include "storage.h"
 
 
 typedef struct strec strec_t;
@@ -50,6 +47,7 @@ struct strec {
     uint8_t	data[0];
 };
 
+/*
 strec_t *
 strec_put_uint64(strec_t * r, uint64_t val)
 {
@@ -64,83 +62,73 @@ strec_get_uint64(strec_t * r, uint64_t *val)
     return ((uint64_t *) r) + 1;
 }
 
-
-#define WARN_UNUSED_RESULT __attribute((warn_unused_result))
-
 strec_t * strec_put_uint64(strec_t * r, uint64_t val) WARN_UNUSED_RESULT;
 strec_t * strec_get_uint64(strec_t * r, uint64_t *val) WARN_UNUSED_RESULT;
 
-#define timestamp_serialize(sbuf, val) \
-*((timestamp_t *) sbuf) = (val), ((timestamp_t *) sbuf) + 1
+*/
 
-#define timestamp_deserialize(sbuf, val) \
-*(val) = *((timestamp_t *) sbuf), ((timestamp_t *) sbuf) + 1
 
-uint8_t *
-charptr_serialize(uint8_t * sbuf, const char * val)
+
+
+
+
+
+
+
+serializable_t *
+mdl_get_config_ser(const mdl_t * h)
 {
-    size_t sz;
-    sz = strlen(val) + 1;
-    
-    sbuf = uint32_serialize(sbuf, sz);
-    memcpy(sbuf, val, sz);
-    return sbuf + sz;
-}
+    mdl_priv_t * type;
+    type = (mdl_priv_t *) h->priv;
 
-uint8_t *
-charptr_deserialize(uint8_t * sbuf, char ** val_out, alc_t * alc)
-{
-    size_t sz;
-    char *val;
-    
-    sbuf = uint32_deserialize(sbuf, &sz);
-    val = alc_alloc(alc, sz);
-    memcpy(val, sbuf, sz);
-    return sbuf + sz;
-}
+    switch (*type) {
+    case PRIV_ISUPERVISOR:
+	return ((mdl_isupervisor_t *) h->priv)->mdl_config;
+    case PRIV_ICAPTURE:
+	return ((mdl_icapture_t *) h->priv)->mdl_config;
+    case PRIV_IEXPORT:
+	return ((mdl_iexport_t *) h->priv)->mdl_config;
+    case PRIV_IQUERY:
+	return ((mdl_iquery_t *) h->priv)->mdl_config;
+    }
 
-size_t
-charptr_expose_len(const char * val)
-{
-    return strlen(val) + 1;
+    error("Can't access config serialization info\n");
+    return NULL;
 }
-
 
 
 /* serialization/deserialization of mdl_t */
-uint8_t *
-mdl_serialize(uint8_t * sbuf, const mdl_t * h)
+void
+mdl_serialize(uint8_t ** sbuf, const mdl_t * h)
 {
     serializable_t *config;
     
     config = mdl_get_config_ser(h);
     
-    sbuf = timestamp_serialize(sbuf, h->flush_ivl);
-    sbuf = charptr_serialize(sbuf, h->name);
-    sbuf = config->serialize(sbuf, h->config);
-    
-    return sbuf;
+    serialize_timestamp_t(sbuf, h->flush_ivl);
+    serialize_string(sbuf, h->name);
+    config->serialize(sbuf, h->config);
 }
 
 size_t
-mdl_expose_len(const mdl_t * src)
+mdl_sersize(const mdl_t * src)
 {
     size_t sz;
     serializable_t *config;
     
-    config = mdl_get_config_ser(h);
+    config = mdl_get_config_ser(src);
 
     sz = sizeof(src->flush_ivl) +
-	 charptr_expose_len(src->name) +
-	 charptr_expose_len(src->description) +
-	 charptr_expose_len(src->filter) +
-	 config->expose_len(src->config);
+	 sersize_string(src->name) +
+	 sersize_string(src->description) +
+	 sersize_string(src->filter) +
+	 config->sersize(src->config);
 
     return sz;
 }
 
-uint8_t *
-mdl_deserialize(uint8_t * sbuf, mdl_t ** h_out, alc_t * alc)
+void
+mdl_deserialize(uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc)
 {
     mdl_t *h;
     serializable_t *config;
@@ -149,96 +137,15 @@ mdl_deserialize(uint8_t * sbuf, mdl_t ** h_out, alc_t * alc)
     
     config = mdl_get_config_ser(h);
     
-    sbuf = timestamp_deserialize(sbuf, &h->flush_ivl);
-    sbuf = charptr_deserialize(sbuf, &h->name, alc);
-    sbuf = charptr_deserialize(sbuf, &h->filter, alc);
-    sbuf = charptr_deserialize(sbuf, &h->description, alc);
-    sbuf = config->deserialize(sbuf, &h->config, alc);
+    deserialize_timestamp_t(sbuf, &h->flush_ivl);
+    deserialize_string(sbuf, &h->name, alc);
+    deserialize_string(sbuf, &h->filter, alc);
+    deserialize_string(sbuf, &h->description, alc);
+    config->deserialize(sbuf, &h->config, alc);
     
     *h_out = h;
-    
-    return sbuf;
 }
 
-#define mdl_get_config(h, type) \
-((const type *) (h->config))
-
-#define mdl_alloc_config(h, type) \
-((type *) mdl__alloc_config(h, sizeof(type), &(type ## _serializable))
-
-void *
-mdl__alloc_config(mdl_t * h, size_t sz, serializable_t * ser)
-{
-    /* allocate the config state of size sz and keep track of it */
-    
-}
-
-/* CAPTURE */
-#define mdl_alloc_rec(h, type) \
-((type *) mdl__alloc_rec(h, sizeof(type))
-
-
-void *
-mdl__alloc_rec(mdl_t * h, size_t sz)
-{
-    /* allocate the record of size sz and keep track of it */
-    mdl_icapture_t *ic;
-    
-    ic = mdl_get_icapture(h);
-    return alc_malloc(&ic->alc, sz);
-}
-
-typedef enum mdl_priv {
-    PRIV_ISUPERVISOR,
-    PRIV_ICAPTURE,
-    PRIV_IEXPORT,
-    PRIV_IQUERY
-} mdl_priv_t;
-
-typedef void * (*su_init_fn) (mdl_t * h);
-
-typedef void * (*flush_fn)   (mdl_t * h, timestamp_t ts);
-typedef int    (*capture_fn) (mdl_t * h, pkt_t * pkt, void * state);
-
-
-
-
-struct mdl_icapture {
-    mdl_priv_t	type;
-    timestamp_t	ivl_start;
-    timestamp_t	ivl_end;
-    void *	ivl_state;
-    collection_t *records;
-    flush_fn	flush;
-    capture_fn	capture;
-
-    serializable_t * mdl_config;
-    serializable_t * mdl_rec;
-    
-    alc_t	alc;
-    alc_t	shalc;
-};
-
-typedef struct mdl_icapture mdl_icapture_t;
-
-
-struct mdl_isupervisor {
-    mdl_priv_t	type;
-    su_init_fn	init;
-
-    serializable_t * mdl_config;
-
-};
-
-typedef struct mdl_isupervisor mdl_isupervisor_t;
-
-struct mdl_iexport {
-    int		cs_writer;
-    size_t	cs_cisz;
-    off_t	woff;
-};
-
-typedef struct mdl_iexport mdl_iexport_t;
 
 mdl_icapture_t *
 mdl_get_icapture(mdl_t * h)
@@ -276,26 +183,77 @@ mdl_get_iexport(mdl_t * h)
 }
 
 
-serializable_t *
-mdl_get_config_ser(const mdl_t * h)
+mdl_iquery_t *
+mdl_get_iquery(mdl_t * h)
 {
     mdl_priv_t * type;
     type = (mdl_priv_t *) h->priv;
+    if (type == NULL || *type != PRIV_IQUERY)
+	error("Can't access IQuery for module `%s`\n", h->name);
 
-    switch (type) {
-    case PRIV_ISUPERVISOR:
-	return ((mdl_isupervisor_t *) h->priv)->mdl_config;
-    case PRIV_ICAPTURE:
-	return ((mdl_icapture_t *) h->priv)->mdl_config;
-    case PRIV_IEXPORT:
-	return ((mdl_iexport_t *) h->priv)->mdl_config;
-    case PRIV_IQUERY:
-	return ((mdl_iquery_t *) h->priv)->mdl_config;
-    }
-
-    error("Can't access config serialization info\n");
-    return NULL;
+    return (mdl_iquery_t *) h->priv;
 }
+
+int
+mdl_load(mdl_t * h, mdl_priv_t priv)
+{
+    mdl_ibase_t *ib;
+    char *filename;
+    const char *libdir;
+    
+    switch (priv) {
+    case PRIV_ISUPERVISOR:
+	ib = (mdl_ibase_t *) como_new0(mdl_isupervisor_t);
+	break;
+    case PRIV_ICAPTURE:
+	ib = (mdl_ibase_t *) como_new0(mdl_icapture_t);
+	break;
+    case PRIV_IEXPORT:
+	ib = (mdl_ibase_t *) como_new0(mdl_iexport_t);
+	break;
+    case PRIV_IQUERY:
+	ib = (mdl_ibase_t *) como_new0(mdl_iquery_t);
+	break;
+    }
+    
+    ib->type = priv;
+    
+    libdir = como_env_libdir();
+    filename = shobj_build_path(libdir, h->mdlname);
+    ib->shobj = shobj_open(filename);
+    if (ib->shobj == NULL) {
+	free(ib);
+	return -1;
+    }
+    
+    return 0;
+}
+
+#if 0
+void *
+mdl__alloc_config(mdl_t * h, size_t sz, serializable_t * ser)
+{
+    /* allocate the config state of size sz and keep track of it */
+    
+}
+#endif
+
+/* CAPTURE */
+
+
+void *
+mdl__alloc_rec(mdl_t * h, size_t sz)
+{
+    /* allocate the record of size sz and keep track of it */
+    mdl_icapture_t *ic;
+    
+    ic = mdl_get_icapture(h);
+    return alc_malloc(&ic->alc, sz);
+}
+
+
+#if 0
+
 
 int
 mdl_capture_batch(mdl_t * h, batch_t * batch, char * fltmap, onflush_fn onflush)
@@ -330,31 +288,35 @@ mdl_capture_batch(mdl_t * h, batch_t * batch, char * fltmap, onflush_fn onflush)
 		ic->ivl_state = ic->flush(h, ic->ivl_start);
 	    }
 	    
-	    if (*which == 0)
+	    if (*fltmap == 0)
 		continue;	/* no interest in this packet */
 
 	    res = ic->capture(h, pkt, ic->ivl_state);
 	    
-	    which++;
+	    fltmap++;
 	}
     }
 }
+#endif
 
 /* EXPORT */
 
-strec_t *
+uint8_t *
 mdl_store_rec(mdl_t * h, size_t sz, timestamp_t ts)
 {
+    mdl_iexport_t *ie;
     strec_t *r;
     
-    sz += sizeof(timestamp_t);
-    h->cs_cisz = sz + sizeof(size_t);
+    ie = mdl_get_iexport(h);
     
-    r = (strec_t *) csmap(h->cs_writer, h->woff, (ssize_t *) &h->cs_cisz);
+    sz += sizeof(timestamp_t);
+    ie->cs_cisz = sz + sizeof(size_t);
+    
+    r = (strec_t *) csmap(ie->cs_writer, ie->woff, (ssize_t *) &ie->cs_cisz);
     if (r == NULL)
-	error("fail csmap for module %s", mdl->name);
+	error("fail csmap for module %s", h->name);
 
-    if ((ssize_t) h->cs_cisz == -1) {
+    if ((ssize_t) ie->cs_cisz == -1) {
 	warn("Can't write to disk for module %s\n", h->name);
 	return NULL;
     }
@@ -362,27 +324,31 @@ mdl_store_rec(mdl_t * h, size_t sz, timestamp_t ts)
     r->size = sz;
     r->ts = ts;
     
-    return (r + 1); /* pointer to data */
+    return r->data; /* pointer to data */
 }
 
 
 void
 mdl_store_commit(mdl_t * h)
 {
-    assert(h->cs_cisz > 0 );
-    h->woff += h->cs_cisz;
-    cscommit(h->cs_writer, h->woff);
-    h->cs_cisz = 0;
+    mdl_iexport_t *ie;
+    
+    ie = mdl_get_iexport(h);
+    
+    assert(ie->cs_cisz > 0 );
+    ie->woff += ie->cs_cisz;
+    cscommit(ie->cs_writer, ie->woff);
+    ie->cs_cisz = 0;
 }
 
 /* QUERY */
-
+#if 0
 strec_t *
 mdl_load_rec(mdl_t * h, size_t sz, timestamp_t * ts)
 {
 
 }
-
+#endif
 
 /* SUPERVISOR */
 
@@ -398,14 +364,14 @@ mdl_init(mdl_t * mdl)
 {
     mdl_isupervisor_t *is;
     
-    is = mdl_get_isupervisor(h);
+    is = mdl_get_isupervisor(mdl);
     
-    mdl->config = is->init(h);
+    mdl->config = is->init(mdl);
     if (mdl->config == NULL) {
 	warn("Initialization of module `%s` failed.\n", mdl->name);
     }
     
-    
+#if 0    
     if (mdl->callbacks.init != NULL) {
 	/*
 	 * create a memory list for this module to
@@ -426,7 +392,7 @@ mdl_init(mdl_t * mdl)
     } else {
 	mdl->flush_ivl = DEFAULT_CAPTURE_IVL;
     }
-
+#endif
     return 0; 
 }
 

@@ -100,7 +100,7 @@ typedef struct PACKED ipc_connect_msg {
 } ipc_connect_msg_t;
 
 
-static ipc_peer_full_t s_me;
+static ipc_peer_full_t * s_me;
 static void * s_user_data;
 
 /* 
@@ -171,14 +171,33 @@ ipc_peer_get_fd(const ipc_peer_t * p_)
 }
 
 
+const char *
+ipc_peer_get_name(const ipc_peer_t * p_)
+{
+    ipc_peer_full_t * p = (ipc_peer_full_t *) p_;
+
+    return p->name;
+}
+
+
+const char *
+ipc_peer_get_code(const ipc_peer_t * p_)
+{
+    ipc_peer_full_t * p = (ipc_peer_full_t *) p_;
+
+    return p->code;
+}
+
+
 ipc_peer_full_t *
 ipc_peer_child(const ipc_peer_full_t * kind, uint16_t id)
 {
     ipc_peer_full_t *p;
     p = como_new(ipc_peer_full_t);
     *p = *kind;
-    p->parent_class = s_me.class;
+    p->parent_class = s_me->class;
     p->id = id;
+    p->at = como_strdup(s_me->at);
     memset(&p->next, 0, sizeof(p->next));
     return p;
 }
@@ -300,14 +319,12 @@ ipc_read(int fd, void * buf, size_t count)
 
 
 void
-ipc_init(ipc_peer_full_t * me, const char * ipc_dir, void * user_data)
+ipc_init(ipc_peer_full_t * me, void * user_data)
 {
     memset(s_handlers, 0, sizeof(s_handlers));
-    free(s_me.at);
 
-    s_me = *me;
-    s_me.at = como_strdup(ipc_dir);
-    s_me.fd = -1;
+    s_me = me;
+    s_me->fd = -1;
     s_user_data = user_data;
 }
 
@@ -322,12 +339,12 @@ ipc_init(ipc_peer_full_t * me, const char * ipc_dir, void * user_data)
 int 
 ipc_listen()
 {
-    assert(s_me.fd == -1);
-    s_me.fd = ipc_create_socket(&s_me, TRUE);
-    if (s_me.fd != -1) {
-	notice("Listening connections on %s@%s.\n", s_me.name, s_me.at);
+    assert(s_me->fd == -1);
+    s_me->fd = ipc_create_socket(s_me, TRUE);
+    if (s_me->fd != -1) {
+	notice("Listening connections on %s@%s.\n", s_me->name, s_me->at);
     }
-    return s_me.fd;
+    return s_me->fd;
 }
 
 /* 
@@ -338,16 +355,19 @@ ipc_listen()
  * used to store known peers.
  */
 void
-ipc_finish()
+ipc_finish(int destroy)
 {
     ipc_peer_full_t *x;
     
-    if (s_me.fd != -1) {
-	ipc_destroy_socket(&s_me);
-	close(s_me.fd);
-	s_me.fd = -1;
+    if (s_me->fd != -1) {
+	if (destroy) {
+	    ipc_destroy_socket(s_me);
+	}
+	close(s_me->fd);
+	s_me->fd = -1;
     }
-    free(s_me.at);
+    free(s_me->at);
+    free(s_me);    
     
     while (!ipc_peer_list_empty(&s_peers)) {
 	x = ipc_peer_list_first(&s_peers);
@@ -368,7 +388,7 @@ int
 ipc_connect(ipc_peer_full_t * dst)
 {
     if (dst->at == NULL) {
-	dst->at = como_strdup(s_me.at);
+	dst->at = como_strdup(s_me->at);
     }
 
     dst->fd = ipc_create_socket(dst, FALSE);
@@ -544,7 +564,7 @@ ipc_handle(int fd)
 	if (ic == IPC_CLOSE) {
 	    notice("Closing connection to peer %s on fd %d\n", x->name, fd);
 	    ipc_peer_list_remove(&s_peers, x);
-	    ipc_peer_destroy(x);
+	    ipc_peer_destroy(x); /* calls close */
 	}
 	assert(ic == IPC_OK);
 	
@@ -670,3 +690,8 @@ ipc_register(ipc_type type, ipc_handler_fn fn)
     s_handlers[type] = fn;
 }
 
+void
+ipc_set_user_data(void * user_data)
+{
+    s_user_data = user_data;
+}

@@ -47,22 +47,8 @@
 #include "storage.h"	// mainloop
 #include "ipc.h"	// ipc_listen()
 
-/*
- * the "map" is the root of the data. it contains all the
- * config parameters that are set before spawning the processes.
- * it is needed by all processes that will use their local copy.
- */
-struct _como map;
 
-
-/*
- * Data structure containing all the configuration parameters
- * loaded from the default config file(s) and the command line.
- * This data structure will contain the information about all the
- * modules and classifiers as well.
- */
-
-
+static como_env_t s_env;
 
 ipc_peer_full_t *COMO_SU;
 ipc_peer_full_t *COMO_CA;
@@ -86,7 +72,185 @@ como_init(int argc, char ** argv)
     COMO_QU = ipc_peer_new(COMO_QU_CLASS, "qu", "QUERY");
 }
 
-#if 0
 
 
-#endif
+void
+como_env_init()
+{
+    s_env.runmode = RUNMODE_NORMAL;
+    s_env.workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
+    s_env.dbdir = strdup(DEFAULT_DBDIR);
+    s_env.libdir = strdup(DEFAULT_LIBDIR);
+}
+
+
+como_env_t *
+como_env()
+{
+    return &s_env;
+}
+
+
+runmode_t
+como_env_runmode()
+{
+    return s_env.runmode;
+}
+
+
+const char *
+como_env_workdir()
+{
+    return s_env.workdir;
+}
+
+
+const char *
+como_env_dbdir()
+{
+    return s_env.dbdir;
+}
+
+
+const char *
+como_env_libdir()
+{
+    return s_env.libdir;
+}
+
+
+
+/**
+ * -- como__malloc
+ *
+ * Not to be called directly, but through como_malloc()
+ *
+ * simple wrapper to malloc that handles errors
+ * and returns only if the malloc call succeded. it
+ * forces a termination, otherwise.
+ *
+ */
+void *
+como__malloc(size_t sz, const char * file, int line)
+{
+    void * v;
+
+    v = malloc(sz);
+    if (v == NULL) {
+	error("malloc failed: %u bytes (%s:%d): %s\n",
+	      sz, file, line, strerror(errno));
+    }
+
+    return v;
+}
+
+
+/**
+ * -- como__calloc
+ * 
+ * Not to be called directly, but through como_calloc()
+ *
+ * simple interface to calloc that handles errors
+ * and returns only if the calloc call succeded. it
+ * forces a termination, otherwise.
+ *
+ */
+void *
+como__calloc(size_t n, size_t sz, const char * file, int line)
+{
+    void * v;
+
+    v = calloc(n, sz);
+    if (v == NULL) {
+	error("calloc failed: %u * %u bytes (%s:%d): %s\n",
+	      n, sz, file, line, strerror(errno));
+    }
+
+    return v;
+}
+
+
+/**          
+ * -- como__realloc
+ *
+ * Not to be called directly, but through como_realloc()
+ *
+ * simple interface to realloc that handles errors
+ * and returns only if the realloc call succeded. it
+ * forces a termination, otherwise.
+ *   
+ */ 
+void *
+como__realloc(void * ptr, size_t sz, const char * file, const int line)
+{
+    void * v;
+        
+    v = realloc(ptr, sz);
+    if (v == NULL) {
+        error("realloc failed: %u bytes (%s:%d): %s\n",
+	      sz, file, line, strerror(errno));
+    }
+    
+    return v;
+}
+
+
+/**
+ * -- como__strdup
+ * 
+ * Not to be called directly, but through como_strdup()
+ *
+ * simple interface to strdup() that handles errors
+ * and returns only if the call succeded. it
+ * forces a termination, otherwise.
+ *
+ */
+char *
+como__strdup(const char * str, const char * file, const int line)
+{
+    char * v; 
+
+    if (str == NULL) 
+	return NULL; 
+
+    v = strdup(str); 
+    if (v == NULL) {
+	error("strdup failed (%s:%d): %s\n",
+	      file, line, strerror(errno));
+    }
+
+    return v;
+}
+
+
+/*
+ * -- como__dup 
+ * 
+ * Not to be called directly, but through como_dup()
+ *
+ * Makes a malloc'ed copy of src into *dst, 
+ * freeing the previous one if any
+ */
+char *
+como__dup(char **dst, char *src, const char * file, const int line)
+{
+    if (*dst)
+        free(*dst);
+    *dst = como__strdup(src, file, line);
+    return *dst;
+}
+
+
+alc_t *
+como_alc()
+{
+    static alc_t alc = {
+	malloc: (alc_malloc_fn) como__malloc,
+	calloc: (alc_calloc_fn) como__calloc,
+	free: (alc_free_fn) free,
+	data: NULL
+    };
+ 
+    return &alc;
+}
+

@@ -41,50 +41,6 @@
 #include "comopriv.h"
 #include "ipc.h"
 
-#ifdef ENABLE_PROFILING
-#include <sys/gmon.h>
-#ifdef __APPLE__
-#include <monitor.h>
-#include <mach-o/getsect.h>
-#endif /* __APPLE__ */
-#endif
-
-/* global state */
-extern como_t map; 
-
-
-/* 
- * This file contains utilities to manage the process tags. 
- * Each process tag is a 32 bit value made of three components: 
- * 
- *   . parent name, 8 bits; 
- *   . child name, 8 bits; 
- *   . process id, 16 bits; 
- * 
- * The parent name and child name are chosen among five predefined 
- * names (SUPERVISOR, CAPTURE, EXPORT, STORAGE, QUERY) while the 
- * process id is used to make the tag unique. 
- * 
- * We define a set of functions to build tags, process tags and 
- * convert tags to human readable strings. 
- */ 
-
-/* 
- * aliases for process class names 
- */ 
-static struct {
-    char * shortname;
-    char * fullname; 
-} s_procalias[] = { 
-    {"??", "NONE"}, 
-    {"su", "SUPERVISOR"}, 
-    {"ca", "CAPTURE"}, 
-    {"ex", "EXPORT"},
-    {"st", "STORAGE"}, 
-    {"qu", "QUERY"},
-};
-
-
 /* 
  * children process information 
  * (both children of SUPERVISOR and QUERY for 
@@ -92,148 +48,11 @@ static struct {
  */ 
 #define MAX_CHILDREN		256
 static struct { 
-    procname_t who;
+    ipc_peer_full_t *who;
     pid_t pid;
 } s_child_info[MAX_CHILDREN];
 
 static int s_children = 0; 
-
-
-#define GETPROCPARENT(x) 	(((x) >> 24) & 0xff) 
-#define GETPROCCHILD(x) 	(((x) >> 16) & 0xff) 
-#define GETPROCID(x)		((x) & 0xffff)
-#define GETPROC(x)		GETPROCCHILD(x)
-
-#define SETPROC(x, y, a) 	(((x) << 8) | (y) | (a)) 
-#define SETPROCSIBLING(x, a) 	(((x) & 0xff000000) | (a) | GETPROCID(x))
-#define SETPROCCHILD(x, a, n) 	((GETPROC(x) << 24) | (a) | (n))
-
-/* 
- * -- getprocname 
- * 
- * this function returns a short name for a process made of 
- * parent-id-child (e.g., qu-1-ca). if id and child are equal 
- * to zero they are not shown. 
- *
- */
-char * 
-getprocname(procname_t who)
-{
-    static char name[256]; 
-    uint p, c, x; 
-
-    p = GETPROCPARENT(who); 
-    c = GETPROCCHILD(who); 
-    x = GETPROCID(who); 
-    if (p == 0) 
-	sprintf(name, "%s", s_procalias[c].shortname);
-    else 
-	sprintf(name, "%s-%d-%s", 
-		s_procalias[p].shortname, x, s_procalias[c].shortname); 
-
-    return name;
-}
-
-
-/* 
- * -- getprocfullname
- * 
- * return the full name instead of the short one. same as 
- * getprocname for the rest.  
- *
- */ 
-char * 
-getprocfullname(procname_t who)
-{
-    static char name[256]; 
-    int p, c, x; 
-
-    p = GETPROCPARENT(who); 
-    c = GETPROCCHILD(who); 
-    x = GETPROCID(who); 
-    if (p == 0) 
-	sprintf(name, "%s", s_procalias[c].fullname);
-    else 
-	sprintf(name, "%s-%d-%s", 
-		s_procalias[p].fullname, x, s_procalias[c].fullname); 
-
-    return name;
-}
-
-
-/* 
- * -- sibling
- * 
- * returns the name of the sibling process by just 
- * using its class. 
- */
-procname_t 
-sibling(procname_t who)
-{
-    return SETPROCSIBLING(map.whoami, who); 
-}
-
-
-/* 
- * -- child
- * 
- * it reconstruct the tag of a child process
- */
-procname_t 
-child(procname_t who, int id)
-{
-    return SETPROCCHILD(map.whoami, who, id); 
-}
-
-/* 
- * -- buildtag
- * 
- * build a tag from all its components 
- */
-procname_t 
-buildtag(procname_t parent, procname_t who, int id)
-{
-    return SETPROC(parent, who, id); 
-}
-
-/* 
- * -- getprocclass
- * 
- * it extracts the process class of a child process. 
- * it returns 0 if the tag does not map any known processes. 
- */
-procname_t 
-getprocclass(procname_t who)
-{
-    procname_t x; 
-
-    x = (GETPROCCHILD(who) << 16); 
-    return (x >= SUPERVISOR && x <= QUERY)? x : 0;
-}
-
-/* 
- * -- getprocid
- * 
- * it extracts the process id. 
- */
-int 
-getprocid(procname_t who)
-{
-    return GETPROCID(who); 
-}
-
-
-/* 
- * -- isvalidproc
- * 
- * it returns 0 if the tag does not map any known processes. 
- */
-int 
-isvalidproc(procname_t who)
-{
-    procname_t x = (GETPROCCHILD(who) << 16); 
-    return (x >= SUPERVISOR && x <= QUERY); 
-}
 
 
 /*
@@ -244,109 +63,57 @@ isvalidproc(procname_t who)
  * The last argument is an optional fd to be passed to the program.
  */
 pid_t
-start_child(procname_t who, int mem_type, mainloop_fn mainloop, 
-	int in_fd, int id)
+start_child(ipc_peer_full_t * child, mainloop_fn mainloop, int client_fd,
+	    como_node_t * node)
 {
     pid_t pid;
     int i;
-
-    if (s_children == 0) { 
-	/* initialize the s_child_info array */ 
-	bzero(s_child_info, sizeof(s_child_info)); 
-    } 
+    ipc_peer_t * who = (ipc_peer_t *) child;
 
     /* find a slot for the child */
-    for (i = 0; i < MAX_CHILDREN; i++)
-	if (!isvalidproc(s_child_info[i].who))
+    for (i = 0; i < MAX_CHILDREN; i++) {
+	if (s_child_info[i].who == NULL)
 	    break;
+    }
     if (i == MAX_CHILDREN) { 
-	logmsg(LOGWARN, "cannot create child %s, no more slots\n", 
-	     getprocfullname(who));
+	warn("cannot create child, no more slots\n");
 	return -1; 
     } 
 
     /* ok, fork a regular process and return pid to the caller. */
     pid = fork();
     if (pid == 0) {	/* child */
-	int out_fd, idx;
+	int supervisor_fd;
 	
 #ifdef ENABLE_PROFILING
-	/* To get timing information after fork() the child has to call
-	 * monstartup().
-	 * 
-	 * http://gcc.gnu.org/ml/gcc-bugs/2001-09/msg00156.html
-	 */
-#ifndef __APPLE__
-	extern void _start (void), etext (void);
-	monstartup ((u_long) &_start, (u_long) &etext);
-#else
-	{
-	  /* There is no etext symbol in mach-o binaries, instead there's
-	   * a function call used to get the equivelent pointed.
-           */
-	  unsigned long etext = get_etext();
-	  extern void _start (void);
-	  monstartup ((char*)&_start, (char*)etext);
-	}
-#endif /* __APPLE__*/
-
+	enable_profiling();
 #endif
 	signal(SIGHUP, SIG_IGN);        /* ignore SIGHUP */
+
+	/* initialize the s_child_info array */ 
+	bzero(s_child_info, sizeof(s_child_info)); 
 
 	/* XXX TODO: close unneeded sockets */
 	// fclose(stdout); // XXX
 	// fclose(stderr); // XXX
 
-	/*
-	 * every new process has to set its name, specify the type of memory 
-	 * the modules will be able to allocate and use, and change the 
-	 * process name accordingly.  
-	 */
-	map.parent = map.whoami;
-	map.whoami = who;
-	map.mem_type = mem_type;
+	ipc_finish(FALSE);
+	ipc_init(child, NULL);
 	
-	/* clean logging system state */
-	logmsg(0, NULL);
-
-	/*
-	 * remove all modules in the map (it will
-	 * receive the proper information from SUPERVISOR)
-	 * 
-	 * the modules with status MDL_ACTIVE_REPLAY are not removed
-	 * because they can be used in CAPTURE to replay records
-	 * from inside sniffer-ondemand which require the module to
-	 * be available when sniffer_start is called
-	 *
-	 * XXX this is not that great but no other workaround comes
-	 *     to mind. the problem is when an IPC_MODULE_ADD message
-	 *     comes we don't want to waste time figuring out if we
-	 *     already have that module somewhere or not. And those
-	 *     messages may come when we are doing something important,
-	 *     while this is done at the very beginning.
-	 *
-	 */
-	for (idx = 0; idx < map.module_max; idx++) {
-	    if (map.modules[idx].status != MDL_UNUSED &&
-		map.modules[idx].status != MDL_ACTIVE_REPLAY) {
-		remove_module(&map, &map.modules[idx]);
-	    }
-	}
-
 	/* connect to SUPERVISOR */
-        out_fd = ipc_connect(map.parent);
-        assert(out_fd > 0);
+        supervisor_fd = ipc_connect(COMO_SU);
+        assert(supervisor_fd != -1);
 
-	setproctitle("%s", getprocfullname(who));
+	setproctitle("%s", ipc_peer_get_name(who));
 
-	logmsg(V_LOGWARN, "starting process %-20s pid %d\n", 
-	       getprocfullname(who), getpid()); 
+	notice("starting process %s pid %d\n",
+	       ipc_peer_get_name(who), getpid());
 
-	mainloop(in_fd, out_fd, id);
+	mainloop(child, supervisor_fd, client_fd, node);
 	exit(0);
     }
 
-    s_child_info[i].who = who;
+    s_child_info[i].who = child;
     s_child_info[i].pid = pid;
     s_children++;
     
@@ -365,7 +132,7 @@ int
 handle_children()
 {
     int j;
-    procname_t who = 0;
+    ipc_peer_t * who = NULL;
     pid_t pid;
     int statbuf;
 
@@ -376,7 +143,7 @@ handle_children()
 
     for (j = 0; j < s_children; j++) {
 	if (s_child_info[j].pid == pid) {
-	    who = s_child_info[j].who;
+	    who = (ipc_peer_t *) s_child_info[j].who;
 	    break;
 	}
     }
@@ -385,35 +152,42 @@ handle_children()
 	/* don't bother about unknown children */
 	return 0;
     }
-
+    
     s_child_info[j].pid = 0;
-    s_child_info[j].who = 0;
+    s_child_info[j].who = NULL;
+
+    if (j == s_children - 1) {
+	/* recompute s_children */
+	int i;
+	for (i = j - 1; i >=0; i--) {
+	    if (s_child_info[i].who != NULL)
+		break;
+	}
+	s_children = i + 1;
+    }
+
 
     if (WIFEXITED(statbuf)) {
 	if (WEXITSTATUS(statbuf) == EXIT_SUCCESS) { 
-	    logmsg(V_LOGWARN, 
-		   "%s (pid %d) completed successfully\n", 
-		   getprocfullname(who), pid); 
+	    notice("%s (pid %d) completed successfully\n",
+		   ipc_peer_get_name(who), pid);
 	    return 0; 
 	} else { 
-	    logmsg(V_LOGWARN, 
-		   "WARNING!! %s (pid %d) terminated (status: %d)\n",
-	           getprocfullname(who), pid, WEXITSTATUS(statbuf)); 
+	    warn("%s (pid %d) terminated (status: %d)\n",
+	         ipc_peer_get_name(who), pid, WEXITSTATUS(statbuf));
 	    return 1; 
 	} 
     } 
 
     if (WIFSIGNALED(statbuf)) {
-	logmsg(LOGWARN, 
-	       "WARNING!! %s (pid %d) terminated (signal: %d)\n",
-	       getprocfullname(who), pid, WTERMSIG(statbuf));
+	warn("%s (pid %d) terminated (signal: %d)\n",
+	     ipc_peer_get_name(who), pid, WTERMSIG(statbuf));
 	return 1; 
     } 
 
     /* this would really be weird if it happened... */
-    logmsg(LOGWARN, 
-           "WEIRD WARNING!! %s (pid %d) terminated but nobody knows why!?!?\n",
-	   getprocfullname(who), pid); 
+    warn("%s (pid %d) terminated for unknown reason\n",
+	 ipc_peer_get_name(who), pid);
     return 1; 
 }
 

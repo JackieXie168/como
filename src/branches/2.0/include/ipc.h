@@ -65,12 +65,13 @@ void              ipc_peer_destroy (ipc_peer_full_t * p);
 ipc_peer_full_t * ipc_peer_at      (const ipc_peer_full_t * p,
 				    const char * at);
 int               ipc_peer_get_fd  (const ipc_peer_t * p_);
+const char *      ipc_peer_get_name(const ipc_peer_t * p_);
+const char *      ipc_peer_get_code(const ipc_peer_t * p_);
 ipc_peer_full_t * ipc_peer_child   (const ipc_peer_full_t * kind, uint16_t id);
 
 
-void ipc_init     (ipc_peer_full_t * me, const char * ipc_dir,
-		   void * user_data);
-void ipc_finish   ();
+void ipc_init     (ipc_peer_full_t * me, void * user_data);
+void ipc_finish   (int destroy);
 void ipc_register (ipc_type type, ipc_handler_fn fn);
 int  ipc_listen   ();
 int  ipc_connect  (ipc_peer_full_t * dst);
@@ -79,5 +80,7 @@ int  ipc_send     (ipc_peer_t * dst, ipc_type type, const void * data,
 int  ipc_handle   (int fd);
 int  ipc_receive  (ipc_peer_t * peer, ipc_type * type, void * data,
 		   size_t * sz, int * swap, const struct timeval * timeout);
+
+void ipc_set_user_data (void * user_data);
 
 #endif	/* _COMO_IPC_H_ */
