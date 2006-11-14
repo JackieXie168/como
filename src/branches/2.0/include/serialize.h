@@ -33,6 +33,8 @@
 #ifndef _SERIALIZE_H
 #define _SERIALIZE_H
 #include <string.h>
+#include <stdint.h>
+#include "allocator.h"
 
 typedef void   (*serialize_fn)   (uint8_t ** sbuf, const void * data);
 typedef void   (*deserialize_fn) (uint8_t ** sbuf, void ** data_out,
@@ -45,11 +47,11 @@ typedef struct serializable {
     sersize_fn		sersize;
 } serializable_t;
 
-#define serialize_type_value(sbuf,value,type) do {      \
-    type __ser_value = (value);                     \
-    memcpy(*sbuf, &__ser_value, sizeof(type));    \
-    *sbuf += sizeof(type);                        \
-    } while (0)
+#define serialize_type_value(sbuf, val, type) do {  \
+    type __val = val;                               \
+    memcpy(*sbuf, &__val, sizeof(type));            \
+    *sbuf += sizeof(type);                          \
+} while (0)
 
 #define serialize_uint64_t(sbuf,x) serialize_type_value(sbuf, x, uint64_t)
 #define serialize_uint32_t(sbuf,x) serialize_type_value(sbuf, x, uint32_t)
@@ -64,19 +66,19 @@ typedef struct serializable {
 #define serialize_timestamp_t serialize_uint64_t
 #define serialize_int serialize_int32_t
 
-#define serialize_string(sbuf,val) do {	\
-    size_t sz;					\
-    sz = strlen(val);				\
-    serialize_uint32_t(sbuf, sz);		\
-    memcpy(*sbuf, val, sz);			\
-    *sbuf += sz;				\
+#define serialize_string(sbuf, val) do {\
+    size_t __sz;			\
+    __sz = strlen(val);		        \
+    serialize_uint32_t(sbuf, __sz);	\
+    memcpy(*sbuf, val, __sz);	        \
+    *sbuf += __sz;			\
 } while(0)
 
 
 #define deserialize_type_value(sbuf,where,type) do {    \
-    memcpy(where, *sbuf, sizeof(type));        \
-    *sbuf += sizeof(type);                        \
-    } while(0)
+    memcpy(where, *sbuf, sizeof(type));                 \
+    *sbuf += sizeof(type);                              \
+} while(0)
 
 #define deserialize_uint64_t(sbuf,x) deserialize_type_value(sbuf, x, uint64_t)
 #define deserialize_uint32_t(sbuf,x) deserialize_type_value(sbuf, x, uint32_t)
