@@ -213,6 +213,10 @@ struct mdl_ibase {
     shobj_t *		shobj;
     serializable_t	mdl_config;
     serializable_t	mdl_rec;
+
+    alc_t *             shmem_alc;
+    metadesc_t *        indesc;
+    metadesc_t *        outdesc;
     union {
         mdl_icapture_t *	ca;
         mdl_iexport_t *		ex;
