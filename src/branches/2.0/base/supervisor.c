@@ -55,7 +55,7 @@ typedef struct como_config {
 } como_config_t;
 
 typedef struct como_su {
-    como_env_t		env;
+    como_env_t *	env;
     event_loop_t	el;
     int			accept_fd;
 
@@ -67,6 +67,8 @@ typedef struct como_su {
 
     shmem_t *		shmem;		/* main shared memory used to store
 					   capture data structures, stats */
+    memmap_t *		memmap;
+    alc_t		shalc;
 
     FILE *		logfile;	/* log file */
     stats_t *		stats;
@@ -150,32 +152,51 @@ su_ipc_sync(ipc_peer_t * peer, UNUSED void * b, UNUSED size_t l,
     return IPC_OK;
 }
 
-#if 0
-typedef struct ipc_ca_sniffer_initialized {
-    int		id;
-    metadesc_t *outdesc; /* outdesc is in shared memory */
-} ipc_ca_sniffer_initialized_t;
 
 static int
-su_ipc_ca_sniffer_initialized(ipc_peer_t * peer,
-			      ipc_ca_sniffer_initialized_t * si,
-			      UNUSED size_t l, UNUSED int swap,
-			      como_su_t * como_su)
+su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
+			       UNUSED void * buf,
+			       UNUSED size_t len,
+			       UNUSED int swap,
+			       como_su_t * como_su)
 {
     como_node_t *node0;
     sniffer_list_t *sniffers;
     sniffer_t *sniff;
+    int i;
+    array_t * mdls;
     
-    node0 = array_at(como_su->nodes, como_node_t, 0);
+    node0 = &array_at(como_su->nodes, como_node_t, 0);
     
-    sniffers = node0->sniffers;
+    sniffers = &node0->sniffers;
     
-    sniff = sniffer_list_find_by_id(sniffers, si->id);
-    sniff->priv->outdesc = si->outdesc;
+    sniffer_list_foreach(sniff, sniffers) {
+	/* setup the sniffer metadesc */
+	sniff->outmd = sniff->cb->setup_metadesc(sniff, como_alc());
+    }
+    
+    mdls = node0->mdls;
+    /* TODO: metadesc comparison here */
+	
+    for (i = 0; i < mdls->len; i++) {
+	mdl_t *mdl;
+	uint8_t *sermdl, *sbuf;
+	size_t sz;
+
+	mdl = &array_at(mdls, mdl_t, i);
+	sz = mdl_sersize(mdl);
+	sermdl = sbuf = como_malloc(sz);
+
+	mdl_serialize(&sbuf, mdl);
+
+	ipc_send(peer, CA_ADD_MODULE, sermdl, sz);
+	free(sermdl);
+    }
+	
+    ipc_send(peer, CA_START, NULL, 0);
     
     return IPC_OK;
 }
-#endif
 
 /*  
  * -- su_ipc_done 
@@ -465,6 +486,8 @@ como_su_run(como_su_t * como_su)
     ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync);
     ipc_register(SU_DONE, (ipc_handler_fn) su_ipc_done);
     ipc_register(SU_ECHO, (ipc_handler_fn) su_ipc_echo);
+    ipc_register(CA_SNIFFERS_INITIALIZED,
+		 (ipc_handler_fn) su_ipc_ca_sniffers_initialized);
     
 #if 0
     /* TODO */
@@ -639,7 +662,7 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 	}
 
 	/* initialize the sniffer */
-	s = cb->init(sniffer_id, def->device, def->args, alc);
+	s = cb->init(def->device, def->args, alc);
 	if (s == NULL) {
 	    warn("Initialization of sniffer `%s` on device `%s` failed.\n",
 		 def->name, def->device);
@@ -684,7 +707,7 @@ fake_config()
     sniffer_defs = array_new(sizeof(sniffer_def_t));
 
     s.name = como_strdup("pcap");
-    s.device = como_strdup("/trace/trace_eth_1");
+    s.device = como_strdup("/traces/trace_eth_1");
     s.args = NULL;
     array_add(sniffer_defs, &s);
 
@@ -708,10 +731,11 @@ main(int argc, char ** argv)
 {
     como_su_t *como_su;
     como_node_t *node0;
+    como_node_t node;
+    alc_t alc;
     
     /* create a global pool */
     pool_t *pool = pool_create();
-    alc_t alc;
     
     pool_alc_init(pool, &alc);
     como_su = alc_new0(&alc, como_su_t);
@@ -720,11 +744,23 @@ main(int argc, char ** argv)
     
     como_init(argc, argv);
     
+    /* initialize environment */
+    como_env_init();
+    como_su->env = como_env();
+
+
+    /* initialize node 0 */
+    memset(&node, 0, sizeof(node));
+    node.id = 0;
+    node.name = como_strdup("CoMo Node");
+    node.location = como_strdup("Unknown");
+    node.type = como_strdup("Unknown");
+    node.query_port = DEFAULT_QUERY_PORT;
+    node.mdls = array_new(sizeof(mdl_t));
+    
     como_su->nodes = array_new(sizeof(como_node_t));
-    
-    /* set default values */
-    como_env_init(&como_su->env);
-    
+    array_add(como_su->nodes, &node);
+
     /*
      * parse command line and configuration files
      */
@@ -738,7 +774,7 @@ main(int argc, char ** argv)
     msg("  Copyright (c) 2004-2006, Intel Corporation\n"); 
     msg("  All rights reserved.\n"); 
     msg("----------------------------------------------------\n");
-    notice("... workdir %s\n", como_su->env.workdir);
+    notice("... workdir %s\n", como_su->env->workdir);
 
 
     notice("log level: %s\n", log_level_name(log_get_level())); 
@@ -749,16 +785,25 @@ main(int argc, char ** argv)
      */
 #define SHMEM_SIZE 8*1024*1024
     como_su->shmem = shmem_create(SHMEM_SIZE, NULL);
-    //mem_init(como_su->shmem);
-
-
+    como_su->memmap = memmap_create(como_su->shmem, 2048);
+    memmap_alc_init(como_su->memmap, &como_su->shalc);
+    
+    /* allocate statistics into shared memory */
+    como_su->stats = alc_new0(&como_su->shalc, stats_t);
+    gettimeofday(&como_su->stats->start, NULL);
+    como_su->stats->first_ts = ~0;
+    
     /* initialize IPC */
-    ipc_init(ipc_peer_at(COMO_SU, como_su->env.workdir), como_su);
+    ipc_init(ipc_peer_at(COMO_SU, como_su->env->workdir), como_su);
     
     /* prepare the SUPERVISOR socket */
     como_su->accept_fd = ipc_listen();
     
+
+
     node0 = &array_at(como_su->nodes, como_node_t, 0);
+    como_node_init_sniffers(node0, como_su->config->sniffer_defs,
+			    &como_su->shalc);
 
     /* start the CAPTURE process */
     if (node0->sniffers_count > 0) {
@@ -766,15 +811,15 @@ main(int argc, char ** argv)
 	pid_t pid;
 	
 	ca = ipc_peer_child(COMO_CA, 0);
-	pid = 0;//start_child(ca, capture, -1, node0);
+	pid = start_child(ca, capture, como_su->memmap, -1, node0);
 	if (pid < 0) {
 	    warn("Can't start CAPTURE\n");
 	}
     }
     
-    /* move to the SUPERVISOR process (we don't fork here) */
-    //setproctitle("%s", getprocfullname(map.whoami));
+    setproctitle("SUPERVISOR");
 
+    /* move to the SUPERVISOR process (we don't fork here) */
     como_su_run(como_su);
 
     return EXIT_SUCCESS;

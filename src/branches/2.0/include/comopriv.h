@@ -69,11 +69,14 @@ pktmeta_type_t pktmeta_type_from_name(const char * name);
 /*
  * util-process.c
  */
-typedef void (*mainloop_fn) (ipc_peer_full_t * p, int supervisor_fd,
-			     int client_fd, como_node_t * node);
+typedef void (*mainloop_fn) (ipc_peer_full_t * child,
+			     ipc_peer_t * parent,
+			     memmap_t * shmemmap,
+			     int client_fd,
+			     como_node_t * node);
 
 pid_t start_child (ipc_peer_full_t * child, mainloop_fn mainloop,
-		   int client_fd, como_node_t * node);
+		   memmap_t * shmemmap, int client_fd, como_node_t * node);
 int handle_children ();
 
 /*
@@ -84,19 +87,17 @@ void inline_mainloop(int accept_fd);
 /*
  * memory.c
  */
-typedef enum memmap_policy_t {
-    POLICY_HOLD_FREE_BLOCKS = 0x5a,
-    POLICY_HOLD_IN_USE_BLOCKS = 0xa5
-} memmap_policy_t;
+typedef struct memmap_stats {
+    size_t	usage;	/* used memory */
+    size_t	peak;	/* peak usage */
+} memmap_stats_t;
 
-void          allocator_init_module(module_t *mdl);
-alc_t * allocator_safe();
-alc_t * allocator_shared();
+memmap_t *       memmap_create         (shmem_t * shmem, uint32_t entries);
+void             memmap_alc_init       (memmap_t * m, alc_t * alc);
+memmap_stats_t * memmap_stats_location (memmap_t * m);
+size_t           memmap_usage          (memmap_t * m);
+size_t           memmap_peak           (memmap_t * m);
 
-void       memory_init(uint chunk);
-
-memmap_t * memmap_new(alc_t *alc, uint entries, memmap_policy_t pol);
-void       memmap_destroy(memmap_t *ml);
 
 /* never call those function directly, use the macros below */
 void *     _mem_malloc(size_t sz, const char * file, int line);
@@ -165,6 +166,9 @@ typedef union ccamsg_t {
 	int		id;
     } close;
 } ccamsg_t;
+
+void capture (ipc_peer_full_t * child, ipc_peer_t * parent,
+	      memmap_t * shmemmap,int client_fd, como_node_t * node);
 
 /* como.c */
 

@@ -81,35 +81,38 @@ int ppbuf_get_count (ppbuf_t * ppbuf);
  */
 
 /* sniffer callbacks */
-typedef sniffer_t * (*sniffer_init_fn)    (int id,
-					   const char * device,
+typedef sniffer_t *  (*sniffer_init_fn)    (const char * device,
 					   const char * args,
 					   alc_t * alc);
-typedef void (*sniffer_finish_fn)         (sniffer_t * s,
-					   alc_t * alc);
-typedef void (*sniffer_setup_metadesc_fn) (sniffer_t * s);
-typedef int  (*sniffer_start_fn)          (sniffer_t * s);
-typedef int  (*sniffer_next_fn)           (sniffer_t * s,
-					   int max_pkts, timestamp_t max_ivl,
-					   pkt_t * first_ref_pkt,
-					   int * dropped_pkts);
-typedef void (*sniffer_stop_fn)           (sniffer_t * s);
-typedef float (*sniffer_usage_fn)         (sniffer_t * s, pkt_t * first,
-					   pkt_t * last);
+typedef void         (*sniffer_finish_fn)  (sniffer_t * s,
+					    alc_t * alc);
+
+typedef metadesc_t * (*sniffer_setup_metadesc_fn) (sniffer_t * s,
+						   alc_t * alc);
+typedef int          (*sniffer_start_fn)   (sniffer_t * s);
+typedef int          (*sniffer_next_fn)    (sniffer_t * s,
+					    int max_pkts, timestamp_t max_ivl,
+					    pkt_t * first_ref_pkt,
+					    int * dropped_pkts);
+typedef void         (*sniffer_stop_fn)    (sniffer_t * s);
+typedef float        (*sniffer_usage_fn)   (sniffer_t * s, pkt_t * first,
+					    pkt_t * last);
 
 struct sniffer_cb {
     char *			name;	/* name of the sniffer */
     sniffer_init_fn		init;	/* initialize the sniffer */
     sniffer_finish_fn		finish;	/* finalize the sniffer */
     sniffer_setup_metadesc_fn	setup_metadesc; /* setup the out metadesc */
+    sniffer_start_fn		start;	/* start the sniffer */
+    sniffer_next_fn		next;	/* get next packet */
+    sniffer_stop_fn		stop;	/* stop the sniffer */
+    sniffer_usage_fn		usage;
 };
 
 typedef struct sniffer_priv sniffer_priv_t;
 typedef struct sniffer_stats sniffer_stats_t;
 
 struct sniffer_t {
-    int				id;     /* id of the sniffer */
-    char *			name;	/* name of the sniffer */
     char *			device;	/* device of the sniffer */
     int				fd;	/* file descriptor we are using */
     int				flags;	/* sniffer flags */
@@ -117,13 +120,15 @@ struct sniffer_t {
 					     for each call to next() */
     timestamp_t			polling; /* polling interval, if needed */
     ppbuf_t *			ppbuf;	/* ring buffer of pkt pointers */
-    sniffer_start_fn		start;	/* start the sniffer */
-    sniffer_next_fn		next;	/* get next packet */
-    sniffer_stop_fn		stop;	/* stop the sniffer */
-    sniffer_usage_fn		usage;
+    sniffer_cb_t *		cb;	/* callbacks */
     sniffer_list_entry_t	entry;
     sniffer_priv_t *		priv;
-    sniffer_stats_t *		stats;
+    metadesc_t *		outmd;/* offered output metadesc list */
+};
+
+struct sniffer_stats {
+    uint64_t	tot_cap_pkts;	/* packets captured by the sniffer */
+    uint64_t	tot_dropped_pkts; /* packets dropped by the sniffer */
 };
 
 /*
@@ -133,13 +138,9 @@ struct sniffer_t {
  * callbacks.
  */
 struct sniffer_priv {
-    sniffer_cb_t *cb;		/* callbacks */
-    int		id;		/* sniffer id */
-    int		fd;		/* descriptor used in the select by capture */
-    char *	device;		/* device name */
-    char *	args;		/* optional arguments */
-    metadesc_t *outdesc;	/* offered output metadesc list */
-    int		touched;
+    int			id;	/* id of the sniffer */
+    int			fd;	/* descriptor used in the select by capture */
+    int			touched;
     enum {
 	SNIFFER_UNINITIALIZED = 0,
 	SNIFFER_INITIALIZED,
@@ -149,23 +150,14 @@ struct sniffer_priv {
 	SNIFFER_COMPLETED,
 	SNIFFER_INACTIVE,
 	SNIFFER_ERROR,
-    }		state;
+    }		state;		/* sniffer state */
+    sniffer_stats_t	stats;	/* sniffer stats */
 };
 
-struct sniffer_stats {
-    uint64_t	tot_cap_pkts;	/* packets captured by the sniffer */
-    uint64_t	tot_dropped_pkts; /* packets dropped by the sniffer */
-};
-
-
-#define SNIFF_TOUCHED	0x8000	/* set if the the flags have changed */
 #define	SNIFF_SELECT	0x0001	/* device supports select() */
 #define	SNIFF_POLL	0x0002	/* device must be polled */
 #define	SNIFF_FILE	0x0004	/* device reads from file */
 #define	SNIFF_SHBUF	0x0040	/* device has a public buffer in shmem  */
-#define SNIFF_INACTIVE	0x0008	/* inactive, i.e. do not select() */
-#define SNIFF_FROZEN	0x0010	/* frozen to slow down (only for SNIFF_FILE) */
-#define SNIFF_COMPLETE  0x0020  /* complete, i.e. finish the buffer */
 
 sniffer_cb_t * sniffer_cb_lookup(const char *name);
 
@@ -188,6 +180,6 @@ int radiotap_header_to_como_radio(const char *buf, struct _como_radio *r);
 /*
  * metadesc.c
  */
-metadesc_t * metadesc_define_sniffer_out(sniffer_t *s, int pktopt_count, ...);
+
 
 #endif /* _COMO_SNIFFERS_H */

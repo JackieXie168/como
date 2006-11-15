@@ -63,8 +63,8 @@ static int s_children = 0;
  * The last argument is an optional fd to be passed to the program.
  */
 pid_t
-start_child(ipc_peer_full_t * child, mainloop_fn mainloop, int client_fd,
-	    como_node_t * node)
+start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
+	    memmap_t * shmemmap, int client_fd, como_node_t * node)
 {
     pid_t pid;
     int i;
@@ -109,7 +109,7 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop, int client_fd,
 	notice("starting process %s pid %d\n",
 	       ipc_peer_get_name(who), getpid());
 
-	mainloop(child, supervisor_fd, client_fd, node);
+	mainloop(child, (ipc_peer_t *) COMO_SU, shmemmap, client_fd, node);
 	exit(0);
     }
 

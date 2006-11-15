@@ -126,7 +126,7 @@ static void sniffer_stop(sniffer_t * s);
  * 
  */
 static sniffer_t *
-sniffer_init(int id, const char * device, const char * args, alc_t * alc)
+sniffer_init(const char * device, const char * args, alc_t * alc)
 {
     struct pcap_me *me;
     struct pcap_file_header pf;
@@ -135,12 +135,7 @@ sniffer_init(int id, const char * device, const char * args, alc_t * alc)
     
     me = alc_new0(alc, struct pcap_me);
 
-    me->sniff.id = id;
     me->sniff.device = alc_strdup(alc, device);
-
-    me->sniff.start = sniffer_start;
-    me->sniff.next = sniffer_next;
-    me->sniff.stop = sniffer_stop;
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
@@ -255,13 +250,14 @@ error:
     if (me->sniff.fd >= 0) {
 	close(me->sniff.fd);
     }
+    alc_free(alc, me->sniff.device);
     alc_free(alc, me);
     return NULL;
 }
 
 
-static void
-sniffer_setup_metadesc(sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(sniffer_t * s, alc_t * alc)
 {
     struct pcap_me *me = (struct pcap_me *) s;
     const headerinfo_t *lchi, *l2hi;
@@ -270,7 +266,7 @@ sniffer_setup_metadesc(sniffer_t * s)
     char protos[32]; /* protos string of metadesc template */
 
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(s, 0);
+    outmd = metadesc_new(NULL, alc, 0);
     
     lchi = headerinfo_lookup_with_type_and_layer(me->type, LCOMO);
     l2hi = headerinfo_lookup_with_type_and_layer(me->l2type, L2);
@@ -281,6 +277,8 @@ sniffer_setup_metadesc(sniffer_t * s)
 	     lchi->name, l2hi->name);
     pkt = metadesc_tpl_add(outmd, protos);
     COMO(caplen) = me->snaplen;
+    
+    return outmd;
 }
 
 
@@ -566,6 +564,7 @@ sniffer_finish(sniffer_t * s, alc_t * alc)
     struct pcap_me *me = (struct pcap_me *) s;
 
     capbuf_finish(&me->capbuf);
+    alc_free(alc, me->sniff.device);
     alc_free(alc, me);
 }
 
@@ -575,4 +574,8 @@ SNIFFER(pcap) = {
     init: sniffer_init,
     finish: sniffer_finish,
     setup_metadesc: sniffer_setup_metadesc,
+    start: sniffer_start,
+    next: sniffer_next,
+    stop: sniffer_stop,
+    usage: NULL,
 };

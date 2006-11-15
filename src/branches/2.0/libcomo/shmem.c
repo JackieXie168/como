@@ -109,6 +109,8 @@ shmem_create(size_t reqsize, const char * filename)
 	*((size_t *) new_m->base) = new_m->realsize;
 	/* metadata isn't usable */
 	new_m->usable = new_m->base + ALIGN_DEFAULT(sizeof(size_t));
+	
+	notice("allocated %lu of mapped memory\n", reqsize);
     } else {
 	/* Name-based shared memory */
 	int fd;
