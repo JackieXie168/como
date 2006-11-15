@@ -300,7 +300,7 @@ struct _como {
 #define DEBUGGER_WAIT_ATTACH(peer) do {		\
     const char *debug = getenv("COMO_DEBUG");	\
     const char *code = ipc_peer_get_code((ipc_peer_t *) peer); \
-    if (strstr(debug, code) != NULL) {		\
+    if (debug && strstr(debug, code) != NULL) {		\
 	msg("%s (%d): waiting %ds for the debugger to attach\n", \
 	    ipc_peer_get_name((ipc_peer_t *) peer), getpid(), \
 	    DEBUG_SLEEP);			\
