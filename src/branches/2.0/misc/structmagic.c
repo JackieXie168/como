@@ -152,6 +152,8 @@ safe_fopen(char *file, char *mode)
         strmode = "reading";
     else if(!strcmp(mode, "w"))
         strmode = "writing";
+    else
+        strmode = "!?";
 
     f = fopen(file, mode);
     if (f == NULL)

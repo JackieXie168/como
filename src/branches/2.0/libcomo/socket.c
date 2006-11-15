@@ -62,7 +62,7 @@ create_socket(const char * path, int is_server)
     struct sockaddr_un sun;
     struct sockaddr_in saddr;
     struct sockaddr *sa;
-    int fd, r;
+    int fd, r = 0;
     size_t l;
     int is_tcp = TRUE;
     char *cp;

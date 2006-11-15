@@ -228,16 +228,18 @@ struct mdl_icapture {
     timestamp_t	ivl_end;
     void *	ivl_state;
 
-    tuple_collection_t tuples;
-    tuple_collection_item_t *last_tuple;
+    ca_init_fn	            init;
+    ca_capture_fn	    capture;
+    ca_flush_fn	            flush;
+    capabilities_t          capabilities;
 
-    ca_init_fn	init;
-    ca_capture_fn	capture;
-    ca_flush_fn	flush;
+    tuple_collection_t      tuples;
+    tuple_collection_item_t *last_tuple;
 
     alc_t	shalc;
     
-    treenode_t *filter;
+    treenode_t  *filter;
+    int         status;
     
     ipc_peer_t *export;
 };

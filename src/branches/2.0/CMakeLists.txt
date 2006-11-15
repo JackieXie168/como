@@ -180,6 +180,11 @@ ENDIF(LINUX)
 ADD_DEFINITIONS(-include ${COMO_SOURCE_DIR}/include/os.h)
 
 #
+# Add -O2 because it helps identify vars used without being initialized
+#
+ADD_DEFINITIONS(-O2)
+
+#
 # Add subdirs
 #
 ADD_SUBDIRECTORY(misc)

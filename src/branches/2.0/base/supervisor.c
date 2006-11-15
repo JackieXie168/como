@@ -682,7 +682,7 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 {
     sniffer_list_t *sniffers;
     
-    int live_sniffers, file_sniffers;
+    int live_sniffers = 0, file_sniffers = 0;
     int i;
     int sniffer_id = 0;
     

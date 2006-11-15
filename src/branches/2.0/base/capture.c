@@ -391,7 +391,65 @@ batch_filter(batch_t * batch, como_ca_t * como_ca)
     return which;
 }
 
-#if 0
+/*
+ * -- mdl_flush
+ *
+ * Flush the state of a module to export. Free all its state.
+ * If next_ts != 0, there is a change of ivl, so update the
+ * module's private information to reflect this.
+ */
+static void
+mdl_flush(mdl_t *mdl, timestamp_t next_ts)
+{
+    mdl_icapture_t *ic = mdl_get_icapture(mdl);
+    if (ic->ivl_start != 0 && ic->flush != NULL)
+        ic->flush(mdl);
+
+    /* TODO: free all mem allocated my mdl except for records */
+    /* TODO: pass the tuples to export */
+
+    /* update ivl_start and ivl_end */
+    if (next_ts != 0) {
+        ic->ivl_start = next_ts - (next_ts % mdl->flush_ivl);
+        ic->ivl_end = ic->ivl_start + mdl->flush_ivl;
+    }
+
+    /* initialize new state */
+    ic->ivl_state = ic->init(mdl, ic->ivl_start);
+}
+
+static timestamp_t
+mdl_batch_process(mdl_t * mdl, batch_t * batch, char * fltmap)
+{
+    pkt_t **pktptr;
+    int i, c, l;
+    timestamp_t ts;
+
+    mdl_icapture_t *ic = mdl_get_icapture(mdl);
+
+    for (c = 0, pktptr = batch->pkts0, l = MIN(batch->pkts0_len, batch->count);
+	 c < batch->count;
+	 pktptr = batch->pkts1, l = batch->pkts1_len)
+    {
+	for (i = 0; i < l; i++, pktptr++, c++) {
+	    pkt_t *pkt = *pktptr;
+
+            ts = pkt->ts;
+	    
+	    if (ts >= ic->ivl_end) /* change of ivl */
+                mdl_flush(mdl, ts);
+	    
+	    if (*fltmap == 0)
+		continue;	/* no interest in this packet */
+
+	    ic->capture(mdl, pkt, ic->ivl_state);
+	    fltmap++;
+	}
+    }
+
+    return ts;
+}
+
 /* 
  * -- batch_process 
  * 
@@ -401,12 +459,10 @@ batch_filter(batch_t * batch, como_ca_t * como_ca)
  * 
  */
 static timestamp_t
-batch_process(batch_t * batch)
+batch_process(batch_t * batch, como_ca_t *como_ca)
 {
     char *which;
     int idx;
-    tailq_t exp_tables = { NULL, NULL };
-    expiredmap_t *first_exp_table;
 
     /*
      * Select which classifiers need to see which packets The batch_filter()
@@ -419,7 +475,7 @@ batch_process(batch_t * batch)
     debug("calling batch_filter with pkts %p, count %d\n",
 	  *batch->pkts0, batch->count);
     start_tsctimer(map.stats->ca_filter_timer);
-    which = batch_filter(batch);
+    which = batch_filter(batch, como_ca);
     end_tsctimer(map.stats->ca_filter_timer);
 
     /*
@@ -431,41 +487,41 @@ batch_process(batch_t * batch)
      * future...
      *
      */
-    for (idx = 0; idx <= map.module_last; idx++) {
-	module_t *mdl = &map.modules[idx];
+    for (idx = 0; idx < como_ca->mdls->len; idx++) {
+	mdl_t *mdl = array_at(como_ca->mdls, mdl_t *, idx);
+	mdl_icapture_t *ic = mdl_get_icapture(mdl);
 
-	if (mdl->status != MDL_ACTIVE)
+	if (ic->status != MDL_ACTIVE)
 	    continue;
 
 	assert(mdl->name != NULL);
 	debug("sending %d packets to module %s for processing\n",
-	      batch->count, map.modules[idx].name);
+	      batch->count, mdl->name);
 
 	start_tsctimer(map.stats->ca_module_timer);
-	capture_pkt(mdl, batch, which, &exp_tables);
+        mdl_batch_process(mdl, batch, which);
 	end_tsctimer(map.stats->ca_module_timer);
 	which += batch->count;	/* next module, new list of packets */
     }
 
-    if (memory_usage() >= FREEZE_THRESHOLD(map.mem_size)) {
-	for (idx = 0; idx <= map.module_last; idx++) {
-	    module_t *mdl = &map.modules[idx];
-	    timestamp_t ivl;
+    #if 0 /* XXX need to define como_ca->mem_size */
+    if (memory_usage() >= FREEZE_THRESHOLD(como_ca->mem_size)) {
+        for (idx = 0; idx < como_ca->mdls->len; idx++) {
+            mdl_t *mdl = array_at(como_ca->mdls, mdl_t *, idx);
+            mdl_icapture_t *ic = mdl_get_icapture(mdl);
 
-	    if (mdl->status != MDL_ACTIVE) {
+	    if (ic->status != MDL_ACTIVE) /* not running */
 		continue;
+
+	    if (ic->capabilities.has_flexible_flush == 0
+                || tuple_collection_empty(&ic->tuples)) {
+		continue; /* not flushable or no memory to free */
 	    }
 
-	    if (mdl->callbacks.capabilities.has_flexible_flush == 0
-		|| mdl->ca_hashtable == NULL
-		|| mdl->ca_hashtable->records == 0) {
-		continue;
-	    }
-
-	    ivl = mdl->ca_hashtable->ivl;
-	    flush_state(mdl, &exp_tables);
 	    debug("flexible flush for %s occurred\n", mdl->name);
+            mdl_flush(mdl, 0); /* flush without ivl change */
 
+            #if 0
 	    /* reset capture table */
 	    mdl->shared_map = memmap_new(allocator_shared(), 64,
 					 POLICY_HOLD_IN_USE_BLOCKS);
@@ -476,9 +532,11 @@ batch_process(batch_t * batch)
 	    if (mdl->callbacks.flush != NULL) {
 		mdl->fstate = mdl->callbacks.flush(mdl);
 	    }
+            #endif
 	}
     }
-
+    #endif
+#if 0
     /*
      * send to EXPORT information on the memory to be read, 
      * where to free it and what module it refers to. 
@@ -492,6 +550,7 @@ batch_process(batch_t * batch)
 	if (ret != IPC_OK)
 	    panic("IPC_FLUSH failed!");
     }
+#endif
 
     /*  
      * get batch timestamp, i.e. the timestamp of the last packet 
@@ -499,7 +558,6 @@ batch_process(batch_t * batch)
      */
     return batch->last_pkt_ts;
 }
-#endif
 
 /* 
  * -- ca_ipc_module_add
@@ -1710,9 +1768,9 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 		batch_export(batch, &como_ca);
 
 	    /* process the batch */
-	    start_tsctimer(map.stats->ca_pkts_timer);
-	    //map.stats->ts = batch_process(batch);
-	    end_tsctimer(map.stats->ca_pkts_timer);
+	    start_tsctimer(como_ca.stats->ca_pkts_timer);
+	    como_ca.stats->ts = batch_process(batch, &como_ca);
+	    end_tsctimer(como_ca.stats->ca_pkts_timer);
 
 	    /* update the stats */
 	    como_ca.stats->pkts += batch->count;
