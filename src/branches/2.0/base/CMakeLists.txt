@@ -147,7 +147,7 @@ ENDIF(NOT ENABLE_SHARED_MODULES)
 
 TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/sniffers/libsniffers.a)
 
-TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
+#TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
 
 TARGET_LINK_LIBRARIES(como m)
 
