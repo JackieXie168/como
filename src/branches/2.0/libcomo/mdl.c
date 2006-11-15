@@ -193,16 +193,11 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
     structname = *((char **) sym);
 
     for (i = 0; i < 3; i++) {
-        char *op, *str;
+        char *opts[] = { "serialize", "deserialize", "sersize" };
+        char *str;
         int ret;
 
-        switch(i) {
-        case 0: op = "serialize"; break;
-        case 1: op = "deserialize"; break;
-        case 2: op = "sersize"; break;
-        }
-
-        ret = asprintf(&str, "%s_%s", op, structname);
+        ret = asprintf(&str, "%s_%s", opts[i], structname);
         if (ret < 0)
             error("out of memory\n");
         sym = shobj_symbol(shobj, str, FALSE);
