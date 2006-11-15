@@ -78,32 +78,13 @@ metadesc_new_va(alc_t *alc, int pktmeta_count, va_list ap)
  * metadesc_list_free() function.
  */
 metadesc_t *
-metadesc_new(int pktmeta_count, ...)
+metadesc_new(metadesc_t * head, alc_t * alc, int pktmeta_count, ...)
 {
     va_list ap;
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(como_alc(), pktmeta_count, ap);
-    va_end(ap);
-    
-    return md;
-}
-
-/*
- * Behaves like metadesc_new as a metadesc_t object is created but this
- * function also manages the list of meta descriptors. Given the head of the
- * list it returns the new head of the list that points to the newly created
- * metadesc_t object.
- */
-metadesc_t *
-metadesc_list_new(metadesc_t *head, int pktmeta_count, ...)
-{
-    va_list ap;
-    metadesc_t *md;
-    
-    va_start(ap, pktmeta_count);
-    md = metadesc_new_va(como_alc(), pktmeta_count, ap);
+    md = metadesc_new_va(alc, pktmeta_count, ap);
     va_end(ap);
     
     md->_next = head;
@@ -139,22 +120,6 @@ metadesc_define_out(module_t *self, int pktmeta_count, ...)
     
     md->_next = self->outdesc;
     self->outdesc = md;
-    
-    return md;
-}
-
-metadesc_t *
-metadesc_define_sniffer_out(sniffer_t * s, int pktmeta_count, ...)
-{
-    va_list ap;
-    metadesc_t *md;
-    
-    va_start(ap, pktmeta_count);
-    md = metadesc_new_va(como_alc(), pktmeta_count, ap);
-    va_end(ap);
-    
-    md->_next = s->priv->outdesc;
-    s->priv->outdesc = md;
     
     return md;
 }

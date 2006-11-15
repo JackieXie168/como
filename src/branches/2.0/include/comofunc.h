@@ -84,12 +84,6 @@ void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
 #define mem_mdl_free(self,p)			\
 	mem_mdl_sfree(p, __FILE__, __LINE__, (module_t *) self)
 
-/*
- * capture.c
- */
-void capture (ipc_peer_full_t * peer, int supervisor_fd,
-	      int client_fd, como_node_t * node);
-
 
 /*
  * capture-client.c
@@ -257,10 +251,12 @@ void reset_timers(void);
 /*
  * metadesc.c
  */
+metadesc_t * metadesc_new     (metadesc_t * head, alc_t * alc,
+			       int pktmeta_count, ...);
+pkt_t *      metadesc_tpl_add (metadesc_t * md, const char * protos);
+
 metadesc_t * metadesc_define_in (module_t *self, int pktmeta_count, ...);
 metadesc_t * metadesc_define_out(module_t *self, int pktmeta_count, ...);
-pkt_t *      metadesc_tpl_add   (metadesc_t *fd, const char *protos);
-void         test_metadesc      ();
 
 /*
  * pktmetaion.c

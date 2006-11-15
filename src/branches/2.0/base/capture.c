@@ -98,7 +98,7 @@ typedef struct como_ca {
     event_loop_t	el;
     int			ready;
     timestamp_t		min_flush_ivl;
-    shmem_t *		shmem;
+    memmap_t *		shmemmap;
     alc_t		shalc;
 
     timestamp_t		live_th;
@@ -119,7 +119,7 @@ static void
 ppbuf_free(sniffer_t * sniff)
 {
     ppbuf_destroy(sniff->ppbuf);
-    sniff->priv->state = SNIFF_INACTIVE;
+    sniff->priv->state = SNIFFER_INACTIVE;
 }
 
 
@@ -148,10 +148,10 @@ cleanup()
 
     sniffer_list_foreach(sniff, s_como_ca->sniffers) {
 
-	if (sniff->priv->state == SNIFF_INACTIVE)
+	if (sniff->priv->state == SNIFFER_INACTIVE)
 	    continue;
 
-	sniff->stop(sniff);
+	sniff->cb->stop(sniff);
 	ppbuf_free(sniff);
     }
 }
@@ -894,7 +894,7 @@ cabuf_init(como_ca_t * como_ca, size_t size)
 
     sniffer_list_foreach(sniff, sniffers) {
 
-	if (sniff->priv->state == SNIFF_INACTIVE)
+	if (sniff->priv->state == SNIFFER_INACTIVE)
 	    continue;
 
 	/*
@@ -1082,7 +1082,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
      * determine if any sniffer has filled its buffer
      */
     sniffer_list_foreach(sniff, sniffers) {
-	if (sniff->priv->state == SNIFF_INACTIVE)
+	if (sniff->priv->state == SNIFFER_INACTIVE)
 	    continue;
 
 	ppbuf = sniff->ppbuf;
@@ -1197,7 +1197,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
     if (s_cabuf.clients_count > 0) {
 	sniffer_list_foreach(sniff, sniffers) {
 	    float usage;
-	    if (sniff->priv->state == SNIFF_INACTIVE)
+	    if (sniff->priv->state == SNIFFER_INACTIVE)
 		continue;
 
 	    ppbuf = sniff->ppbuf;
@@ -1205,9 +1205,9 @@ batch_create(int force_batch, como_ca_t * como_ca)
 	    if (batch->first_ref_pkts[ppbuf->id] == NULL)
 		continue;
 
-	    usage = sniff->usage(sniff,
-				 batch->first_ref_pkts[ppbuf->id],
-				 ppbuf->last_rpkt);
+	    usage = sniff->cb->usage(sniff,
+				     batch->first_ref_pkts[ppbuf->id],
+				     ppbuf->last_rpkt);
 	    batch->sniff_usage[ppbuf->id] = usage;
 	}
     }
@@ -1426,7 +1426,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
  *
  */
 void
-capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
+capture(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 	UNUSED int client_fd, como_node_t * node)
 {
     como_ca_t como_ca;
@@ -1436,17 +1436,20 @@ capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
     size_t sum_max_pkts = 0; /* sum of max pkts across initialized sniffers */
     int avg_batch_len = 0;
     int wait_for_clients = 0;
+    int supervisor_fd;
     sniffer_t *sniff;
     sniffer_list_t *sniffers;
     
+    supervisor_fd = ipc_peer_get_fd(parent);
     
     memset(&como_ca, 0, sizeof(como_ca_t));
     s_como_ca = &como_ca; /* used only by cleanup */
     
-    //como_ca.shmem = shmem;
+    como_ca.shmemmap = shmemmap;
+    memmap_alc_init(shmemmap, &como_ca.shalc);
     
     /* wait for the debugger to attach */
-    DEBUGGER_WAIT_ATTACH(peer);
+    DEBUGGER_WAIT_ATTACH(child);
 
     /* register handlers for signals */
 
@@ -1475,34 +1478,31 @@ capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
 
     /* start all the sniffers */
     sniffer_list_foreach(sniff, sniffers) {
+	/* initialize private state */
+	sniff->priv = como_new0(sniffer_priv_t);
+	sniff->priv->state = SNIFFER_UNINITIALIZED;
     	sniff->priv->fd = -1;
 
 	/* create the ppbuf */
 	sniff->ppbuf = ppbuf_new(sniff->max_pkts, sniff->priv->id);
 
-	if (sniff->start(sniff) < 0) {
+	if (sniff->cb->start(sniff) < 0) {
 	    sniff->priv->state = SNIFFER_INACTIVE;
 
 	    warn("error while starting sniffer %s (%s): %s\n",
-		 sniff->name, sniff->priv->device, strerror(errno));
+		 sniff->cb->name, sniff->device, strerror(errno));
 	    continue;
 	}
 	sniff->priv->state = SNIFFER_ACTIVE;
 
-	/* setup the sniffer metadesc */
-	//sniff->setup_metadesc(sniff);
-
 	sum_max_pkts += sniff->max_pkts;
-	
-	ipc_send((ipc_peer_t *) COMO_SU, CA_SNIFFER_INITIALIZED,
-		 &sniff->priv->id, sizeof(sniff->priv->id));
     }
 
     /* initialize the capture buffer */
     cabuf_init(&como_ca, sum_max_pkts);
     
     /* notify SUPERVISOR that all the sniffers are ready */
-    ipc_send((ipc_peer_t *) COMO_SU, CA_SNIFFERS_INITIALIZED, NULL, 0);
+    ipc_send(parent, CA_SNIFFERS_INITIALIZED, NULL, 0);
 
     /*
      * proccess all the messages from SUPERVISOR until it sends
@@ -1627,7 +1627,7 @@ capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
 	    int max_no;		/* max number of packets to capture */
 	    int drops = 0;
 
-	    if (sniff->priv->state == SNIFF_FROZEN)
+	    if (sniff->priv->state == SNIFFER_FROZEN)
 		continue;	/* frozen devices */
 
 	    if ((sniff->flags & SNIFF_SELECT) && !FD_ISSET(sniff->fd, &r))
@@ -1656,8 +1656,8 @@ capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
 	    /* capture more packets */
 
 	    start_tsctimer(map.stats->ca_sniff_timer);
-	    res = sniff->next(sniff, max_no, como_ca.min_flush_ivl,
-				first_ref_pkt, &drops);
+	    res = sniff->cb->next(sniff, max_no, como_ca.min_flush_ivl,
+				  first_ref_pkt, &drops);
 	    end_tsctimer(map.stats->ca_sniff_timer);
 
 	    /* tell the ppbuf we're done with capture */
@@ -1669,14 +1669,14 @@ capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
 	    /* disable the sniffer if a problem occurs */
 
 	    if (res < 0) {
-		sniff->stop(sniff);
+		sniff->cb->stop(sniff);
 		/* NB: freeing ppbuf here discards some previously
 		 *     OK packets. Fixing this needs a new "dying"
 		 *     state to be added.  so TODO!   RNC1 21SEP06
 		 */
 		ppbuf_free(sniff);
 		/* disable the sniffer */
-		sniff->priv->state = SNIFF_INACTIVE;
+		sniff->priv->state = SNIFFER_INACTIVE;
 		continue;
 	    }
 	    
@@ -1689,10 +1689,11 @@ capture(ipc_peer_full_t * peer, /*shmem_t * shmem,*/ int supervisor_fd,
 	    /* update drop statistics */
 
 	    como_ca.stats->drops += drops;
-	    sniff->stats->tot_dropped_pkts += drops;
+	    sniff->priv->stats.tot_dropped_pkts += drops;
 
 	    debug("received %d packets from sniffer %s\n",
-		  sniff->ppbuf->captured, sniff->name);
+		  sniff->ppbuf->captured,
+		  sniff->cb->name);
 	}
 
 	/* try to create a new batch containing all captured packets */

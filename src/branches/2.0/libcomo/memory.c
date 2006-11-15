@@ -42,8 +42,7 @@
 
 #define LOG_DOMAIN "MEMORY"
 #include "como.h"
-
-#define MAP_NOSYNC 0
+#include "comopriv.h"
 
 
 /*
@@ -92,12 +91,6 @@ struct memblock {
     uint8_t		data[0];
 };
 
-typedef struct memmap_stats memmap_stats_t;
-
-struct memmap_stats {
-    size_t	usage;	/* used memory */
-    size_t	peak;	/* peak usage */
-};
 
 /*
  * Entries of a memmap.
@@ -325,26 +318,22 @@ memmap_free(void * p, const char * file, int line, memmap_t * m)
  * 
  */
 memmap_t *
-memmap_create(size_t chunk, uint32_t entries)
+memmap_create(shmem_t * shmem, uint32_t entries)
 {
     void *x;
     memmap_state_t *mem;
     memmap_t *map;
     memblock_t *m;
     size_t ctrl;
+    size_t size;
 
     /*
      * we put the memmap state structure at the beginning of the
      * chunk, followed by the memory block that contains the actual
      * allocated space.
      */    
-    
-    x = mmap((void *)0, chunk*1024*1024, PROT_WRITE|PROT_READ,
-	       MAP_ANON|MAP_NOSYNC|MAP_SHARED, -1 /* fd */, (off_t)0);
-    if (x == MAP_FAILED) {
-	error("Can't allocate %dMB of mapped memory\n", chunk);
-    }
-    notice("allocated %dMB of mapped memory\n", chunk);
+    x = shmem_baseaddr(shmem);
+    size = shmem_size(shmem);
     
     /* size of control structures */
     ctrl = sizeof(memmap_state_t) + (sizeof(memmap_t) * (1 + entries));
@@ -360,12 +349,12 @@ memmap_create(size_t chunk, uint32_t entries)
     
     /* initially the map has only a big block */
     m = (memblock_t *) x;
-    m->size = chunk*1024*1024 - ctrl - sizeof(memblock_t);
+    m->size = size - ctrl - sizeof(memblock_t);
     m->_magic = MY_MAGIC;
     m->next = NULL;
     
     mem->low = mem->high = (void *) m;
-    mem->high += chunk*1024*1024 - ctrl;
+    mem->high += size - ctrl;
 
     /* create an initial, pseudo-empty map */
     map_size(map) = entries;
@@ -374,22 +363,6 @@ memmap_create(size_t chunk, uint32_t entries)
     memmap_insert(map, m);
     
     return map;
-}
-
-
-void
-memmap_destroy(memmap_t * m)
-{
-    memmap_state_t *mem;
-    size_t chunk;
-    
-    mem = memmap_get_state(m);
-    
-    chunk = (mem->high - (void *) mem)/1024/1024;
-    
-    munmap(mem, mem->high - (void *) mem);
-    
-    notice("deallocated %dMB of mapped memory\n", chunk);
 }
 
 
