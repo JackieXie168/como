@@ -579,7 +579,8 @@ ipc_handle(int fd)
     /* find the right handler if any */
     if (s_handlers[msg.type] != NULL) {
 	int ic;
-	ic = s_handlers[msg.type](&msg.sender, buf, msg.len, swap, s_user_data);
+	ic = s_handlers[msg.type]((ipc_peer_t *) x, buf, msg.len, swap,
+				  s_user_data);
 	if (ic == IPC_CLOSE) {
 	    notice("Closing connection to peer %s on fd %d\n", x->name, fd);
 	    ipc_peer_list_remove(&s_peers, x);

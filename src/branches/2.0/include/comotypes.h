@@ -53,6 +53,15 @@ typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
 #include "serialize.h"
 
+typedef struct collection collection_t;
+typedef struct tuple_collection_item_t tuple_collection_item_t;
+#include "tuple_collection.h"
+struct tuple_collection_item_t {
+    tuple_collection_entry_t entry;
+    uint8_t data[0]; /* variable size */
+};
+
+
 /*
  * New definitions of object types
  */
@@ -115,22 +124,8 @@ typedef enum running_t {
  * and take arguments from the config file.
  * Returns the config state.
  */
-typedef void * (*su_init_fn) (mdl_t * h);
+typedef void * (*su_init_fn) (mdl_t * h, hash_t * args);
 
-
-/**
- * flush_fn() run from capture at every flush interval to obtain a clean
- * flush state.
- */
-typedef void * (*flush_fn)   (mdl_t * h, timestamp_t ts);
-
-/**
- * captures_fn() run from capture to update *state with the info from *pkt.
- * state points to current flush state.
- * Normally returns COMO_OK to continue to process the packets, can return
- * COMO_FLUSH to force a flush.
- */
-typedef int    (*capture_fn) (mdl_t * h, pkt_t * pkt, void * state);
 
 typedef struct mdl_ibase        mdl_ibase_t;
 
@@ -146,13 +141,15 @@ struct _mdl {
     mdl_ibase_t * priv;
 };
 
-#define mdl_get_config(h, type) \
+#define mdl_get_config(h,type) \
 ((const type *) (h->config))
 
-#define mdl_alloc_config(h, type) \
-((type *) mdl__alloc_config(h, sizeof(type), &(type ## _serializable)))
+#define mdl_alloc_config(h,type) \
+((type *) mdl__alloc_config(h, sizeof(type)))
 
-#define mdl_alloc_tuple(h, type) \
+void * mdl__alloc_config(mdl_t * h, size_t sz);
+
+#define mdl_alloc_tuple(h,type) \
 ((type *) mdl__alloc_tuple(h, sizeof(type)))
 
 
@@ -160,19 +157,28 @@ void * mdl__alloc_tuple(mdl_t * h, size_t sz);
 char * mdl_alloc_string(mdl_t * h, size_t sz);
 
 
-void   mdl_serialize   (uint8_t ** sbuf, const mdl_t * h);
-size_t mdl_sersize     (const mdl_t * src);
-void   mdl_deserialize (uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc);
 
 
 /* Module callbacks  (TODO: document) */
 
-typedef void * (ca_init_fn)(mdl_t *self);
-typedef void   (ca_update_fn)(mdl_t *self, pkt_t *pkt);
-typedef void   (ca_flush_fn)(mdl_t *self);
 
-typedef void * (ex_init_fn)(mdl_t *self);
-typedef void   (ex_update_fn)(mdl_t *self, pkt_t *pkt);
+typedef void * (*ca_init_fn)(mdl_t * self, timestamp_t ts);
+/**
+ * ca_update_fn() run from capture to update *state with the info from *pkt.
+ * state points to current flush state.
+ * Normally returns COMO_OK to continue to process the packets, can return
+ * COMO_FLUSH to force a flush.
+ */
+typedef void   (*ca_capture_fn)(mdl_t * self, pkt_t * pkt, void * state);
+/**
+ * ca_flush_fn() run from capture at every flush interval to obtain a clean
+ * flush state.
+ */
+typedef void   (*ca_flush_fn)(mdl_t * self);
+
+typedef void * (*ex_init_fn)(mdl_t *self);
+
+typedef void   (*ex_export_fn)(mdl_t *self, tuple_collection_t * col);
 
 typedef struct capabilities_t {
     uint32_t has_flexible_flush:1;

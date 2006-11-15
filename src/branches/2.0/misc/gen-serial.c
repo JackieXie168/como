@@ -160,8 +160,12 @@ gen_serialization_skel(FILE *out, struct_t *st, char *op)
     char *sep = "";
     int unroll = 0;
 
-    if (! strcmp(op, "deserialize")) /* particularities of operations */
+    if (! strcmp(op, "deserialize")) { /* particularities of operations */
         third_param = ", alc_t *alloc";
+        asprintf(&first_statement, "struct %s *x = alc_new(alloc, struct %s); ",
+        	st->name, st->name);
+        last_statement = "*_x = x;\n";
+    }
     else if (!strcmp(op, "sersize")) {
         first_param = "";
         ret_type = "int";
@@ -171,8 +175,10 @@ gen_serialization_skel(FILE *out, struct_t *st, char *op)
         last_statement = ";";
     }
 
-    fprintf(out, "static %s\n%s_%s(%sstruct %s *x%s)\n{\n",
-        ret_type, op, st->name, first_param, st->name, third_param);
+    fprintf(out, "%s\n%s_%s(%sstruct %s *%sx%s)\n{\n",
+        ret_type, op, st->name, first_param, st->name,
+        strcmp(op, "deserialize") == 0 ? "*_" : "",
+        third_param);
 
     if (first_statement)
         fprintf(out, "\t%s\n", first_statement);

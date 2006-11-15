@@ -43,18 +43,20 @@
 #include "module.h"
 #include "data.h"
 
-static timestamp_t 
-init(void * self, char *args[])
+void * 
+init(mdl_t * self, hash_t * args)
 {
     config_t * config; 
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
 
-    config = mem_mdl_malloc(self, sizeof(config_t)); 
+    config = mdl_alloc_config(self, config_t);
+
     config->meas_ivl = 1;
     config->iface = -1; 
 
+/*
     for (i = 0; args && args[i]; i++) {
 	char * wh;
 
@@ -65,15 +67,17 @@ init(void * self, char *args[])
             config->iface = atoi(wh);
 	} 
     }
-    
+*/    
     /* setup indesc */
+/*
     inmd = metadesc_define_in(self, 0);
     inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
+*/    
+    self->flush_ivl = TIME2TS(config->meas_ivl, 0);
     
-    //CONFIG(self) = config;
-    return TIME2TS(config->meas_ivl, 0);
+    return config;
 }
 
 

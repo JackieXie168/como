@@ -167,8 +167,8 @@ typedef union ccamsg_t {
     } close;
 } ccamsg_t;
 
-void capture (ipc_peer_full_t * child, ipc_peer_t * parent,
-	      memmap_t * shmemmap,int client_fd, como_node_t * node);
+void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
+		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 
 /* como.c */
 
@@ -188,13 +188,6 @@ const char * como_env_libdir();
 
 /* mdl.c */
 
-typedef struct collection collection_t;
-typedef struct tuple_collection_item_t tuple_collection_item_t;
-#include "tuple_collection.h"
-struct tuple_collection_item_t {
-    tuple_collection_entry_t entry;
-    uint8_t data[0]; /* variable size */
-};
 
 typedef struct mdl_icapture     mdl_icapture_t;
 typedef struct mdl_iexport      mdl_iexport_t;
@@ -212,9 +205,11 @@ struct mdl_ibase {
     mdl_priv_t		type;
     shobj_t *		shobj;
     serializable_t	mdl_config;
-    serializable_t	mdl_rec;
+    serializable_t	mdl_tuple;
+    serializable_t	mdl_record;
 
-    alc_t *             shmem_alc;
+    alc_t		alc;
+
     metadesc_t *        indesc;
     metadesc_t *        outdesc;
     union {
@@ -236,10 +231,10 @@ struct mdl_icapture {
     tuple_collection_t tuples;
     tuple_collection_item_t *last_tuple;
 
-    flush_fn	flush;
-    capture_fn	capture;
+    ca_init_fn	init;
+    ca_capture_fn	capture;
+    ca_flush_fn	flush;
 
-    alc_t	alc;
     alc_t	shalc;
     
     treenode_t *filter;
@@ -257,6 +252,9 @@ struct mdl_iexport {
     int		cs_writer;
     size_t	cs_cisz;
     off_t	woff;
+    
+    ex_init_fn	init;
+    ex_export_fn	export;
 };
 
 struct mdl_iquery {
@@ -268,5 +266,9 @@ mdl_iexport_t *     mdl_get_iexport     (mdl_t * h);
 mdl_iquery_t *      mdl_get_iquery      (mdl_t * h);
 
 int mdl_load (mdl_t * h, mdl_priv_t priv);
+void   mdl_serialize   (uint8_t ** sbuf, const mdl_t * h);
+size_t mdl_sersize     (const mdl_t * src);
+void   mdl_deserialize (uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc,
+			mdl_priv_t priv);
 
 #endif /*COMOPRIV_H_*/

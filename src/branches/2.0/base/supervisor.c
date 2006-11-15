@@ -50,8 +50,16 @@ typedef struct sniffer_def {
     char *	args;
 } sniffer_def_t;
 
+typedef struct mdl_def {
+    char *	name;
+    char *	mdlname;
+    hash_t *	args;
+} mdl_def_t;
+
+
 typedef struct como_config {
     array_t *		sniffer_defs;
+    array_t *		mdl_defs;
 } como_config_t;
 
 typedef struct como_su {
@@ -635,6 +643,38 @@ como_su_run(como_su_t * como_su)
     }
 }
 
+void
+como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
+		    alc_t * alc)
+{
+    mdl_t mdl;
+    int i;
+    for (i = 0; i < mdl_defs->len; i++) {
+	mdl_def_t *def;
+	mdl_isupervisor_t *is;
+	
+	def = &array_at(mdl_defs, mdl_def_t, i);
+	
+	memset(&mdl, 0, sizeof(mdl_t));
+	mdl.name = alc_strdup(alc, def->name);
+	mdl.mdlname = alc_strdup(alc, def->mdlname);
+	
+	if (mdl_load(&mdl, PRIV_ISUPERVISOR) < 0) {
+	    //mdl_destroy(&mdl);
+	    continue;
+	}
+	
+	is = mdl_get_isupervisor(&mdl);
+	mdl.config = is->init(&mdl, def->args);
+	if (mdl.config == NULL) {
+	    warn("Initialization of module `%s` failed.\n", mdl.name);
+	    continue;
+	}
+
+	array_add(node->mdls, &mdl);
+    }
+}
+
 
 void
 como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
@@ -668,6 +708,8 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 		 def->name, def->device);
 	    continue;
 	}
+	
+	s->cb = cb;
 
 	/* check that the sniffer is consistent with the sniffers already
 	 * configured */
@@ -703,15 +745,27 @@ fake_config()
     static como_config_t config;
     
     array_t *sniffer_defs;
+    array_t *mdl_defs;
+    
     sniffer_def_t s;
+    mdl_def_t m;
+    
+    
     sniffer_defs = array_new(sizeof(sniffer_def_t));
+    mdl_defs = array_new(sizeof(mdl_def_t));
 
     s.name = como_strdup("pcap");
     s.device = como_strdup("/traces/trace_eth_1");
     s.args = NULL;
     array_add(sniffer_defs, &s);
+    
+    m.name = como_strdup("traffic");
+    m.mdlname = como_strdup("trafficCC");
+    m.args = NULL;
+    array_add(mdl_defs, &m);
 
     config.sniffer_defs = sniffer_defs;
+    config.mdl_defs = mdl_defs;
     
     return &config;    
 }
@@ -747,7 +801,7 @@ main(int argc, char ** argv)
     /* initialize environment */
     como_env_init();
     como_su->env = como_env();
-
+    como_su->env->libdir = "./modules";
 
     /* initialize node 0 */
     memset(&node, 0, sizeof(node));
@@ -805,13 +859,16 @@ main(int argc, char ** argv)
     como_node_init_sniffers(node0, como_su->config->sniffer_defs,
 			    &como_su->shalc);
 
+    como_node_init_mdls(node0, como_su->config->mdl_defs,
+			como_su->alc);
+
     /* start the CAPTURE process */
     if (node0->sniffers_count > 0) {
 	ipc_peer_full_t *ca;
 	pid_t pid;
 	
 	ca = ipc_peer_child(COMO_CA, 0);
-	pid = start_child(ca, capture, como_su->memmap, -1, node0);
+	pid = start_child(ca, capture_main, como_su->memmap, -1, node0);
 	if (pid < 0) {
 	    warn("Can't start CAPTURE\n");
 	}

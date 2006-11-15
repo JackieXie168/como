@@ -100,7 +100,7 @@ metadesc_define_in(mdl_t *self, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(self->priv->shmem_alc, pktmeta_count, ap);
+    md = metadesc_new_va(&self->priv->alc, pktmeta_count, ap);
     va_end(ap);
     
     md->_next = self->priv->indesc;
@@ -116,7 +116,7 @@ metadesc_define_out(mdl_t *self, int pktmeta_count, ...)
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(self->priv->shmem_alc, pktmeta_count, ap);
+    md = metadesc_new_va(&self->priv->alc, pktmeta_count, ap);
     va_end(ap);
     
     md->_next = self->priv->outdesc;

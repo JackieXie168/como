@@ -66,11 +66,12 @@ typedef struct serializable {
 #define serialize_timestamp_t serialize_uint64_t
 #define serialize_int serialize_int32_t
 
-#define serialize_string(sbuf, val) do {\
+#define serialize_string(sbuf,val) do {	\
     size_t __sz;			\
-    __sz = strlen(val);		        \
+    __sz = (val) ? 1 + strlen(val) : 0; \
     serialize_uint32_t(sbuf, __sz);	\
-    memcpy(*sbuf, val, __sz);	        \
+    if (__sz > 0)			\
+	memcpy(*sbuf, val, __sz);	\
     *sbuf += __sz;			\
 } while(0)
 
@@ -95,11 +96,12 @@ typedef struct serializable {
 
 #define deserialize_string(sbuf,val_out,alc) do { \
     size_t sz;					\
-    char *val;					\
+    char *val = NULL;				\
     deserialize_uint32_t(sbuf, &sz);		\
-    val = alc_malloc(alc, sz + 1);		\
-    memcpy(val, sbuf, sz);			\
-    val[sz] = '\0';				\
+    if (sz > 0) {				\
+	val = alc_malloc(alc, sz);		\
+	memcpy(val, *sbuf, sz);			\
+    }						\
     *val_out = val;				\
     *sbuf += sz;				\
 } while(0)
@@ -119,6 +121,7 @@ typedef struct serializable {
 #define sersize_timestamp_t sersize_uint64_t
 #define sersize_int sersize_int32_t
 
-#define sersize_string(val) (sersize_uint32_t(x) + strlen(val))
+#define sersize_string(val) \
+    (sersize_uint32_t(x) + ((val) ? 1 + strlen(val) : 0))
 
 #endif
