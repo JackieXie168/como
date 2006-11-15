@@ -238,7 +238,9 @@ struct mdl_icapture {
     alc_t	alc;
     alc_t	shalc;
     
-    treenode_t * filter;
+    treenode_t *filter;
+    
+    ipc_peer_t *export;
 };
 
 struct mdl_isupervisor {
