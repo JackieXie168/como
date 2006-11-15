@@ -255,8 +255,8 @@ metadesc_t * metadesc_new     (metadesc_t * head, alc_t * alc,
 			       int pktmeta_count, ...);
 pkt_t *      metadesc_tpl_add (metadesc_t * md, const char * protos);
 
-metadesc_t * metadesc_define_in (module_t *self, int pktmeta_count, ...);
-metadesc_t * metadesc_define_out(module_t *self, int pktmeta_count, ...);
+metadesc_t * metadesc_define_in (mdl_t *self, int pktmeta_count, ...);
+metadesc_t * metadesc_define_out(mdl_t *self, int pktmeta_count, ...);
 
 /*
  * pktmetaion.c

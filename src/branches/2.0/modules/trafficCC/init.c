@@ -72,7 +72,7 @@ init(void * self, char *args[])
     
     pkt = metadesc_tpl_add(inmd, "none:none:none:none");
     
-    CONFIG(self) = config;
+    //CONFIG(self) = config;
     return TIME2TS(config->meas_ivl, 0);
 }
 

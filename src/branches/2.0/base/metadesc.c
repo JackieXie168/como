@@ -38,6 +38,7 @@
 
 #include "como.h"
 #include "comopriv.h"
+#include "comotypes.h"
 
 static metadesc_t *
 metadesc_new_va(alc_t *alc, int pktmeta_count, va_list ap)
@@ -93,33 +94,33 @@ metadesc_new(metadesc_t * head, alc_t * alc, int pktmeta_count, ...)
 }
 
 metadesc_t *
-metadesc_define_in(module_t *self, int pktmeta_count, ...)
+metadesc_define_in(mdl_t *self, int pktmeta_count, ...)
 {
     va_list ap;
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(&self->alc, pktmeta_count, ap);
+    md = metadesc_new_va(self->priv->shmem_alc, pktmeta_count, ap);
     va_end(ap);
     
-    md->_next = self->indesc;
-    self->indesc = md;
+    md->_next = self->priv->indesc;
+    self->priv->indesc = md;
     
     return md;
 }
 
 metadesc_t *
-metadesc_define_out(module_t *self, int pktmeta_count, ...)
+metadesc_define_out(mdl_t *self, int pktmeta_count, ...)
 {
     va_list ap;
     metadesc_t *md;
     
     va_start(ap, pktmeta_count);
-    md = metadesc_new_va(&self->alc, pktmeta_count, ap);
+    md = metadesc_new_va(self->priv->shmem_alc, pktmeta_count, ap);
     va_end(ap);
     
-    md->_next = self->outdesc;
-    self->outdesc = md;
+    md->_next = self->priv->outdesc;
+    self->priv->outdesc = md;
     
     return md;
 }

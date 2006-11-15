@@ -52,13 +52,13 @@ typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 #include "hash.h"
 
 #include "serialize.h"
-#include "mdl.h"
 
 /*
  * New definitions of object types
  */
 typedef struct _como		como_t;		/* main como map */
-typedef struct _module          module_t;       /* module package */
+typedef struct _module          module_t;       /* XXX legacy module package */
+typedef struct _mdl             mdl_t;          /* module package */
 typedef struct _alias           alias_t;        /* aliases */
 typedef uint32_t		procname_t;	/* process names */
 typedef struct _callbacks       callbacks_t;    /* callbacks */
@@ -83,7 +83,6 @@ typedef struct _como_headerinfo headerinfo_t;
 
 typedef struct cca		cca_t;
 
-
 typedef uint16_t		asn_t;		/* ASN values */
 
 typedef enum runmode { 
@@ -105,166 +104,82 @@ typedef enum running_t {
     RUNNING_ON_DEMAND			/* running in query on demand */
 } running_t;
 
+/*
+ * Module callbacks
+ */
+
 
 /**
- * export_fn() same as update_fn(), is the core of export's processing.
- * It updates *efh with the info in *fh.
- * new_rec = 1 if *fh has just been allocated.
- * fs points to current flush state.
- * Returns 1 if *fh becomes full after the call, 0 otherwise (failure is
- * not contemplated).
- * Not mandatory; if defined, an action_fn() should be defined too.
+ * su_init_fn() run from supervisor to initialize a module,
+ * For the time being, just initialize the private memory for the module,
+ * and take arguments from the config file.
+ * Returns the config state.
  */
-typedef int (export_fn)(void * self, void *efh, void *fh, int new_rec);
+typedef void * (*su_init_fn) (mdl_t * h);
+
 
 /**
- * compare_fn() is the compare function used by qsort.
- * If defined, it means that the records are sorted before being scanned
- * by export.
- * Not mandatory; useless if there's no export_fn().
+ * flush_fn() run from capture at every flush interval to obtain a clean
+ * flush state.
  */
-typedef int (compare_fn)(const void *, const void *);
+typedef void * (*flush_fn)   (mdl_t * h, timestamp_t ts);
 
 /**
- * action_fn() called by export to determine if a record can be discarded.
- * Returns a bitmap on what to do with the record given the beginning of the
- * interval i, the current time t and the number, count of calls on this table.
- *	ACT_DISCARD	discard the record after this step;
- *	ACT_STORE	store the record;
- *	ACT_STOP	stop the scanning after this record
- *      ACT_GO		start scanning all the records
- * 
- * This function if called with fh = NULL and count = 0 indicates 
- * that the action must be taken on the entire table. In this case
- * an ACT_STOP means that no record is processed at all. ACT_GO instead
- * makes export process the entire table (and sort it if needed).
- * Not mandatory; if defined, an export_fn() should be defined too.
- * 
+ * captures_fn() run from capture to update *state with the info from *pkt.
+ * state points to current flush state.
+ * Normally returns COMO_OK to continue to process the packets, can return
+ * COMO_FLUSH to force a flush.
  */
-typedef int (action_fn)(void * self, void * fh, timestamp_t i,
-			timestamp_t t, int count);
-#define	ACT_DISCARD	0x0400
-#define	ACT_STORE	0x4000
-#define	ACT_STORE_BATCH	0x8000
-#define	ACT_STOP	0x0040
-#define ACT_GO		0x0010
-#define	ACT_MASK	(ACT_DISCARD|ACT_STORE|ACT_STORE_BATCH|ACT_STOP|ACT_GO)
+typedef int    (*capture_fn) (mdl_t * h, pkt_t * pkt, void * state);
 
-/**
- * store_fn() writes the record in the buffer,
- * returns the actual len (0 is valid), or -1 on error.
- * Mandatory.
- * XXX in case of failure e.g. for lack of room, we don't know what to do.
- * This is always due to a configuration error (because in write mode,
- * the storage module will always give you what you requested as long as
- * it is not larger than a single file). So the response to this should
- * be disable the module or some other strong action.
- */
-typedef ssize_t (store_fn)(void * self, void * rec, char * buf);
+typedef struct mdl_ibase        mdl_ibase_t;
 
-/**
- * load_fn() given a buffer, returns the size of the first record in the
- * buffer and the associated timestamp in *ts.
- * On error returns 0 and leaves *ts invalid.
- * Mandatory.
- */
-typedef size_t (load_fn)(void * self, char *buf, size_t len, timestamp_t * ts);
+struct _mdl {
+    /* public fields */
+    timestamp_t	flush_ivl;
+    char *	name;
+    char *	description;
+    char *	filter;
+    char *	mdlname;
+    void *	config;
+    /* private state */
+    mdl_ibase_t * priv;
+};
 
-/**
- * print_fn() given a data buffer, returns a printable
- * representation of the content of the data in a static buffer.
- * Returns the length in *len. It can receive arguments in the array args
- * (the last element is NULL) to format the string. 
- * This function is overloaded. If buf == NULL and args != NULL, it indicates
- * that this is the first call to print() within a query. If buf == NULL and
- * args == NULL, this is the last call of print(). If buf != NULL and 
- * args == NULL, this is a call of print() for one valid record. 
- * On error returns NULL.
- * Optional
- */
-typedef char * (print_fn)(void * self, char * buf, size_t * len, 
-			  char * const args[]);
+#define mdl_get_config(h, type) \
+((const type *) (h->config))
 
-/**
- * replay_fn() - given a data buffer (ptr), returns a reconstructed packet 
- * trace in the output buffer (out). The output buffer is allocated by the 
- * caller. The left variable tells the the module how many packets are left
- * to be genereted (i.e. the value returned by previous call with the 
- * same record).  
- *
- * Returns the number of packet left to send, -1 on error. 
- * out_len is also updated to indicate the valid bytes in out and count
- * is update to record the total number of packets generated so far from 
- * the record pointed by ptr.  
- * 
- * Not mandatory.
- */
-typedef int (replay_fn)(void * self, char *ptr, char *out, 
-			size_t * out_len, int left);
+#define mdl_alloc_config(h, type) \
+((type *) mdl__alloc_config(h, sizeof(type), &(type ## _serializable)))
+
+#define mdl_alloc_tuple(h, type) \
+((type *) mdl__alloc_tuple(h, sizeof(type)))
+
+
+void * mdl__alloc_tuple(mdl_t * h, size_t sz);
+char * mdl_alloc_string(mdl_t * h, size_t sz);
+
+
+void   mdl_serialize   (uint8_t ** sbuf, const mdl_t * h);
+size_t mdl_sersize     (const mdl_t * src);
+void   mdl_deserialize (uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc);
+
+
+/* Module callbacks  (TODO: document) */
+
+typedef void * (ca_init_fn)(mdl_t *self);
+typedef void   (ca_update_fn)(mdl_t *self, pkt_t *pkt);
+typedef void   (ca_flush_fn)(mdl_t *self);
+
+typedef void * (ex_init_fn)(mdl_t *self);
+typedef void   (ex_update_fn)(mdl_t *self, pkt_t *pkt);
 
 typedef struct capabilities_t {
     uint32_t has_flexible_flush:1;
     uint32_t _res:31;
 } capabilities_t;
 
-/*
- * This structure contains the callbacks for a classifier.
- * Each classifier which is implemented as a shared
- * object is expected to export a structure of this kind,
- * named 'callbacks', properly initialized.
- */
-struct _callbacks {
-    size_t ca_recordsize; 
-    size_t ex_recordsize; 
-    size_t st_recordsize;
-    
-    capabilities_t capabilities;
-#if 0    
-    /* callbacks called by the supervisor process */
-    init_fn     * init;
-
-    /* callbacks called by the capture process */
-    check_fn    * check;
-    hash_fn     * hash;
-    match_fn    * match;
-    update_fn   * update;
-    flush_fn	* flush;
-
-    /* callbacks called by the export process */
-    ematch_fn   * ematch;  
-    export_fn   * export;
-    compare_fn  * compare;
-    action_fn   * action;
-    store_fn    * store;
-
-    /* callbacks called by the query process */
-    load_fn     * load;
-    print_fn    * print;
-    replay_fn   * replay;
-#endif
-    char * formats; 
-};
-
-
-/*
- * Packet filter.
- *
- * On input, a list of packets and a count. On output, it returns the
- * number of outputs in *n_outputs, and also allocates and fills a
- * matrix of n_output rows, n_packet columns, indicating,
- * for each output, who is going to receive which packets.
- * The pointer to the matrix is returned by the function.
- *
- * The function also needs the array of modules, to check if a module
- * has been disabled (and if so, filter out all packets).
- *
- * For the time being, the array is one of integers. Later it
- * will be packed to use bits.
- */
-typedef int *(filter_fn)(void *pkt_buf, int n_packets, int n_outputs,
-        module_t *modules);
-
-
+#if 0 /* XXX legacy code */
 /*
  * "Module" data structure. It needs a set of configuration parameters
  * (e.g., weigth, base output directory, etc.), some runtime information
@@ -321,7 +236,6 @@ struct _module {
     int seen;                   /* used in config.c to find out what modules
                                  * have been removed from cfg files */
 };
-
 
 /* 
  * aliases are used to define new module names that correspond to 
@@ -422,6 +336,7 @@ struct _export_array {
     uint32_t first_full;	/* first full record */
     rec_t *record[0]; 		/* pointers to records */
 };
+#endif
 
 
 /* 
