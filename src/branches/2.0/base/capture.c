@@ -103,11 +103,12 @@ typedef struct como_ca {
 
     timestamp_t		live_th;
 
-    stats_t *		stats;
 } como_ca_t;
 
 como_ca_t *s_como_ca;
 
+/* stats 'inherited' from SU */
+extern stats_t *como_stats;
 
 /*
  * -- ppbuf_free
@@ -156,160 +157,6 @@ cleanup()
     }
 }
 
-#if 0
-/*
- * -- flush_state
- *
- * Called by capture_pkt() process when a timeslot is complete.
- * it flushes the flow table (if it exists and it is non-empty)
- * and all memory state of the module. The state is queued in the 
- * em_tables list to be sent to EXPORT later.
- * 
- * XXX we send both the pointer to the module state and the 
- *     capture table. this is going to change in the near future 
- *     when the hash table will be managed from inside the modules.
- *
- */
-static void
-flush_state(module_t * mdl, tailq_t * em_tables)
-{
-    ctable_t *ct;
-    expiredmap_t *em;
-
-    /* check if the table is there and if it is non-empty */
-    ct = mdl->ca_hashtable;
-    assert(ct != NULL);
-    assert(ct->records > 0 || ct->flexible == 1);
-
-    logmsg(V_LOGCAPTURE,
-	   "flush_tables %p(%s) buckets %d records %d live %d\n"
-	   "ivl %llu ts %llu\n",
-	   ct, mdl->name, ct->size, ct->records, ct->live_buckets,
-	   ct->ivl, ct->ts);
-
-    /* update the hash table size for next time if it is underutilized 
-     * or overfull. 
-     */
-#ifdef ADAPTIVE_HASH_TABLES
-    if (ct->records > ct->size) {
-	/* hashtable underprovisioned, try resize it */
-	mdl->ca_hashsize <<= 2;
-	logmsg(LOGCAPTURE,
-	       "table '%s' overfull (%d vs %d) -- %d live : new size %d\n",
-	       mdl->name, ct->records, ct->size,
-	       ct->live_buckets, mdl->ca_hashsize);
-    } else if (ct->records < ct->size >> 5) {
-	/* the hashtable is overprovisioned. try resize it */
-	mdl->ca_hashsize >>= 2;
-	logmsg(LOGCAPTURE,
-	       "table '%s' underused (%d vs %d) -- %d live : new size %d\n",
-	       mdl->name, ct->records, ct->size,
-	       ct->live_buckets, mdl->ca_hashsize);
-    }
-#endif
-
-    em = alc_malloc(&(mdl->alc), sizeof(expiredmap_t));
-    em->next = NULL;
-    em->ct = ct;
-    em->mdl = mdl;
-    em->fstate = mdl->fstate;
-    em->shared_map = mdl->shared_map;
-
-    TQ_APPEND(em_tables, em, next);
-    map.stats->table_queue++;
-
-    /* reset the state of the module */
-    mdl->ca_hashtable = NULL;
-    mdl->fstate = NULL;
-    mdl->shared_map = NULL;
-}
-
-
-/*
- * -- capture_pkt
- *
- * This function is called for every batch of packets that need to be
- * processed by a classifier.
- * For each packet in the batch it runs the check()/hash()/match()/update()
- * methods of the classifier cl_index. The function also checks if the
- * current flow table needs to be flushed.
- *
- */
-static void
-capture_pkt(module_t * mdl, batch_t * batch, char *which, tailq_t * exp_tables)
-{
-    pkt_t *pkt, **pktptr;
-    int i, c, l;
-    int new_record;
-    int record_size;		/* effective record size */
-
-    record_size = mdl->callbacks.ca_recordsize + sizeof(rec_t);
-
-    c = 0;
-    pktptr = batch->pkts0;
-    l = MIN(batch->pkts0_len, batch->count);
-    do {
-
-	for (i = 0; i < l; i++, pktptr++, which++, c++) {
-	    pkt = *pktptr;
-
-	    /* flush the current flow table, if needed */
-	    if (mdl->ca_hashtable) {
-		ctable_t *ct = mdl->ca_hashtable;
-
-		if (pkt->ts >= ct->ivl + mdl->flush_ivl) {
-		    if (ct->records || ct->flexible) {
-			/*
-			 * even if the table doesn't contain any record, if
-			 * the flexible flag is set it will be flushed to
-			 * guarantee that export can call store_records for
-			 * the previously seen tables belonging to the same
-			 * interval.
-			 */
-			ct->ts = ct->ivl + mdl->flush_ivl;
-			flush_state(mdl, exp_tables);
-		    } else {
-			/* 
-			 * the table that would have been flushed if it
-			 * contained some record must be updated to refer to
-			 * the right ivl value.
-			 */
-			ct->ivl = pkt->ts - (pkt->ts % mdl->flush_ivl);
-		    }
-		}
-	    }
-	    if (!mdl->ca_hashtable) {
-		timestamp_t ivl;
-		ivl = pkt->ts - (pkt->ts % mdl->flush_ivl);
-		mdl->shared_map = memmap_new(allocator_shared(), 64,
-					     POLICY_HOLD_IN_USE_BLOCKS);
-		mdl->ca_hashtable = create_table(mdl, ivl);
-		if (!mdl->ca_hashtable) {
-		    /* XXX no memory, we keep going. 
-		     *     need better solution! */
-		    logmsg(LOGWARN, "out of memory for %s, skipping pkt\n",
-			   mdl->name);
-		    continue;
-		}
-		if (mdl->callbacks.flush != NULL) {
-		    mdl->fstate = mdl->callbacks.flush(mdl);
-		}
-	    }
-	    mdl->ca_hashtable->ts = pkt->ts;
-
-	    if (*which == 0)
-		continue;	/* no interest in this packet */
-
-	    start_tsctimer(map.stats->ca_updatecb_timer);
-	    cand->full = mdl->callbacks.update(mdl, pkt, cand, new_record);
-	    end_tsctimer(map.stats->ca_updatecb_timer);
-	}
-	pktptr = batch->pkts1;
-	l = batch->pkts1_len;
-    } while (c < batch->count);
-}
-#endif
-
 /*
  * -- batch_filter()
  *
@@ -318,7 +165,7 @@ capture_pkt(module_t * mdl, batch_t * batch, char *which, tailq_t * exp_tables)
  * This needs to be optimized.
  *
  */
-UNUSED static char *
+static char *
 batch_filter(batch_t * batch, como_ca_t * como_ca)
 {
     array_t *mdls;
@@ -372,10 +219,10 @@ batch_filter(batch_t * batch, como_ca_t * como_ca)
 		    if (COMO(ts) < ld_ts) {
 			ld_bytes += (uint64_t) COMO(len);
 		    } else {
-			como_ca->stats->load_15m[ld_idx % 15] = ld_bytes;
-			como_ca->stats->load_1h[ld_idx % 60] = ld_bytes;
-			como_ca->stats->load_6h[ld_idx % 360] = ld_bytes;
-			como_ca->stats->load_1d[ld_idx] = ld_bytes;
+			como_stats->load_15m[ld_idx % 15] = ld_bytes;
+			como_stats->load_1h[ld_idx % 60] = ld_bytes;
+			como_stats->load_6h[ld_idx % 360] = ld_bytes;
+			como_stats->load_1d[ld_idx] = ld_bytes;
 			ld_idx = (ld_idx + 1) % 1440;
 			ld_bytes = (uint64_t) COMO(len);
 			ld_ts += TIME2TS(60, 0);
@@ -415,7 +262,8 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
     }
 
     /* initialize new state */
-    ic->ivl_state = ic->init(mdl, ic->ivl_start);
+    if (ic->init)
+        ic->ivl_state = ic->init(mdl, ic->ivl_start);
 }
 
 static timestamp_t
@@ -436,7 +284,7 @@ mdl_batch_process(mdl_t * mdl, batch_t * batch, char * fltmap)
 
             ts = pkt->ts;
 	    
-	    if (ts >= ic->ivl_end) /* change of ivl */
+	    if (ts >= ic->ivl_end) /* change of ivl or 1st batch */
                 mdl_flush(mdl, ts);
 	    
 	    if (*fltmap == 0)
@@ -587,9 +435,9 @@ ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 
     ic = mdl_get_icapture(mdl);
     
-    
     /* parse the filter string */
-    parse_filter(mdl->filter, &(ic->filter), NULL);
+    if (mdl->filter)
+        parse_filter(mdl->filter, &(ic->filter), NULL);
 
     /* save the minimum flush interval */
     if (como_ca->min_flush_ivl == 0 ||
@@ -1496,6 +1344,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     int supervisor_fd;
     sniffer_t *sniff;
     sniffer_list_t *sniffers;
+
     
     supervisor_fd = ipc_peer_get_fd(parent);
     
@@ -1503,6 +1352,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     s_como_ca = &como_ca; /* used only by cleanup */
     
     como_ca.shmemmap = shmemmap;
+    como_ca.mdls = array_new(sizeof(mdl_t));
     memmap_alc_init(shmemmap, &como_ca.shalc);
     
     /* wait for the debugger to attach */
@@ -1574,6 +1424,10 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 	}
     }
 
+    sniffer_list_foreach(sniff, sniffers) {
+	if (sniff->priv->state == SNIFFER_ACTIVE)
+            sniff->priv->touched = TRUE;
+    }
 
     /* initialize select()able file descriptors */
     event_loop_init(&como_ca.el);
@@ -1734,6 +1588,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 		ppbuf_free(sniff);
 		/* disable the sniffer */
 		sniff->priv->state = SNIFFER_INACTIVE;
+		sniff->priv->touched = TRUE;
 		continue;
 	    }
 	    
@@ -1745,7 +1600,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 
 	    /* update drop statistics */
 
-	    como_ca.stats->drops += drops;
+	    como_stats->drops += drops;
 	    sniff->priv->stats.tot_dropped_pkts += drops;
 
 	    debug("received %d packets from sniffer %s\n",
@@ -1769,14 +1624,14 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 
 	    /* process the batch */
 	    start_tsctimer(como_ca.stats->ca_pkts_timer);
-	    como_ca.stats->ts = batch_process(batch, &como_ca);
+	    como_stats->ts = batch_process(batch, &como_ca);
 	    end_tsctimer(como_ca.stats->ca_pkts_timer);
 
 	    /* update the stats */
-	    como_ca.stats->pkts += batch->count;
+	    como_stats->pkts += batch->count;
 
-	    if (como_ca.stats->ts < como_ca.stats->first_ts)
-		como_ca.stats->first_ts = como_ca.stats->ts;
+	    if (como_stats->ts < como_stats->first_ts)
+		como_stats->first_ts = como_stats->ts;
 
 	    if (batch->ref_mask != 1)
 		batch->ref_mask &= ~1LL;

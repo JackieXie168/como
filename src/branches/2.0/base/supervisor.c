@@ -79,10 +79,10 @@ typedef struct como_su {
     alc_t		shalc;
 
     FILE *		logfile;	/* log file */
-    stats_t *		stats;
     como_config_t *	config;
 } como_su_t;
 
+stats_t *como_stats;
 
 
 #define SIZEOF_LOGMSG_DOMAIN	8
@@ -580,7 +580,7 @@ como_su_run(como_su_t * como_su)
          * user interface. just one line... 
          */
 	gettimeofday(&now, NULL);
-	secs = 1 + now.tv_sec - como_su->stats->start.tv_sec;
+	secs = 1 + now.tv_sec - como_stats->start.tv_sec;
  	dd = secs / 86400; 
         hh = (secs % 86400) / 3600; 
         mm = (secs % 3600) / 60;
@@ -591,13 +591,13 @@ como_su_run(como_su_t * como_su)
 		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); "
 		"pkts %llu drops %d; mdl %d/%d\r", 
 		dd, hh, mm, ss,
-		    (unsigned int)como_su->stats->mem_usage_cur/(1024*1024), 
-		    (unsigned int)como_su->stats->mem_usage_peak/(1024*1024), 
+		    (unsigned int)como_stats->mem_usage_cur/(1024*1024), 
+		    (unsigned int)como_stats->mem_usage_peak/(1024*1024), 
 		    shmem_size(como_su->shmem)/(1024*1024),
-		    como_su->stats->table_queue,
-		    como_su->stats->pkts,
-		    como_su->stats->drops,
-		    como_su->stats->modules_active,
+		    como_stats->table_queue,
+		    como_stats->pkts,
+		    como_stats->drops,
+		    como_stats->modules_active,
 		    mdls->len);
 	}
 
@@ -843,9 +843,9 @@ main(int argc, char ** argv)
     memmap_alc_init(como_su->memmap, &como_su->shalc);
     
     /* allocate statistics into shared memory */
-    como_su->stats = alc_new0(&como_su->shalc, stats_t);
-    gettimeofday(&como_su->stats->start, NULL);
-    como_su->stats->first_ts = ~0;
+    como_stats = alc_new0(&como_su->shalc, stats_t);
+    gettimeofday(&como_stats->start, NULL);
+    como_stats->first_ts = ~0;
     
     /* initialize IPC */
     ipc_init(ipc_peer_at(COMO_SU, como_su->env->workdir), como_su);
