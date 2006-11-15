@@ -27,7 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id:ipc.c 1032 2006-11-14 13:29:01Z m_canini $
  */
 
 /*
@@ -79,7 +79,9 @@ struct ipc_peer_full_t {
     char			name[SIZEOF_IPC_PEER_NAME];
     char *			at;
     int				fd;
-    int				swap;
+    int				swap:1;
+    int				connected:1;
+    int				_res:6;
     ipc_peer_list_entry_t	next;
 };
 
@@ -150,7 +152,7 @@ ipc_peer_at(const ipc_peer_full_t * p, const char * at)
     *p2 = *p;
     p2->fd = -1;
     p2->at = como_strdup(at);
-    p2->swap = FALSE;
+    p2->swap = 0;
     memset(&p2->next, 0, sizeof(p2->next));
     return p2;
 }
@@ -387,16 +389,30 @@ ipc_finish(int destroy)
 int
 ipc_connect(ipc_peer_full_t * dst)
 {
+    ipc_connect_msg_t cm;
+    int r;
+
     if (dst->at == NULL) {
 	dst->at = como_strdup(s_me->at);
     }
 
     dst->fd = ipc_create_socket(dst, FALSE);
-    if (dst->fd != -1) {
-	notice("Connected to peer %s@%s.\n", dst->name, dst->at);
-	/* add to existing list of destinations */
-	ipc_peer_list_insert_head(&s_peers, dst);
-    }
+    if (dst->fd == -1)
+	return IPC_ERR;
+
+    strncpy(cm.code, s_me->code, SIZEOF_IPC_PEER_CODE);
+    strncpy(cm.name, s_me->name, SIZEOF_IPC_PEER_NAME);
+    /* send connection message */
+    r = ipc_send((ipc_peer_t *) dst, IPC_CONNECT,
+		 &cm, sizeof(ipc_connect_msg_t));
+    if (r == IPC_ERR)
+	return IPC_ERR;
+
+    dst->connected = 1;
+
+    notice("Connected to peer %s@%s.\n", dst->name, dst->at);
+    /* add to existing list of destinations */
+    ipc_peer_list_insert_head(&s_peers, dst);
 
     return dst->fd;
 }
@@ -416,7 +432,10 @@ ipc_send(ipc_peer_t * dst_, ipc_type type, const void * data, size_t sz)
     ipc_peer_full_t * dst = (ipc_peer_full_t *) dst_;
     ipc_peer_t *me = (ipc_peer_t *) &s_me;
     
-    assert(type != IPC_CONNECT);
+    if (type == IPC_CONNECT && dst->connected) {
+	error("Already connected to peer %s@%s on fd %d.\n",
+	      dst->name, dst->at, dst->fd);
+    }
     
     msg = alloca(sizeof(ipc_msg_t) + sz);
     
@@ -473,7 +492,7 @@ ipc_handle(int fd)
     ipc_msg_t msg;
     void *buf = NULL;
     size_t r;
-    int swap = FALSE;
+    int swap = 0;
 
     /* read the message header first */
     r = (size_t) ipc_read(fd, &msg, sizeof(ipc_msg_t)); 
@@ -501,7 +520,7 @@ ipc_handle(int fd)
 		     fd);
 		return IPC_ERR;
 	    }
-	    swap = TRUE;
+	    swap = 1;
 	}
     } else {
 	/* find the sender of the message */
@@ -514,7 +533,7 @@ ipc_handle(int fd)
 	swap = x->swap;
     }
     
-    if (swap == TRUE) {
+    if (swap) {
 	swap_msg(&msg);
     }
 
@@ -635,14 +654,14 @@ ipc_receive(ipc_peer_t * peer, ipc_type * type, void * data, size_t * sz,
 	return IPC_ERR;
     }
     
-    if (x->swap == TRUE) {
+    if (x->swap) {
 	swap_msg(&msg);
     }
     assert(msg.type != IPC_CONNECT);
 
     *type = msg.type;
-    if (swap) {
-	*swap = x->swap;
+    if (swap != NULL) {
+	*swap = (int) x->swap;
     }
 	    
     /* read the data part now */ 
