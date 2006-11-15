@@ -205,7 +205,7 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
         ret = asprintf(&str, "%s_%s", op, structname);
         if (ret < 0)
             error("out of memory\n");
-        sym = (serialize_fn *) shobj_symbol(shobj, str, FALSE);
+        sym = shobj_symbol(shobj, str, FALSE);
         if (sym == NULL) {
             free(str);
             return -1;
@@ -213,9 +213,9 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
         free(str);
 
         switch(i) {
-        case 0: out->serialize = (serialize_fn *) sym;
-        case 1: out->deserialize = (deserialize_fn *) sym;
-        case 2: out->sersize = (sersize_fn *) sym;
+        case 0: out->serialize = (serialize_fn *) sym; break;
+        case 1: out->deserialize = (deserialize_fn *) sym; break;
+        case 2: out->sersize = (sersize_fn *) sym; break;
         }
     }
 
