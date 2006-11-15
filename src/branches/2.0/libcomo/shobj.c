@@ -82,11 +82,12 @@ shobj_open(const char * filename)
 
 
 void *
-shobj_symbol(shobj_t * shobj, const char * symbol)
+shobj_symbol(shobj_t * shobj, const char * symbol, int optional)
 {
     void *sym;
+    dlerror(); /* clear error */
     sym = dlsym(shobj->handle, symbol);
-    if (sym == NULL) {
+    if (sym == NULL && optional == FALSE) {
         warn("Can't find symbol %s in shared object %s: %s\n",
 	     symbol, shobj->name, dlerror());
     }

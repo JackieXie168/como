@@ -521,10 +521,9 @@ ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     
     alc = como_alc();
     
-    mdl_deserialize(&sbuf, &mdl, alc);
-    
-    if (mdl_load(mdl, PRIV_ICAPTURE) < 0) {
-	alc_free(alc, mdl);
+    mdl_deserialize(&sbuf, &mdl, alc, PRIV_ICAPTURE);
+    if (mdl == NULL) {
+	/* failed */
 	return IPC_OK;
     }
 
@@ -1417,7 +1416,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
 }
 
 /*
- * -- capture
+ * -- capture_main
  *
  * This is the CAPTURE mainloop. It opens all the sniffer devices.
  * Then the real mainloop starts and it sits on a select()
@@ -1426,7 +1425,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
  *
  */
 void
-capture(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
+capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 	UNUSED int client_fd, como_node_t * node)
 {
     como_ca_t como_ca;

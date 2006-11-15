@@ -99,6 +99,9 @@ mdl_serialize(uint8_t ** sbuf, const mdl_t * h)
     
     serialize_timestamp_t(sbuf, h->flush_ivl);
     serialize_string(sbuf, h->name);
+    serialize_string(sbuf, h->description);
+    serialize_string(sbuf, h->filter);
+    serialize_string(sbuf, h->mdlname);
     config->serialize(sbuf, h->config);
 }
 
@@ -114,25 +117,34 @@ mdl_sersize(const mdl_t * src)
 	 sersize_string(src->name) +
 	 sersize_string(src->description) +
 	 sersize_string(src->filter) +
+	 sersize_string(src->mdlname) +
 	 config->sersize(src->config);
 
     return sz;
 }
 
 void
-mdl_deserialize(uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc)
+mdl_deserialize(uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc,
+		mdl_priv_t priv)
 {
     mdl_t *h;
     serializable_t *config;
     
-    h = alc_new(alc, mdl_t);
-    
-    config = mdl_get_config_ser(h);
+    h = alc_new0(alc, mdl_t);
     
     deserialize_timestamp_t(sbuf, &h->flush_ivl);
     deserialize_string(sbuf, &h->name, alc);
-    deserialize_string(sbuf, &h->filter, alc);
     deserialize_string(sbuf, &h->description, alc);
+    deserialize_string(sbuf, &h->filter, alc);
+    deserialize_string(sbuf, &h->mdlname, alc);
+
+    if (mdl_load(h, priv) < 0) {
+	alc_free(alc, h);
+	*h_out = NULL;
+	return;
+    }
+
+    config = mdl_get_config_ser(h);
     config->deserialize(sbuf, &h->config, alc);
     
     *h_out = h;
@@ -169,19 +181,19 @@ mdl_get_iquery(mdl_t * h)
 int
 mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
 {
+    void *sym;
     char *structname;
     int i;
 
-    structname = (char *) shobj_symbol(shobj, what);
-    if (structname == NULL) {
-        warn("symbol '%s' not found, cannot determine "
-            "module's structure serialization functions");
+    sym = shobj_symbol(shobj, what, FALSE);
+    if (sym == NULL) {
         return -1;
     }
+    
+    structname = *((char **) sym);
 
     for (i = 0; i < 3; i++) {
         char *op, *str;
-        void *sym;
         int ret;
 
         switch(i) {
@@ -190,12 +202,11 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
         case 2: op = "sersize"; break;
         }
 
-        ret = asprintf(&str, "%s_", structname);
+        ret = asprintf(&str, "%s_%s", op, structname);
         if (ret < 0)
-            error("out of memory");
-        sym = (serialize_fn *) shobj_symbol(shobj, str);
+            error("out of memory\n");
+        sym = (serialize_fn *) shobj_symbol(shobj, str, FALSE);
         if (sym == NULL) {
-            warn("symbol '%s' not found", str);
             free(str);
             return -1;
         }
@@ -222,6 +233,8 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
     ib = como_new0(mdl_ibase_t);
     ib->type = priv;
     
+    ib->alc = *como_alc();
+    
     switch (priv) {
     case PRIV_ISUPERVISOR:
 	ib->proc.su = como_new0(mdl_isupervisor_t);
@@ -245,25 +258,47 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
 	return -1;
     }
 
+
     ret = mdl_load_serializable(&ib->mdl_config, ib->shobj, "config_type");
-    ret += mdl_load_serializable(&ib->mdl_config, ib->shobj, "tuple_type");
-    ret += mdl_load_serializable(&ib->mdl_config, ib->shobj, "record_type");
+    ret += mdl_load_serializable(&ib->mdl_tuple, ib->shobj, "tuple_type");
+    ret += mdl_load_serializable(&ib->mdl_record, ib->shobj, "record_type");
     if (ret < 0) { /* any at least one of the above failed */
         warn("module %s misses functions to handle its struct types");
         return -1;
     }
 
+    switch (priv) {
+    case PRIV_ISUPERVISOR:
+	ib->proc.su->init = shobj_symbol(ib->shobj, "init", FALSE);
+	break;
+    case PRIV_ICAPTURE:
+	ib->proc.ca->init = shobj_symbol(ib->shobj, "ca_init", TRUE);
+	ib->proc.ca->capture = shobj_symbol(ib->shobj, "capture", FALSE);
+	ib->proc.ca->flush = shobj_symbol(ib->shobj, "flush", TRUE);
+	break;
+    case PRIV_IEXPORT:
+	ib->proc.ex = como_new0(mdl_iexport_t);
+	ib->proc.ex->init = shobj_symbol(ib->shobj, "ex_init", TRUE);
+	ib->proc.ex->export = shobj_symbol(ib->shobj, "export", TRUE);
+	break;
+    case PRIV_IQUERY:
+	ib->proc.qu = como_new0(mdl_iquery_t);
+	break;
+    }
+    
+    h->priv = ib;
+
     return 0;
 }
 
-#if 0
+
 void *
-mdl__alloc_config(mdl_t * h, size_t sz, serializable_t * ser)
+mdl__alloc_config(mdl_t * h, size_t sz)
 {
     /* allocate the config state of size sz and keep track of it */
-    
+    alc_t *alc = &h->priv->alc;
+    return alc_calloc(alc, 1, sz);
 }
-#endif
 
 /* CAPTURE */
 
@@ -277,7 +312,7 @@ mdl__alloc_tuple(mdl_t * mdl, size_t sz)
     ic = mdl_get_icapture(mdl);
 
     /* allocate sz + space for the tuple collection-specific fields */
-    it = alc_malloc(&ic->alc, sz + sizeof(tuple_collection_item_t));
+    it = alc_calloc(&ic->shalc, 1, sz + sizeof(tuple_collection_item_t));
 
     if (ic->last_tuple == NULL) {
         ic->last_tuple = it;
@@ -301,6 +336,8 @@ mdl__free_tuple(mdl_t *mdl, void *ptr)
     assert(! tuple_collection_empty(&ic->tuples));
 
     tuple_collection_remove(it);
+    
+    alc_free(&ic->shalc, it);
 }
 
 
@@ -403,7 +440,7 @@ mdl_load_rec(mdl_t * h, size_t sz, timestamp_t * ts)
 #endif
 
 /* SUPERVISOR */
-
+#if 0
 /* 
  * -- mdl_init
  * 
@@ -423,7 +460,6 @@ mdl_init(mdl_t * mdl)
 	warn("Initialization of module `%s` failed.\n", mdl->name);
     }
     
-#if 0    
     if (mdl->callbacks.init != NULL) {
 	/*
 	 * create a memory list for this module to
@@ -444,7 +480,7 @@ mdl_init(mdl_t * mdl)
     } else {
 	mdl->flush_ivl = DEFAULT_CAPTURE_IVL;
     }
-#endif
     return 0; 
 }
+#endif
 
