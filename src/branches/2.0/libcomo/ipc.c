@@ -430,7 +430,7 @@ ipc_send(ipc_peer_t * dst_, ipc_type type, const void * data, size_t sz)
 {
     ipc_msg_t *msg;
     ipc_peer_full_t * dst = (ipc_peer_full_t *) dst_;
-    ipc_peer_t *me = (ipc_peer_t *) &s_me;
+    ipc_peer_t *me = (ipc_peer_t *) s_me;
     
     if (type == IPC_CONNECT && dst->connected) {
 	error("Already connected to peer %s@%s on fd %d.\n",
