@@ -206,7 +206,6 @@ typedef enum mdl_priv {
     PRIV_ISUPERVISOR = 1,
     PRIV_ICAPTURE,
     PRIV_IEXPORT,
-    PRIV_ISTORAGE,
     PRIV_IQUERY
 } mdl_priv_t;
 

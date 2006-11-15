@@ -232,9 +232,6 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
     case PRIV_IEXPORT:
 	ib->proc.ex = como_new0(mdl_iexport_t);
 	break;
-    case PRIV_ISTORAGE:
-	ib->proc.ex = como_new0(mdl_iexport_t);
-	break;
     case PRIV_IQUERY:
 	ib->proc.qu = como_new0(mdl_iquery_t);
 	break;
