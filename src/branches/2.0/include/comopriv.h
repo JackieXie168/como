@@ -198,7 +198,6 @@ struct tuple_collection_item_t {
 
 typedef struct mdl_icapture     mdl_icapture_t;
 typedef struct mdl_iexport      mdl_iexport_t;
-typedef struct mdl_istorage     mdl_istorage_t;
 typedef struct mdl_isupervisor  mdl_isupervisor_t;
 typedef struct mdl_iquery       mdl_iquery_t;
 
@@ -215,11 +214,10 @@ struct mdl_ibase {
     serializable_t	mdl_config;
     serializable_t	mdl_rec;
     union {
-        mdl_icapture_t  *ca;
-        mdl_iexport_t   *ex;
-        mdl_istorage_t  *st;
-        mdl_isupervisor_t *su;
-        mdl_iquery_t    *qu;
+        mdl_icapture_t *	ca;
+        mdl_iexport_t *		ex;
+        mdl_isupervisor_t *	su;
+        mdl_iquery_t *		qu;
     } proc;
 };
 
