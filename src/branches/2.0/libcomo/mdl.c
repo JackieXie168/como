@@ -302,35 +302,32 @@ void *
 mdl__alloc_tuple(mdl_t * mdl, size_t sz)
 {
     mdl_icapture_t *ic;
-    tuple_collection_item_t *it;
+    struct tuple *t;
 
     ic = mdl_get_icapture(mdl);
 
     /* allocate sz + space for the tuple collection-specific fields */
-    it = alc_calloc(&ic->shalc, 1, sz + sizeof(tuple_collection_item_t));
+    t = alc_calloc(&ic->shalc, 1, sz + sizeof(struct tuple));
 
-    if (ic->last_tuple == NULL) {
-        ic->last_tuple = it;
-        tuple_collection_insert_head(&ic->tuples, it);
-    } else
-        tuple_collection_insert_after(ic->last_tuple, it);
+    tuples_insert_tail(&ic->tuples, t);
 
-    return it->data;
+    return t->data;
 }
 
 void
 mdl__free_tuple(mdl_t *mdl, void *ptr)
 {
-    mdl_icapture_t *ic = mdl_get_icapture(mdl);
-    tuple_collection_item_t *it;
+    mdl_icapture_t *ic;
+    struct tuple *it;
 
-    it = (tuple_collection_item_t *)
-            (((char *)ptr) - sizeof(tuple_collection_item_t));
+    ic = mdl_get_icapture(mdl);
+
+    it = (struct tuple *) (ptr - sizeof(struct tuple));
 
     assert(it->data == ptr);
-    assert(! tuple_collection_empty(&ic->tuples));
+    assert(! tuples_empty(&ic->tuples));
 
-    tuple_collection_remove(it);
+    tuples_remove(&ic->tuples, it);
     
     alc_free(&ic->shalc, it);
 }

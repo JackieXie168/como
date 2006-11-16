@@ -53,12 +53,11 @@ typedef uint64_t 		timestamp_t;	/* NTP-like timestamps */
 
 #include "serialize.h"
 
-typedef struct collection collection_t;
-typedef struct tuple_collection_item_t tuple_collection_item_t;
-#include "tuple_collection.h"
-struct tuple_collection_item_t {
-    tuple_collection_entry_t entry;
-    uint8_t data[0]; /* variable size */
+struct tuple;
+#include "tuples.h"
+struct tuple {
+    tuples_entry_t	entry;
+    uint8_t		data[0]; /* variable size */
 };
 
 
@@ -178,7 +177,7 @@ typedef void   (*ca_flush_fn)(mdl_t * self);
 
 typedef void * (*ex_init_fn)(mdl_t *self);
 
-typedef void   (*ex_export_fn)(mdl_t *self, tuple_collection_t * col);
+typedef void   (*ex_export_fn)(mdl_t *self, tuples_t * tuples);
 
 typedef struct capabilities_t {
     uint32_t has_flexible_flush:1;

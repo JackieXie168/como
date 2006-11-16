@@ -221,45 +221,42 @@ struct mdl_ibase {
 };
 
 struct mdl_icapture {
-    mdl_priv_t	type;
-    shobj_t *	shobj;
+    mdl_priv_t		type;
 
-    timestamp_t	ivl_start;
-    timestamp_t	ivl_end;
-    void *	ivl_state;
+    timestamp_t		ivl_start;
+    timestamp_t		ivl_end;
+    void *		ivl_state;
 
-    ca_init_fn	            init;
-    ca_capture_fn	    capture;
-    ca_flush_fn	            flush;
-    capabilities_t          capabilities;
+    ca_init_fn		init;
+    ca_capture_fn	capture;
+    ca_flush_fn		flush;
+    capabilities_t	capabilities;
 
-    tuple_collection_t      tuples;
-    tuple_collection_item_t *last_tuple;
+    tuples_t		tuples;
 
-    alc_t	shalc;
+    alc_t		shalc;
     
-    treenode_t  *filter;
-    int         status;
+    treenode_t  *	filter;
+    int			status;
     
-    shmem_t *	shmem;
-    ipc_peer_t *export;
+    shmem_t *		shmem;
+    ipc_peer_t *	export;
 };
 
 struct mdl_isupervisor {
     mdl_priv_t	type;
-    shobj_t *	shobj;
     su_init_fn	init;
 };
 
 struct mdl_iexport {
-    int		cs_writer;
-    size_t	cs_cisz;
-    off_t	woff;
+    int			cs_writer;
+    size_t		cs_cisz;
+    off_t		woff;
     
-    ex_init_fn	init;
+    ex_init_fn		init;
     ex_export_fn	export;
 
-    shmem_t *	shmem;
+    shmem_t *		shmem;
 };
 
 struct mdl_iquery {
