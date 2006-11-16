@@ -88,6 +88,7 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 #ifdef ENABLE_PROFILING
 	enable_profiling();
 #endif
+	//DEBUGGER_WAIT_ATTACH(child);
 	signal(SIGHUP, SIG_IGN);        /* ignore SIGHUP */
 
 	/* initialize the s_child_info array */ 

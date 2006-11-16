@@ -172,7 +172,7 @@ su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
     sniffer_list_t *sniffers;
     sniffer_t *sniff;
     int i;
-    array_t * mdls;
+    array_t *mdls;
     
     node0 = &array_at(como_su->nodes, como_node_t, 0);
     
@@ -200,6 +200,8 @@ su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
 	ipc_send(peer, CA_ADD_MODULE, sermdl, sz);
 	free(sermdl);
     }
+    
+    /* start export */
 	
     ipc_send(peer, CA_START, NULL, 0);
     
