@@ -102,6 +102,7 @@ mdl_serialize(uint8_t ** sbuf, const mdl_t * h)
     serialize_string(sbuf, h->description);
     serialize_string(sbuf, h->filter);
     serialize_string(sbuf, h->mdlname);
+    serialize_uint64_t(sbuf, h->streamsize);
     config->serialize(sbuf, h->config);
 }
 
@@ -118,6 +119,7 @@ mdl_sersize(const mdl_t * src)
 	 sersize_string(src->description) +
 	 sersize_string(src->filter) +
 	 sersize_string(src->mdlname) +
+         sersize_uint64_t(src->streamsize) +
 	 config->sersize(src->config);
 
     return sz;
@@ -137,6 +139,7 @@ mdl_deserialize(uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc,
     deserialize_string(sbuf, &h->description, alc);
     deserialize_string(sbuf, &h->filter, alc);
     deserialize_string(sbuf, &h->mdlname, alc);
+    deserialize_uint64_t(sbuf, &h->streamsize);
 
     if (mdl_load(h, priv) < 0) {
 	alc_free(alc, h);
@@ -305,9 +308,10 @@ mdl__alloc_tuple(mdl_t * mdl, size_t sz)
     struct tuple *t;
 
     ic = mdl_get_icapture(mdl);
+    ic->tuple_count++;
 
     /* allocate sz + space for the tuple collection-specific fields */
-    t = alc_calloc(&ic->shalc, 1, sz + sizeof(struct tuple));
+    t = alc_calloc(&ic->tuple_alc, 1, sz + sizeof(struct tuple));
 
     tuples_insert_tail(&ic->tuples, t);
 
@@ -315,12 +319,13 @@ mdl__alloc_tuple(mdl_t * mdl, size_t sz)
 }
 
 void
-mdl__free_tuple(mdl_t *mdl, void *ptr)
+mdl_free_tuple(mdl_t *mdl, void *ptr)
 {
     mdl_icapture_t *ic;
     struct tuple *it;
 
     ic = mdl_get_icapture(mdl);
+    ic->tuple_count--;
 
     it = (struct tuple *) (ptr - sizeof(struct tuple));
 
@@ -329,7 +334,7 @@ mdl__free_tuple(mdl_t *mdl, void *ptr)
 
     tuples_remove(&ic->tuples, it);
     
-    alc_free(&ic->shalc, it);
+    alc_free(&ic->tuple_alc, it);
 }
 
 

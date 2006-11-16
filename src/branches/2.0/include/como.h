@@ -61,6 +61,8 @@
 #define FALSE	0
 #endif
 
+#define MDLNAME_MAX 1024
+
 typedef struct como_node como_node_t;
 
 #include "comotypes.h"
@@ -156,11 +158,13 @@ enum {
     CA_ADD_MODULE,
     CA_START,
     CA_EXIT,
+    CA_EXPORT_RUNNING_MODULE,
 
-    EX_ADD_MODULE,
-    EX_MODULE_TUPLES,
+    EX_ADD_MODULE = 0x200,
+    EX_MODULE_SERIALIZED_TUPLES,
+    EX_MODULE_SHMEM_TUPLES,
     
-    CCA_OPEN,
+    CCA_OPEN = 0x300,
     CCA_OPEN_RES,
     CCA_ERROR,
     CCA_NEW_BATCH,

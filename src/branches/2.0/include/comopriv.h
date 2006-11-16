@@ -34,6 +34,7 @@
 #define COMOPRIV_H_
 
 #include "comotypes.h"
+#include <stdlib.h> /* PATH_MAX */
 
 typedef struct metadesc_match {
     metadesc_t *	in;
@@ -167,6 +168,25 @@ typedef union ccamsg_t {
     } close;
 } ccamsg_t;
 
+typedef struct { /* EX tells CA it's running a mdl. ex->ca */
+    char mdl_name[MDLNAME_MAX];
+    char shmem_filename[PATH_MAX];
+} caexmsg_t;
+
+typedef struct { /* tuples in shmem. ca->ex, ex->ca */
+    char        mdl_name[MDLNAME_MAX];
+    tuples_t    tuples;
+    size_t      ntuples;
+    timestamp_t	ivl_start;
+} tuplesmsg_t;
+
+typedef struct { /* serialized tuples. ca->ex */
+    char        mdl_name[MDLNAME_MAX];
+    size_t      ntuples;
+    uint8_t     data[0];
+    timestamp_t	ivl_start;
+} sertuplesmsg_t;
+
 void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 
@@ -233,13 +253,14 @@ struct mdl_icapture {
     capabilities_t	capabilities;
 
     tuples_t		tuples;
-
-    alc_t		shalc;
+    alc_t		tuple_alc;
+    size_t              tuple_count;
     
     treenode_t  *	filter;
     int			status;
     
     shmem_t *		shmem;
+    memmap_t *          shmap;
     ipc_peer_t *	export;
 };
 
@@ -252,6 +273,7 @@ struct mdl_iexport {
     int			cs_writer;
     size_t		cs_cisz;
     off_t		woff;
+    int         outfile;
     
     ex_init_fn		init;
     ex_export_fn	export;
