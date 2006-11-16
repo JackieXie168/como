@@ -49,6 +49,15 @@
 #include "ipc.h"
 #include "query.h"
 
+typedef struct _como_ex como_ex_t;
+struct _como_ex {
+    event_loop_t el;
+    char * st_dir;
+    int use_shmem;
+    hash_t *mdls; /* mdl name to mdl */
+};
+
+#if 0
 extern struct _como map;	/* Global state structure */
 
 int storage_fd;                 /* socket to storage 
@@ -473,7 +482,7 @@ store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts)
     bzero(&ea->record[et->records], (ea->size - et->records) * sizeof(rec_t*));
     ea->first_full = 0;
 }
-
+#endif
 
 /* 
  * -- ex_ipc_module_add
@@ -483,68 +492,153 @@ store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts)
  * needs to run in EXPORT. 
  * 
  */
-static void
-ex_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
-                    void * pack, size_t sz) 
+static int
+ex_ipc_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
+                    UNUSED int swap, UNUSED como_ex_t * como_ex)
 {
-    module_t tmp; 
-    module_t * mdl;
-    int len;
+    mdl_iexport_t *ie;
+    caexmsg_t msg;
+    mdl_t *mdl;
+    alc_t *alc;
+    char *str;
 
-    /* only the parent process should send this message */
-    assert(src == map.parent);
-
-    /* unpack the received module info */
-    if (unpack_module(pack, sz, &tmp)) {
-        logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n");
-        return;
+    alc = como_alc();
+    mdl_deserialize(&sbuf, &mdl, alc, PRIV_IEXPORT);
+    if (mdl == NULL) { /* failure */
+        warn("failed to receive a module");
+        return IPC_OK;
     }
 
-    /* find an empty slot in the modules array */
-    mdl = copy_module(&map, &tmp, tmp.node, tmp.index, NULL); 
-
-    /* free memory from the tmp module */
-    clean_module(&tmp); 
-
-    if (activate_module(mdl, map.libdir)) {
-        logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
-        return;
-    }
+    ie = mdl_get_iexport(mdl);
 
     /*
-     * initialize hash table and record array
+     * open output file
      */
-    len = sizeof(etable_t) + mdl->ex_hashsize * sizeof(void *);
-    mdl->ex_hashtable = safe_calloc(1, len);
-    mdl->ex_hashtable->size = mdl->ex_hashsize;
-        
-    /* allocate record array */
-    len = sizeof(earray_t) + mdl->ex_hashsize * sizeof(void *);
-    mdl->ex_array = safe_calloc(1, len);
-    mdl->ex_array->size = mdl->ex_hashsize;
-
-    /*
-     * open output file unless we are running in inline mode 
-     */
-    if (map.runmode == RUNMODE_NORMAL) {
-	logmsg(V_LOGEXPORT, "module %s: opening file\n", mdl->name);
-	mdl->file = csopen(mdl->output, CS_WRITER, mdl->streamsize, storage_fd);
-	if (mdl->file < 0)
-	    panic("cannot open file %s for %s", mdl->output, mdl->name);
-	mdl->offset = csgetofs(mdl->file);
-    } else { 
-	char * x[] = {NULL}; 
-	char ** p = mdl->args? mdl->args : x; 
-
-	/* setup the print format (make sure we 
-	 * don't send a NULL args pointer down)
-	 */
-	if (module_db_record_print(mdl, NULL, p, map.inline_fd) < 0)
-	    handle_print_fail(mdl);
+    str = como_asprintf("%s/%s", como_ex->st_dir, mdl->name);
+    ie->outfile = csopen(str, CS_WRITER, (off_t)mdl->streamsize, (ipc_peer_t *)COMO_ST);
+    if (ie->outfile < 0) {
+        warn("cannot start storage for module `%s'\n", mdl->name);
+        free(str);
+        return IPC_CLOSE;
     }
+    ie->woff = csgetofs(ie->outfile);
+
+    strcpy(msg.mdl_name, mdl->name);
+    if (como_ex->use_shmem) {
+        ie->shmem = shmem_create(10 * 1024 * 1024, str);
+        strcpy(msg.shmem_filename, str);
+    }
+    else {
+        ie->shmem = NULL;
+        msg.shmem_filename[0] = '\0';
+    }
+
+    ipc_send((ipc_peer_t*)COMO_CA, CA_EXPORT_RUNNING_MODULE, &msg, sizeof(msg));
+    free(str);
+
+    hash_insert_string(como_ex->mdls, mdl->name, mdl); /* add to mdl index */
+
+    return IPC_OK;
 }
- 
 
+static int
+ex_ipc_serialized_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UNUSED size_t sz,
+                    UNUSED int swap, UNUSED como_ex_t * como_ex)
+{
+    uint8_t *sbuf = msg->data;
+    alc_t *alc = como_alc();
+    mdl_iexport_t *ie;
+    void **tuples;
+    mdl_t *mdl;
+    size_t i;
+
+    debug("recv'd %d serialized tuples\n", msg->ntuples);
+
+    /*
+     * locate the module
+     */
+    mdl = hash_lookup_string(como_ex->mdls, msg->mdl_name);
+    if (mdl == NULL)
+        error("capture sent tuples from an unknown module\n");
+
+    ie = mdl_get_iexport(mdl);
+    tuples = como_calloc(msg->ntuples, sizeof(void *));
+
+    /*
+     * create an array for the tuples
+     */
+    debug("deserializing tuples\n");
+    for (i = 0; i < msg->ntuples; i++)
+        mdl->priv->mdl_tuple.deserialize(&sbuf, &tuples[i], alc);
+    debug("deserialized the tuples\n");
+
+    /*
+     * let the module process 'em
+     */
+    if (ie->export)
+        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start);
+    else
+        error("TODO: store the tuples directly\n");
+
+    /*
+     * free allocated mem.
+     */
+    free(tuples);
+
+    /*
+     * we are done
+     */
+    return IPC_OK;
+}
+
+static int
+ex_ipc_shmem_tuples(UNUSED ipc_peer_t *peer, tuplesmsg_t * msg, UNUSED size_t sz,
+                    UNUSED int swap, UNUSED como_ex_t * como_ex)
+{
+    mdl_iexport_t *ie;
+    void **tuples;
+    mdl_t *mdl;
+    size_t i;
+    struct tuple *t;
+
+    debug("recv'd %d tuples in shared mem\n", msg->ntuples);
+
+    /*
+     * locate the module
+     */
+    mdl = hash_lookup_string(como_ex->mdls, msg->mdl_name);
+    if (mdl == NULL)
+        error("capture sent tuples from an unknown module\n");
+
+    ie = mdl_get_iexport(mdl);
+    tuples = como_calloc(msg->ntuples, sizeof(void *));
+
+    debug("buiding array\n");
+
+    i = 0;
+    tuples_foreach(t, &msg->tuples)
+        tuples[i++] = t;
+
+    assert(i == msg->ntuples);
+
+    /*
+     * let the module process 'em
+     */
+    if (ie->export)
+        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start);
+    else
+        error("TODO: store the tuples directly\n");
+
+    ipc_send(peer, EX_MODULE_SHMEM_TUPLES, msg, sz);
+    /*
+     * free allocated mem.
+     */
+    free(tuples);
+
+    return IPC_OK;
+}
+
+#if 0
 /* 
  * -- ex_ipc_module_del
  * 
@@ -728,6 +822,7 @@ ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
     assert(sender == map.parent);  
     exit(EXIT_SUCCESS); 
 }
+#endif
 
 
 /*
@@ -744,46 +839,57 @@ ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
  * the action() callback tells us to do (save, discard, etc.).
  */
 void
-export_mainloop(__attribute__((__unused__)) int in_fd, int parent_fd,
-                __attribute__((__unused__)) int id)
+export_main(UNUSED int argc, UNUSED char **argv)
 {
-    int capture_fd; 
-    int	max_fd;
-    fd_set rx;
+    int supervisor_fd, capture_fd, storage_fd;
+    char *ipc_location, *ca_location;
+    como_ex_t como_ex;
 
-    /* initialize select()able file descriptors */
-    max_fd = -1; 
-    FD_ZERO(&rx);
+    if (argc < 4)
+        error("usage: %s supervisor_location", argv[0]);
+
+    /* initialize como_ex */
+    bzero(&como_ex, sizeof(como_ex));
+    como_ex.mdls = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
+
+    ipc_location = argv[1];
+    ca_location = argv[2];
+    como_ex.st_dir = argv[3];
+
 
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 
     signal(SIGINT, exit);
     signal(SIGTERM, exit);
-    /* ignore SIGHUP */
-    signal(SIGHUP, SIG_IGN); 
+    signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */
 
     /* register handlers for IPC messages */ 
-    ipc_clear();
-    ipc_register(IPC_MODULE_ADD, ex_ipc_module_add);
-    ipc_register(IPC_MODULE_DEL, ex_ipc_module_del);
+    ipc_init(ipc_peer_at(COMO_EX, ipc_location), &como_ex);
+    ipc_register(EX_ADD_MODULE, (ipc_handler_fn) ex_ipc_add_module);
+    ipc_register(EX_MODULE_SERIALIZED_TUPLES, (ipc_handler_fn) ex_ipc_serialized_tuples);
+    ipc_register(EX_MODULE_SHMEM_TUPLES, (ipc_handler_fn) ex_ipc_shmem_tuples);
+    /*ipc_register(IPC_MODULE_DEL, ex_ipc_module_del);
     ipc_register(IPC_MODULE_START, ex_ipc_start);
     ipc_register(IPC_FLUSH, (ipc_handler_fn) ex_ipc_flush);
     ipc_register(IPC_DONE, ex_ipc_done);
-    ipc_register(IPC_EXIT, ex_ipc_exit);
+    ipc_register(IPC_EXIT, ex_ipc_exit);*/
     
     /* listen to the parent */
-    max_fd = add_fd(parent_fd, &rx, max_fd); 
+    event_loop_init(&como_ex.el);
+    supervisor_fd = ipc_connect(COMO_SU);
+    event_loop_add(&como_ex.el, supervisor_fd);
 
-    storage_fd = ipc_connect(STORAGE); 
-    max_fd = add_fd(storage_fd, &rx, max_fd); 
+    storage_fd = ipc_connect(COMO_ST); 
+    event_loop_add(&como_ex.el, storage_fd);
 
-    capture_fd = ipc_connect(sibling(CAPTURE)); 
-    max_fd = add_fd(capture_fd, &rx, max_fd); 
+    capture_fd = ipc_connect(ipc_peer_at(COMO_CA, ca_location));
+    como_ex.use_shmem = ca_location[0] == '/'; /* check if local or remote CA */
+    event_loop_add(&como_ex.el, capture_fd);
 
     /* 
      * wait for the debugger to attach
      */
-    DEBUGGER_WAIT_ATTACH(map);
+    DEBUGGER_WAIT_ATTACH(COMO_EX);
  
     /* allocate the timers */
     init_timers();
@@ -794,31 +900,31 @@ export_mainloop(__attribute__((__unused__)) int in_fd, int parent_fd,
      * tables to see if any action is required.
      */
     for (;;) {
-	fd_set r = rx;
+	fd_set r;
 	int n_ready;
         int i;
         int ipcr;
 
 	start_tsctimer(map.stats->ex_full_timer); 
 
-	n_ready = select(max_fd + 1, &r, NULL, NULL, NULL);
+        n_ready = event_loop_select(&como_ex.el, &r);
 	if (n_ready < 0) {
 	    if (errno == EINTR) {
 		continue;
 	    }
-	    panic("error in the select (%s)\n", strerror(errno));
+	    error("error in the select (%s)\n", strerror(errno));
 	}
 
 	start_tsctimer(map.stats->ex_loop_timer); 
 
-    	for (i = 0; n_ready > 0 && i < max_fd; i++) {
+    	for (i = 0; n_ready > 0 && i < como_ex.el.max_fd; i++) {
 	    if (!FD_ISSET(i, &r))
 		continue;
 	    
 	    ipcr = ipc_handle(i);
 	    if (ipcr != IPC_OK) {
 		/* an error. close the socket */
-		logmsg(LOGWARN, "error on IPC handle from %d (%d)\n", i, ipcr);
+		warn("error on IPC handle from %d (%d)\n", i, ipcr);
 		exit(EXIT_FAILURE);
 	    }
 	    

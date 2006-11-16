@@ -57,7 +57,7 @@ struct tuple;
 #include "tuples.h"
 struct tuple {
     tuples_entry_t	entry;
-    uint8_t		data[0]; /* variable size */
+    void		*data;
 };
 
 
@@ -102,6 +102,7 @@ typedef enum status_t {
     MDL_UNUSED,				/* module unused, free entry */
     MDL_LOADING,            		/* module is being loaded */
     MDL_INCOMPATIBLE,			/* not compatible with sniffer */
+    MDL_WAIT_FOR_EXPORT,                /* loaded in CA but no EX attached */
     MDL_ACTIVE, 			/* active and processing packets */
     MDL_ACTIVE_REPLAY,			/* active only to replay records */
     MDL_DISABLED            		/* disabled or turned off */
@@ -136,6 +137,7 @@ struct _mdl {
     char *	filter;
     char *	mdlname;
     void *	config;
+    uint64_t    streamsize;
     /* private state */
     mdl_ibase_t * priv;
 };
@@ -153,6 +155,7 @@ void * mdl__alloc_config(mdl_t * h, size_t sz);
 
 
 void * mdl__alloc_tuple(mdl_t * h, size_t sz);
+void   mdl_free_tuple(mdl_t * h, void *ptr);
 char * mdl_alloc_string(mdl_t * h, size_t sz);
 
 
@@ -177,7 +180,8 @@ typedef void   (*ca_flush_fn)(mdl_t * self);
 
 typedef void * (*ex_init_fn)(mdl_t *self);
 
-typedef void   (*ex_export_fn)(mdl_t *self, tuples_t * tuples);
+typedef void   (*ex_export_fn)(mdl_t *self, void ** tuples, size_t count,
+                                timestamp_t ivl_start);
 
 typedef struct capabilities_t {
     uint32_t has_flexible_flush:1;

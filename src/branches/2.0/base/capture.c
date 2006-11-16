@@ -249,21 +249,92 @@ static void
 mdl_flush(mdl_t *mdl, timestamp_t next_ts)
 {
     mdl_icapture_t *ic = mdl_get_icapture(mdl);
-    if (ic->ivl_start != 0 && ic->flush != NULL)
-        ic->flush(mdl);
 
-    /* TODO: free all mem allocated my mdl except for records */
-    /* TODO: pass the tuples to export */
+    /* TODO: free all mem allocated my mdl (now only done for records) */
+
+    /*
+     * Change of interval management
+     */
+    if (ic->ivl_start != 0) {
+        debug("module `%s': flushing\n", mdl->name);
+        if (ic->flush != NULL) /* call flush callback, if defined */
+            ic->flush(mdl);
+
+        /*
+         * Send the tuples to export
+         */
+        if (ic->shmem != NULL) { /* send msg with tuples' location */
+            tuplesmsg_t msg;
+            strcpy(msg.mdl_name, mdl->name);
+            msg.tuples = ic->tuples;
+            msg.ivl_start = ic->ivl_start;
+            msg.ntuples = ic->tuple_count;
+
+            ipc_send(ic->export, EX_MODULE_SHMEM_TUPLES, &msg, sizeof(msg));
+            debug("module `%s': flushing - sent shmem tuples msg to CA\n", mdl->name);
+
+            /* prepare a new empty tuple list */
+            tuples_init(&ic->tuples);
+
+            /*
+             * the tuples are still in the shared memory. this memory
+             * will be free'd when capture gets the message back
+             * from export, which will happen after export has processed
+             * the tuples.
+             */
+        } else { /* serialize & send tuples */
+            sertuplesmsg_t *msg;
+            uint8_t *sbuf;
+            size_t sz, ntuples;
+            struct tuple *t;
+
+            debug("module `%s': flushing - get sersize\n", mdl->name);
+            sz = 0;
+            ntuples = 0;
+            tuples_foreach(t, &ic->tuples) { /* get serialized size */
+                sz += mdl->priv->mdl_tuple.sersize(t);
+                ntuples++;
+            }
+
+            msg = (sertuplesmsg_t *) como_malloc(sz + sizeof(sertuplesmsg_t));
+            strcpy(msg->mdl_name, mdl->name);
+            msg->ntuples = ntuples;
+            msg->ivl_start = ic->ivl_start;
+
+            debug("module `%s': flushing - serializing\n", mdl->name);
+            sbuf = msg->data;
+            tuples_foreach(t, &ic->tuples) /* get serialized size */
+                mdl->priv->mdl_tuple.serialize(&sbuf, t->data);
+
+            assert(sz == (size_t)(sbuf - msg->data));
+            ipc_send(ic->export, EX_MODULE_SERIALIZED_TUPLES, msg, sz +
+                    sizeof(sertuplesmsg_t));
+            debug("module `%s': flushing - sent serialized tuples to CA\n", mdl->name);
+
+            /*
+             * we have serialized and sent the tuples. we can free
+             * them all right now.
+             */
+            while(! tuples_empty(&ic->tuples)) {
+                t = tuples_first(&ic->tuples);
+                mdl_free_tuple(mdl, t->data);
+            }
+            debug("module `%s': flushing - capture state cleared\n", mdl->name);
+        }
+    }
 
     /* update ivl_start and ivl_end */
     if (next_ts != 0) {
+        debug("module `%s': next IVL\n", mdl->name);
         ic->ivl_start = next_ts - (next_ts % mdl->flush_ivl);
         ic->ivl_end = ic->ivl_start + mdl->flush_ivl;
     }
 
     /* initialize new state */
-    if (ic->init)
+    if (ic->init) {
+        debug("module `%s': calling init()\n", mdl->name);
         ic->ivl_state = ic->init(mdl, ic->ivl_start);
+    }
 }
 
 static timestamp_t
@@ -424,9 +495,11 @@ ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     mdl_t *mdl;
     mdl_icapture_t *ic;
     alc_t *alc;
+
     
     alc = como_alc();
     
+    debug("capture adding module - deserialize\n");
     mdl_deserialize(&sbuf, &mdl, alc, PRIV_ICAPTURE);
     if (mdl == NULL) {
 	/* failed */
@@ -436,6 +509,7 @@ ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     ic = mdl_get_icapture(mdl);
     
     /* parse the filter string */
+    debug("capture adding module - parse filter\n");
     if (mdl->filter)
         parse_filter(mdl->filter, &(ic->filter), NULL);
 
@@ -446,6 +520,56 @@ ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     }
     
     array_add(como_ca->mdls, &mdl);
+
+    debug("capture adding module - done, waiting for EX to claim its tuples\n");
+    ic->status = MDL_WAIT_FOR_EXPORT;
+
+    return IPC_OK;
+}
+
+static int
+ca_ipc_export_running_mdl(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
+                UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
+{
+    mdl_icapture_t *ic;
+    array_t *mdls = como_ca->mdls;
+    mdl_t *mdl = NULL;
+    int i;
+
+    debug("capture - export claims tuples from module `%s'\n", msg->mdl_name);
+
+    for (i = 0; i < mdls->len; i++) {
+        mdl = &array_at(mdls, mdl_t, i);
+        if (! strcmp(mdl->name, msg->mdl_name))
+            break;
+    }
+
+    if (i == mdls->len) {
+        warn("export reports claims tuples from unknown module `%s",
+            msg->mdl_name);
+        return IPC_CLOSE;
+    }
+
+    ic = mdl_get_icapture(mdl);
+    ic->export = peer;
+
+    if (msg->shmem_filename[0] != '\0') { /* need to attach shmem */
+        debug("capture - connecting to shmem at `%s'\n", msg->shmem_filename);
+        ic->shmem = shmem_attach(msg->shmem_filename);
+        ic->shmap = memmap_create(ic->shmem, 128);
+        memmap_alc_init(ic->shmap, &ic->tuple_alc);
+
+        if (ic->shmem == NULL)
+            return IPC_CLOSE;
+    }
+    else {
+        debug("capture - will use serialized interface for `%s'\n", mdl->name);
+        ic->tuple_alc = *como_alc(); /* TODO: manage mdl's priv memory */
+        ic->shmem = NULL;
+    }
+
+    debug("capture - module `%s' can run\n", mdl->name);
+    ic->status = MDL_ACTIVE;
 
     return IPC_OK;
 }
@@ -1314,6 +1438,18 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
     /* if no sniffers now active then we log this change of state */
 
     if ((active == 0) && (como_env_runmode() == RUNMODE_NORMAL)) {
+        array_t *mdls;
+        int idx;
+
+        mdls = como_ca->mdls;
+
+        debug("no sniffers left - flushing all modules\n");
+        for (idx = 0; idx < mdls->len; idx++) {
+            mdl_t *mdl = array_at(mdls, mdl_t *, idx);
+            debug("no sniffers left - flushing `%s'\n", mdl->name);
+            mdl_flush(mdl, 0);
+        }
+
 	msg("no sniffers left. waiting for queries\n");
 	print_timers();
     }
@@ -1376,6 +1512,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     ipc_register(CA_EXIT, (ipc_handler_fn) ca_ipc_exit);
     ipc_register(CCA_OPEN, (ipc_handler_fn) ca_ipc_cca_open);
     ipc_register(CCA_ACK_BATCH, (ipc_handler_fn) ca_ipc_cca_ack_batch);
+    ipc_register(CA_EXPORT_RUNNING_MODULE, (ipc_handler_fn) ca_ipc_export_running_mdl);
 /*    ipc_register(IPC_FLUSH, (ipc_handler_fn) ca_ipc_flush);
     ipc_register(IPC_FREEZE, ca_ipc_freeze);
     */

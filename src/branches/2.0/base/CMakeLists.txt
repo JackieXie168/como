@@ -16,6 +16,7 @@ SET(COMO_SRCS
   metadesc.c
   pktmeta.c
   headerinfo.c
+  export.c
 #  memory.c
 #  config.c
 #  inline.c
@@ -32,7 +33,6 @@ SET(COMO_SRCS
 #  services.c
 #  capture.c
 #  capture-client.c
-#  export.c
 #  supervisor.c
 #  storage.c
 #  storage-client.c
@@ -100,10 +100,11 @@ SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-syntax.c GENERATED)
 #
 # Some versions of flex (at least 2.5.33) produce code with comparisons between
 # signed and unsigned vars. This, combined with -Wall and -Werror, prevents CoMo
-# to build. We add -Wno-sign-compare to gcc flags to work around this.
+# from building. We add -Wno-sign-compare to gcc flags to work around this.
 #
 # (see bug #1468610 for the flex project at http://sf.net/projects/flex)
 #
+SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-lexic.c COMPILE_FLAGS -Wno-sign-compare)
 SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-syntax.c COMPILE_FLAGS -Wno-sign-compare)
 
 #
