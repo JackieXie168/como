@@ -104,8 +104,8 @@ char * como__dup (char **dst, char *src, const char * file, const int line);
 como__dup(dst, src, __FILE__, __LINE__)
 
 char * como__asprintf (const char * file, const int line, char *fmt, ...);
-#define como_asprintf(fmt...) \
-como__asprintf(__FILE__, __LINE__, fmt...)
+#define como_asprintf(fmt,...) \
+como__asprintf(__FILE__, __LINE__, fmt, __VA_ARGS__)
 
 #define como_new(type) \
 ((type *) como_malloc(sizeof(type)))
@@ -156,6 +156,9 @@ enum {
     CA_ADD_MODULE,
     CA_START,
     CA_EXIT,
+
+    EX_ADD_MODULE,
+    EX_MODULE_TUPLES,
     
     CCA_OPEN,
     CCA_OPEN_RES,
