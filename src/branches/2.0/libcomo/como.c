@@ -27,9 +27,10 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id:como.c 1032 2006-11-14 13:29:01Z m_canini $
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -238,6 +239,29 @@ como__dup(char **dst, char *src, const char * file, const int line)
         free(*dst);
     *dst = como__strdup(src, file, line);
     return *dst;
+}
+
+
+char *
+como__asprintf(const char * file, const int line, char *fmt, ...)
+{
+    char *str;
+    va_list ap;
+    va_start(ap, fmt);
+    vasprintf(&str, fmt, ap);
+    if (str == NULL) {
+	error("asprintf failed (%s:%d): %s\n",
+	      file, line, strerror(errno));
+    }
+    va_end(ap);
+    return str;
+}
+
+
+char *
+como_basename(const char * path)
+{
+    return basename(path); /* GNU version of basename */
 }
 
 

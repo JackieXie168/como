@@ -82,15 +82,39 @@ typedef struct como_node como_node_t;
 
 #define ROUND_32(n) (((n) + 3) & ~3)
 
-#define como_malloc	malloc
-#define como_calloc	calloc
-#define como_realloc	realloc
-#define como_strdup	strdup
+void * como__malloc (size_t sz, const char * file, int line);
+#define como_malloc(sz) \
+como__malloc(sz, __FILE__, __LINE__)
 
-#define como_new(type)	((type *) como_malloc(sizeof(type)))
-#define como_new0(type)	((type *) como_calloc(1, sizeof(type)))
+void * como__calloc (size_t n, size_t sz, const char * file, int line);
+#define como_calloc(n,sz) \
+como__calloc(n, sz, __FILE__, __LINE__)
 
-#define como_basename	basename
+void * como__realloc (void * ptr, size_t sz, const char * file,
+		      const int line);
+#define como_realloc(ptr,sz) \
+como__realloc(ptr, sz, __FILE__, __LINE__)
+
+char * como__strdup (const char * str, const char * file, const int line);
+#define como_strdup(str) \
+como__strdup(str, __FILE__, __LINE__)
+
+char * como__dup (char **dst, char *src, const char * file, const int line);
+#define como_dup(dst,src) \
+como__dup(dst, src, __FILE__, __LINE__)
+
+char * como__asprintf (const char * file, const int line, char *fmt, ...);
+#define como_asprintf(fmt...) \
+como__asprintf(__FILE__, __LINE__, fmt...)
+
+#define como_new(type) \
+((type *) como_malloc(sizeof(type)))
+
+#define como_new0(type) \
+((type *) como_calloc(1, sizeof(type)))
+
+char * como_basename (const char * path);
+
 
 alc_t * como_alc();
 
