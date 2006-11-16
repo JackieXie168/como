@@ -241,6 +241,7 @@ struct mdl_icapture {
     treenode_t  *filter;
     int         status;
     
+    shmem_t *	shmem;
     ipc_peer_t *export;
 };
 
@@ -257,6 +258,8 @@ struct mdl_iexport {
     
     ex_init_fn	init;
     ex_export_fn	export;
+
+    shmem_t *	shmem;
 };
 
 struct mdl_iquery {
