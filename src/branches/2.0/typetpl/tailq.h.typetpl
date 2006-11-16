@@ -1,0 +1,62 @@
+#ifndef <name>_H_
+#define <name>_H_
+
+#include "c_queue.h"
+
+/*
+ * Tail queue definitions.
+ */
+typedef struct <name> {
+	<type> *tqh_first;	/* first element */
+	<type> **tqh_last;	/* addr of last next element */
+} <name>_t;
+
+#define	<name>_head_initializer(head)					\
+	{ NULL, &(head).tqh_first }
+
+typedef struct <name>_entry {
+	<type> *tqe_next;	/* next element */
+	<type> **tqe_prev;	/* address of previous next element */
+} <name>_entry_t;
+
+/* 
+ * tail queue access methods 
+ */
+#define	<name>_first(head)		C_TAILQ_FIRST(head)
+#define	<name>_end(head)		C_TAILQ_END(head)
+#define	<name>_empty(head)		C_TAILQ_EMPTY(head)
+#define	<name>_next(elm)		C_TAILQ_NEXT(elm, <field>)
+#define	<name>_last(head)		C_TAILQ_LAST(head, <name>)
+#define	<name>_prev(elm)		C_TAILQ_PREV(elm, <name>, <field>)
+
+#define	<name>_foreach(var, head)	\
+	C_TAILQ_FOREACH(var, head, <field>)
+
+#define	<name>_foreach_reverse(var, head)	\
+	C_TAILQ_FOREACH_REVERSE(var, head, <name>, <field>)
+
+/*
+ * Tail queue functions.
+ */
+#define	<name>_init(head)	C_TAILQ_INIT(head)
+
+#define	<name>_insert_head(head, elm)	\
+	C_TAILQ_INSERT_HEAD(head, elm, <field>)
+
+#define	<name>_insert_tail(head, elm)	\
+	C_TAILQ_INSERT_TAIL(head, elm, <field>)
+
+#define	<name>_insert_after(head, listelm, elm)	\
+	C_TAILQ_INSERT_AFTER(head, listelm, elm, <field>)
+
+#define	<name>_insert_before(listelm, elm)	\
+	C_TAILQ_INSERT_BEFORE(listelm, elm, <field>)
+
+#define <name>_remove(head, elm)	\
+	C_TAILQ_REMOVE(head, elm, <field>)
+
+#define <name>_replace(head, elm, elm2)	\
+	C_TAILQ_REPLACE(head, elm, elm2, <field>)
+
+
+#endif /*<name>_H_*/
