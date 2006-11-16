@@ -158,7 +158,7 @@ csopen(const char * name, int mode, off_t size)
     bzero(&out, sizeof(out));
     out.arg = mode;
     out.size = size;
-    strncpy(out.name, name, FILENAME_MAX);
+    strncpy(out.name, name, ST_FILENAME_MAX);
     
     if (ipc_send(STORAGE, S_OPEN, &out, sizeof(out)) != IPC_OK)
 	panic("sending message to storage: %s\n", strerror(errno));

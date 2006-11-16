@@ -63,6 +63,11 @@
 #define FILE_NAMEFMT    "%s/%016llx" /* format used to print */
 
 /*
+ * max filename length we can handle (IPC msgs have a max length)
+ */
+#define ST_FILENAME_MAX 2048
+
+/*
  * Message exchanged between STORAGE and its clients.
  */
 typedef struct {
@@ -70,7 +75,7 @@ typedef struct {
     int arg;			/* seek method, open mode, error code */ 
     off_t ofs;			/* requested offset */
     off_t size;			/* requested/granted block size (or filesize) */
-    char name[FILENAME_MAX];	/* file name (only for OPEN messages) */
+    char name[ST_FILENAME_MAX];	/* file name (only for OPEN messages) */
 } csmsg_t;
 
 typedef enum {
