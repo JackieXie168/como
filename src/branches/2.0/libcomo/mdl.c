@@ -273,6 +273,7 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
 	ib->proc.ca->init = shobj_symbol(ib->shobj, "ca_init", TRUE);
 	ib->proc.ca->capture = shobj_symbol(ib->shobj, "capture", FALSE);
 	ib->proc.ca->flush = shobj_symbol(ib->shobj, "flush", TRUE);
+        tuples_init(&ib->proc.ca->tuples);
 	break;
     case PRIV_IEXPORT:
 	ib->proc.ex = como_new0(mdl_iexport_t);

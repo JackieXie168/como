@@ -99,7 +99,7 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 	// fclose(stderr); // XXX
 
 	ipc_finish(FALSE);
-	ipc_init(child, NULL);
+	ipc_init(child, NULL, NULL);
 	
 	/* connect to SUPERVISOR */
         supervisor_fd = ipc_connect(COMO_SU);
@@ -198,13 +198,14 @@ spawn_child(ipc_peer_full_t * child, const char * path, ...)
 {
     pid_t pid;
     va_list va;
-    int argc = 0;
+    int argc = 1;
     const char *arg;
     int i;
     
     va_start(va, path);
     arg = va_arg(va, const char *);
     while (arg != NULL) {
+        arg = va_arg(va, const char *);
 	argc++;
     }
     va_end(va);
@@ -218,7 +219,8 @@ spawn_child(ipc_peer_full_t * child, const char * path, ...)
 	/* child process */
 	char * argv[argc + 1];
 
-	i = 0;
+        argv[0] = (char *)path;
+	i = 1;
 	va_start(va, path);
 	while (i < argc) {
 	    argv[i] = va_arg(va, char *);

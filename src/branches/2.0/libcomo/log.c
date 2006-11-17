@@ -38,6 +38,7 @@
 
 #include "como.h"
 
+int log_last_level;
 
 typedef struct log_handler {
     char *	domain;
@@ -74,7 +75,7 @@ get_color(log_level_t level)
 
 
 static void
-default_handler(const char * domain, log_level_t level,
+default_handler(const char * program, const char * domain, log_level_t level,
 		const char * message, struct timeval tv,
 		UNUSED void * user_data)
 {
@@ -86,13 +87,13 @@ default_handler(const char * domain, log_level_t level,
 	color = get_color(level);
 
     if (level & LOG_LEVEL_ERROR) {
-	o = stderr;
+	o = stdout;
 	if (color)
 	    pre = "\033[31;1mFATAL ERROR\033[0m: ";
 	else
 	    pre = "FATAL ERROR: ";
     } else if (level & LOG_LEVEL_WARNING) {
-	o = stderr;
+	o = stdout;
 	if (color)
 	    pre = "\033[33;1mWARNING\033[0m: ";
 	else
@@ -101,18 +102,21 @@ default_handler(const char * domain, log_level_t level,
 	o = stdout;
 	pre = "";
     }
+
+    if (program == NULL)
+        program = "";
     
     if (domain == NULL)
 	domain = "";
 
     if (color) {
-	fprintf(o, "[\033[%d;1m%5ld.%06ld %-6s\033[0m] %s%s",
+	fprintf(o, "[\033[%d;1m%5ld.%06ld %-2s %-6s\033[0m] %s%s",
 		color, tv.tv_sec % 86400, (long int) tv.tv_usec,
-		domain, pre, message);
+		program, domain, pre, message);
     } else {
-	fprintf(o, "[%5ld.%06ld %-6s] %s%s",
+	fprintf(o, "[%5ld.%06ld %-2s %-6s] %s%s",
 		tv.tv_sec % 86400, (long int) tv.tv_usec,
-		domain, pre, message);
+		program, domain, pre, message);
     }
 
 
@@ -126,12 +130,14 @@ static log_handler_t s_initial_handler = {
 
 /* static state */
 static struct log_static_state {
+    char *              program;
     log_level_t		level;
     log_handler_t *	handlers;
     int			handlers_count;
     char *		buf;
     size_t		buf_len;
 } s_log = {
+    program: NULL,
     level: LOG_LEVEL_ERROR | LOG_LEVEL_WARNING |
 	   LOG_LEVEL_NOTICE | LOG_LEVEL_MESSAGE | LOG_LEVEL_DEBUG,
     buf: NULL,
@@ -140,6 +146,12 @@ static struct log_static_state {
     handlers_count: 1
 };
 
+
+void
+log_set_program(const char * program)
+{
+    s_log.program = strdup(program);
+}
 
 void
 log_set_level(log_level_t level)
@@ -244,7 +256,7 @@ log_out(const char *domain, log_level_t level,
     }
     
     h = log_handler_lookup(domain);
-    h->user_fn(domain, level, s_log.buf, tv, h->user_data);
+    h->user_fn(s_log.program, domain, level, s_log.buf, tv, h->user_data);
     
     va_end(ap);
     
@@ -283,7 +295,7 @@ log_outv(const char *domain, log_level_t level, const char *format, va_list ap)
     }
     
     h = log_handler_lookup(domain);
-    h->user_fn(domain, level, s_log.buf, tv, h->user_data);
+    h->user_fn(s_log.program, domain, level, s_log.buf, tv, h->user_data);
 
     if (level & LOG_LEVEL_ERROR)
 	abort();

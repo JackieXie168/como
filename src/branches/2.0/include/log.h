@@ -16,7 +16,8 @@ typedef enum
   LOG_LEVEL_DEBUG	= 1 << 4,
 } log_level_t;
 
-typedef void (*log_fn) (const char * domain, log_level_t level,
+typedef void (*log_fn) (const char * program, const char * domain,
+                        log_level_t level,
 			const char * message, struct timeval tv,
 			void * user_data);
 
@@ -26,6 +27,7 @@ void        log_set_level (log_level_t level);
 void log_set_handler (const char * domain, log_fn user_fn,
 		      void * user_data);
 
+void log_set_program (const char * program);
 void log_set_use_color (int use_color);
 
 void log_out  (const char * domain, log_level_t level,
@@ -38,10 +40,10 @@ char * log_level_name (log_level_t level);
 
 #ifdef LOG_DISABLE
 
-#define error(args...)
-#define warn(args...)
-#define msg(args...)
-#define notice(args...)
+#define error(args...)  log_last_level = LOG_LEVEL_ERROR
+#define warn(args...)   log_last_level = LOG_LEVEL_WARNING
+#define msg(args...)    log_last_level = LOG_LEVEL_MESSAGE
+#define notice(args...) log_last_level = LOG_LEVEL_NOTICE
 
 #else
 
@@ -59,15 +61,19 @@ log_out(LOG_DOMAIN, LOG_LEVEL_NOTICE, args)
 
 #endif
 
-#ifndef DEBUG
+#if defined(LOG_DISABLE) || !defined(DEBUG)
 
-#define debug(args...)
+#define debug(args...)  log_last_level = LOG_LEVEL_DEBUG
 
 #else
 
 #define debug(args...) \
 log_out(LOG_DOMAIN, LOG_LEVEL_DEBUG, args)
 
+#endif
+
+#if defined(LOG_DISABLE) || !defined(DEBUG)
+extern int log_last_level;
 #endif
 
 #endif /*LOG_H_*/

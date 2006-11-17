@@ -188,6 +188,10 @@ typedef struct { /* serialized tuples. ca->ex */
     timestamp_t	ivl_start;
 } sertuplesmsg_t;
 
+typedef struct {
+    char        mdl_name[MDLNAME_MAX];
+} delmdlmsg_t;
+
 void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 

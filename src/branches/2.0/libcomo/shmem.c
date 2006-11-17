@@ -208,7 +208,7 @@ shmem_remove(const char * filename)
     return unlink(filename);
 
 error:
-    warn("shmem_remove(): %s\n", strerror(errno));
+    debug("shmem_remove(): %s\n", strerror(errno));
     if (fd != -1)
 	close(fd);
     /* ensure the file has been removed anyway. */

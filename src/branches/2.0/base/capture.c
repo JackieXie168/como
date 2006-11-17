@@ -519,10 +519,13 @@ ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 	como_ca->min_flush_ivl = mdl->flush_ivl;
     }
     
+    /* TODO locate the first empty entry in the array */
     array_add(como_ca->mdls, &mdl);
 
     debug("capture adding module - done, waiting for EX to claim its tuples\n");
     ic->status = MDL_WAIT_FOR_EXPORT;
+
+    ipc_send(peer, CA_MODULE_ADDED, NULL, 0);
 
     return IPC_OK;
 }
@@ -539,13 +542,14 @@ ca_ipc_export_running_mdl(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
     debug("capture - export claims tuples from module `%s'\n", msg->mdl_name);
 
     for (i = 0; i < mdls->len; i++) {
-        mdl = &array_at(mdls, mdl_t, i);
+        mdl = array_at(mdls, mdl_t *, i);
         if (! strcmp(mdl->name, msg->mdl_name))
             break;
+        debug("%s is not what it's looking for\n", mdl->name);
     }
 
     if (i == mdls->len) {
-        warn("export reports claims tuples from unknown module `%s",
+        warn("export claims tuples from unknown module `%s",
             msg->mdl_name);
         return IPC_CLOSE;
     }
@@ -573,38 +577,49 @@ ca_ipc_export_running_mdl(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
 
     return IPC_OK;
 }
-
 #if 0
 /* 
  * -- ca_ipc_module_del 
  * 
- * this function removes a module from the current map. 
- * the index of the module is contained in the message. 
+ * this function removes a module. The message contains the
+ * name of the module to remove.
  * 
  */
-static void
-ca_ipc_module_del(procname_t sender, UNUSED int fd,
-                    void *buf, UNUSED size_t len)
+static int
+ca_ipc_module_del(UNUSED ipc_peer_t * peer, delmsg_t *msg,
+                UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
 {
     module_t *mdl;
-    int idx;
+    int i;
 
-    /* TODO: send flush state */
+    debug("capture - deleting module `%s'\n", msg->mdl_name);
 
     /* only the parent process should send this message */
-    assert(sender == map.parent);
+    //assert(sender == map.parent);
 
-    idx = *(int *) buf;
-    mdl = &map.modules[idx];
-
-    if (mdl->status == MDL_ACTIVE) {
-	s_active_modules--;
+    for (i = 0; i < mdls->len; i++) {
+        mdl = &array_at(mdls, mdl_t, i);
+        if (! strcmp(mdl->name, msg->mdl_name))
+            break;
+    }
+    if (i == mdls->len) {
+        warn("deletion of unknown module `%s' requested\n");
+        return IPC_OK; /* XXX what should we do? */
     }
 
-    remove_module(&map, mdl);
+    if (mdl->status == MDL_ACTIVE) {
+        mdl_flush(mdl, 0); /* final flush */
+        s_active_modules--;
+    }
+
+    /* TODO: free its data */
+    shobj_close(mdl->priv->shobj);
+    mdl->status = MDL_UNUSED;
 }
+#endif
 
 
+#if 0
 /* 
  * -- ca_ipc_freeze
  * 
@@ -1383,6 +1398,9 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
     if (touched == 0)
 	return active;
 
+    if (como_ca->ready != TRUE)
+        return active;
+
     /* rebuild the list of file selectors and recalculate the timeout */
     tout->tv_sec = 3600;
     tout->tv_usec = 0;
@@ -1446,6 +1464,11 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
         debug("no sniffers left - flushing all modules\n");
         for (idx = 0; idx < mdls->len; idx++) {
             mdl_t *mdl = array_at(mdls, mdl_t *, idx);
+            mdl_icapture_t *ic = mdl_get_icapture(mdl);
+
+            if (ic->status != MDL_ACTIVE)
+                continue;
+
             debug("no sniffers left - flushing `%s'\n", mdl->name);
             mdl_flush(mdl, 0);
         }
@@ -1481,7 +1504,8 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     sniffer_t *sniff;
     sniffer_list_t *sniffers;
 
-    
+    log_set_program("CA");
+
     supervisor_fd = ipc_peer_get_fd(parent);
     
     memset(&como_ca, 0, sizeof(como_ca_t));
@@ -1491,9 +1515,6 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     como_ca.mdls = array_new(sizeof(mdl_t));
     memmap_alc_init(shmemmap, &como_ca.shalc);
     
-    /* wait for the debugger to attach */
-    DEBUGGER_WAIT_ATTACH(child);
-
     /* register handlers for signals */
 
     signal(SIGPIPE, SIG_IGN);
@@ -1502,10 +1523,14 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     signal(SIGHUP, SIG_IGN);
     atexit(cleanup);
 
-    /* register handlers for IPC messages */
-
+    /* listen for IPC messages */
     ipc_set_user_data(&como_ca);
+    como_ca.accept_fd = ipc_listen();
+
+    /* wait for the debugger to attach */
+    DEBUGGER_WAIT_ATTACH(child);
     
+    /* register handlers for IPC messages */
     ipc_register(CA_ADD_MODULE, (ipc_handler_fn) ca_ipc_add_module);
 //    ipc_register(CA_DEL_MODULE, ca_ipc_module_del);
     ipc_register(CA_START, (ipc_handler_fn) ca_ipc_start);
@@ -1552,7 +1577,8 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
      * proccess all the messages from SUPERVISOR until it sends
      * the CA_START message which trigger como_ca.ready
      */
-    while (como_ca.ready == FALSE) {
+/*
+while (como_ca.ready == FALSE) {
 	int ipcr = ipc_handle(supervisor_fd);
 	if (ipcr != IPC_OK) {
 	    warn("error on IPC handle from %d (%d)\n",
@@ -1560,7 +1586,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 	    exit(EXIT_FAILURE);
 	}
     }
-
+*/
     sniffer_list_foreach(sniff, sniffers) {
 	if (sniff->priv->state == SNIFFER_ACTIVE)
             sniff->priv->touched = TRUE;
@@ -1575,7 +1601,6 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     FD_SET(supervisor_fd, &ipc_fds);
 
     /* accept connections from EXPORT process(es) and CAPTURE CLIENTS */
-    como_ca.accept_fd = ipc_listen();
     event_loop_add(&como_ca.el, como_ca.accept_fd);
 
     /* initialize the timers */
@@ -1608,7 +1633,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 
 	/* wait for messages, sniffers or up to the polling interval */
 	if (active_sniff > 0) {
-	    event_loop_set_timeout(&como_ca.el, &timeout);
+	    //event_loop_set_timeout(&como_ca.el, &timeout);
 	}
 	n_ready = event_loop_select(&como_ca.el, &r);
 	if (n_ready < 0) {
@@ -1654,6 +1679,9 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 		n_ready--;
 	    }
 	}
+
+        if (como_ca.ready != TRUE)
+            continue; /* don't go any further until ready */
 
 	/* check resources usage occupied by capture clients */
 	if (s_cabuf.clients_count > 0) {
