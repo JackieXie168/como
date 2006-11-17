@@ -192,3 +192,52 @@ handle_children()
     return 1; 
 }
 
+
+pid_t
+spawn_child(ipc_peer_full_t * child, const char * path, ...)
+{
+    pid_t pid;
+    va_list va;
+    int argc = 0;
+    const char *arg;
+    int i;
+    
+    va_start(va, path);
+    arg = va_arg(va, const char *);
+    while (arg != NULL) {
+	argc++;
+    }
+    va_end(va);
+    
+    pid = fork();
+    if (pid == -1) {
+	warn("fork() failed: %s\n", strerror(errno));
+	return -1;
+    }
+    if (pid == 0) {
+	/* child process */
+	char * argv[argc + 1];
+
+	i = 0;
+	va_start(va, path);
+	while (i < argc) {
+	    argv[i] = va_arg(va, char *);
+	    i++;
+	}
+	va_end(va);
+	argv[i] = NULL;
+	
+	i = execv(path, argv);
+	assert(i == -1);
+	error("Can't execute %s: %s\n", path, strerror(errno));
+    }
+
+    i = s_children;
+    s_child_info[i].who = child;
+    s_child_info[i].pid = pid;
+    s_children++;
+
+    return pid;
+}
+
+
