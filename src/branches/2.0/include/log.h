@@ -13,7 +13,7 @@ typedef enum
   LOG_LEVEL_WARNING	= 1 << 1,
   LOG_LEVEL_MESSAGE	= 1 << 2,
   LOG_LEVEL_NOTICE	= 1 << 3,
-  LOG_LEVEL_DEBUG	= 1 << 4
+  LOG_LEVEL_DEBUG	= 1 << 4,
 } log_level_t;
 
 typedef void (*log_fn) (const char * domain, log_level_t level,
@@ -26,6 +26,8 @@ void        log_set_level (log_level_t level);
 void log_set_handler (const char * domain, log_fn user_fn,
 		      void * user_data);
 
+void log_set_use_color (int use_color);
+
 void log_out  (const char * domain, log_level_t level,
 	       const char * format, ...);
 
@@ -34,6 +36,14 @@ void log_outv (const char * domain, log_level_t level,
 
 char * log_level_name (log_level_t level);
 
+#ifdef LOG_DISABLE
+
+#define error(args...)
+#define warn(args...)
+#define msg(args...)
+#define notice(args...)
+
+#else
 
 #define error(args...) \
 log_out(LOG_DOMAIN, LOG_LEVEL_ERROR, args)
@@ -47,8 +57,17 @@ log_out(LOG_DOMAIN, LOG_LEVEL_MESSAGE, args)
 #define notice(args...) \
 log_out(LOG_DOMAIN, LOG_LEVEL_NOTICE, args)
 
+#endif
+
+#ifndef DEBUG
+
+#define debug(args...)
+
+#else
+
 #define debug(args...) \
 log_out(LOG_DOMAIN, LOG_LEVEL_DEBUG, args)
 
+#endif
 
 #endif /*LOG_H_*/

@@ -45,6 +45,33 @@ typedef struct log_handler {
     void *	user_data;
 } log_handler_t;
 
+static int s_use_color = TRUE;
+
+static inline int
+get_color(log_level_t level)
+{
+    static const int colors[5] = {
+	31, /* ERROR */
+	33, /* WARNING */
+	32, /* MESSAGE */
+	35, /* NOTICE */
+	36, /* DEBUG */
+    };
+    
+    if (level & LOG_LEVEL_ERROR) {
+	return colors[0];
+    } else if (level & LOG_LEVEL_WARNING) {
+	return colors[1];
+    } else if (level & LOG_LEVEL_MESSAGE) {
+	return colors[2];
+    } else if (level & LOG_LEVEL_NOTICE) {
+	return colors[3];
+    } else if (level & LOG_LEVEL_DEBUG) {
+	return colors[4];
+    }
+    return 0;
+}
+
 
 static void
 default_handler(const char * domain, log_level_t level,
@@ -53,27 +80,42 @@ default_handler(const char * domain, log_level_t level,
 {
     FILE *o;
     char *pre;
+    int color = 0;
+    
+    if (s_use_color == TRUE)
+	color = get_color(level);
 
     if (level & LOG_LEVEL_ERROR) {
 	o = stderr;
-	pre = "FATAL ERROR: ";
+	if (color)
+	    pre = "\033[31;1mFATAL ERROR\033[0m: ";
+	else
+	    pre = "FATAL ERROR: ";
     } else if (level & LOG_LEVEL_WARNING) {
 	o = stderr;
-	pre = "WARNING: ";
+	if (color)
+	    pre = "\033[33;1mWARNING\033[0m: ";
+	else
+	    pre = "WARNING: ";
     } else {
 	o = stdout;
 	pre = "";
     }
+    
+    if (domain == NULL)
+	domain = "";
 
-    if (domain) {
-	fprintf(o, "[%5ld.%06ld %s] %s%s",
-		tv.tv_sec % 86400, (long int) tv.tv_usec,
+    if (color) {
+	fprintf(o, "[\033[%d;1m%5ld.%06ld %-6s\033[0m] %s%s",
+		color, tv.tv_sec % 86400, (long int) tv.tv_usec,
 		domain, pre, message);
     } else {
-	fprintf(o, "[%5ld.%06ld] %s%s",
+	fprintf(o, "[%5ld.%06ld %-6s] %s%s",
 		tv.tv_sec % 86400, (long int) tv.tv_usec,
-		pre, message);
+		domain, pre, message);
     }
+
+
 }
 
 static log_handler_t s_initial_handler = {
@@ -157,6 +199,13 @@ log_set_handler(const char * domain, log_fn user_fn, void * user_data)
     h->domain = como_strdup(domain);
     h->user_fn = user_fn;
     h->user_data = user_data; 
+}
+
+
+void
+log_set_use_color(int use_color)
+{
+    s_use_color = use_color;
 }
 
 
