@@ -247,7 +247,7 @@ shmem_destroy(shmem_t * m)
 
 
 shmem_t *
-shmem_attach(const char * filename)
+shmem_attach(const char * filename, void *base_addr)
 {
     shmem_t *new_m;
     int fd;   /* file where metadata is stored */
@@ -287,8 +287,9 @@ shmem_attach(const char * filename)
 	goto error;
     }
 
-    new_m->base = shmat(new_m->shmid, NULL, 0);
+    new_m->base = shmat(new_m->shmid, base_addr, 0);
     if (new_m->base == (void *)-1) {
+        debug("shmat() error - %s\n", strerror(errno));
 	goto error;
     }
 

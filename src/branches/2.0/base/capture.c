@@ -559,7 +559,8 @@ ca_ipc_export_running_mdl(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
 
     if (msg->shmem_filename[0] != '\0') { /* need to attach shmem */
         debug("capture - connecting to shmem at `%s'\n", msg->shmem_filename);
-        ic->shmem = shmem_attach(msg->shmem_filename);
+        debug("attaching shmem @ %p\n", msg->base_addr);
+        ic->shmem = shmem_attach(msg->shmem_filename, msg->base_addr);
         ic->shmap = memmap_create(ic->shmem, 128);
         memmap_alc_init(ic->shmap, &ic->tuple_alc);
 
