@@ -172,6 +172,7 @@ typedef union ccamsg_t {
 typedef struct { /* EX tells CA it's running a mdl. ex->ca */
     char mdl_name[MDLNAME_MAX];
     char shmem_filename[PATH_MAX];
+    void *base_addr; /* they must agree when using shmem */
 } caexmsg_t;
 
 typedef struct { /* tuples in shmem. ca->ex, ex->ca */

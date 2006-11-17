@@ -536,6 +536,7 @@ ex_ipc_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
             free(str);
             return IPC_CLOSE;
         }
+        msg.base_addr = shmem_baseaddr(ie->shmem);
         debug("ex_ipc_add_module -- created shared mem region\n");
         strcpy(msg.shmem_filename, str);
         free(str);
