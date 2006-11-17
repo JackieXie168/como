@@ -79,6 +79,7 @@ typedef void (*mainloop_fn) (ipc_peer_full_t * child,
 pid_t start_child (ipc_peer_full_t * child, mainloop_fn mainloop,
 		   memmap_t * shmemmap, int client_fd, como_node_t * node);
 int handle_children ();
+pid_t spawn_child (ipc_peer_full_t * child, const char * path, ...);
 
 /*
  * inline.c
