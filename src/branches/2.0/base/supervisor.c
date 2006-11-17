@@ -38,6 +38,8 @@
 #include <errno.h>      /* errno */
 #include <err.h>	/* errx */
 #include <assert.h>
+#include <sys/stat.h>   /* mkdir */
+#include <sys/types.h>  /* mkdir */
 
 #include "como.h"
 #include "comopriv.h"
@@ -111,7 +113,6 @@ su_ipc_echo(UNUSED ipc_peer_t * sender, logmsg_t * m, UNUSED size_t len,
     return IPC_OK;
 }
 
-
 /*
  * -- ipc_sync_handler()
  * 
@@ -122,45 +123,106 @@ su_ipc_echo(UNUSED ipc_peer_t * sender, logmsg_t * m, UNUSED size_t len,
  * 
  */
 static int
-su_ipc_sync(ipc_peer_t * peer, UNUSED void * b, UNUSED size_t l,
-	    UNUSED int swap, como_su_t * como_su)
+su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
 {
-    int i;
+    static int ca_done = 0, st_done = 0, ex_spawned = 0;
     como_node_t *node0;
     array_t * mdls;
+    ipc_type t;
+    int i;
+
+    debug("su_ipc_onconnect()\n");
     
     node0 = &array_at(como_su->nodes, como_node_t, 0);
     mdls = node0->mdls;
-    
-    if (peer->class == COMO_CA_CLASS) {
-	ipc_type t;
-	ipc_send(peer, CA_INITIALIZE_SNIFFERS, NULL, 0);
-	ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
-	assert(t == CA_SNIFFERS_INITIALIZED);
-	
-	/* TODO: metadesc comparison here */
-	
-	for (i = 0; i < mdls->len; i++) {
-	    mdl_t *mdl;
-	    uint8_t *buf, *sbuf;
-	    size_t sz;
 
-	    mdl = &array_at(mdls, mdl_t, i);
-	    sz = mdl_sersize(mdl);
-	    buf = sbuf = como_malloc(sz);
+    switch (peer->class) {
+        case COMO_CA_CLASS: { /* connect from CA */
+            debug("su_ipc_onconnect -- CAPTURE\n");
+            COMO_CA = (ipc_peer_full_t *)peer;
 
-	    mdl_serialize(&sbuf, mdl);
+            ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
+            assert(t == CA_SNIFFERS_INITIALIZED);
+            
+            /* TODO: metadesc comparison here */
+            
+            for (i = 0; i < mdls->len; i++) { /* send the mdls */
+                mdl_t *mdl;
+                uint8_t *buf, *sbuf;
+                size_t sz;
 
-	    ipc_send(peer, CA_ADD_MODULE, buf, sz);
-	    free(buf);
-	}
-	
-	ipc_send(peer, CA_START, NULL, 0);
+                /* TODO only send compatible modules */
+
+                mdl = &array_at(mdls, mdl_t, i);
+                sz = mdl_sersize(mdl);
+                buf = sbuf = como_malloc(sz);
+
+                mdl_serialize(&sbuf, mdl);
+
+                ipc_send(peer, CA_ADD_MODULE, buf, sz);
+                free(buf);
+            }
+            for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
+                ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
+                assert(t == CA_MODULE_ADDED);
+            }
+            
+            ca_done = 1;
+            break;
+        }
+        case COMO_ST_CLASS: { /* connect from ST */
+            debug("su_ipc_onconnect -- STORAGE\n");
+            st_done = 1;
+            break;   
+        }
+        case COMO_EX_CLASS: { /* connect from EX */
+            debug("su_ipc_onconnect -- EXPORT\n");
+            assert(ca_done && st_done);
+
+            for (i = 0; i < mdls->len; i++) { /* send the mdls */
+                mdl_t *mdl;
+                uint8_t *buf, *sbuf;
+                size_t sz;
+
+                /* TODO only send compatible modules */
+
+                mdl = &array_at(mdls, mdl_t, i);
+                sz = mdl_sersize(mdl);
+                buf = sbuf = como_malloc(sz);
+
+                mdl_serialize(&sbuf, mdl);
+                ipc_send(peer, EX_ADD_MODULE, buf, sz);
+                free(buf);
+            }
+            for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
+                ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
+                assert(t == EX_MODULE_ADDED);
+            }
+
+            /*
+             * At this point all processes are running and configured.
+             * Tell CAPTURE to start processing input traffic.
+             */
+            debug("su_ipc_onconnect -- all procs ready, starting CA\n");
+            ipc_send((ipc_peer_t *)COMO_CA, CA_START, NULL, 0);
+        }
+    }
+
+    if (ca_done && st_done && !ex_spawned) { /* CA && ST done, can go for EX */
+        char *str;
+
+        debug("CA and ST initialized, spawning export\n");
+        str = como_asprintf("%s/%s", como_su->env->dbdir, node0->name);
+        spawn_child(COMO_EX, "base/como-export", como_su->env->workdir,
+            como_su->env->workdir, str, como_su->env->libdir, NULL);   
+        free(str);
+
+        ex_spawned = 1;
     }
     return IPC_OK;
 }
 
-
+#if 0
 static int
 su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
 			       UNUSED void * buf,
@@ -207,6 +269,7 @@ su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
     
     return IPC_OK;
 }
+#endif
 
 /*  
  * -- su_ipc_done 
@@ -493,11 +556,11 @@ como_su_run(como_su_t * como_su)
     atexit(cleanup);
 
     /* register handlers for IPC */
-    ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync);
+    //ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync);
     ipc_register(SU_DONE, (ipc_handler_fn) su_ipc_done);
     ipc_register(SU_ECHO, (ipc_handler_fn) su_ipc_echo);
-    ipc_register(CA_SNIFFERS_INITIALIZED,
-		 (ipc_handler_fn) su_ipc_ca_sniffers_initialized);
+    /*ipc_register(CA_SNIFFERS_INITIALIZED,
+		 (ipc_handler_fn) su_ipc_ca_sniffers_initialized);*/
     
 #if 0
     /* TODO */
@@ -617,7 +680,7 @@ como_su_run(como_su_t * como_su)
 		int x;
 		x = accept(i, NULL, NULL);
 		if (x < 0) {
-		    warn("Failed on accept(): %s\n", strerror(errno));
+		    warn("accept() failed: %s\n", strerror(errno));
 		} else {
 		    event_loop_add(&como_su->el, x);
 		}
@@ -788,6 +851,7 @@ main(int argc, char ** argv)
     como_su_t *como_su;
     como_node_t *node0;
     como_node_t node;
+    char *str;
     alc_t alc;
     
     /* create a global pool */
@@ -797,8 +861,8 @@ main(int argc, char ** argv)
     como_su = alc_new0(&alc, como_su_t);
     como_su->pool = pool;
     como_su->alc = &alc;
-    
-    como_init(argc, argv);
+   
+    como_init("SU", argc, argv);
     
     /* initialize environment */
     como_env_init();
@@ -813,7 +877,14 @@ main(int argc, char ** argv)
     node.type = como_strdup("Unknown");
     node.query_port = DEFAULT_QUERY_PORT;
     node.mdls = array_new(sizeof(mdl_t));
-    
+    if (mkdir(como_su->env->dbdir, 0700) == -1 && errno != EEXIST)
+        error("cannot create db dir `%s'\n", como_su->env->dbdir);
+
+    str = como_asprintf("%s/%s", como_su->env->dbdir, node.name);
+    if (mkdir(str, 0700) == -1 && errno != EEXIST)
+        error("cannot create db dir `%s'\n", str);
+    free(str);
+
     como_su->nodes = array_new(sizeof(como_node_t));
     array_add(como_su->nodes, &node);
 
@@ -850,13 +921,12 @@ main(int argc, char ** argv)
     como_stats->first_ts = ~0;
     
     /* initialize IPC */
-    ipc_init(ipc_peer_at(COMO_SU, como_su->env->workdir), como_su);
+    ipc_init(ipc_peer_at(COMO_SU, como_su->env->workdir),
+             (ipc_on_connect_fn) su_ipc_onconnect, como_su);
     
     /* prepare the SUPERVISOR socket */
     como_su->accept_fd = ipc_listen();
     
-
-
     node0 = &array_at(como_su->nodes, como_node_t, 0);
     como_node_init_sniffers(node0, como_su->config->sniffer_defs,
 			    &como_su->shalc);
@@ -864,18 +934,22 @@ main(int argc, char ** argv)
     como_node_init_mdls(node0, como_su->config->mdl_defs,
 			como_su->alc);
 
-    /* start the CAPTURE process */
+    /* spawn STORAGE */
+    spawn_child(COMO_ST, "base/como-storage", como_su->env->workdir,
+            "134217728", NULL);
+
     if (node0->sniffers_count > 0) {
 	ipc_peer_full_t *ca;
 	pid_t pid;
 	
+        /* start the CAPTURE process */
 	ca = ipc_peer_child(COMO_CA, 0);
 	pid = start_child(ca, capture_main, como_su->memmap, -1, node0);
 	if (pid < 0) {
 	    warn("Can't start CAPTURE\n");
 	}
     }
-    
+
     setproctitle("SUPERVISOR");
 
     /* move to the SUPERVISOR process (we don't fork here) */
@@ -883,3 +957,4 @@ main(int argc, char ** argv)
 
     return EXIT_SUCCESS;
 }
+

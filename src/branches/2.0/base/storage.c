@@ -1690,28 +1690,6 @@ handle_shutdown(UNUSED ipc_peer_t * sender, UNUSED void * buf,
 }
 
 
-
-
-static void
-handle_configure(UNUSED ipc_peer_t * sender, UNUSED off_t * maxfilesize,
-		UNUSED size_t len, UNUSED int swap, UNUSED void * user_data)
-{
-    s_como_st.maxfilesize = *maxfilesize;
-    
-    /* register handlers for IPC messages */
-    ipc_register(S_CLOSE, (ipc_handler_fn) handle_close);
-    ipc_register(S_OPEN, (ipc_handler_fn) handle_open);
-    ipc_register(S_REGION, (ipc_handler_fn) handle_region);
-    ipc_register(S_SEEK, (ipc_handler_fn) handle_seek);
-    ipc_register(S_INFORM, (ipc_handler_fn) handle_inform);
-
-    /* accept connections from other processes */
-    s_como_st.accept_fd = ipc_listen();
-    
-    event_loop_add(&s_como_st.el, s_como_st.accept_fd);
-}
-
-
 /*
  * This is the mainloop of the storage-server process. It waits on a select
  * for a message on any of the open socket and then performs the 
@@ -1721,18 +1699,22 @@ static void
 como_st_run()
 {
     struct timeval to = { 5, 200000 };	// XXX just to put something?
+
+
+    /* register handlers for IPC messages */
+    ipc_register(S_CLOSE, (ipc_handler_fn) handle_close);
+    ipc_register(S_OPEN, (ipc_handler_fn) handle_open);
+    ipc_register(S_REGION, (ipc_handler_fn) handle_region);
+    ipc_register(S_SEEK, (ipc_handler_fn) handle_seek);
+    ipc_register(S_INFORM, (ipc_handler_fn) handle_inform);
+
+    event_loop_add(&s_como_st.el, s_como_st.accept_fd);
     
-    ipc_register(SU_CONFIGURE, (ipc_handler_fn) handle_configure);
     ipc_register(SU_EXIT, handle_shutdown);
     
 
     /* listen to SUPERVISOR */
     event_loop_add(&s_como_st.el, s_como_st.supervisor_fd);
-
-    /* 
-     * wait for the debugger to attach
-     */
-    //DEBUGGER_WAIT_ATTACH(map);
 
     /*
      * The real main loop.
@@ -1815,20 +1797,42 @@ como_st_run()
 int
 main(int argc, char ** argv)
 {
-    if (argc != 2 || argv[1][0] != '/') {
+    char *location;
+    uint64_t maxfilesize;
+
+    if (argc != 3) {
+        fprintf(stderr, "usage: %s su_location maxfilesize\n", argv[0]);
 	exit(EXIT_FAILURE);
     }
-    
-    como_init(argc, argv);
+    if (argv[1][0] != '/') {
+        fprintf(stderr, "invalid su_location `%s'\n", argv[1]);
+	exit(EXIT_FAILURE);
+    }
+
+    maxfilesize = strtoll(argv[2], NULL, 0);
+    if (maxfilesize == 0) {
+        fprintf(stderr, "invalid maxfilesize `%lld'\n", maxfilesize);
+	exit(EXIT_FAILURE);
+    }
+
+    location = como_strdup(argv[1]);
+    como_init("ST", argc, argv);
+    setproctitle("STORAGE");
 
     /* init data structures */
     memset(&s_como_st, 0, sizeof(s_como_st));
     s_como_st.accept_fd = -1;
+    s_como_st.maxfilesize = maxfilesize;
     
     /* initialize IPC */
-    ipc_init(ipc_peer_at(COMO_ST, argv[1]), &s_como_st);
-    
+    ipc_init(ipc_peer_at(COMO_ST, location), NULL, &s_como_st);
+    s_como_st.accept_fd = ipc_listen();
+
+    /* connect to SU - we are ready to handle connections */
     s_como_st.supervisor_fd = ipc_connect(COMO_SU);
+
+    /* if needed, wait for debugger */
+    DEBUGGER_WAIT_ATTACH(COMO_ST);
     
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 

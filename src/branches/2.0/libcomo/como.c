@@ -59,8 +59,9 @@ ipc_peer_full_t *COMO_QU;
 
 
 void
-como_init(int argc, char ** argv)
+como_init(const char * program, int argc, char ** argv)
 {
+    log_set_program(program);
 #if defined(linux) || defined(__APPLE__)
     /* linux/Mac OS X does not support setproctitle. we have our own. */
     setproctitle_init(argc, argv);
@@ -69,7 +70,7 @@ como_init(int argc, char ** argv)
     COMO_SU = ipc_peer_new(COMO_SU_CLASS, "su", "SUPERVISOR");
     COMO_CA = ipc_peer_new(COMO_CA_CLASS, "ca", "CAPTURE");
     COMO_EX = ipc_peer_new(COMO_EX_CLASS, "ex", "EXPORT");
-    COMO_ST = ipc_peer_new(COMO_EX_CLASS, "st", "STORAGE");
+    COMO_ST = ipc_peer_new(COMO_ST_CLASS, "st", "STORAGE");
     COMO_QU = ipc_peer_new(COMO_QU_CLASS, "qu", "QUERY");
 }
 

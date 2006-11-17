@@ -43,7 +43,7 @@
 #include "como.h"
 #include "data.h"
 
-void *
+tuple_t *
 ca_init(mdl_t * self, timestamp_t ts)
 {
     tuple_t *t = mdl_alloc_tuple(self, tuple_t);
@@ -52,10 +52,9 @@ ca_init(mdl_t * self, timestamp_t ts)
 }
 
 void
-capture(mdl_t * self, pkt_t * pkt, void * state)
+capture(mdl_t * self, pkt_t * pkt, tuple_t * t)
 {
     const config_t *cf = mdl_get_config(self, config_t);
-    tuple_t *t = (tuple_t *) state;
 
     if (COMO(type) == COMOTYPE_NF) {
 	if (cf->iface == -1 || H16(NF(input)) == cf->iface) {

@@ -118,7 +118,7 @@ static ipc_peer_list_t s_peers;
  */
 /* TODO: replace with hash table */
 static ipc_handler_fn s_handlers[65536] = {0};
-
+static ipc_on_connect_fn s_on_connect;
 
 ipc_peer_full_t *
 ipc_peer_new(uint8_t class, const char * code, const char * name)
@@ -321,12 +321,13 @@ ipc_read(int fd, void * buf, size_t count)
 
 
 void
-ipc_init(ipc_peer_full_t * me, void * user_data)
+ipc_init(ipc_peer_full_t * me, ipc_on_connect_fn on_connect, void * user_data)
 {
     memset(s_handlers, 0, sizeof(s_handlers));
 
     s_me = me;
     s_me->fd = -1;
+    s_on_connect = on_connect;
     s_user_data = user_data;
 }
 
@@ -560,13 +561,24 @@ ipc_handle(int fd)
     if (msg.type == IPC_CONNECT) {
 	/* this is the connection message */
 	ipc_connect_msg_t *cm;
+        int ic;
 	
 	cm = (ipc_connect_msg_t *) buf;
 	x = ipc_peer_new(msg.sender.class, cm->code, cm->name);
 	x->fd = fd;
 	x->at = strdup("unknown");
-	ipc_peer_list_insert_head(&s_peers, x);
+        x->connected = 1;
 	
+        if (s_on_connect != NULL) {
+            ic = s_on_connect((ipc_peer_t *) x, s_user_data);
+            if (ic == IPC_CLOSE || ic == IPC_ERR) {
+                notice("Connection from peer %s on fd %d refused by "
+                       "on_connect handler.\n", x->name, fd);
+                ipc_peer_destroy(x); /* calls close */
+                return ic;
+            }
+        }
+	ipc_peer_list_insert_head(&s_peers, x);
 	notice("New connection from peer %s on fd %d\n", x->name, fd);
 	return IPC_OK;
     }
@@ -586,7 +598,8 @@ ipc_handle(int fd)
 	    ipc_peer_list_remove(&s_peers, x);
 	    ipc_peer_destroy(x); /* calls close */
 	}
-	assert(ic == IPC_OK);
+        else
+            assert(ic == IPC_OK || ic == IPC_ERR);
 	
 	//free(buf);
 	return ic;
@@ -715,3 +728,10 @@ ipc_set_user_data(void * user_data)
 {
     s_user_data = user_data;
 }
+
+void
+ipc_set_on_connect(ipc_on_connect_fn on_connect)
+{
+    s_on_connect = on_connect;
+}
+

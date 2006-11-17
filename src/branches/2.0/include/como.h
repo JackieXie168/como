@@ -145,7 +145,7 @@ enum {
     SU_EXIT = 2
 };
 
-void como_init(int argc, char ** argv);
+void como_init(const char * progname, int argc, char ** argv);
 
 enum {
     SU_CONNECT = 1,
@@ -156,11 +156,13 @@ enum {
     CA_SNIFFER_INITIALIZED,
     CA_SNIFFERS_INITIALIZED,    
     CA_ADD_MODULE,
+    CA_MODULE_ADDED,
     CA_START,
     CA_EXIT,
     CA_EXPORT_RUNNING_MODULE,
 
     EX_ADD_MODULE = 0x200,
+    EX_MODULE_ADDED,
     EX_MODULE_SERIALIZED_TUPLES,
     EX_MODULE_SHMEM_TUPLES,
     

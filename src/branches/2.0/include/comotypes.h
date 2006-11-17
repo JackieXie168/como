@@ -57,7 +57,7 @@ struct tuple;
 #include "tuples.h"
 struct tuple {
     tuples_entry_t	entry;
-    void		*data;
+    uint8_t		data[0]; /* variable size */
 };
 
 

@@ -41,6 +41,7 @@
 #include <sys/time.h>
 
 #define LOG_DOMAIN "MEMORY"
+#define LOG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 
@@ -194,7 +195,8 @@ memmap_insert(memmap_t * m, memblock_t * x)
  * 
  */
 static void *
-memmap_malloc(size_t size, const char * file, int line, memmap_t * m)
+memmap_malloc(size_t size, UNUSED const char * file, UNUSED int line,
+              memmap_t * m)
 {
     uint32_t i, cand;
     memblock_t *x;
@@ -283,7 +285,7 @@ memmap_malloc(size_t size, const char * file, int line, memmap_t * m)
  * 
  */
 static void
-memmap_free(void * p, const char * file, int line, memmap_t * m)
+memmap_free(void * p, UNUSED const char * file, UNUSED int line, memmap_t * m)
 {
     memblock_t *x;
     memmap_state_t *mem;

@@ -48,6 +48,7 @@ struct __attribute__((packed)) ipc_peer_t {
 
 typedef int (*ipc_handler_fn) (ipc_peer_t * peer, void * buf, size_t len,
 			       int swap, void * user_data);
+typedef int (*ipc_on_connect_fn) (ipc_peer_t * peer, void * user_data);
 
 
 #define IPC_OK		0
@@ -70,7 +71,7 @@ const char *      ipc_peer_get_code(const ipc_peer_t * p_);
 ipc_peer_full_t * ipc_peer_child   (const ipc_peer_full_t * kind, uint16_t id);
 
 
-void ipc_init     (ipc_peer_full_t * me, void * user_data);
+void ipc_init     (ipc_peer_full_t * me, ipc_on_connect_fn on_connect, void * user_data);
 void ipc_finish   (int destroy);
 void ipc_register (ipc_type type, ipc_handler_fn fn);
 int  ipc_listen   ();
@@ -82,5 +83,6 @@ int  ipc_receive  (ipc_peer_t * peer, ipc_type * type, void * data,
 		   size_t * sz, int * swap, const struct timeval * timeout);
 
 void ipc_set_user_data (void * user_data);
+void ipc_set_on_connect (ipc_on_connect_fn on_connect);
 
 #endif	/* _COMO_IPC_H_ */
