@@ -98,6 +98,7 @@ store_records(mdl_t *self, ex_state_t *st)
 
     flowtable_iter_init(st->table, &it);
 
+    i = 0;
     while ((rec = (topaddr_record_t *)flowtable_iter_get(&it))) {
         array[i] = rec;
         flowtable_iter_next(&it);
