@@ -312,16 +312,6 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
 		     sizeof(msg_process_ser_tuples_t));
             debug("module `%s': flushing - sent serialized tuples to CA\n", mdl->name);
 
-            /*
-             * we have serialized and sent the tuples. we can free
-             * them all right now.
-             */
-            t = tuples_first(&ic->tuples);
-	    while (t != NULL) {
-		t2 = t;
-		t = tuples_next(t);
-                mdl_free_tuple(mdl, t->data);
-            }
             ic->tuple_count = 0;
             debug("module `%s': flushing - capture state cleared\n", mdl->name);
         }
@@ -493,14 +483,13 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
  * 
  */
 static int
-handle_su_ca_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
-		  UNUSED int swap, como_ca_t * como_ca)
+handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
+			UNUSED int swap, como_ca_t * como_ca)
 {
     mdl_t *mdl;
     mdl_icapture_t *ic;
     alc_t *alc;
 
-    
     alc = como_alc();
     
     debug("capture adding module - deserialize\n");
@@ -531,7 +520,7 @@ handle_su_ca_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t 
     /* TODO locate the first empty entry in the array */
     array_add(como_ca->mdls, &mdl);
 
-    debug("capture adding module - done, waiting for EX to claim its tuples\n");
+    debug("capture adding module - done, waiting for EX to attach\n");
     ic->status = MDL_WAIT_FOR_EXPORT;
 
     ipc_send(peer, CA_SU_MODULE_ADDED, NULL, 0);
@@ -573,7 +562,7 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
         ic->use_shmem = TRUE;
     } else {
         debug("capture - will use serialized interface for `%s'\n", mdl->name);
-        ic->tuple_alc = *como_alc(); /* TODO: manage mdl's priv memory */
+        ic->tuple_alc = mdl->priv->alc;
         ic->use_shmem = FALSE;
     }
 
