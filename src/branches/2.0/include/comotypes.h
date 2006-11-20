@@ -143,7 +143,7 @@ struct _mdl {
 };
 
 #define mdl_get_config(h,type) \
-((const type *) (h->config))
+((type *) (h->config))
 
 #define mdl_alloc_config(h,type) \
 ((type *) mdl__alloc_config(h, sizeof(type)))
@@ -154,11 +154,15 @@ void * mdl__alloc_config(mdl_t * h, size_t sz);
 ((type *) mdl__alloc_tuple(h, sizeof(type)))
 
 
-void * mdl__alloc_tuple(mdl_t * h, size_t sz);
-void   mdl_free_tuple(mdl_t * h, void *ptr);
-char * mdl_alloc_string(mdl_t * h, size_t sz);
+void * mdl__alloc_tuple(mdl_t * mdl, size_t sz);
+void   mdl_free_tuple(mdl_t * mdl, void *ptr);
+char * mdl_alloc_string(mdl_t * mdl, size_t sz);
+
+alc_t * mdl_get_alloc(mdl_t * mdl);
 
 
+void * mdl__malloc(alc_t *alc, size_t sz);
+#define mdl_malloc(self, sz) mdl__malloc(mdl_get_alloc(self), sz);
 
 
 /* Module callbacks  (TODO: document) */
@@ -181,7 +185,7 @@ typedef void   (*ca_flush_fn)(mdl_t * self);
 typedef void * (*ex_init_fn)(mdl_t *self);
 
 typedef void   (*ex_export_fn)(mdl_t *self, void ** tuples, size_t count,
-                                timestamp_t ivl_start);
+                                timestamp_t ivl_start, void *state);
 
 typedef struct capabilities_t {
     uint32_t has_flexible_flush:1;

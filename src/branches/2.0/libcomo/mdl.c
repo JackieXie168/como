@@ -296,8 +296,13 @@ mdl__alloc_config(mdl_t * mdl, size_t sz)
     return alc_calloc(alc, 1, sz);
 }
 
-/* CAPTURE */
+alc_t *
+mdl_get_alloc(mdl_t * mdl)
+{
+    return &mdl->priv->alc;
+}
 
+/* CAPTURE */
 
 void *
 mdl__alloc_tuple(mdl_t * mdl, size_t sz)

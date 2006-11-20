@@ -101,10 +101,16 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     debug("handle_su_ex_add_module -- output file `%s' open\n", str);
     free(str);
 
+    debug("handle_su_ex_add_module -- init export state: calling ex_init()\n");
+    if (ie->init)
+        ie->state = ie->init(mdl);
+    else
+        ie->state = NULL;
+
+    debug("handle_su_ex_add_module -- attaching to capture\n");
     strcpy(msg.mdl_name, mdl->name);
     msg.use_shmem = como_ex->use_shmem;
     ipc_send((ipc_peer_t *) COMO_CA, EX_CA_ATTACH_MODULE, &msg, sizeof(msg));
-
     ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
 
     hash_insert_string(como_ex->mdls, mdl->name, mdl); /* add to mdl index */
@@ -152,7 +158,7 @@ handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
      * let the module process 'em
      */
     if (ie->export)
-        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start);
+        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start, ie->state);
     else
         error("TODO: store the tuples directly\n");
 
@@ -208,7 +214,7 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 
 	assert(i == msg->ntuples);
 
-        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start);
+        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start, ie->state);
 	/*
 	 * free allocated mem.
 	 */
