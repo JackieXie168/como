@@ -88,7 +88,8 @@
 #include <string.h>
 #include <assert.h>
 
-#include "corlib.h"
+#include "como.h"
+#include "flowtable.h"
 
 /*
  * When there are this many entries per bucket, on average, rebuild
@@ -107,8 +108,9 @@ typedef struct flowtable_entry_t {
     struct flowtable_entry_t *nextPtr;	/* Pointer to next entry in this
 					 * hash bucket, or NULL for end of
 					 * chain. */
-    flowtable_t *ftable;	/* Pointer to table containing entry. */
-    flow_t *flow;		/* Entry value. */
+    flowtable_t *	ftable;	/* Pointer to table containing entry. */
+    flow_t *		flow;	/* Entry value. */
+    flowhash_t		hash;
 } flowtable_entry_t;
 
 /*
@@ -116,25 +118,25 @@ typedef struct flowtable_entry_t {
  */
 
 struct flowtable_t {
-    allocator_t *alc;		/* Allocator of the hash table. */
+    alc_t *	alc;		/* Allocator of the hash table. */
     flowtable_entry_t **buckets;	/* Pointer to bucket array.  Each
 					 * element points to first entry in
 					 * bucket's hash chain, or NULL. */
-    int firstBucket;
-    int lastBucket;
-    int numBuckets;		/* Total number of buckets allocated
+    int		firstBucket;
+    int 	lastBucket;
+    int 	numBuckets;	/* Total number of buckets allocated
 				 * at **bucketPtr. */
-    int numEntries;		/* Total number of entries present
+    int 	numEntries;	/* Total number of entries present
 				 * in table. */
-    int rebuildSize;		/* Enlarge table when numEntries gets
+    int 	rebuildSize;	/* Enlarge table when numEntries gets
 				 * to be this large. */
-    int downShift;		/* Shift count used in hashing
+    int 	downShift;	/* Shift count used in hashing
 				 * function.  Designed to use high-
 				 * order bits of randomized keys. */
-    int mask;			/* Mask value used in hashing
+    int 	mask;		/* Mask value used in hashing
 				 * function. */
     flow_equal_fn flowEqualFn;
-    pkt_in_flow_fn pktInFlowFn;
+    flow_match_fn flowMatchFn;
     destroy_notify_fn flowDestroyFn;
 };
 
@@ -189,9 +191,10 @@ static void rebuild_table(flowtable_t * ftable);
  */
 
 flowtable_t *
-flowtable_new_full(allocator_t * alc, int size,
-		   flow_equal_fn flowEqualFn,
-		   pkt_in_flow_fn pktInFlowFn, destroy_notify_fn flowDestroyFn)
+flowtable_new(alc_t * alc, int size,
+	      flow_equal_fn flowEqualFn,
+	      flow_match_fn flowMatchFn,
+	      destroy_notify_fn flowDestroyFn)
 {
     flowtable_t *ftable;
     int numBuckets;
@@ -214,7 +217,7 @@ flowtable_new_full(allocator_t * alc, int size,
     ftable->firstBucket = numBuckets;
     ftable->lastBucket = -1;
     ftable->flowEqualFn = flowEqualFn;
-    ftable->pktInFlowFn = pktInFlowFn;
+    ftable->flowMatchFn = flowMatchFn;
     ftable->flowDestroyFn = flowDestroyFn;
 
     return ftable;
@@ -229,7 +232,7 @@ flowtable_size(flowtable_t * ftable)
 
 
 flow_t *
-flowtable_lookup(flowtable_t * ftable, flowhash_t hash, pkt_t * pkt)
+flowtable_lookup(flowtable_t * ftable, flowhash_t hash, const void * key)
 {
     flowtable_entry_t *hPtr;
     int i;
@@ -239,36 +242,12 @@ flowtable_lookup(flowtable_t * ftable, flowhash_t hash, pkt_t * pkt)
     /*
      * Search all of the entries in the appropriate bucket.
      */
-    pkt_in_flow_fn pktInFlowFn = ftable->pktInFlowFn;
+    flow_match_fn flowMatchFn = ftable->flowMatchFn;
     for (hPtr = ftable->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
-	if (hash != hPtr->flow->hash) {
+	if (hash != hPtr->hash) {
 	    continue;
 	}
-	if (pktInFlowFn(pkt, hPtr->flow)) {
-	    return hPtr->flow;
-	}
-    }
-
-    return NULL;
-}
-
-flow_t *
-flowtable_lookup_flow(flowtable_t * ftable, flow_t * flow)
-{
-    flowtable_entry_t *hPtr;
-    int i;
-
-    i = flow->hash & ftable->mask;
-
-    /*
-     * Search all of the entries in the appropriate bucket.
-     */
-    flow_equal_fn flowEqualFn = ftable->flowEqualFn;
-    for (hPtr = ftable->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
-	if (flow->hash != hPtr->flow->hash) {
-	    continue;
-	}
-	if (flowEqualFn(flow, hPtr->flow)) {
+	if (flowMatchFn(key, hPtr->flow)) {
 	    return hPtr->flow;
 	}
     }
@@ -278,12 +257,12 @@ flowtable_lookup_flow(flowtable_t * ftable, flow_t * flow)
 
 
 int
-flowtable_insert(flowtable_t * ftable, flow_t * flow)
+flowtable_insert(flowtable_t * ftable, flowhash_t hash, flow_t * flow)
 {
     flowtable_entry_t *hPtr;
     int i;
 
-    i = flow->hash & ftable->mask;
+    i = hash & ftable->mask;
 
     if (i < ftable->firstBucket)
 	ftable->firstBucket = i;
@@ -292,27 +271,10 @@ flowtable_insert(flowtable_t * ftable, flow_t * flow)
 	ftable->lastBucket = i;
 
     /*
-     * Search all of the entries in the appropriate bucket.
-     */
-
-    flow_equal_fn flowEqualFn = ftable->flowEqualFn;
-    for (hPtr = ftable->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
-	if (flow->hash != (unsigned int) hPtr->flow->hash) {
-	    continue;
-	}
-	if (flowEqualFn(flow, hPtr->flow)) {
-	    if (ftable->flowDestroyFn && flow != hPtr->flow)
-		ftable->flowDestroyFn(hPtr->flow);
-
-	    hPtr->flow = flow;
-	    return 0;
-	}
-    }
-
-    /*
-     * Entry not found.  Add a new one to the bucket.
+     * Add the new entry to the bucket.
      */
     hPtr = alc_calloc(ftable->alc, 1, sizeof(flowtable_entry_t));
+    hPtr->hash = hash;
     hPtr->flow = flow;
     hPtr->ftable = ftable;
     hPtr->nextPtr = ftable->buckets[i];
@@ -385,12 +347,12 @@ flowtable_remove_entry_internal(flowtable_t * ftable,
 }
 
 int
-flowtable_remove(flowtable_t * ftable, flow_t * flow)
+flowtable_remove(flowtable_t * ftable, flowhash_t hash, flow_t * flow)
 {
     flowtable_entry_t *hPtr;
     int i;
 
-    i = flow->hash & ftable->mask;
+    i = hash & ftable->mask;
 
     /*
      * Search all of the entries in the appropriate bucket.
@@ -398,7 +360,7 @@ flowtable_remove(flowtable_t * ftable, flow_t * flow)
 
     flow_equal_fn flowEqualFn = ftable->flowEqualFn;
     for (hPtr = ftable->buckets[i]; hPtr != NULL; hPtr = hPtr->nextPtr) {
-	if (flow->hash != (unsigned int) hPtr->flow->hash) {
+	if (hash != (unsigned int) hPtr->hash) {
 	    continue;
 	}
 	if (flowEqualFn(flow, hPtr->flow)) {
@@ -712,7 +674,7 @@ rebuild_table(flowtable_t * ftable)
 	for (hPtr = *oldChainPtr; hPtr != NULL; hPtr = *oldChainPtr) {
 	    *oldChainPtr = hPtr->nextPtr;
 
-	    i = hPtr->flow->hash & ftable->mask;
+	    i = hPtr->hash & ftable->mask;
 	    hPtr->nextPtr = ftable->buckets[i];
 	    ftable->buckets[i] = hPtr;
 	}

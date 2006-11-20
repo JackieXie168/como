@@ -55,33 +55,31 @@ struct flowtable_iter_t
  */
 typedef struct flowtable_t flowtable_t;
 typedef struct flowtable_iter_t  flowtable_iter_t;
-typedef unsigned int flowhash_t;
 
 /*
- * All records for the flowtable must have a 32bit initial
- * record which is interpreted as the hash of the record.
+ * A flow_t can be anything.
  */
-typedef struct flow {
-    flowhash_t	hash;
-} flow_t;
+typedef void * flow_t;
 
-typedef flowhash_t (*flow_hash_fn)   (const pkt_t * pkt);
+typedef unsigned int flowhash_t;
+
 typedef int        (*flow_equal_fn)  (const flow_t * flow1,
 				      const flow_t * flow2);
-typedef int        (*pkt_in_flow_fn) (const pkt_t * pkt,
+typedef int        (*flow_match_fn)  (const void * key,
 				      const flow_t * flow);
 
 
-flowtable_t * flowtable_new    (allocator_t * alc,
+flowtable_t * flowtable_new    (alc_t * alc, int size,
 				flow_equal_fn flowEqualFn,
-				pkt_in_flow_fn pktInFlowFn,
+				flow_match_fn flowMatchFn,
 				destroy_notify_fn flowDestroyFn);
 int      flowtable_size        (flowtable_t * ftable);
 flow_t * flowtable_lookup      (flowtable_t * ftable, flowhash_t hash,
-				pkt_t * pkt);
-flow_t * flowtable_lookup_flow (flowtable_t * ftable, flow_t * flow);
-int      flowtable_insert      (flowtable_t * ftable, flow_t * flow);
-int      flowtable_remove      (flowtable_t * ftable, flow_t * flow);
+				const void * key);
+int      flowtable_insert      (flowtable_t * ftable, flowhash_t hash,
+				flow_t * flow);
+int      flowtable_remove      (flowtable_t * ftable, flowhash_t hash,
+				flow_t * flow);
 void     flowtable_destroy     (flowtable_t * ftable);
 
 #ifdef DEBUG
