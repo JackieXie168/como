@@ -540,17 +540,16 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
     mdl_t *mdl = NULL;
     int i;
 
-    debug("capture - export claims tuples from module `%s'\n", msg->mdl_name);
+    debug("capture - export attaches to module `%s'\n", msg->mdl_name);
 
     for (i = 0; i < mdls->len; i++) {
         mdl = array_at(mdls, mdl_t *, i);
         if (! strcmp(mdl->name, msg->mdl_name))
             break;
-        debug("%s is not what it's looking for\n", mdl->name);
     }
 
     if (i == mdls->len) {
-        warn("export claims tuples from unknown module `%s",
+        warn("export attaches to an unknown module `%s'\n",
             msg->mdl_name);
         return IPC_CLOSE;
     }
@@ -568,6 +567,7 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
         ic->use_shmem = FALSE;
     }
 
+    ipc_send(peer, CA_EX_MODULE_ATTACHED, NULL, 0);
 
     debug("capture - module `%s' can run\n", mdl->name);
     ic->status = MDL_ACTIVE;
@@ -1526,7 +1526,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     s_como_ca = &como_ca; /* used only by cleanup */
     
     como_ca.shmemmap = shmemmap;
-    como_ca.mdls = array_new(sizeof(mdl_t));
+    como_ca.mdls = array_new(sizeof(mdl_t *));
     memmap_alc_init(shmemmap, &como_ca.shalc);
     
     /* register handlers for signals */

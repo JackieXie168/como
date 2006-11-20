@@ -70,24 +70,6 @@ int unpack_module(char * x, size_t len, module_t * mdl);
 int init_module(module_t * mdl); 
 int match_module(module_t * a, module_t * b); 
 
-/* 
- * memory.c
- */
-uint memory_usage();
-uint memory_peak();
-
-alc_t * allocator_safe();
-
-void * mem_mdl_smalloc(size_t sz, const char * file, int line, module_t * mdl);
-void * mem_mdl_scalloc(size_t n, size_t sz, const char *, int, module_t * mdl);
-void   mem_mdl_sfree  (void *ptr, const char * file, int line, module_t * mdl);
-
-#define mem_mdl_malloc(self,sz)			\
-	mem_mdl_smalloc(sz, __FILE__, __LINE__, (module_t *) self)
-#define mem_mdl_calloc(self,nmemb,sz)		\
-	mem_mdl_scalloc(nmemb, sz, __FILE__, __LINE__, (module_t *) self)
-#define mem_mdl_free(self,p)			\
-	mem_mdl_sfree(p, __FILE__, __LINE__, (module_t *) self)
 
 
 /*
