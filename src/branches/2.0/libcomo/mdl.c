@@ -34,11 +34,10 @@
 #include <string.h>
 #include <assert.h>
 
+#define LOG_DOMAIN "MDL"
 #include "como.h"
 #include "comopriv.h"
 #include "storage.h"
-#include "serialize.h"
-#include "shobj.h"
 
 typedef struct strec strec_t;
 
@@ -346,9 +345,14 @@ mdl_store_rec(mdl_t * mdl, void * rec)
     size_t sz;
     uint8_t *sbuf;
     
-    ie = mdl_get_iexport(mdl);
     /* the timestamp is the first 64-bit integer of the record */
-//    ts = *((timestamp_t *) rec);
+#if DEBUG
+    timestamp_t ts;
+    ts = *((timestamp_t *) rec);
+    debug("mdl_store_rec ts = %u\n", TS2SEC(ts));
+#endif
+
+    ie = mdl_get_iexport(mdl);
 
     sz = mdl->priv->mdl_record.sersize(rec) + sizeof(size_t);
 

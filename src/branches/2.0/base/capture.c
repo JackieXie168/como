@@ -265,7 +265,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
          * Send the tuples to export
          */
         if (ic->use_shmem) { /* send msg with tuples' location */
-            tuplesmsg_t msg;
+            msg_process_shm_tuples_t msg;
             strcpy(msg.mdl_name, mdl->name);
             msg.tuples = ic->tuples;
             msg.ivl_start = ic->ivl_start;
@@ -285,7 +285,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
              * the tuples.
              */
         } else { /* serialize & send tuples */
-            sertuplesmsg_t *msg;
+            msg_process_ser_tuples_t *msg;
             uint8_t *sbuf;
             size_t sz, ntuples;
             struct tuple *t, *t2;
@@ -298,7 +298,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
                 ntuples++;
             }
 
-            msg = (sertuplesmsg_t *) como_malloc(sz + sizeof(sertuplesmsg_t));
+            msg = como_malloc(sz + sizeof(msg_process_ser_tuples_t));
             strcpy(msg->mdl_name, mdl->name);
             msg->ntuples = ntuples;
             msg->ivl_start = ic->ivl_start;
@@ -310,7 +310,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
 
             assert(sz == (size_t)(sbuf - msg->data));
             ipc_send(ic->export, CA_EX_PROCESS_SER_TUPLES, msg, sz +
-                    sizeof(sertuplesmsg_t));
+		     sizeof(msg_process_ser_tuples_t));
             debug("module `%s': flushing - sent serialized tuples to CA\n", mdl->name);
 
             /*
@@ -536,8 +536,9 @@ handle_su_ca_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t 
 }
 
 static int
-handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
-                UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
+handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
+			   UNUSED size_t sz, UNUSED int swap,
+			   como_ca_t * como_ca)
 {
     mdl_icapture_t *ic;
     array_t *mdls = como_ca->mdls;
@@ -621,16 +622,20 @@ ca_ipc_module_del(UNUSED ipc_peer_t * peer, delmsg_t *msg,
 
 
 static int
-handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer, tuplesmsg_t *msg,
-                UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
+handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer,
+			      msg_process_shm_tuples_t *msg,
+			      UNUSED size_t sz, UNUSED int swap,
+			      como_ca_t * como_ca)
 {
     struct tuple *t, *t2;
+    
     t = tuples_first(&msg->tuples);
     while (t != NULL) {
 	t2 = t;
 	t = tuples_next(t);
 	alc_free(&como_ca->shalc, t2);
     }
+    
     return IPC_OK;
 }
 
