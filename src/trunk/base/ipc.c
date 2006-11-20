@@ -159,15 +159,15 @@ _ipc_wait(procname_t who)
  * this is used by ipc_handle.
  */ 
 static int
-_ipc_recv(int fd, ipc_msg_t * msg, int max_len) 
+_ipc_recv(int fd, ipc_msg_t * msg) 
 {
     ipc_dest_t * x;
     int r;
-    
+
     /* read the message header first */
     r = como_read(fd, (char *) msg, sizeof(ipc_msg_t));
     if (r != sizeof(ipc_msg_t)) {
-        if (r == 0)
+        if (r == 0) 
             return IPC_EOF;
  
         /* find the name for this destination */
@@ -182,9 +182,18 @@ _ipc_recv(int fd, ipc_msg_t * msg, int max_len)
     }
     
     /* check the message is not too big */ 
-    if (msg->len > max_len) { 
-        logmsg(LOGWARN, "IPC message from %s too large: %d\n", 
-               getprocfullname(msg->sender), msg->len); 
+    if (msg->len > MAX_IPC_LEN) { 
+	int i; 
+
+        logmsg(LOGWARN, "IPC message from %s too large: %d (max %d)\n", 
+               getprocfullname(msg->sender), msg->len, MAX_IPC_LEN); 
+	
+	/* read the message anyway to be able to read
+	 * next messages and return an error 
+	 */
+	for (i = 0; i < msg->len / MAX_IPC_LEN; i++) 
+	    como_read(fd, msg->data, MAX_IPC_LEN); 
+	como_read(fd, msg->data, msg->len % MAX_IPC_LEN); 
         return IPC_ERR;
     } 
 	
@@ -213,7 +222,7 @@ _ipc_recv(int fd, ipc_msg_t * msg, int max_len)
                getprocfullname(msg->sender), fd);
     }
 
-    return msg->type; 
+    return IPC_OK;
 }
 
 
@@ -335,6 +344,8 @@ ipc_send(procname_t dst, ipctype_t type, const void *data, size_t sz)
     ipc_dest_t * x; 
     ipc_msg_t * msg;
 
+    assert(sz <= MAX_IPC_LEN); 
+
     /* find the socket for this destination */
     for (x = ipc_dests; x && x->name != dst; x = x->next)
 	;
@@ -419,14 +430,17 @@ ipc_send_blocking(procname_t dst, ipctype_t type, const void *data, size_t sz)
  * -- ipc_receive
  * 
  * receive a message from a given process and within a certain 
- * timeout. 
+ * timeout. it returns a pointer to the message. note that the 
+ * pointer goes to a static variable in _ipc_recv. therefore, 
+ * the caller has to copy that data somewhere else before calling
+ * again ipc_receive.
  * 
  */
 void *
 ipc_receive(procname_t who, ipctype_t *type, size_t *sz, struct timeval *tout)
 {
-    static char buf[MAX_IPC_LEN + sizeof(ipc_msg_t)];
-    ipc_msg_t * msg;
+    static char buf[MAX_IPC_LEN + sizeof(ipc_msg_t)]; 
+    ipc_msg_t * msg = (ipc_msg_t *) buf;
     fd_set rs;
     int r, fd;
     
@@ -436,12 +450,19 @@ ipc_receive(procname_t who, ipctype_t *type, size_t *sz, struct timeval *tout)
     FD_SET(fd, &rs);
 
     r = select(fd + 1, &rs, NULL, NULL, tout);
-    if (r == 0) 
+    if (r == 0) {
+	*sz = 0; 
 	return NULL;
+    }
 
-    msg = (ipc_msg_t *) buf; 
-    if (_ipc_recv(fd, msg, MAX_IPC_LEN) == IPC_ERR) 
+    r = _ipc_recv(fd, msg); 
+    if (r == IPC_ERR) { 
+	*sz = -1;
 	return NULL; 
+    } else if (r == IPC_EOF) {
+	*sz = 0; 
+	return NULL; 
+    } 
 
     *type = msg->type;
     *sz = msg->len;
@@ -463,11 +484,9 @@ ipc_handle(int fd)
     ipc_msg_t * msg = (ipc_msg_t *) buf; 
     int ret; 
 
-    ret = _ipc_recv(fd, msg, MAX_IPC_LEN); 
-    if (ret == IPC_EOF) 
-	return IPC_EOF; 
-    if (ret == IPC_ERR) 
-	return IPC_ERR; 
+    ret = _ipc_recv(fd, msg); 
+    if (ret != IPC_OK) 
+	return ret; 
 	    
     /* find the right handler if any */
     if (handlers[msg->type] != NULL) 
