@@ -62,6 +62,10 @@ void
 como_init(const char * program, int argc, char ** argv)
 {
     log_set_program(program);
+    if (!isatty(0)) {
+	log_set_use_color(FALSE);
+    }
+    
 #if defined(linux) || defined(__APPLE__)
     /* linux/Mac OS X does not support setproctitle. we have our own. */
     setproctitle_init(argc, argv);

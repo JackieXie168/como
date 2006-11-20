@@ -4,14 +4,12 @@ INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/base)
 SET(STORAGE_SRCS
   storage.c
 )
-SET(EXPORT_SRCS
-  export.c
-)
 
 SET(COMO_SRCS
   supervisor.c
   util-process.c
   capture.c
+  export.c
   asn.c
   sniffers.c
   ieee80211frames.c
@@ -121,8 +119,6 @@ ADD_EXECUTABLE(como ${COMO_SRCS})
 
 ADD_EXECUTABLE(como-storage ${STORAGE_SRCS})
 
-ADD_EXECUTABLE(como-export ${EXPORT_SRCS})
-
 #
 # Make sure modules can see como's symbols
 #
@@ -159,11 +155,9 @@ TARGET_LINK_LIBRARIES(como m)
 TARGET_LINK_LIBRARIES(como comolib)
 
 TARGET_LINK_LIBRARIES(como-storage comolib)
-TARGET_LINK_LIBRARIES(como-export comolib)
 
 IF(LINUX)
   TARGET_LINK_LIBRARIES(como dl)
-  TARGET_LINK_LIBRARIES(como-export dl)
 ENDIF(LINUX)
 
 # pcap is dlopened

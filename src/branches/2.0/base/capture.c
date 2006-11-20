@@ -41,6 +41,7 @@
 
 #define CAPTURE_SOURCE
 
+//#define LOG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "sniffers.h"
@@ -263,18 +264,19 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
         /*
          * Send the tuples to export
          */
-        if (ic->shmem != NULL) { /* send msg with tuples' location */
+        if (ic->use_shmem) { /* send msg with tuples' location */
             tuplesmsg_t msg;
             strcpy(msg.mdl_name, mdl->name);
             msg.tuples = ic->tuples;
             msg.ivl_start = ic->ivl_start;
             msg.ntuples = ic->tuple_count;
 
-            ipc_send(ic->export, EX_MODULE_SHMEM_TUPLES, &msg, sizeof(msg));
+            ipc_send(ic->export, CA_EX_PROCESS_SHM_TUPLES, &msg, sizeof(msg));
             debug("module `%s': flushing - sent shmem tuples msg to CA\n", mdl->name);
 
             /* prepare a new empty tuple list */
             tuples_init(&ic->tuples);
+            ic->tuple_count = 0;
 
             /*
              * the tuples are still in the shared memory. this memory
@@ -286,7 +288,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             sertuplesmsg_t *msg;
             uint8_t *sbuf;
             size_t sz, ntuples;
-            struct tuple *t;
+            struct tuple *t, *t2;
 
             debug("module `%s': flushing - get sersize\n", mdl->name);
             sz = 0;
@@ -307,7 +309,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
                 mdl->priv->mdl_tuple.serialize(&sbuf, t->data);
 
             assert(sz == (size_t)(sbuf - msg->data));
-            ipc_send(ic->export, EX_MODULE_SERIALIZED_TUPLES, msg, sz +
+            ipc_send(ic->export, CA_EX_PROCESS_SER_TUPLES, msg, sz +
                     sizeof(sertuplesmsg_t));
             debug("module `%s': flushing - sent serialized tuples to CA\n", mdl->name);
 
@@ -315,10 +317,13 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
              * we have serialized and sent the tuples. we can free
              * them all right now.
              */
-            while(! tuples_empty(&ic->tuples)) {
-                t = tuples_first(&ic->tuples);
+            t = tuples_first(&ic->tuples);
+	    while (t != NULL) {
+		t2 = t;
+		t = tuples_next(t);
                 mdl_free_tuple(mdl, t->data);
             }
+            ic->tuple_count = 0;
             debug("module `%s': flushing - capture state cleared\n", mdl->name);
         }
     }
@@ -489,7 +494,7 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
  * 
  */
 static int
-ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
+handle_su_ca_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 		  UNUSED int swap, como_ca_t * como_ca)
 {
     mdl_t *mdl;
@@ -525,13 +530,13 @@ ca_ipc_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     debug("capture adding module - done, waiting for EX to claim its tuples\n");
     ic->status = MDL_WAIT_FOR_EXPORT;
 
-    ipc_send(peer, CA_MODULE_ADDED, NULL, 0);
+    ipc_send(peer, CA_SU_MODULE_ADDED, NULL, 0);
 
     return IPC_OK;
 }
 
 static int
-ca_ipc_export_running_mdl(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
+handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
                 UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
 {
     mdl_icapture_t *ic;
@@ -557,21 +562,16 @@ ca_ipc_export_running_mdl(UNUSED ipc_peer_t * peer, caexmsg_t *msg,
     ic = mdl_get_icapture(mdl);
     ic->export = peer;
 
-    if (msg->shmem_filename[0] != '\0') { /* need to attach shmem */
-        debug("capture - connecting to shmem at `%s'\n", msg->shmem_filename);
-        debug("attaching shmem @ %p\n", msg->base_addr);
-        ic->shmem = shmem_attach(msg->shmem_filename, msg->base_addr);
-        ic->shmap = memmap_create(ic->shmem, 128);
-        memmap_alc_init(ic->shmap, &ic->tuple_alc);
-
-        if (ic->shmem == NULL)
-            return IPC_CLOSE;
-    }
-    else {
+    if (msg->use_shmem) {
+        debug("capture - using shmem\n");
+        memmap_alc_init(como_ca->shmemmap, &ic->tuple_alc);
+        ic->use_shmem = TRUE;
+    } else {
         debug("capture - will use serialized interface for `%s'\n", mdl->name);
         ic->tuple_alc = *como_alc(); /* TODO: manage mdl's priv memory */
-        ic->shmem = NULL;
+        ic->use_shmem = FALSE;
     }
+
 
     debug("capture - module `%s' can run\n", mdl->name);
     ic->status = MDL_ACTIVE;
@@ -619,6 +619,20 @@ ca_ipc_module_del(UNUSED ipc_peer_t * peer, delmsg_t *msg,
 }
 #endif
 
+
+static int
+handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer, tuplesmsg_t *msg,
+                UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
+{
+    struct tuple *t, *t2;
+    t = tuples_first(&msg->tuples);
+    while (t != NULL) {
+	t2 = t;
+	t = tuples_next(t);
+	alc_free(&como_ca->shalc, t2);
+    }
+    return IPC_OK;
+}
 
 #if 0
 /* 
@@ -695,14 +709,14 @@ ca_ipc_flush(procname_t sender, UNUSED int fd,
 #endif
 
 /* 
- * -- ca_ipc_start
+ * -- handle_su_ca_start
  * 
  * handle IPC_MODULE_START message sent by SUPERVISOR to indicate when 
  * it is possible to start processing traces. 
  * 
  */
 static int
-ca_ipc_start(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
+handle_su_ca_start(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
 	     UNUSED int swap, como_ca_t * como_ca)
 {
     if (como_ca->min_flush_ivl == 0) {
@@ -716,13 +730,13 @@ ca_ipc_start(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
 
 
 /* 
- * -- ca_ipc_exit
+ * -- handle_su_ca_exit
  * 
  * terminate this processing cleaning up the sniffers. 
  * 
  */
 static int
-ca_ipc_exit(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
+handle_su_ca_exit(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
 	    UNUSED int swap, UNUSED como_ca_t * como_ca)
 {
     ipc_finish(TRUE);
@@ -1532,13 +1546,14 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     DEBUGGER_WAIT_ATTACH(child);
     
     /* register handlers for IPC messages */
-    ipc_register(CA_ADD_MODULE, (ipc_handler_fn) ca_ipc_add_module);
+    ipc_register(SU_CA_ADD_MODULE, (ipc_handler_fn) handle_su_ca_add_module);
 //    ipc_register(CA_DEL_MODULE, ca_ipc_module_del);
-    ipc_register(CA_START, (ipc_handler_fn) ca_ipc_start);
-    ipc_register(CA_EXIT, (ipc_handler_fn) ca_ipc_exit);
+    ipc_register(SU_CA_START, (ipc_handler_fn) handle_su_ca_start);
+    ipc_register(SU_CA_EXIT, (ipc_handler_fn) handle_su_ca_exit);
     ipc_register(CCA_OPEN, (ipc_handler_fn) ca_ipc_cca_open);
     ipc_register(CCA_ACK_BATCH, (ipc_handler_fn) ca_ipc_cca_ack_batch);
-    ipc_register(CA_EXPORT_RUNNING_MODULE, (ipc_handler_fn) ca_ipc_export_running_mdl);
+    ipc_register(EX_CA_ATTACH_MODULE, (ipc_handler_fn) handle_ex_ca_attach_module);
+    ipc_register(EX_CA_TUPLES_PROCESSED, (ipc_handler_fn) handle_ex_ca_tuples_processed);
 /*    ipc_register(IPC_FLUSH, (ipc_handler_fn) ca_ipc_flush);
     ipc_register(IPC_FREEZE, ca_ipc_freeze);
     */
@@ -1572,7 +1587,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     cabuf_init(&como_ca, sum_max_pkts);
     
     /* notify SUPERVISOR that all the sniffers are ready */
-    ipc_send(parent, CA_SNIFFERS_INITIALIZED, NULL, 0);
+    ipc_send(parent, CA_SU_SNIFFERS_INITIALIZED, NULL, 0);
 
     /*
      * proccess all the messages from SUPERVISOR until it sends
@@ -1813,9 +1828,6 @@ while (como_ca.ready == FALSE) {
 	 * THAW_THRESHOLD, or EXPORT has no data to process (hence no mem
          * is going to be free'd).
 	 */
-
-	map.stats->mem_usage_cur = memory_usage();
-	map.stats->mem_usage_peak = memory_peak();
 
 	if (map.stats->table_queue == 0 ||
                 map.stats->mem_usage_cur < THAW_THRESHOLD(map.mem_size)) {

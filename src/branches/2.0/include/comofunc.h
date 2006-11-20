@@ -49,10 +49,15 @@ void configure(como_t * m, int argc, char *argv[]);
 void init_map(como_t * m);
 void add_sniffer(como_t * m, char *want, char *device, char *args);
 
+/*
+ * mdl.c
+ */
+void mdl_store_rec(mdl_t * mdl, void * rec);
 
 /* 
  * modules.c 
  */
+
 int activate_module(module_t * mdl, char * libdir);
 int check_module(como_t * m, module_t *mdl);
 module_t * new_module(como_t * m, char *name, int node, int idx);
