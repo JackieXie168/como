@@ -255,6 +255,9 @@ struct mdl_icapture {
     timestamp_t		ivl_end;
     void *		ivl_state;
 
+    pool_t *		ivl_mem;	/* pool of memory allocated during
+					   the interval */
+
     ca_init_fn		init;
     ca_capture_fn	capture;
     ca_flush_fn		flush;
@@ -263,6 +266,7 @@ struct mdl_icapture {
     tuples_t		tuples;
     alc_t		tuple_alc;
     size_t              tuple_count;
+    
     
     treenode_t  *	filter;
     int			status;
