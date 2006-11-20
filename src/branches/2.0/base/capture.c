@@ -736,7 +736,7 @@ handle_su_ca_start(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
  * 
  */
 static int
-handle_su_ca_exit(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
+handle_su_any_exit(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
 		  UNUSED int swap, UNUSED como_ca_t * como_ca)
 {
     exit(EXIT_SUCCESS);
@@ -1548,7 +1548,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     ipc_register(SU_CA_ADD_MODULE, (ipc_handler_fn) handle_su_ca_add_module);
 //    ipc_register(CA_DEL_MODULE, ca_ipc_module_del);
     ipc_register(SU_CA_START, (ipc_handler_fn) handle_su_ca_start);
-    ipc_register(SU_CA_EXIT, (ipc_handler_fn) handle_su_ca_exit);
+    ipc_register(SU_ANY_EXIT, (ipc_handler_fn) handle_su_any_exit);
     ipc_register(CCA_OPEN, (ipc_handler_fn) ca_ipc_cca_open);
     ipc_register(CCA_ACK_BATCH, (ipc_handler_fn) ca_ipc_cca_ack_batch);
     ipc_register(EX_CA_ATTACH_MODULE, (ipc_handler_fn) handle_ex_ca_attach_module);

@@ -106,8 +106,8 @@ char * como__dup (char **dst, char *src, const char * file, const int line);
 como__dup(dst, src, __FILE__, __LINE__)
 
 char * como__asprintf (const char * file, const int line, char *fmt, ...);
-#define como_asprintf(fmt,...) \
-como__asprintf(__FILE__, __LINE__, fmt, __VA_ARGS__)
+#define como_asprintf(fmt...) \
+como__asprintf(__FILE__, __LINE__, fmt)
 
 #define como_new(type) \
 ((type *) como_malloc(sizeof(type)))
@@ -140,17 +140,13 @@ extern ipc_peer_full_t *COMO_EX;
 extern ipc_peer_full_t *COMO_ST;
 extern ipc_peer_full_t *COMO_QU;
 
-enum {
-    SU_CONFIGURE = 1,
-    SU_EXIT = 2
-};
 
 void como_init(const char * progname, int argc, char ** argv);
 
 enum {
     SU_CA_START = 0x100,
 
-    SU_CA_EXIT,
+    SU_ANY_EXIT,
     
     CA_SU_DONE,
 

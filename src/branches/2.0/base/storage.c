@@ -1710,7 +1710,7 @@ como_st_run()
 
     event_loop_add(&s_como_st.el, s_como_st.accept_fd);
     
-    ipc_register(SU_EXIT, handle_shutdown);
+    ipc_register(SU_ANY_EXIT, handle_shutdown);
     
 
     /* listen to SUPERVISOR */
