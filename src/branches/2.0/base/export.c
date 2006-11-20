@@ -57,435 +57,9 @@ struct _como_ex {
     hash_t *mdls; /* mdl name to mdl */
 };
 
-#if 0
-extern struct _como map;	/* Global state structure */
-
-int storage_fd;                 /* socket to storage 
-				 * 
-				 * XXX this is temporary until IPC are
-				 *     used to communicate with STORAGE too
-				 */
-
-inline static void
-handle_print_fail(module_t *mdl)
-{
-    if (errno == ENODATA) {
-	panicx("module \"%s\" failed to print\n", mdl->name);
-    } else {
-	err(EXIT_FAILURE, "sending data to the client");
-    }
-}
-
-/**
- * -- create_record
- *               
- * allocates a new record, updates the ex_array and the 
- * counters (records, live_buckets) 
- */
-static rec_t *
-create_record(module_t * mdl, uint32_t hash)
-{
-    etable_t * et = mdl->ex_hashtable; 
-    earray_t * ea = mdl->ex_array; 
-    rec_t * rp; 
-
-    /* first of all check if the ex_array is large enough. 
-     * reallocate it if necessary 
-     */
-    if (et->records >= ea->size) { 
-	size_t len; 
-
-	logmsg(V_LOGEXPORT, "need to reallocate ex_array for %s (%d -> %d)\n", 
-	    mdl->name, ea->size, et->records * 2); 
-
-	len = sizeof(earray_t) + et->records * 2 * sizeof(rec_t *);
-	ea = safe_realloc(ea, len); 
-	ea->size = et->records * 2; 
-	mdl->ex_array = ea;
-    } 
-
-    /* allocate the new record */
-    rp = safe_calloc(1, mdl->callbacks.ex_recordsize + sizeof(rec_t));
-    ea->record[et->records] = rp;
-    et->records++;
-    if (et->bucket[hash] == NULL) 
-	et->live_buckets++;
-
-    return rp;
-}
-
-
-/**
- * -- export_record
- *
- * Invoked by process_tables for each individual record that
- * is received by CAPTURE. It stores persistent state in the EXPORT
- * flow table. 
- *
- * Using the hash value in the flow_hdr, this block scans the hash
- * table to determine the bucket and store the info.
- * 
- */
-static int
-export_record(module_t * mdl, rec_t * rp)
-{
-    etable_t *et; 
-    rec_t *cand; 
-    uint32_t hash;
-    int isnew; 
-
-    start_tsctimer(map.stats->ex_export_timer); 
-
-    /* 
-     * get the right bucket in the hash table. we do not need to 
-     * compute a new hash but we use the same that was used in CAPTURE, 
-     * just a different number of bit, given the new size of the table.
-     */
-    et = mdl->ex_hashtable;
-    hash = rp->hash % et->size; 
-
-    /* 
-     * browse thru the elements in the bucket to 
-     * find the right one (with ematch())
-     */
-    for (cand = et->bucket[hash]; cand != NULL; cand = cand->next) {
-        int ret;
-
-        /* If there's no ematch() callback, any record matches */
-        if (mdl->callbacks.ematch == NULL)
-            break;
-        
-        ret = mdl->callbacks.ematch(mdl, cand, rp);
-        if (ret)
-            break;
-    }
-
-    isnew = 0; 
-    if (cand == NULL) {
-	cand = create_record(mdl, hash);
-	isnew = 1; 	/* new record */
-        cand->hash = rp->hash;
-    } 
-
-    /* 
-     * update the export record. 
-     */
-    mdl->callbacks.export(mdl, cand, rp, isnew);
-
-    /*
-     * move the record to the front of the bucket in the  
-     * hash table to speed up successive accesses
-     */
-    if (cand->prev) 
-	cand->prev->next = cand->next;
-    if (cand->next)
-	cand->next->prev = cand->prev;
-    if (cand != et->bucket[hash])
-        cand->next = et->bucket[hash];
-    if (cand->next)
-        cand->next->prev = cand;
-    cand->prev = NULL; 
-    et->bucket[hash] = cand;
-
-    end_tsctimer(map.stats->ex_export_timer); 
-    return 0;		// XXX just to have same prototype of call_store
-}
-
-
-/**
- * -- call_store
- * 
- * call_store() maps memory and stores the content of a record.
- * Anything >= 0 means success, <0 is failure.
- * 
- */
-static int
-call_store(module_t * mdl, rec_t *rp)
-{
-    char *dst = NULL;
-    int ret, done = 0;
-    
-    ssize_t bsize = mdl->callbacks.st_recordsize; 
-
-    start_tsctimer(map.stats->ex_mapping_timer); 
-    
-    if (map.runmode == RUNMODE_INLINE) {
-	/* running inline */
-	dst = alloca(bsize); /* NOTE: might be replaced with a heap allocated
-				area using a static variable to keep track of
-				it */
-    }
-    
-    do {
-	if (map.runmode == RUNMODE_NORMAL) { 
-	    dst = csmap(mdl->file, mdl->offset, (ssize_t *) &bsize);
-	    if (dst == NULL)
-		panic("fail csmap for module %s", mdl->name);
-	    if (bsize < (ssize_t) mdl->callbacks.st_recordsize) {
-		logmsg(LOGWARN, "cannot write to disk for module %s\n",
-		       mdl->name);
-		logmsg(0, "   need %d bytes, got %d\n",
-		       mdl->callbacks.st_recordsize, bsize);
-		return -1;
-	    }
-	}
-
-	/* call the store() callback */
-	ret = mdl->callbacks.store(mdl, rp, dst);
-	if (ret < 0) {
-	    logmsg(LOGWARN, "store() of %s fails\n", mdl->name);
-	    return ret;
-	}
-	
-	if (ret <= bsize) {
-	    done = 1;
-	} else {
-	    ret -= ACT_STORE_BATCH;
-	}
-	
-	if (map.runmode == RUNMODE_NORMAL) { 
-	    /*
-	     * update the offset and commit the bytes written to 
-	     * disk so far so that they are available to readers 
-	     */
-	    mdl->offset += ret;
-	    cscommit(mdl->file, mdl->offset);
-	} else {
-	    char * p;
-	    size_t left;
-	    
-	    /* now the dst pointer contains the entire output of 
-	     * store. note that store could save more than one record
-	     * in a single call. we pass this pointer to the load callback
-	     * to get that information. 
-	     */
-	    p = dst;
-	    left = ret;
-	    while (left > 0) {
-		size_t sz;
-		timestamp_t ts;
-		sz = mdl->callbacks.load(mdl, p, ret, &ts);
-		assert(sz > 0 && ts != 0);
-		
-		/* print this record */
-		if (module_db_record_print(mdl, p, NULL, map.inline_fd) < 0)
-		    handle_print_fail(mdl);
-		
-		/* move to next */
-		p += sz;
-		left -= sz;
-	    }
-	}
-    } while (done == 0);
-
-    end_tsctimer(map.stats->ex_mapping_timer); 
-    return ret;
-}
-
-
-/**
- * -- process_table
- *
- * Process a table from the expired list (ct). It will go through the buckets
- * of the table, process each single entry in a random order (i.e. the
- * way the entries were hashed into the table). The process consists
- * of writing the content of the entry to disk (via the store() callback)
- * save some information in the EXPORT table (via the ehash/ematch/eupdate 
- * callbacks). 
- *
- * On entry:
- *	mem	is the map where memory can be freed.
- *	ct	points to a list of tables to be flushed
- *
- */
-static void
-process_table(ctable_t * ct, module_t * mdl)
-{
-    int (*record_fn)(module_t *, rec_t *);
-    
-    /*
-     * call export() if available, otherwise just store() and
-     * bypass the rest of the export code (see above)
-     */
-    record_fn = mdl->callbacks.export? export_record : call_store;
-
-    /*
-     * scan all buckets and save the information to the output file.
-     * then see what the EXPORT process has to keep about the entry.
-     */
-    for (; ct->first_full <= ct->last_full; ct->first_full++) {
-	rec_t *rec; 
-
-	/*
-	 * Each entry in the bucket is a list of records for the same record.
-	 * Remember, CAPTURE does not support variable size records, so when 
-	 * a fixed record fills up, CAPTURE creates a new record and attaches 
-	 * to it the full one with the most recent one at the head.
-	 *
-	 * We store in 'end' a pointer to the next record, and walk back to the
-	 * oldest record using the 'prev' field, then store() all the 
-	 * records one by one. Once done, unlink the saved records so we
-	 * do not hit them again.
-	 */
-	rec = ct->bucket[ct->first_full];
-	while (rec != NULL) {
-	    rec_t *end = rec->next;	/* Mark next record to scan */
-
-	    /* Walk back to the oldest record */
-	    while (rec->prev) 
-	        rec = rec->prev;
-
-	    /*
-	     * now save the entries for this flow one by one
-	     */
-	    while (rec != end) {
-		rec_t *p;
-
-                /* keep the next record because fh will be freed */
-		p = rec->next; 
-
-		/* store or export this record */
-                record_fn(mdl, rec);
-
-		rec = p;		/* move to the next one */
-	    }
-
-	    /* done with the entry, move to next */
-	    ct->bucket[ct->first_full] = rec;
-	}
-    }
-
-    /* 
-     * if we have update the export table, keep track of the 
-     * flush interval for which the table is up-to-date. 
-     */
-    if (mdl->callbacks.export) 
-	mdl->ex_hashtable->ts = ct->ivl; 
-}
-
-/** 
- * -- destroy_record
- * 
- * remove the export record from the hash table and 
- * free the memory. 
- */
-static void 
-destroy_record(int i, module_t * mdl) 
-{
-    etable_t * et = mdl->ex_hashtable; 
-    earray_t * ea = mdl->ex_array; 
-    rec_t * rp; 
-
-    rp = ea->record[i];
-
-    /* unlink this record from the hash table */
-    et->records--; 
-    if (rp->next != NULL) 
-	rp->next->prev = rp->prev; 
-    if (rp->prev != NULL) {
-	rp->prev->next = rp->next; 
-    } else { 
-	et->bucket[rp->hash % et->size] = rp->next; 
-	if (rp->next == NULL) 
-	    et->live_buckets--; 
-    } 
-
-    /* remove this record from the array keeping all 
-     * used entries compact 
-     */
-    ea->record[i] = NULL;
-    ea->record[i] = ea->record[ea->first_full];
-    ea->record[ea->first_full] = NULL;
-    ea->first_full++;
-    free(rp);
-}
-
-
-/**
- * -- store_records
- * 
- * Sweep through the entire table and stores
- * all records that the module is willing to store at 
- * this time.
- *
- * Nothing of this is done if export is not defined, as all
- * the module does is store() directly the input from CAPTURE. 
- * 
- * Before doing that, however, it sorts the records if 
- * the module needs to do so (this is true if the compare()
- * callback is defined). 
- *
- */ 
-static void
-store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts) 
-{
-    etable_t * et = mdl->ex_hashtable; 
-    earray_t * ea = mdl->ex_array;
-    uint32_t i, max;
-    int what;
-
-    if (mdl->callbacks.export == NULL)
-	return;
-
-    /* check the global action to be done on the 
-     * export records at this time. 
-     */
-    what = mdl->callbacks.action(mdl, NULL, ivl, ts, 0); 
-    assert( (what | ACT_MASK) == ACT_MASK );
-    if (what & ACT_STOP) 
-	return; 
-
-    /* check if we need to sort the records */
-    if (mdl->callbacks.compare != NULL)  
-	qsort(ea->record, et->records, sizeof(rec_t*), mdl->callbacks.compare); 
-
-    /* now go thru the sorted list of records and 
-     * store whatever needs to be stored 
-     */
-    max = et->records;
-    for (i = 0; i < max; i++) { 
-        
-        if (ea->record[i] == NULL) 
-            panicx("EXPORT array should be compact!");
-
-	what = mdl->callbacks.action(mdl, ea->record[i], ivl, ts, i);
-	/* only bits in the mask are valid */
-	logmsg(V_LOGEXPORT, "action %d returns 0x%x (%s%s%s%s)\n",
-		i, what,
-		what & ACT_STORE ? "STORE ":"",
-		what & ACT_STORE_BATCH ? "STORE_BATCH ":"",
-		what & ACT_DISCARD ? "DISCARD ":"",
-		what & ACT_STOP ? "STOP ":""
-		);
-	assert( (what | ACT_MASK) == ACT_MASK );
-
-	if ((what & ACT_STORE) || (what & ACT_STORE_BATCH)) {
-	    /* store the thing. Do not destroy if store returns < 0
-	     * because it means a failure
-	     */
-	    if (call_store(mdl, ea->record[i]) < 0)
-		continue;
-	}
-
-	/* check if the module wants to discard this record */
-	if (what & ACT_DISCARD)
-	    destroy_record(i, mdl);
-	if (what & ACT_STOP)
-	    break;
-    }
-
-    /* reorganize the export record array so that all 
-     * used entries are at the beginning of the array with no holes
-     */
-    bcopy(&ea->record[ea->first_full], &ea->record[0], 
-		et->records * sizeof(rec_t *));
-    bzero(&ea->record[et->records], (ea->size - et->records) * sizeof(rec_t*));
-    ea->first_full = 0;
-}
-#endif
 
 /* 
- * -- ex_ipc_module_add
+ * -- handle_su_ex_add_module
  * 
  * handle IPC_MODULE_ADD messages by unpacking the module, 
  * activating it and initializing the data structures it 
@@ -493,11 +67,11 @@ store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts)
  * 
  */
 static int
-handle_su_ex_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
-                    UNUSED int swap, UNUSED como_ex_t * como_ex)
+handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
+			UNUSED int swap, UNUSED como_ex_t * como_ex)
 {
     mdl_iexport_t *ie;
-    caexmsg_t msg;
+    msg_attach_module_t msg;
     mdl_t *mdl;
     alc_t *alc;
     char *str;
@@ -516,7 +90,8 @@ handle_su_ex_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t s
      * open output file
      */
     str = como_asprintf("%s/%s", como_ex->st_dir, mdl->name);
-    ie->outfile = csopen(str, CS_WRITER, (off_t)mdl->streamsize, (ipc_peer_t *)COMO_ST);
+    ie->outfile = csopen(str, CS_WRITER, (off_t) mdl->streamsize,
+			 (ipc_peer_t *) COMO_ST);
     if (ie->outfile < 0) {
         warn("cannot start storage for module `%s'\n", mdl->name);
         free(str);
@@ -528,29 +103,8 @@ handle_su_ex_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t s
 
     strcpy(msg.mdl_name, mdl->name);
     msg.use_shmem = como_ex->use_shmem;
-    
-/*
-    if (como_ex->use_shmem) {
-        str = como_asprintf("%s/%s/shmem", como_ex->st_dir, mdl->name);
-        shmem_remove(str);
-        ie->shmem = shmem_create(10 * 1024 * 1024, str);
-        if (ie->shmem == NULL) {
-            alc_free(alc, mdl);
-            free(str);
-            return IPC_CLOSE;
-        }
-        msg.base_addr = shmem_baseaddr(ie->shmem);
-        debug("handle_su_ex_add_module -- created shared mem region\n");
-        strcpy(msg.shmem_filename, str);
-        free(str);
-    }
-    else {
-        ie->shmem = NULL;
-        msg.shmem_filename[0] = '\0';
-        debug("handle_su_ex_add_module -- will use serialization interface\n");
-    }
-*/
-    ipc_send((ipc_peer_t*)COMO_CA, EX_CA_ATTACH_MODULE, &msg, sizeof(msg));
+    ipc_send((ipc_peer_t *) COMO_CA, EX_CA_ATTACH_MODULE, &msg, sizeof(msg));
+
     ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
 
     hash_insert_string(como_ex->mdls, mdl->name, mdl); /* add to mdl index */
@@ -560,8 +114,10 @@ handle_su_ex_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t s
 }
 
 static int
-handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UNUSED size_t sz,
-                    UNUSED int swap, UNUSED como_ex_t * como_ex)
+handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
+				msg_process_ser_tuples_t * msg,
+				UNUSED size_t sz, UNUSED int swap,
+				UNUSED como_ex_t * como_ex)
 {
     uint8_t *sbuf = msg->data;
     alc_t *alc = como_alc();
@@ -609,12 +165,15 @@ handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UN
      * we are done
      */
     debug("handle_ca_ex_process_ser_tuples -- tuples processed\n");
+
     return IPC_OK;
 }
 
 static int
-handle_ca_ex_process_shm_tuples(UNUSED ipc_peer_t *peer, tuplesmsg_t * msg,
-        UNUSED size_t sz, UNUSED int swap, UNUSED como_ex_t * como_ex)
+handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
+				msg_process_shm_tuples_t * msg,
+				UNUSED size_t sz, UNUSED int swap,
+				UNUSED como_ex_t * como_ex)
 {
     mdl_iexport_t *ie;
     struct tuple *t;
@@ -657,7 +216,7 @@ handle_ca_ex_process_shm_tuples(UNUSED ipc_peer_t *peer, tuplesmsg_t * msg,
     } else {
         debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
         tuples_foreach(t, &msg->tuples) {
-	    mdl_store_rec(mdl, t);
+	    mdl_store_rec(mdl, t->data);
         }
     }
 

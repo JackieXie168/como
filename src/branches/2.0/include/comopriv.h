@@ -172,25 +172,25 @@ typedef union ccamsg_t {
 typedef struct { /* EX tells CA it's running a mdl. ex->ca */
     char	mdl_name[MDLNAME_MAX];
     int		use_shmem;
-} caexmsg_t;
+} msg_attach_module_t;
 
 typedef struct { /* tuples in shmem. ca->ex, ex->ca */
     char        mdl_name[MDLNAME_MAX];
     tuples_t    tuples;
     size_t      ntuples;
     timestamp_t	ivl_start;
-} tuplesmsg_t;
+} msg_process_shm_tuples_t;
 
 typedef struct { /* serialized tuples. ca->ex */
     char        mdl_name[MDLNAME_MAX];
     size_t      ntuples;
     uint8_t     data[0];
     timestamp_t	ivl_start;
-} sertuplesmsg_t;
+} msg_process_ser_tuples_t;
 
 typedef struct {
     char        mdl_name[MDLNAME_MAX];
-} delmdlmsg_t;
+} msg_del_module_t;
 
 void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
