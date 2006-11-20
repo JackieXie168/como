@@ -64,7 +64,7 @@ BY_DST_pkt_belongs_to_record(pkt_t *pkt, topaddr_tuple_t *t)
 ca_state_t *
 ca_init(mdl_t *self, timestamp_t *ivl)
 {
-    alc_t *alc = mdl_get_alloc(self);
+    alc_t *alc = mdl_alc(self);
     topaddr_config_t *cfg = mdl_get_config(self, topaddr_config_t);
     ca_state_t *st = mdl_malloc(self, sizeof(ca_state_t));
 
@@ -79,7 +79,7 @@ ca_init(mdl_t *self, timestamp_t *ivl)
 }
 
 int
-update(mdl_t *self, pkt_t *pkt, ca_state_t *st)
+capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 {
     topaddr_tuple_t *t;
     uint32_t key, hash;
@@ -92,6 +92,7 @@ update(mdl_t *self, pkt_t *pkt, ca_state_t *st)
     t = (topaddr_tuple_t *) flowtable_lookup(st->table, hash, pkt);
 
     if (t == NULL) { /* tuple not found, create a new entry */
+        t = mdl_alloc_tuple(self, topaddr_tuple_t);
         t->addr = key;
         t->bytes = 0;
         t->pkts = 0;

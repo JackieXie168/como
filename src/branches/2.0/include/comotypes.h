@@ -158,11 +158,10 @@ void * mdl__alloc_tuple(mdl_t * mdl, size_t sz);
 void   mdl_free_tuple(mdl_t * mdl, void *ptr);
 char * mdl_alloc_string(mdl_t * mdl, size_t sz);
 
-alc_t * mdl_get_alloc(mdl_t * mdl);
+alc_t * mdl_alc(mdl_t * mdl);
 
 
-void * mdl__malloc(alc_t *alc, size_t sz);
-#define mdl_malloc(self, sz) mdl__malloc(mdl_get_alloc(self), sz);
+#define mdl_malloc(self, sz) alc_malloc(mdl_alc(self), sz)
 
 
 /* Module callbacks  (TODO: document) */

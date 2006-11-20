@@ -75,7 +75,7 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     mdl_t *mdl;
     alc_t *alc;
     char *str;
-
+    ipc_type t;
     alc = como_alc();
     mdl_deserialize(&sbuf, &mdl, alc, PRIV_IEXPORT);
     if (mdl == NULL) { /* failure */
@@ -101,9 +101,10 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     debug("handle_su_ex_add_module -- output file `%s' open\n", str);
     free(str);
 
-    debug("handle_su_ex_add_module -- init export state: calling ex_init()\n");
-    if (ie->init)
+    if (ie->init) {
+        debug("handle_su_ex_add_module -- init export state: call ex_init()\n");
         ie->state = ie->init(mdl);
+    }
     else
         ie->state = NULL;
 
@@ -111,6 +112,9 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     strcpy(msg.mdl_name, mdl->name);
     msg.use_shmem = como_ex->use_shmem;
     ipc_send((ipc_peer_t *) COMO_CA, EX_CA_ATTACH_MODULE, &msg, sizeof(msg));
+    ipc_receive((ipc_peer_t *) COMO_CA, &t, NULL, NULL, NULL, NULL);
+    assert(t == CA_EX_MODULE_ATTACHED);
+
     ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
 
     hash_insert_string(como_ex->mdls, mdl->name, mdl); /* add to mdl index */

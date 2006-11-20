@@ -297,7 +297,7 @@ mdl__alloc_config(mdl_t * mdl, size_t sz)
 }
 
 alc_t *
-mdl_get_alloc(mdl_t * mdl)
+mdl_alc(mdl_t * mdl)
 {
     return &mdl->priv->alc;
 }

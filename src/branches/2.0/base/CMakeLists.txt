@@ -17,6 +17,8 @@ SET(COMO_SRCS
   metadesc.c
   pktmeta.c
   headerinfo.c
+  ${COMO_SOURCE_DIR}/lib/uhash.c
+  ${COMO_SOURCE_DIR}/lib/flowtable.c
 #  memory.c
 #  config.c
 #  inline.c
@@ -153,7 +155,7 @@ TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/sniffers/libsniffers.a)
 TARGET_LINK_LIBRARIES(como m)
 
 TARGET_LINK_LIBRARIES(como comolib)
-TARGET_LINK_LIBRARIES(como comomdl)
+#TARGET_LINK_LIBRARIES(como comomdl)
 
 TARGET_LINK_LIBRARIES(como-storage comolib)
 

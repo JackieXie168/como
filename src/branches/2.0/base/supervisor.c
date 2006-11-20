@@ -831,7 +831,7 @@ fake_config()
     array_t *mdl_defs;
     
     sniffer_def_t s;
-    mdl_def_t m;
+    mdl_def_t m, m2;
     
     
     sniffer_defs = array_new(sizeof(sniffer_def_t));
@@ -847,6 +847,12 @@ fake_config()
     m.args = NULL;
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
+
+    m2.name = como_strdup("topaddr");
+    m2.mdlname = como_strdup("topaddrCC");
+    m2.args = NULL;
+    m2.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m2);
 
     config.sniffer_defs = sniffer_defs;
     config.mdl_defs = mdl_defs;

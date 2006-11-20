@@ -71,7 +71,7 @@ record_cmp(topaddr_record_t *r1, topaddr_record_t *r2)
 void
 ex_init(mdl_t *self)
 {
-    alc_t *alc = mdl_get_alloc(self);
+    alc_t *alc = mdl_alc(self);
     topaddr_config_t *cfg = mdl_get_config(self, topaddr_config_t);
     ex_state_t *st = mdl_malloc(self, sizeof(ex_state_t));
 
@@ -106,6 +106,9 @@ store_records(mdl_t *self, ex_state_t *st)
     assert(i == st->nrec);
 
     qsort(array, i, sizeof(void *), (int(*)(const void *, const void *))record_cmp);
+
+    for (i = 0; i < MIN(10, st->nrec); i++)
+        mdl_store_rec(self, array[i]);
 }
 
 void
@@ -137,7 +140,7 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples, timestamp_t ivl_s
                 (pkt_t *)t);
 
         if (rec == NULL) {
-            rec = mem_mdl_malloc(self, sizeof(topaddr_record_t));
+            rec = mdl_malloc(self, sizeof(topaddr_record_t));
             rec->addr = t->addr;
             rec->bytes = 0;
             rec->pkts = 0;

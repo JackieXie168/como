@@ -2,6 +2,7 @@ INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 
 SET(COMOMDL_SRCS
   flowtable.c
+  uhash.c
 )
 
 ADD_LIBRARY(comomdl STATIC ${COMOMDL_SRCS})
