@@ -147,6 +147,8 @@ cleanup()
 {
     sniffer_t *sniff;
 
+    ipc_finish(TRUE);
+
     sniffer_list_foreach(sniff, s_como_ca->sniffers) {
 
 	if (sniff->priv->state == SNIFFER_INACTIVE)
@@ -287,7 +289,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             msg_process_ser_tuples_t *msg;
             uint8_t *sbuf;
             size_t sz, ntuples;
-            struct tuple *t, *t2;
+            struct tuple *t;
 
             debug("module `%s': flushing - get sersize\n", mdl->name);
             sz = 0;
@@ -715,7 +717,7 @@ ca_ipc_flush(procname_t sender, UNUSED int fd,
  */
 static int
 handle_su_ca_start(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
-	     UNUSED int swap, como_ca_t * como_ca)
+		   UNUSED int swap, como_ca_t * como_ca)
 {
     if (como_ca->min_flush_ivl == 0) {
 	como_ca->min_flush_ivl = TIME2TS(1, 0);
@@ -735,9 +737,8 @@ handle_su_ca_start(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
  */
 static int
 handle_su_ca_exit(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
-	    UNUSED int swap, UNUSED como_ca_t * como_ca)
+		  UNUSED int swap, UNUSED como_ca_t * como_ca)
 {
-    ipc_finish(TRUE);
     exit(EXIT_SUCCESS);
     return IPC_OK;
 }
@@ -1504,7 +1505,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
  */
 void
 capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
-	UNUSED int client_fd, como_node_t * node)
+	     UNUSED int client_fd, como_node_t * node)
 {
     como_ca_t como_ca;
     struct timeval timeout = { 0, 0 };
@@ -1587,20 +1588,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     /* notify SUPERVISOR that all the sniffers are ready */
     ipc_send(parent, CA_SU_SNIFFERS_INITIALIZED, NULL, 0);
 
-    /*
-     * proccess all the messages from SUPERVISOR until it sends
-     * the CA_START message which trigger como_ca.ready
-     */
-/*
-while (como_ca.ready == FALSE) {
-	int ipcr = ipc_handle(supervisor_fd);
-	if (ipcr != IPC_OK) {
-	    warn("error on IPC handle from %d (%d)\n",
-		 supervisor_fd, ipcr);
-	    exit(EXIT_FAILURE);
-	}
-    }
-*/
+    /* touches all the sniffers */
     sniffer_list_foreach(sniff, sniffers) {
 	if (sniff->priv->state == SNIFFER_ACTIVE)
             sniff->priv->touched = TRUE;
@@ -1647,7 +1635,7 @@ while (como_ca.ready == FALSE) {
 
 	/* wait for messages, sniffers or up to the polling interval */
 	if (active_sniff > 0) {
-	    //event_loop_set_timeout(&como_ca.el, &timeout);
+	    //FIXME: event_loop_set_timeout(&como_ca.el, &timeout);
 	}
 	n_ready = event_loop_select(&como_ca.el, &r);
 	if (n_ready < 0) {
@@ -1859,58 +1847,11 @@ while (como_ca.ready == FALSE) {
 	    }
 	}
 #endif
-	end_tsctimer(map.stats->ca_loop_timer);
-	end_tsctimer(map.stats->ca_full_timer);
+	end_tsctimer(como_stats->ca_loop_timer);
+	end_tsctimer(como_stats->ca_full_timer);
 
-#if 0
-	XXX this part of the code does not apply to the current code
-	    anymore.if (table_sent) {
-	    /* store profiling information every time 
-	     * tables are sent to EXPORT 
-	     */
-	    print_timers();
-	    reset_timers();
-	    table_sent = 0;
-	}
-#endif
 
     }
-
-#if 0
-	/* 
-	 * if no sniffers are left, flush all the tables given that
-	 * no more packets will be received. 
-	 */
-	if (active_sniff == 0) {
-	    int idx;
-
-	    tailq_t exp_tables = { NULL, NULL };
-
-	    for (idx = 0; idx <= map.module_last; idx++) {
-		module_t *mdl = &map.modules[idx];
-		ctable_t *ct = mdl->ca_hashtable;
-
-		if (ct && ct->records)
-		    flush_state(mdl, &exp_tables);
-	    }
-
-	    if (TQ_HEAD(&exp_tables)) {
-		expiredmap_t *x = TQ_HEAD(&exp_tables);
-		if (ipc_send(sibling(EXPORT), IPC_FLUSH, &x, sizeof(x)) !=
-		    IPC_OK)
-		    panic("IPC_FLUSH failed!");
-	    }
-
-	    if (map.exit_when_done == 1 && done_msg_sent == 0) {
-		done_msg_sent = 1;
-		/* inform export that no more message will come */
-		if (ipc_send(sibling(EXPORT), IPC_DONE, NULL, 0) != IPC_OK)
-		    panic("IPC_DONE failed!");
-	    }
-	}
-#endif
-
-    msg("no sniffers left, terminating.\n");
 }
 
 /* end of file */
