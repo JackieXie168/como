@@ -259,6 +259,12 @@ main(int argc, char **argv)
             fprintf(tnout, "char * record_type = \"%s\";\n", st->name);
             printf("%srecord", sep);
             sep = ", ";
+
+            if (st->n_fields < 0 || strcmp(st->fields[0].type, "timestamp_t")) {
+                printf("\n");
+                errx(1, "First field of record_type must be of type "
+                        "timestamp_t and contain the record's timestamp");
+            }
         }
         if (st->flags & FLAG_CONFIG) {
             fprintf(tnout, "char * config_type = \"%s\";\n", st->name);
@@ -267,10 +273,6 @@ main(int argc, char **argv)
         printf("):\n");
         gen_serialization_funcs(serialout, st);
         printf("\tSerialization functions\n");
-        //if (st->storable) {
-        //    gen_store_funcs(st);
-        //    printf("\tStore/Load functions");
-        //}
 
         gen_csharp_class(csout, st);
         printf("\tC# class\n");
