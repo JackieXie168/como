@@ -355,7 +355,7 @@ mdl_batch_process(mdl_t * mdl, batch_t * batch, char * fltmap)
 	 c < batch->count;
 	 pktptr = batch->pkts1, l = batch->pkts1_len)
     {
-	for (i = 0; i < l; i++, pktptr++, c++) {
+	for (i = 0; i < l; i++, pktptr++, c++, fltmap++) {
 	    pkt_t *pkt = *pktptr;
 
             ts = pkt->ts;
@@ -367,7 +367,6 @@ mdl_batch_process(mdl_t * mdl, batch_t * batch, char * fltmap)
 		continue;	/* no interest in this packet */
 
 	    ic->capture(mdl, pkt, ic->ivl_state);
-	    fltmap++;
 	}
     }
 
