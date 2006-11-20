@@ -493,7 +493,7 @@ store_records(module_t * mdl, timestamp_t ivl, timestamp_t ts)
  * 
  */
 static int
-ex_ipc_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
+handle_su_ex_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
                     UNUSED int swap, UNUSED como_ex_t * como_ex)
 {
     mdl_iexport_t *ie;
@@ -508,7 +508,7 @@ ex_ipc_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
         warn("failed to receive + deserialize + load a module");
         return IPC_OK;
     }
-    debug("ex_ipc_add_module -- recv'd & loaded module `%s'\n", mdl->name);
+    debug("handle_su_ex_add_module -- recv'd & loaded module `%s'\n", mdl->name);
 
     ie = mdl_get_iexport(mdl);
 
@@ -523,10 +523,13 @@ ex_ipc_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
         return IPC_CLOSE;
     }
     ie->woff = csgetofs(ie->outfile);
-    debug("ex_ipc_add_module -- output file `%s' open\n", str);
+    debug("handle_su_ex_add_module -- output file `%s' open\n", str);
     free(str);
 
     strcpy(msg.mdl_name, mdl->name);
+    msg.use_shmem = como_ex->use_shmem;
+    
+/*
     if (como_ex->use_shmem) {
         str = como_asprintf("%s/%s/shmem", como_ex->st_dir, mdl->name);
         shmem_remove(str);
@@ -537,27 +540,27 @@ ex_ipc_add_module(UNUSED ipc_peer_t *peer, uint8_t * sbuf, UNUSED size_t sz,
             return IPC_CLOSE;
         }
         msg.base_addr = shmem_baseaddr(ie->shmem);
-        debug("ex_ipc_add_module -- created shared mem region\n");
+        debug("handle_su_ex_add_module -- created shared mem region\n");
         strcpy(msg.shmem_filename, str);
         free(str);
     }
     else {
         ie->shmem = NULL;
         msg.shmem_filename[0] = '\0';
-        debug("ex_ipc_add_module -- will use serialization interface\n");
+        debug("handle_su_ex_add_module -- will use serialization interface\n");
     }
-
-    ipc_send((ipc_peer_t*)COMO_CA, CA_EXPORT_RUNNING_MODULE, &msg, sizeof(msg));
-    ipc_send(peer, EX_MODULE_ADDED, NULL, 0);
+*/
+    ipc_send((ipc_peer_t*)COMO_CA, EX_CA_ATTACH_MODULE, &msg, sizeof(msg));
+    ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
 
     hash_insert_string(como_ex->mdls, mdl->name, mdl); /* add to mdl index */
-    debug("ex_ipc_add_module -- module `%s' fully loaded\n", mdl->name);
+    debug("handle_su_ex_add_module -- module `%s' fully loaded\n", mdl->name);
 
     return IPC_OK;
 }
 
 static int
-ex_ipc_serialized_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UNUSED size_t sz,
+handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UNUSED size_t sz,
                     UNUSED int swap, UNUSED como_ex_t * como_ex)
 {
     uint8_t *sbuf = msg->data;
@@ -576,7 +579,7 @@ ex_ipc_serialized_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UNUSED si
     if (mdl == NULL)
         error("capture sent tuples from an unknown module\n");
 
-    debug("ex_ipc_serialized_tuples - tuples for mdl `%s'\n", mdl->name);
+    debug("handle_ca_ex_process_ser_tuples - tuples for mdl `%s'\n", mdl->name);
 
     ie = mdl_get_iexport(mdl);
     tuples = como_calloc(msg->ntuples, sizeof(void *));
@@ -584,10 +587,10 @@ ex_ipc_serialized_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UNUSED si
     /*
      * create an array for the tuples
      */
-    debug("ex_ipc_serialized_tuples -- deserializing tuples\n");
+    debug("handle_ca_ex_process_ser_tuples -- deserializing tuples\n");
     for (i = 0; i < msg->ntuples; i++)
         mdl->priv->mdl_tuple.deserialize(&sbuf, &tuples[i], alc);
-    debug("ex_ipc_serialized_tuples -- deserialized the tuples\n");
+    debug("handle_ca_ex_process_ser_tuples -- deserialized the tuples\n");
 
     /*
      * let the module process 'em
@@ -605,21 +608,19 @@ ex_ipc_serialized_tuples(UNUSED ipc_peer_t *peer, sertuplesmsg_t *msg, UNUSED si
     /*
      * we are done
      */
-    debug("ex_ipc_serialized_tuples -- tuples processed\n");
+    debug("handle_ca_ex_process_ser_tuples -- tuples processed\n");
     return IPC_OK;
 }
 
 static int
-ex_ipc_shmem_tuples(UNUSED ipc_peer_t *peer, tuplesmsg_t * msg,
+handle_ca_ex_process_shm_tuples(UNUSED ipc_peer_t *peer, tuplesmsg_t * msg,
         UNUSED size_t sz, UNUSED int swap, UNUSED como_ex_t * como_ex)
 {
     mdl_iexport_t *ie;
-    void **tuples;
-    mdl_t *mdl;
-    size_t i;
     struct tuple *t;
+    mdl_t *mdl;
 
-    debug("ex_ipc_shmem_tuples -- recv'd %d tuples in shared mem\n", msg->ntuples);
+    debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n", msg->ntuples);
 
     /*
      * locate the module
@@ -628,32 +629,40 @@ ex_ipc_shmem_tuples(UNUSED ipc_peer_t *peer, tuplesmsg_t * msg,
     if (mdl == NULL)
         error("capture sent tuples from an unknown module\n");
 
-    debug("ex_ipc_shmem_tuples -- tuples for mdl `%s'\n", mdl->name);
+    debug("handle_ca_ex_process_shm_tuples -- tuples for mdl `%s'\n", mdl->name);
 
     ie = mdl_get_iexport(mdl);
-    tuples = como_calloc(msg->ntuples, sizeof(void *));
-
-    debug("ex_ipc_shmem_tuples -- building tuple array\n", mdl->name);
-    i = 0;
-    tuples_foreach(t, &msg->tuples)
-        tuples[i++] = t;
-
-    assert(i == msg->ntuples);
-
     /*
      * let the module process 'em
      */
-    if (ie->export)
-        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start);
-    else
-        error("TODO: store the tuples directly\n");
+    if (ie->export) {
+	void **tuples;
+	size_t i;
 
-    debug("ex_ipc_shmem_tuples -- tuples processed, sending response\n");
-    ipc_send(peer, EX_MODULE_SHMEM_TUPLES, msg, sz);
-    /*
-     * free allocated mem.
-     */
-    free(tuples);
+	tuples = como_calloc(msg->ntuples, sizeof(void *));
+
+	debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
+	i = 0;
+	tuples_foreach(t, &msg->tuples) {
+	    tuples[i++] = t;
+	}
+
+	assert(i == msg->ntuples);
+
+        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start);
+	/*
+	 * free allocated mem.
+	 */
+	free(tuples);
+    } else {
+        debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
+        tuples_foreach(t, &msg->tuples) {
+	    mdl_store_rec(mdl, t);
+        }
+    }
+
+    debug("handle_ca_ex_process_shm_tuples -- tuples processed, sending response\n");
+    ipc_send(peer, EX_CA_TUPLES_PROCESSED, msg, sz);
 
     return IPC_OK;
 }
@@ -846,7 +855,7 @@ ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
 
 
 /*
- * -- main
+ * -- export_main
  *
  * This is the EXPORT process main loop. It sits there
  * waiting for flow tables flushed by CAPTURE. It also 
@@ -858,29 +867,23 @@ ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
  * The EXPORT flow tables are processed periodically according to what
  * the action() callback tells us to do (save, discard, etc.).
  */
-int
-main(int argc, char **argv)
+void
+export_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
+	UNUSED int client_fd, como_node_t * node)
 {
     int supervisor_fd, capture_fd, storage_fd;
-    char *ipc_location, *ca_location;
     como_ex_t como_ex;
     como_env_t *env;
-
-    if (argc < 5)
-        error("usage: %s ipc_location ca_location st_dir lib_dir", argv[0]);
+    
+    log_set_program("EX");
 
     /* initialize como_ex */
     bzero(&como_ex, sizeof(como_ex));
     como_ex.mdls = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
 
-    ipc_location = como_strdup(argv[1]);
-    ca_location = como_strdup(argv[2]);
-    como_ex.st_dir = como_strdup(argv[3]);
     env = como_env();
-    env->libdir = como_strdup(argv[4]);
+    como_ex.st_dir = como_asprintf("%s/%s", env->dbdir, node->name);
     
-    como_init("EX", argc, argv);
-
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 
     signal(SIGINT, exit);
@@ -888,36 +891,41 @@ main(int argc, char **argv)
     signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */
 
     /* register handlers for IPC messages */ 
-    ipc_init(ipc_peer_at(COMO_EX, ipc_location), NULL, &como_ex);
-    ipc_register(EX_ADD_MODULE, (ipc_handler_fn) ex_ipc_add_module);
-    ipc_register(EX_MODULE_SERIALIZED_TUPLES, (ipc_handler_fn) ex_ipc_serialized_tuples);
-    ipc_register(EX_MODULE_SHMEM_TUPLES, (ipc_handler_fn) ex_ipc_shmem_tuples);
+    ipc_set_user_data(&como_ex);
+    ipc_register(SU_EX_ADD_MODULE, (ipc_handler_fn) handle_su_ex_add_module);
+    ipc_register(CA_EX_PROCESS_SER_TUPLES, (ipc_handler_fn) handle_ca_ex_process_ser_tuples);
+    ipc_register(CA_EX_PROCESS_SHM_TUPLES, (ipc_handler_fn) handle_ca_ex_process_shm_tuples);
     /*ipc_register(IPC_MODULE_DEL, ex_ipc_module_del);
     ipc_register(IPC_MODULE_START, ex_ipc_start);
     ipc_register(IPC_FLUSH, (ipc_handler_fn) ex_ipc_flush);
     ipc_register(IPC_DONE, ex_ipc_done);
     ipc_register(IPC_EXIT, ex_ipc_exit);*/
 
+/* In SU
     COMO_CA = ipc_peer_at(COMO_CA, ca_location);
-    
-    /* listen to the parent */
-    event_loop_init(&como_ex.el);
-    supervisor_fd = ipc_connect(COMO_SU);
-    event_loop_add(&como_ex.el, supervisor_fd);
-
-    storage_fd = ipc_connect(COMO_ST); 
-    event_loop_add(&como_ex.el, storage_fd);
-
     ((ipc_peer_t *)COMO_CA)->id = 0;
     ((ipc_peer_t *)COMO_CA)->parent_class = COMO_SU_CLASS;
-    capture_fd = ipc_connect(COMO_CA);
-    como_ex.use_shmem = ca_location[0] == '/'; /* check if local or remote CA */
-    event_loop_add(&como_ex.el, capture_fd);
+    */
+    /* listen to the parent */
+    event_loop_init(&como_ex.el);
+    
+    supervisor_fd = ipc_peer_get_fd(parent);
+    event_loop_add(&como_ex.el, supervisor_fd);
 
     /* 
      * wait for the debugger to attach
      */
-    DEBUGGER_WAIT_ATTACH(COMO_EX);
+    DEBUGGER_WAIT_ATTACH(child);
+
+    storage_fd = ipc_connect(COMO_ST); 
+    event_loop_add(&como_ex.el, storage_fd);
+
+    capture_fd = ipc_connect(COMO_CA);
+
+    /* save whether we're using shmem */
+    como_ex.use_shmem = (shmemmap != NULL);
+    event_loop_add(&como_ex.el, capture_fd);
+
  
     /* allocate the timers */
     init_timers();
@@ -969,3 +977,43 @@ main(int argc, char **argv)
 
     exit(EXIT_FAILURE); /* never reached */
 }
+
+#if 0
+/*
+ * -- main
+ *
+ * This is the EXPORT process main loop. It sits there
+ * waiting for flow tables flushed by CAPTURE. It also 
+ * communicates with STORAGE to save module data to disk.  
+ *
+ * On the receipt of a table, EXPORT will go through all the entries,
+ * and process them (either accumulate info in the EXPORT flow tables
+ * (etable_t), or save to the bytestream and drop them
+ * The EXPORT flow tables are processed periodically according to what
+ * the action() callback tells us to do (save, discard, etc.).
+ */
+int
+main(int argc, char **argv)
+{
+    int supervisor_fd, capture_fd, storage_fd;
+    char *ipc_location, *ca_location;
+    como_ex_t como_ex;
+    como_env_t *env;
+
+    if (argc < 5)
+        error("usage: %s ipc_location ca_location st_dir lib_dir", argv[0]);
+
+    /* initialize como_ex */
+    bzero(&como_ex, sizeof(como_ex));
+    como_ex.mdls = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
+
+    ipc_location = como_strdup(argv[1]);
+    ca_location = como_strdup(argv[2]);
+    como_ex.st_dir = como_strdup(argv[3]);
+    env = como_env();
+    env->libdir = como_strdup(argv[4]);
+    
+    como_init("EX", argc, argv);
+}
+
+#endif

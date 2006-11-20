@@ -72,113 +72,103 @@ serializable_t *
 mdl_get_config_ser(const mdl_t * mdl)
 {
     return &mdl->priv->mdl_config;
-
-    /*switch (*type) {
-    case PRIV_ISUPERVISOR:
-	return ((mdl_isupervisor_t *) h->priv)->mdl_config;
-    case PRIV_ICAPTURE:
-	return ((mdl_icapture_t *) h->priv)->mdl_config;
-    case PRIV_IEXPORT:
-	return ((mdl_iexport_t *) h->priv)->mdl_config;
-    case PRIV_IQUERY:
-	return ((mdl_iquery_t *) h->priv)->mdl_config;
-    }
-
-    error("Can't access config serialization info\n");
-    return NULL;*/
 }
 
 
 /* serialization/deserialization of mdl_t */
 void
-mdl_serialize(uint8_t ** sbuf, const mdl_t * h)
+mdl_serialize(uint8_t ** sbuf, const mdl_t * mdl)
 {
     serializable_t *config;
     
-    config = mdl_get_config_ser(h);
+    config = mdl_get_config_ser(mdl);
     
-    serialize_timestamp_t(sbuf, h->flush_ivl);
-    serialize_string(sbuf, h->name);
-    serialize_string(sbuf, h->description);
-    serialize_string(sbuf, h->filter);
-    serialize_string(sbuf, h->mdlname);
-    serialize_uint64_t(sbuf, h->streamsize);
-    config->serialize(sbuf, h->config);
+    serialize_timestamp_t(sbuf, mdl->flush_ivl);
+    serialize_string(sbuf, mdl->name);
+    serialize_string(sbuf, mdl->description);
+    serialize_string(sbuf, mdl->filter);
+    serialize_string(sbuf, mdl->mdlname);
+    serialize_uint64_t(sbuf, mdl->streamsize);
+    config->serialize(sbuf, mdl->config);
 }
 
 size_t
-mdl_sersize(const mdl_t * src)
+mdl_sersize(const mdl_t * mdl)
 {
     size_t sz;
     serializable_t *config;
     
-    config = mdl_get_config_ser(src);
+    config = mdl_get_config_ser(mdl);
 
-    sz = sizeof(src->flush_ivl) +
-	 sersize_string(src->name) +
-	 sersize_string(src->description) +
-	 sersize_string(src->filter) +
-	 sersize_string(src->mdlname) +
-         sersize_uint64_t(src->streamsize) +
-	 config->sersize(src->config);
+    sz = sizeof(mdl->flush_ivl) +
+	 sersize_string(mdl->name) +
+	 sersize_string(mdl->description) +
+	 sersize_string(mdl->filter) +
+	 sersize_string(mdl->mdlname) +
+         sersize_uint64_t(mdl->streamsize) +
+	 config->sersize(mdl->config);
 
     return sz;
 }
 
 void
-mdl_deserialize(uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc,
+mdl_deserialize(uint8_t ** sbuf, mdl_t ** mdl_out, alc_t * alc,
 		mdl_priv_t priv)
 {
-    mdl_t *h;
+    mdl_t *mdl;
     serializable_t *config;
     
-    h = alc_new0(alc, mdl_t);
+    mdl = alc_new0(alc, mdl_t);
     
-    deserialize_timestamp_t(sbuf, &h->flush_ivl);
-    deserialize_string(sbuf, &h->name, alc);
-    deserialize_string(sbuf, &h->description, alc);
-    deserialize_string(sbuf, &h->filter, alc);
-    deserialize_string(sbuf, &h->mdlname, alc);
-    deserialize_uint64_t(sbuf, &h->streamsize);
+    deserialize_timestamp_t(sbuf, &mdl->flush_ivl);
+    deserialize_string(sbuf, &mdl->name, alc);
+    deserialize_string(sbuf, &mdl->description, alc);
+    deserialize_string(sbuf, &mdl->filter, alc);
+    deserialize_string(sbuf, &mdl->mdlname, alc);
+    deserialize_uint64_t(sbuf, &mdl->streamsize);
 
-    if (mdl_load(h, priv) < 0) {
-	alc_free(alc, h);
-	*h_out = NULL;
+    if (mdl_load(mdl, priv) < 0) {
+	alc_free(alc, mdl);
+	*mdl_out = NULL;
 	return;
     }
 
-    config = mdl_get_config_ser(h);
-    config->deserialize(sbuf, &h->config, alc);
+    config = mdl_get_config_ser(mdl);
+    config->deserialize(sbuf, &mdl->config, alc);
     
-    *h_out = h;
+    *mdl_out = mdl;
 }
 
 
 mdl_icapture_t *
-mdl_get_icapture(mdl_t * h)
+mdl_get_icapture(mdl_t * mdl)
 {
-    return h->priv->proc.ca;
+    assert(mdl->priv->type == PRIV_ICAPTURE);
+    return mdl->priv->proc.ca;
 }
 
 
 mdl_isupervisor_t *
-mdl_get_isupervisor(mdl_t * h)
+mdl_get_isupervisor(mdl_t * mdl)
 {
-    return h->priv->proc.su;
+    assert(mdl->priv->type == PRIV_ISUPERVISOR);
+    return mdl->priv->proc.su;
 }
 
 
 mdl_iexport_t *
-mdl_get_iexport(mdl_t * h)
+mdl_get_iexport(mdl_t * mdl)
 {
-    return h->priv->proc.ex;
+    assert(mdl->priv->type == PRIV_IEXPORT);
+    return mdl->priv->proc.ex;
 }
 
 
 mdl_iquery_t *
-mdl_get_iquery(mdl_t * h)
+mdl_get_iquery(mdl_t * mdl)
 {
-    return h->priv->proc.qu;
+    assert(mdl->priv->type == PRIV_IQUERY);
+    return mdl->priv->proc.qu;
 }
 
 int
@@ -221,7 +211,7 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
 }
 
 int
-mdl_load(mdl_t * h, mdl_priv_t priv)
+mdl_load(mdl_t * mdl, mdl_priv_t priv)
 {
     mdl_ibase_t *ib;
     char *filename;
@@ -249,7 +239,7 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
     }
     
     libdir = como_env_libdir();
-    filename = shobj_build_path(libdir, h->mdlname);
+    filename = shobj_build_path(libdir, mdl->mdlname);
     ib->shobj = shobj_open(filename);
     if (ib->shobj == NULL) {
 	free(ib);
@@ -261,7 +251,8 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
     ret += mdl_load_serializable(&ib->mdl_tuple, ib->shobj, "tuple_type");
     ret += mdl_load_serializable(&ib->mdl_record, ib->shobj, "record_type");
     if (ret < 0) { /* any at least one of the above failed */
-        warn("module %s misses functions to handle its struct types");
+        warn("module `%s' misses functions to handle its struct types",
+	     mdl->name);
         return -1;
     }
 
@@ -279,23 +270,31 @@ mdl_load(mdl_t * h, mdl_priv_t priv)
 	ib->proc.ex = como_new0(mdl_iexport_t);
 	ib->proc.ex->init = shobj_symbol(ib->shobj, "ex_init", TRUE);
 	ib->proc.ex->export = shobj_symbol(ib->shobj, "export", TRUE);
+	if (ib->proc.ex->export == NULL &&
+	    ib->mdl_tuple.serialize != ib->mdl_record.serialize)
+	    
+	{
+	    warn("module `%s' doesn't implement export but tuple and record "
+		 "are not identical.\n", mdl->name);
+	    return -1;
+	}
 	break;
     case PRIV_IQUERY:
 	ib->proc.qu = como_new0(mdl_iquery_t);
 	break;
     }
     
-    h->priv = ib;
+    mdl->priv = ib;
 
     return 0;
 }
 
 
 void *
-mdl__alloc_config(mdl_t * h, size_t sz)
+mdl__alloc_config(mdl_t * mdl, size_t sz)
 {
     /* allocate the config state of size sz and keep track of it */
-    alc_t *alc = &h->priv->alc;
+    alc_t *alc = &mdl->priv->alc;
     return alc_calloc(alc, 1, sz);
 }
 
@@ -339,55 +338,35 @@ mdl_free_tuple(mdl_t *mdl, void *ptr)
 }
 
 
-#if 0
-
-
-int
-mdl_capture_batch(mdl_t * h, batch_t * batch, char * fltmap, onflush_fn onflush)
-{
-    pkt_t **pktptr;
-    int i, c, l;
-
-    mdl_icapture_t *ic;
-    
-    ic = mdl_get_icapture(h);
-
-    for (c = 0, pktptr = batch->pkts0, l = MIN(batch->pkts0_len, batch->count);
-	 c < batch->count;
-	 pktptr = batch->pkts1, l = batch->pkts1_len)
-    {
-	for (i = 0; i < l; i++, pktptr++, c++) {
-	    pkt_t *pkt = *pktptr;
-	    int res;
-	    
-	    /* check whether the state has to be flushed */
-	    if (ic->ivl_state && pkt->ts >= ic->ivl_end) {
-		onflush(h, ic->records);
-		/* TODO: free all memory allocated in the interval except records */
-		ic->ivl_state = NULL;
-	    }
-	    if (ic->ivl_state == NULL) {
-		/* initialize ivl_start and ivl_end */
-		ic->ivl_start = pkt->ts - (pkt->ts % h->flush_ivl);
-		ic->ivl_end = ic->ivl_start + h->flush_ivl;
-		
-		/* call flush() to initialize ivl_state */
-		ic->ivl_state = ic->flush(h, ic->ivl_start);
-	    }
-	    
-	    if (*fltmap == 0)
-		continue;	/* no interest in this packet */
-
-	    res = ic->capture(h, pkt, ic->ivl_state);
-	    
-	    fltmap++;
-	}
-    }
-}
-#endif
-
 /* EXPORT */
+void
+mdl_store_rec(mdl_t * mdl, void * rec)
+{
+    mdl_iexport_t *ie;
+    size_t sz;
+    uint8_t *sbuf;
+    
+    ie = mdl_get_iexport(mdl);
+    /* the timestamp is the first 64-bit integer of the record */
+//    ts = *((timestamp_t *) rec);
 
+    sz = mdl->priv->mdl_record.sersize(rec) + sizeof(size_t);
+
+    sbuf = (uint8_t *) csmap(ie->cs_writer, ie->woff, (ssize_t *) &sz);
+    if (sbuf == NULL)
+	error("csmap() failed for module `%s'\n", mdl->name);
+
+    if ((ssize_t) sz == -1)
+	error("Can't write to disk for module `%s'\n", mdl->name);
+
+    serialize_uint32_t(&sbuf, sz);
+    mdl->priv->mdl_record.serialize(&sbuf, rec);
+
+    ie->woff += sz;
+    cscommit(ie->cs_writer, ie->woff);
+}
+
+#if 0
 uint8_t *
 mdl_store_rec(mdl_t * h, size_t sz, timestamp_t ts)
 {
@@ -415,6 +394,7 @@ mdl_store_rec(mdl_t * h, size_t sz, timestamp_t ts)
 }
 
 
+
 void
 mdl_store_commit(mdl_t * h)
 {
@@ -427,7 +407,7 @@ mdl_store_commit(mdl_t * h)
     cscommit(ie->cs_writer, ie->woff);
     ie->cs_cisz = 0;
 }
-
+#endif
 /* QUERY */
 #if 0
 strec_t *

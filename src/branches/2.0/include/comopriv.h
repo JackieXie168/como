@@ -170,9 +170,8 @@ typedef union ccamsg_t {
 } ccamsg_t;
 
 typedef struct { /* EX tells CA it's running a mdl. ex->ca */
-    char mdl_name[MDLNAME_MAX];
-    char shmem_filename[PATH_MAX];
-    void *base_addr; /* they must agree when using shmem */
+    char	mdl_name[MDLNAME_MAX];
+    int		use_shmem;
 } caexmsg_t;
 
 typedef struct { /* tuples in shmem. ca->ex, ex->ca */
@@ -194,6 +193,9 @@ typedef struct {
 } delmdlmsg_t;
 
 void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
+		   memmap_t * shmemmap,int client_fd, como_node_t * node);
+
+void export_main  (ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 
 /* como.c */
@@ -265,8 +267,7 @@ struct mdl_icapture {
     treenode_t  *	filter;
     int			status;
     
-    shmem_t *		shmem;
-    memmap_t *          shmap;
+    int			use_shmem;
     ipc_peer_t *	export;
 };
 

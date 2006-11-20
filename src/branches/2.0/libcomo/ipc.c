@@ -200,6 +200,7 @@ ipc_peer_child(const ipc_peer_full_t * kind, uint16_t id)
     p->parent_class = s_me->class;
     p->id = id;
     p->at = como_strdup(s_me->at);
+    p->fd = -1;
     memset(&p->next, 0, sizeof(p->next));
     return p;
 }
@@ -211,7 +212,7 @@ ipc_peer_connection_point(const ipc_peer_full_t * p)
     char *cp;
     assert(p->at != NULL);
     if (p->at[0] == '/') {
-	if (p->parent_class == 0) {
+	if (p->parent_class == 0 && p->id != 0) {
 	    asprintf(&cp, "%s/%s.sock", p->at, p->name);
 	} else {
 	    asprintf(&cp, "%s/%s-%d.sock", p->at, p->name, p->id);
