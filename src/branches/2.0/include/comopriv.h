@@ -284,12 +284,14 @@ struct mdl_iexport {
     int			cs_writer;
     size_t		cs_cisz;
     off_t		woff;
-    int         outfile;
+    int                 outfile;
     
     ex_init_fn		init;
     ex_export_fn	export;
 
     shmem_t *		shmem;
+
+    void *              state;
 };
 
 struct mdl_iquery {
