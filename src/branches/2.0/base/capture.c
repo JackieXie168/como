@@ -95,7 +95,6 @@ typedef struct como_ca {
     int			sniffers_count;
 
     // capbuf
-    //como_stats *	stats;
     event_loop_t	el;
     int			ready;
     timestamp_t		min_flush_ivl;
@@ -336,6 +335,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
     }
 
     /* initialize new state */
+    pool_clear(ic->ivl_mem);
     if (ic->init) {
         debug("module `%s': calling init()\n", mdl->name);
         ic->ivl_state = ic->init(mdl, ic->ivl_start);
@@ -524,6 +524,11 @@ handle_su_ca_add_module(UNUSED ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t 
 	como_ca->min_flush_ivl = mdl->flush_ivl;
     }
     
+    tuples_init(&ic->tuples);
+
+    ic->ivl_mem = pool_create();
+    pool_alc_init(ic->ivl_mem, &mdl->priv->alc);
+
     /* TODO locate the first empty entry in the array */
     array_add(como_ca->mdls, &mdl);
 
