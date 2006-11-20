@@ -1708,6 +1708,9 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
 	    if (sniff->priv->state == SNIFFER_FROZEN)
 		continue;	/* frozen devices */
 
+            if (sniff->priv->state != SNIFFER_ACTIVE)
+                continue;       /* skip inactive sniffers */
+
 	    if ((sniff->flags & SNIFF_SELECT) && !FD_ISSET(sniff->fd, &r))
 		continue;	/* nothing to read here. */
 
