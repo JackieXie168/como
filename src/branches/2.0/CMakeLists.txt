@@ -187,6 +187,13 @@ ADD_DEFINITIONS(-include ${COMO_SOURCE_DIR}/include/os.h)
 #
 # Add subdirs
 #
+#
+# If we have mono, add the appropirate support.
+#
+IF(MONO_FOUND)
+  ADD_SUBDIRECTORY(mono)
+ENDIF(MONO_FOUND)
+
 ADD_SUBDIRECTORY(misc)
 ADD_SUBDIRECTORY(modules)
 ADD_SUBDIRECTORY(sniffers)
@@ -195,6 +202,8 @@ ADD_SUBDIRECTORY(base)
 ADD_SUBDIRECTORY(libcomo)
 #ADD_SUBDIRECTORY(lib)
 #ADD_SUBDIRECTORY(man)
+
+
 
 #
 # Output configuration messages

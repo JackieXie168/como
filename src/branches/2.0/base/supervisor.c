@@ -169,7 +169,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             }
             for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
                 ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
-                assert(t == CA_SU_MODULE_ADDED);
+                assert(t == CA_SU_MODULE_ADDED || t == CA_SU_MODULE_FAILED);
             }
             
             ca_done = 1;
@@ -201,7 +201,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             }
             for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
                 ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
-                assert(t == EX_SU_MODULE_ADDED);
+                assert(t == EX_SU_MODULE_ADDED || t == EX_SU_MODULE_FAILED);
             }
 
             /*
@@ -831,7 +831,7 @@ fake_config()
     array_t *mdl_defs;
     
     sniffer_def_t s;
-    mdl_def_t m, m2;
+    mdl_def_t m;
     
     
     sniffer_defs = array_new(sizeof(sniffer_def_t));
@@ -842,17 +842,24 @@ fake_config()
     s.args = NULL;
     array_add(sniffer_defs, &s);
     
+    m.name = como_strdup("traffic2");
+    m.mdlname = como_strdup("trafficCCS");
+    m.args = NULL;
+    m.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m);
+#if 0
+    m.name = como_strdup("topaddr");
+    m.mdlname = como_strdup("topaddrCC");
+    m.args = NULL;
+    m.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m);
+
     m.name = como_strdup("traffic");
     m.mdlname = como_strdup("trafficCC");
     m.args = NULL;
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
-
-    m2.name = como_strdup("topaddr");
-    m2.mdlname = como_strdup("topaddrCC");
-    m2.args = NULL;
-    m2.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m2);
+#endif
 
     config.sniffer_defs = sniffer_defs;
     config.mdl_defs = mdl_defs;

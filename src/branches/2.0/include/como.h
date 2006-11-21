@@ -162,17 +162,6 @@ struct _como {
 #endif
 
 /*
- * standard names for master processes.
- * no parent and no id
- */
-#define SUPERVISOR      0x00010000
-#define CAPTURE         0x00020000
-#define EXPORT          0x00030000
-#define STORAGE         0x00040000
-#define QUERY           0x00050000
-
-
-/*
  * default values 
  */
 #define DEFAULT_STREAMSIZE 	(1024*1024*1024)/* bytestream size */
@@ -186,16 +175,12 @@ struct _como {
 #define DEFAULT_REPLAY_BUFSIZE	(1024*1024)	/* replay packet trace buffer */
 
 
-#define DEBUGCLASS(c)	(1 << ((c >> 16) - 1))
-
 #define DEBUG_SLEEP	20 /* how many seconds */
-#define DEBUGGER_WAIT_ATTACH(peer) do {		\
+#define DEBUGGER_WAIT_ATTACH(code) do {		\
     const char *debug = getenv("COMO_DEBUG");	\
-    const char *code = ipc_peer_get_code((ipc_peer_t *) peer); \
     if (debug && strstr(debug, code) != NULL) {		\
-	msg("%s (%d): waiting %ds for the debugger to attach\n", \
-	    ipc_peer_get_name((ipc_peer_t *) peer), getpid(), \
-	    DEBUG_SLEEP);			\
+	msg("waiting %ds for the debugger to attach on pid %d\n", \
+	    DEBUG_SLEEP, getpid()); \
 	sleep(DEBUG_SLEEP);			\
 	msg("wakeup, ready to work\n");		\
     }						\

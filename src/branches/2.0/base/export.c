@@ -79,8 +79,9 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     alc = como_alc();
     mdl_deserialize(&sbuf, &mdl, alc, PRIV_IEXPORT);
     if (mdl == NULL) { /* failure */
-        warn("failed to receive + deserialize + load a module");
-        return IPC_OK;
+	warn("failed to receive + deserialize + load a module\n");
+	ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
+	return IPC_OK;
     }
     debug("handle_su_ex_add_module -- recv'd & loaded module `%s'\n", mdl->name);
 
@@ -95,7 +96,8 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     if (ie->outfile < 0) {
         warn("cannot start storage for module `%s'\n", mdl->name);
         free(str);
-        return IPC_CLOSE;
+        ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
+        return IPC_OK;
     }
     ie->woff = csgetofs(ie->outfile);
     debug("handle_su_ex_add_module -- output file `%s' open\n", str);
@@ -437,8 +439,8 @@ ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
  * the action() callback tells us to do (save, discard, etc.).
  */
 void
-export_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
-	UNUSED int client_fd, como_node_t * node)
+export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
+	    memmap_t * shmemmap, UNUSED int client_fd, como_node_t * node)
 {
     int supervisor_fd, capture_fd, storage_fd;
     como_ex_t como_ex;
@@ -484,7 +486,7 @@ export_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     /* 
      * wait for the debugger to attach
      */
-    DEBUGGER_WAIT_ATTACH(child);
+    DEBUGGER_WAIT_ATTACH("ex");
 
     storage_fd = ipc_connect(COMO_ST); 
     event_loop_add(&como_ex.el, storage_fd);
