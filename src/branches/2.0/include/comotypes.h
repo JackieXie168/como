@@ -189,12 +189,19 @@ struct mdl {
     char *	description;
     char *	filter;
     char *	mdlname;
-    void *	config;
     uint64_t    streamsize;
+    void *	config;
     /* private state */
     mdl_ibase_t * priv;
 };
 
+
+typedef enum ex_impl
+{
+    EX_IMPL_NONE,
+    EX_IMPL_C,
+    EX_IMPL_MONO,
+} ex_impl_t;
 
 
 typedef struct capabilities_t {

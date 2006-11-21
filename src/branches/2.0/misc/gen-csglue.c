@@ -91,7 +91,7 @@ extern cstype_conv_t cstypes[];
 "   } while(0)                                                   \n"
 
 #define TOMONO_FUNC                                                     \
-    "static MonoObject *\n" \
+    "MonoObject *\n" 							\
     "STRUCT_TO_MONO(MonoDomain *domain, MonoImage *image, TYPE *ref)\n" \
     "{\n"                                                               \
     "    static MonoClass *klass;\n"                                    \

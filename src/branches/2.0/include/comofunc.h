@@ -66,7 +66,8 @@ alc_t * mdl_alc(mdl_t * mdl);
 #define mdl_malloc(self,sz)	alc_malloc(mdl_alc(self), sz)
 #define mdl_calloc(self,n,sz)	alc_calloc(mdl_alc(self), n, sz)
 #define mdl_free(self,ptr)	alc_free(mdl_alc(self), ptr)
-
+#define mdl_new(self,type)	alc_new(mdl_alc(self), type)
+#define mdl_new0(self,type)	alc_new0(mdl_alc(self), type)
 
 
 void * mdl__alloc_config(mdl_t * h, size_t sz);

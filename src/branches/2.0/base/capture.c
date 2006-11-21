@@ -498,6 +498,7 @@ handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     mdl_deserialize(&sbuf, &mdl, alc, PRIV_ICAPTURE);
     if (mdl == NULL) {
 	/* failed */
+	ipc_send(peer, CA_SU_MODULE_FAILED, NULL, 0);
 	return IPC_OK;
     }
 
@@ -1504,8 +1505,8 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
  *
  */
 void
-capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
-	     UNUSED int client_fd, como_node_t * node)
+capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
+	     memmap_t * shmemmap, UNUSED int client_fd, como_node_t * node)
 {
     como_ca_t como_ca;
     struct timeval timeout = { 0, 0 };
@@ -1542,7 +1543,7 @@ capture_main(ipc_peer_full_t * child, ipc_peer_t * parent, memmap_t * shmemmap,
     como_ca.accept_fd = ipc_listen();
 
     /* wait for the debugger to attach */
-    DEBUGGER_WAIT_ATTACH(child);
+    DEBUGGER_WAIT_ATTACH("ca");
     
     /* register handlers for IPC messages */
     ipc_register(SU_CA_ADD_MODULE, (ipc_handler_fn) handle_su_ca_add_module);

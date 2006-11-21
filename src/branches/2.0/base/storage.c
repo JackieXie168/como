@@ -1833,7 +1833,7 @@ main(int argc, char ** argv)
     s_como_st.supervisor_fd = ipc_connect(COMO_SU);
 
     /* if needed, wait for debugger */
-    DEBUGGER_WAIT_ATTACH(COMO_ST);
+    DEBUGGER_WAIT_ATTACH("st");
     
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 

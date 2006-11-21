@@ -209,6 +209,11 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
     return 0;
 }
 
+
+
+int proxy_mono_load(mdl_t * mdl);
+void * proxy_mono_ex_init(mdl_t * mdl);
+
 int
 mdl_load(mdl_t * mdl, mdl_priv_t priv)
 {
@@ -216,8 +221,10 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
     char *filename;
     const char *libdir;
     int ret;
+    ex_impl_t *ex_impl;
 
     ib = como_new0(mdl_ibase_t);
+    mdl->priv = ib;
     ib->type = priv;
     
     ib->alc = *como_alc();
@@ -265,15 +272,27 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	ib->proc.ca->flush = shobj_symbol(ib->shobj, "flush", TRUE);
 	break;
     case PRIV_IEXPORT:
-	ib->proc.ex->init = shobj_symbol(ib->shobj, "ex_init", TRUE);
-	ib->proc.ex->export = shobj_symbol(ib->shobj, "export", TRUE);
-	if (ib->proc.ex->export == NULL &&
-	    ib->mdl_tuple.serialize != ib->mdl_record.serialize)
-	    
-	{
-	    warn("module `%s' doesn't implement export but tuple and record "
-		 "are not identical.\n", mdl->name);
-	    return -1;
+	ex_impl = shobj_symbol(ib->shobj, "ex_impl", FALSE);
+	switch (*ex_impl) {
+	case EX_IMPL_NONE:
+	break;
+	case EX_IMPL_C:
+	    ib->proc.ex->init = shobj_symbol(ib->shobj, "ex_init", TRUE);
+	    ib->proc.ex->export = shobj_symbol(ib->shobj, "export", FALSE);
+	    if (ib->proc.ex->export == NULL &&
+		ib->mdl_tuple.serialize != ib->mdl_record.serialize)
+	    {
+		warn("module `%s' doesn't implement export but tuple and "
+		     "record are not identical.\n", mdl->name);
+		return -1;
+	    }
+	    break;
+	case EX_IMPL_MONO:
+	    if (proxy_mono_load(mdl) == -1)
+		return -1;
+	    ib->proc.ex->init = proxy_mono_ex_init;
+	    //ib->proc.ex->export = proxy_mono_export;
+	    break;
 	}
 	break;
     case PRIV_IQUERY:
@@ -281,7 +300,6 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	break;
     }
     
-    mdl->priv = ib;
 
     return 0;
 }
