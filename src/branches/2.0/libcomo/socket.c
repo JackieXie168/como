@@ -48,7 +48,7 @@
 #include <netdb.h>
 
 #include "como.h"
-
+#include "comopriv.h"
 
 /*
  * -- create_socket()

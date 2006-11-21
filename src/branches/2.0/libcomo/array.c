@@ -62,6 +62,7 @@
 #include <string.h>
 
 #include "como.h"
+#include "comopriv.h"
 
 #ifndef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))

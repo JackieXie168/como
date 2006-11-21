@@ -39,9 +39,6 @@
 /* sniffer-related typedefs */
 typedef struct source		source_t;
 typedef struct sniffer_cb	sniffer_cb_t;
-typedef struct sniffer_t	sniffer_t;
-
-#include "sniffer_list.h"
 
 #define SNIFFER(name) sniffer_cb_t como_ ## name ## _sniffer
 

@@ -27,7 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id:storage-client.c 1032 2006-11-14 13:29:01Z m_canini $
  */
 
 /*
@@ -95,7 +95,7 @@ four methods, and provides an mmap-like interface.
 
 #define LOG_DOMAIN	"ST-CL"
 #include "como.h"
-
+#include "comopriv.h"
 #include "storagepriv.h"
 
 

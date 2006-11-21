@@ -74,8 +74,8 @@ typedef struct qreq_t {
     char *	source;		/* source module to read data from */
     char **	args;		/* arguments to be passed to module */
 
-    module_t *	mdl;		/* module producing data -- using print() */
-    module_t *	src;		/* module retrieving data -- using load() */
+    mdl_t *	mdl;		/* module producing data -- using print() */
+    mdl_t *	src;		/* module retrieving data -- using load() */
 } qreq_t;
 
 /* 
