@@ -36,6 +36,113 @@
 #include "comotypes.h"
 #include <stdlib.h> /* PATH_MAX */
 
+/*
+ * como.c
+ */
+void como_init(const char * progname, int argc, char ** argv);
+
+#define como_malloc(sz) \
+como__malloc(sz, __FILE__, __LINE__)
+
+#define como_calloc(n,sz) \
+como__calloc(n, sz, __FILE__, __LINE__)
+
+#define como_realloc(ptr,sz) \
+como__realloc(ptr, sz, __FILE__, __LINE__)
+
+#define como_strdup(str) \
+como__strdup(str, __FILE__, __LINE__)
+
+#define como_dup(dst,src) \
+como__dup(dst, src, __FILE__, __LINE__)
+
+#define como_asprintf(fmt...) \
+como__asprintf(__FILE__, __LINE__, fmt)
+
+#define como_new(type) \
+((type *) como_malloc(sizeof(type)))
+
+#define como_new0(type) \
+((type *) como_calloc(1, sizeof(type)))
+
+char * como_basename (const char * path);
+
+alc_t * como_alc();
+
+enum {
+    COMO_SU_CLASS = 1,
+    COMO_CA_CLASS = 2,
+    COMO_EX_CLASS = 3,
+    COMO_ST_CLASS = 4,
+    COMO_QU_CLASS = 5,
+};
+
+extern ipc_peer_full_t *COMO_SU;
+extern ipc_peer_full_t *COMO_CA;
+extern ipc_peer_full_t *COMO_EX;
+extern ipc_peer_full_t *COMO_ST;
+extern ipc_peer_full_t *COMO_QU;
+
+enum {
+    SU_CA_START = 0x100,
+
+    SU_ANY_EXIT,
+    
+    CA_SU_DONE,
+
+/*    SU_CA_INITIALIZE_SNIFFERS,
+    CA_SU_SNIFFER_INITIALIZED,*/
+    CA_SU_SNIFFERS_INITIALIZED,
+
+    SU_CA_ADD_MODULE,
+    SU_CA_DEL_MODULE,
+    CA_SU_MODULE_ADDED,
+
+    SU_EX_ADD_MODULE,
+    SU_EX_DEL_MODULE,
+    EX_SU_MODULE_ADDED,
+
+    EX_CA_ATTACH_MODULE,
+    CA_EX_MODULE_ATTACHED,
+
+    CA_EX_PROCESS_SER_TUPLES,
+    CA_EX_PROCESS_SHM_TUPLES,
+    EX_CA_TUPLES_PROCESSED,
+    
+    CCA_OPEN = 0x300,
+    CCA_OPEN_RES,
+    CCA_ERROR,
+    CCA_NEW_BATCH,
+    CCA_ACK_BATCH,
+};
+
+void * como__malloc (size_t sz, const char * file, int line);
+void * como__calloc (size_t n, size_t sz, const char * file, int line);
+void * como__realloc (void * ptr, size_t sz, const char * file,
+		      const int line);
+char * como__strdup (const char * str, const char * file, const int line);
+char * como__dup (char **dst, char *src, const char * file, const int line);
+char * como__asprintf (const char * file, const int line, char *fmt, ...);
+
+/*
+ * memory.c
+ */
+typedef struct memmap memmap_t;      /* memory manager */
+
+typedef struct memmap_stats {
+    size_t	usage;	/* used memory */
+    size_t	peak;	/* peak usage */
+} memmap_stats_t;
+
+memmap_t *       memmap_create         (shmem_t * shmem, uint32_t entries);
+void             memmap_alc_init       (memmap_t * m, alc_t * alc);
+memmap_stats_t * memmap_stats_location (memmap_t * m);
+size_t           memmap_usage          (memmap_t * m);
+size_t           memmap_peak           (memmap_t * m);
+
+/*
+ * metadesc.c
+ */
 typedef struct metadesc_match {
     metadesc_t *	in;
     metadesc_t *	out;
@@ -81,47 +188,9 @@ pid_t start_child (ipc_peer_full_t * child, mainloop_fn mainloop,
 int handle_children ();
 pid_t spawn_child (ipc_peer_full_t * child, const char * path, ...);
 
-/*
- * inline.c
- */
-void inline_mainloop(int accept_fd);
-
-/*
- * memory.c
- */
-typedef struct memmap_stats {
-    size_t	usage;	/* used memory */
-    size_t	peak;	/* peak usage */
-} memmap_stats_t;
-
-memmap_t *       memmap_create         (shmem_t * shmem, uint32_t entries);
-void             memmap_alc_init       (memmap_t * m, alc_t * alc);
-memmap_stats_t * memmap_stats_location (memmap_t * m);
-size_t           memmap_usage          (memmap_t * m);
-size_t           memmap_peak           (memmap_t * m);
 
 
-/* never call those function directly, use the macros below */
-void *     _mem_malloc(size_t sz, const char * file, int line);
-void *     _mem_calloc(size_t nmemb, size_t sz, const char * file, int line);
-void       _mem_free(void * p, const char * file, int line);
-
-#define mem_malloc(sz)		_mem_malloc(sz, __FILE__, __LINE__)
-#define mem_calloc(nmemb,sz)	_mem_calloc(nmemb, sz, __FILE__, __LINE__)
-#define mem_free(p)		_mem_free(p, __FILE__, __LINE__)
-
-/*
- * modules.c
- */
-module_t * module_lookup(const char *name, int node);
-off_t      module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start);
-void *     module_db_record_get(int fd, off_t * ofs, module_t * mdl,
-				ssize_t *len, timestamp_t *ts);
-int        module_db_record_print(module_t * mdl, char * ptr, char **args,
-				  int client_fd);
-int        module_db_record_replay(module_t * mdl, char * ptr, int client_fd);
-
-#define	GR_LOSTSYNC	((void *) module_db_record_get)
+#define	GR_LOSTSYNC	((void *) -1)
 
 /*
  * capture.c

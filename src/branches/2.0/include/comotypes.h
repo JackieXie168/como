@@ -33,8 +33,7 @@
 #ifndef _COMOTYPES_H
 #define _COMOTYPES_H
 
-#define __OUT
-#define __INOUT
+#define MDLNAME_MAX 1024
 
 #include <inttypes.h>
 #include <sys/time.h>
@@ -64,32 +63,23 @@ struct tuple {
 /*
  * New definitions of object types
  */
-typedef struct _como		como_t;		/* main como map */
-typedef struct _module          module_t;       /* XXX legacy module package */
-typedef struct _mdl             mdl_t;          /* module package */
-typedef struct _alias           alias_t;        /* aliases */
-typedef uint32_t		procname_t;	/* process names */
-typedef struct _callbacks       callbacks_t;    /* callbacks */
-typedef struct _callbacks       module_cb_t;    /* callbacks */
-typedef struct _flushmsg        flushmsg_t;     /* message capture/export */
+typedef struct como_node como_node_t;
 
-typedef struct memmap           memmap_t;      /* opaque, memory manager */
-typedef struct _expiredmap	expiredmap_t;	/* expired list of mem maps */
-
-typedef struct _record 	        rec_t;          /* table record header */
-typedef struct _capture_table   ctable_t;       /* capture hash table */
-typedef struct _export_table    etable_t;       /* export hash table */
-typedef struct _export_array    earray_t;       /* export record array */
+typedef struct mdl		mdl_t;          /* module package */
+typedef struct mdl_ibase	mdl_ibase_t;
 
 typedef struct _tsc		tsc_t; 		/* timers (using TSC) */
 typedef struct _statistics	stats_t; 	/* statistic counters */
 
-typedef struct _como_metadesc	metadesc_t;
-typedef struct _como_metatpl	metatpl_t;
+typedef struct metadesc	metadesc_t;
+typedef struct metatpl	metatpl_t;
 
-typedef struct _como_headerinfo headerinfo_t;
+typedef struct headerinfo headerinfo_t;
 
 typedef struct cca		cca_t;
+
+typedef struct sniffer_t	sniffer_t;
+#include "sniffer_list.h"
 
 typedef uint16_t		asn_t;		/* ASN values */
 
@@ -119,17 +109,80 @@ typedef enum running_t {
 
 
 /**
- * su_init_fn() run from supervisor to initialize a module,
- * For the time being, just initialize the private memory for the module,
- * and take arguments from the config file.
- * Returns the config state.
+ * su_init_fn()
+ * Run: run once from supervisor when the module is loaded.
+ * Purpose: initialize a module.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - args: hashtable of the arguments present in the configuration.
+ * Return: the config state.
  */
-typedef void * (*su_init_fn) (mdl_t * h, hash_t * args);
+typedef void * (*su_init_fn) (mdl_t * self, hash_t * args);
 
+/**
+ * ca_init_fn()
+ * Run: run from capture at the beginning of the measurement interval.
+ * Purpose: initialize the capture state valid within the current
+ *          measurement interval.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - ivl_start: the beginning of the measurement interval.
+ * Return: the capture state.
+ */
+typedef void * (*ca_init_fn) (mdl_t * self, timestamp_t ivl_start);
 
-typedef struct mdl_ibase        mdl_ibase_t;
+/**
+ * ca_capture_fn()
+ * Run: run from capture for each captured packet that has not been
+ *      filtered out.
+ * Purpose: update the capture state with the information carried in the
+ *          packet.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - pkt: the packet that has been captured.
+ *            - state: the current capture state.
+ * Return: - COMO_OK: to continue to process packets for the current capture
+ *           state.
+ *         - COMO_FLUSH: to flush the current capture state with all the
+ *           information collected so far.
+ */
+typedef void   (*ca_capture_fn)(mdl_t * self, pkt_t * pkt, void * state);
 
-struct _mdl {
+/**
+ * ca_flush_fn()
+ * Run: run from capture at the end of the measurement interval.
+ * Purpose: perform the last computation on the capture state just before it
+ *          is handed over to export.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - state: the current capture state.
+ * Return: void.
+ */
+typedef void   (*ca_flush_fn) (mdl_t * self, void * state);
+
+/**
+ * ex_init_fn()
+ * Run: run once from export when the module is loaded.
+ * Purpose: initialize the export state.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ * Return: the export state.
+ */
+typedef void * (*ex_init_fn) (mdl_t * self);
+
+/**
+ * ex_init_fn()
+ * Run: run from export for each capture state that is flushed.
+ * Purpose: update the export state with the information carried in the
+ *          capture state, store the results of the performed measurements,
+ *          dump unnecessary information.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - tuples: array of pointers to the tuples collected in capture.
+ *            - tuple_count: the number of tuples inside the tuples array.
+ *            - ivl_start: the beginning of the measurement interval.
+ *            - state: the export state.
+ * Return: void.
+ */
+typedef void   (*ex_export_fn) (mdl_t * self, void ** tuples,
+				size_t tuple_count, timestamp_t ivl_start,
+				void * state);
+
+struct mdl {
     /* public fields */
     timestamp_t	flush_ivl;
     char *	name;
@@ -142,213 +195,41 @@ struct _mdl {
     mdl_ibase_t * priv;
 };
 
-#define mdl_get_config(h,type) \
-((type *) (h->config))
 
-#define mdl_alloc_config(h,type) \
-((type *) mdl__alloc_config(h, sizeof(type)))
-
-void * mdl__alloc_config(mdl_t * h, size_t sz);
-
-#define mdl_alloc_tuple(h,type) \
-((type *) mdl__alloc_tuple(h, sizeof(type)))
-
-
-void * mdl__alloc_tuple(mdl_t * mdl, size_t sz);
-void   mdl_free_tuple(mdl_t * mdl, void *ptr);
-char * mdl_alloc_string(mdl_t * mdl, size_t sz);
-
-alc_t * mdl_alc(mdl_t * mdl);
-
-
-#define mdl_malloc(self, sz) alc_malloc(mdl_alc(self), sz)
-
-
-/* Module callbacks  (TODO: document) */
-
-
-typedef void * (*ca_init_fn)(mdl_t * self, timestamp_t ts);
-/**
- * ca_update_fn() run from capture to update *state with the info from *pkt.
- * state points to current flush state.
- * Normally returns COMO_OK to continue to process the packets, can return
- * COMO_FLUSH to force a flush.
- */
-typedef void   (*ca_capture_fn)(mdl_t * self, pkt_t * pkt, void * state);
-/**
- * ca_flush_fn() run from capture at every flush interval to obtain a clean
- * flush state.
- */
-typedef void   (*ca_flush_fn)(mdl_t * self);
-
-typedef void * (*ex_init_fn)(mdl_t *self);
-
-typedef void   (*ex_export_fn)(mdl_t *self, void ** tuples, size_t count,
-                                timestamp_t ivl_start, void *state);
 
 typedef struct capabilities_t {
     uint32_t has_flexible_flush:1;
     uint32_t _res:31;
 } capabilities_t;
 
-#if 0 /* XXX legacy code */
-/*
- * "Module" data structure. It needs a set of configuration parameters
- * (e.g., weigth, base output directory, etc.), some runtime information
- * (e.g., CPU usage stats), and finally a list of classifier that are
- * associated to it.
- */
-struct _module {
-    int index;          	/* order in the array of classifiers */
-    int node;			/* node this module is running for */
-    char * name;		/* name of the module */
-    char * description;		/* module description */
-
-    treenode_t * filter_tree;   /* filter data */
-    char * filter_str;          /* filter expression */
-
-    metadesc_t *indesc;		/* requested input metadesc list */
-    metadesc_t *outdesc;	/* offered output metadesc list */
-
-    alc_t alc;
-    
-    memmap_t * init_map;       /* memory map used in init() */
-    memmap_t * shared_map;     /* memory map currently used in sh memory */
-    memmap_t * inprocess_map;  /* memory map currently used in cur process */
-    void * config;               /* persistent config state */
-    void * fstate;		/* flush state */
-    void * estate;		/* export state */
-
-    char * output;              /* output file basename */
-    char ** args;               /* parameters for the module */
-    char * source;              /* filename of the shared lib. */
-
-    callbacks_t callbacks;      /* callbacks (static, from the shared obj) */
-    void * cb_handle;           /* handle of module's dynamic libraries */
-
-    status_t status; 		/* current module status */
-    running_t running;		/* running mode */
-    size_t memusage; 		/* current memory usage */
-
-    ctable_t *ca_hashtable;  	/* capture hash table */
-    uint ca_hashsize;    	/* capture hash table size (by config) */
-    timestamp_t flush_ivl;	/* capture flush interval */
-
-    etable_t *ex_hashtable;  	/* export hash table */
-    uint ex_hashsize; 	   	/* export hash table size (by config) */
-    earray_t *ex_array; 	/* array of export records */
-
-    int	file;			/* output file for export records */
-    off_t streamsize;       	/* max bytestream size */
-    off_t offset;		/* current offset in the export file */
-
-    int priority;               /* resource management priority, the lower
-                                 * the more important the module is */
-
-    int seen;                   /* used in config.c to find out what modules
-                                 * have been removed from cfg files */
-};
 
 /* 
- * aliases are used to define new module names that correspond to 
- * existing running modules with an additional set of arguments. 
- * they can be seen exactly as unix shell command aliases. 
- */ 
-struct _alias { 
-    char * name; 		/* alias name */
-    char * description; 	/* alias description */ 
-    char * module; 		/* actual module name */
-    char ** args; 		/* arguments */ 
-    int ac; 			/* no. of arguments */
-    struct _alias * next; 	/* next alias */
-};
-
-/*
- * _record is the header assumed to be in front of each 
- * record descriptor for the purpose of hash table manipulations
- * both in export and capture.
- * One pointer (next) for the linked list, one for the hash table
- * manipulation, and one word for the hash function. 
- * 
- * The pointer (prev) is used differently by capture and export. 
- * In capture it points to the previous block of the same record (this is 
- * to implement variable record sizes with fixed-size data structures), 
- * in export it points to the previous record in the same bucket. 
+ * this structure contains the node specific 
+ * information (name, location, etc.). It is a 
+ * list given that one can define multiple virtual 
+ * nodes to run in parallel. They will run the same 
+ * modules and respond on different to query on 
+ * different port. a virtual node may apply a filter on 
+ * all packets before the module process them. 
  */
-struct _record {
-    rec_t * next;          /* next in bucket or in record */
-    rec_t * prev;          /* previous block same record */
-    uint32_t hash;          /* full hash value (from packets) */
-    int full;               /* set if this record is full */
+
+struct como_node { 
+    int		id;
+    char *	name;
+    char *	location;
+    char *	type;
+    char *	comment;
+    char *	source;		/* source module for all virtual modules */
+    char *	filter;		/* filter expression */
+    char **	args;		/* parameters for the modules */
+    uint16_t	query_port;	/* port for incoming queries */
+    int		query_fd;	/* socket accepting queries */
+    array_t *	mdls;		/* module information */
+    sniffer_list_t	sniffers;
+    int			sniffers_count;
+    timestamp_t		live_thresh;
 };
 
-/* 
- * Expired memory maps are stored by CAPTURE waiting to be sent to 
- * EXPORT on a per-module basis to pass the state. They contain the 
- * pointer to the private state of the module (at the time of being expired)
- * and the memory maps where blocks should be freed.
- */
-struct _expiredmap { 
-    expiredmap_t * next;	/* next expired map */
-    module_t * mdl; 		/* module using this table */
-    ctable_t * ct;		/* capture table expired */
-    void * fstate;		/* flush state */
-    memmap_t * shared_map;	/* module shared map */
-};
-
-/*
- * Flow table descriptor -- one for each protocol or group of protocols.
- * The number of buckets ("size") is a parameter. While we insert/remove
- * elements we also track the number of active buckets and entries.
- *
- * As individual flow descriptors become full, they are linked off
- * new ones in the chain.
- */
-struct _capture_table {
-    timestamp_t ts;             /* end of the flush interval or
-				   time of last seen packet in the interval if
-				   the table is flushed before */
-    timestamp_t ivl;            /* first insertion (flush_ivl aligned) */
-    uint32_t size;		/* size of hash table */
-    uint32_t records;		/* no. active records */
-    uint32_t first_full;	/* index of first full slot */
-    uint32_t last_full;		/* index of last full slot */
-    uint32_t live_buckets;	/* no. active buckets */
-    uint32_t filled_records;    /* no. records filled */
-    uint32_t bytes;             /* size of table and contents in memory */
-    int flexible;		/* set to one if the table is created after a
-				   flexible flush occurred in the interal */
-    rec_t *bucket[0];           /* pointers to records -- actual hash table */
-};
-
-
-/*
- * export table descriptor.
- * This is persistent, and records are flushed according to the 
- * discard strategy of the module. 
- */
-struct _export_table {
-    timestamp_t ts;             /* time of most recent update */
-    uint32_t size;		/* size of hash table */
-    uint32_t live_buckets;	/* no. active buckets */
-    uint32_t records;		/* no. active records */
-    rec_t *bucket[0];		/* pointers to records -- actual hash table */
-};
-
-
-/* 
- * export record array 
- * 
- * This is persistent EXPORT and keeps all active records in an 
- * array that will then be used to sort records, and browse thru 
- * all the records for storing/discarding them. 
- */ 
-struct _export_array { 
-    uint32_t size; 		/* size of array */
-    uint32_t first_full;	/* first full record */
-    rec_t *record[0]; 		/* pointers to records */
-};
-#endif
 
 
 /* 
@@ -410,17 +291,17 @@ typedef enum meta_flags_t {
 
 typedef uint16_t pktmeta_type_t;
 
-struct _como_metatpl {
-    struct _como_metatpl *_next;
+struct metatpl {
+    metatpl_t *_next;
     char *protos;
     pkt_t tpl;
 };
 
-struct _como_metadesc {
-    struct _como_metadesc *_next;
+struct metadesc {
+    metadesc_t *_next;
     alc_t *_alc;
     uint32_t _tpl_count;
-    struct _como_metatpl *_first_tpl;
+    metatpl_t *_first_tpl;
     timestamp_t ts_resolution;
     meta_flags_t flags;
     uint32_t pktmeta_count;
@@ -436,7 +317,7 @@ typedef enum layer_t {
     LALL = 0xffff
 } layer_t;
 
-struct _como_headerinfo {
+struct headerinfo {
     const char *name;
     layer_t layer;
     uint16_t type;

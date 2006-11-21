@@ -42,35 +42,35 @@
 #include "comotypes.h"
 #include "ipc.h"
 
-/*
- * config.c
- */
-void configure(como_t * m, int argc, char *argv[]);
-void init_map(como_t * m);
-void add_sniffer(como_t * m, char *want, char *device, char *args);
+
 
 /*
  * mdl.c
  */
 void mdl_store_rec(mdl_t * mdl, void * rec);
 
-/* 
- * modules.c 
- */
+#define mdl_get_config(h,type) \
+((type *) (h->config))
 
-int activate_module(module_t * mdl, char * libdir);
-int check_module(como_t * m, module_t *mdl);
-module_t * new_module(como_t * m, char *name, int node, int idx);
-module_t * copy_module(como_t * m, module_t * src, int node, int idx,
-		       char ** extra_args);
-void clean_module(module_t *mdl);
-void remove_module(como_t * m, module_t *mdl);
-char * pack_module(module_t * mdl, int * len);
-int unpack_module(char * x, size_t len, module_t * mdl);
-int init_module(module_t * mdl); 
-int match_module(module_t * a, module_t * b); 
+#define mdl_alloc_config(h,type) \
+((type *) mdl__alloc_config(h, sizeof(type)))
+
+#define mdl_alloc_tuple(h,type) \
+((type *) mdl__alloc_tuple(h, sizeof(type)))
+
+void   mdl_free_tuple(mdl_t * mdl, void *ptr);
+char * mdl_alloc_string(mdl_t * mdl, size_t sz);
+
+alc_t * mdl_alc(mdl_t * mdl);
+
+#define mdl_malloc(self,sz)	alc_malloc(mdl_alc(self), sz)
+#define mdl_calloc(self,n,sz)	alc_calloc(mdl_alc(self), n, sz)
+#define mdl_free(self,ptr)	alc_free(mdl_alc(self), ptr)
 
 
+
+void * mdl__alloc_config(mdl_t * h, size_t sz);
+void * mdl__alloc_tuple(mdl_t * mdl, size_t sz);
 
 /*
  * capture-client.c
@@ -79,51 +79,11 @@ cca_t * cca_open     (int cd);
 void	cca_destroy  (cca_t * cca);
 pkt_t * cca_next_pkt (cca_t * cca);
 
-/*
- * export.c
- */
-void export_mainloop();
-
-/*
- * supervisor.c
- */
-void supervisor_mainloop();
-
-/*
- * querymode.c
- */
-void querymode_init();
-
-#if 0
-/* 
- * logging.c 
- */
-typedef struct logmsg_t {
-    struct timeval tv;
-    int flags;
-    char msg[0];
-} logmsg_t;
-
-char * loglevel_name (int flags); 
-void   displaymsg    (FILE *f, procname_t sender, logmsg_t *lmsg);
-
-/* don't call these directly, use the macros below */
-void _logmsg  (const char * file, int line, int flags, const char *fmt, ...);
-void _epanic  (const char * file, int line, const char *fmt, ...);
-void _epanicx (const char * file, int line, const char *fmt, ...);
-
-#define logmsg(flags,fmt...)	_logmsg(__FILE__, __LINE__, flags, fmt)
-#define panic(fmt...)		_epanic(__FILE__, __LINE__, fmt)
-#define panicx(fmt...)		_epanicx(__FILE__, __LINE__, fmt)
-
-#endif
-
 /* 
  * filter-syntax.c
  */
 int          parse_filter (char *, treenode_t **, char **);
 int          evaluate     (treenode_t *t, pkt_t *pkt);
-
 
 /*
  * asn.c
@@ -149,27 +109,6 @@ int como_writen(int fd, const char *buf, size_t len);
 char * getprotoname (int proto);
 char * strchug      (char *str);
 char * strchomp     (char *str);
-
-
-/*
- * util-safe.c 
- * 
- * If possible, do not call malloc(),  calloc() and realloc() directly.
- * Instead use safe_malloc(), safe_calloc() and safe_realloc() which provide
- * wrappers to check the arguments and panic if necessary.
- */
-void *_smalloc(size_t sz, const char * file, int line);
-#define safe_malloc(sz) _smalloc(sz, __FILE__, __LINE__)
-void *_scalloc(size_t n, size_t sz, const char * file, int line);
-#define safe_calloc(n, sz) _scalloc(n, sz, __FILE__, __LINE__)
-void *_srealloc(void * ptr, size_t sz, const char * file, const int line);
-#define safe_realloc(ptr, sz) _srealloc(ptr, sz, __FILE__, __LINE__)
-char *_sstrdup(const char * str, const char * file, const int line);
-#define safe_strdup(str) _sstrdup(str, __FILE__, __LINE__)
-void _sfree(void * ptr, const char * file, int line);
-#define safe_free(ptr) _sfree(ptr, __FILE__, __LINE__)
-void _sdup(char ** dst, char * src, const char * file, const int line);
-#define safe_dup(dst, src) _sdup(dst, src, __FILE__, __LINE__)
 
 /* 
  * util-timers.c

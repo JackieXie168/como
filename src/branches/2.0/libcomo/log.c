@@ -37,6 +37,7 @@
 #include <stdlib.h>
 
 #include "como.h"
+#include "comopriv.h"
 
 int log_last_level;
 

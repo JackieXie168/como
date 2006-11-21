@@ -260,7 +260,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
     if (ic->ivl_start != 0) {
         debug("module `%s': flushing\n", mdl->name);
         if (ic->flush != NULL) /* call flush callback, if defined */
-            ic->flush(mdl);
+            ic->flush(mdl, ic->ivl_state);
 
         /*
          * Send the tuples to export

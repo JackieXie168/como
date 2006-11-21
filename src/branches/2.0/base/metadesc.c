@@ -462,9 +462,9 @@ metadesc_try_match_pair(metadesc_t *out, metadesc_t *in)
 
 int
 metadesc_try_match(metadesc_t * out, metadesc_t * in,
-		   __OUT metadesc_match_t ** matches,
-		   __OUT metadesc_incompatibility_t ** incomps_,
-		   __OUT int *incomps_count_)
+		   metadesc_match_t ** matches,
+		   metadesc_incompatibility_t ** incomps_,
+		   int *incomps_count_)
 {
     metadesc_t *init, *outit;
     metadesc_match_t *res = NULL;
@@ -502,9 +502,9 @@ metadesc_try_match(metadesc_t * out, metadesc_t * in,
 
 int
 metadesc_best_match(metadesc_t * out, metadesc_t * in,
-		    __OUT metadesc_match_t * best,
-		    __OUT metadesc_incompatibility_t ** incomps,
-		    __OUT int *incomps_count)
+		    metadesc_match_t * best,
+		    metadesc_incompatibility_t ** incomps,
+		    int *incomps_count)
 {
     metadesc_match_t *matches;
     int matches_count;

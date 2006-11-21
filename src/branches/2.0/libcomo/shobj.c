@@ -36,6 +36,7 @@
 #include <dlfcn.h>	/* dlopen, dlclose, etc. */
 
 #include "como.h"
+#include "comopriv.h"
 
 #ifdef WIN32
 #  define SHOBJ_SUFFIX		"dll"

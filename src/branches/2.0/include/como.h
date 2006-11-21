@@ -61,19 +61,6 @@
 #define FALSE	0
 #endif
 
-#define MDLNAME_MAX 1024
-
-typedef struct como_node como_node_t;
-
-#include "comotypes.h"
-#include "ipc.h"
-#include "comofunc.h"
-#include "sniffers.h"
-#include "log.h"
-#include "eventloop.h"
-#include "pool.h"
-#include "shmem.h"
-
 #define ALIGN(size, boundary) \
     (((size) + ((boundary) - 1)) & ~((boundary) - 1))
 #define ALIGN_DEFAULT(size) ALIGN(size, 8)
@@ -84,127 +71,25 @@ typedef struct como_node como_node_t;
 
 #define ROUND_32(n) (((n) + 3) & ~3)
 
-void * como__malloc (size_t sz, const char * file, int line);
-#define como_malloc(sz) \
-como__malloc(sz, __FILE__, __LINE__)
-
-void * como__calloc (size_t n, size_t sz, const char * file, int line);
-#define como_calloc(n,sz) \
-como__calloc(n, sz, __FILE__, __LINE__)
-
-void * como__realloc (void * ptr, size_t sz, const char * file,
-		      const int line);
-#define como_realloc(ptr,sz) \
-como__realloc(ptr, sz, __FILE__, __LINE__)
-
-char * como__strdup (const char * str, const char * file, const int line);
-#define como_strdup(str) \
-como__strdup(str, __FILE__, __LINE__)
-
-char * como__dup (char **dst, char *src, const char * file, const int line);
-#define como_dup(dst,src) \
-como__dup(dst, src, __FILE__, __LINE__)
-
-char * como__asprintf (const char * file, const int line, char *fmt, ...);
-#define como_asprintf(fmt...) \
-como__asprintf(__FILE__, __LINE__, fmt)
-
-#define como_new(type) \
-((type *) como_malloc(sizeof(type)))
-
-#define como_new0(type) \
-((type *) como_calloc(1, sizeof(type)))
-
-char * como_basename (const char * path);
+#include "sniffers.h"
+#include "comotypes.h"
+#include "ipc.h"
+#include "comofunc.h"
+#include "log.h"
+#include "eventloop.h"
+#include "pool.h"
+#include "shmem.h"
 
 
-alc_t * como_alc();
-
-char *  alc_strdup(alc_t * alc, const char * s);
 
 
 void setproctitle_init(int argc, char **argv);
 void setproctitle(const char *format, ...);
 
-enum {
-    COMO_SU_CLASS = 1,
-    COMO_CA_CLASS = 2,
-    COMO_EX_CLASS = 3,
-    COMO_ST_CLASS = 4,
-    COMO_QU_CLASS = 5,
-};
-
-extern ipc_peer_full_t *COMO_SU;
-extern ipc_peer_full_t *COMO_CA;
-extern ipc_peer_full_t *COMO_EX;
-extern ipc_peer_full_t *COMO_ST;
-extern ipc_peer_full_t *COMO_QU;
 
 
-void como_init(const char * progname, int argc, char ** argv);
 
-enum {
-    SU_CA_START = 0x100,
-
-    SU_ANY_EXIT,
-    
-    CA_SU_DONE,
-
-/*    SU_CA_INITIALIZE_SNIFFERS,
-    CA_SU_SNIFFER_INITIALIZED,*/
-    CA_SU_SNIFFERS_INITIALIZED,
-
-    SU_CA_ADD_MODULE,
-    SU_CA_DEL_MODULE,
-    CA_SU_MODULE_ADDED,
-
-    SU_EX_ADD_MODULE,
-    SU_EX_DEL_MODULE,
-    EX_SU_MODULE_ADDED,
-
-    EX_CA_ATTACH_MODULE,
-    CA_EX_MODULE_ATTACHED,
-
-    CA_EX_PROCESS_SER_TUPLES,
-    CA_EX_PROCESS_SHM_TUPLES,
-    EX_CA_TUPLES_PROCESSED,
-    
-    CCA_OPEN = 0x300,
-    CCA_OPEN_RES,
-    CCA_ERROR,
-    CCA_NEW_BATCH,
-    CCA_ACK_BATCH,
-};
-
-
-/* 
- * this structure contains the node specific 
- * information (name, location, etc.). It is a 
- * list given that one can define multiple virtual 
- * nodes to run in parallel. They will run the same 
- * modules and respond on different to query on 
- * different port. a virtual node may apply a filter on 
- * all packets before the module process them. 
- */
-
-struct como_node { 
-    int		id;
-    char *	name;
-    char *	location;
-    char *	type;
-    char *	comment;
-    char *	source;		/* source module for all virtual modules */
-    char *	filter;		/* filter expression */
-    char **	args;		/* parameters for the modules */
-    uint16_t	query_port;	/* port for incoming queries */
-    int		query_fd;	/* socket accepting queries */
-    array_t *	mdls;		/* module information */
-    sniffer_list_t	sniffers;
-    int			sniffers_count;
-    timestamp_t		live_thresh;
-};
-
-
+#if 0
     
 /*
  * Data structure containing all the configuration parameters
@@ -274,6 +159,7 @@ struct _como {
 				   command line */
 };
 
+#endif
 
 /*
  * standard names for master processes.
@@ -285,36 +171,6 @@ struct _como {
 #define STORAGE         0x00040000
 #define QUERY           0x00050000
 
-
-/* log flags. The high bits are only set for verbose logging */
-#define	LOGUI		0x0001	/* normal warning msgs			*/
-#define	LOGWARN		0x0002	/* normal warning msgs			*/
-#define	LOGMEM		0x0004	/* memory.c debugging			*/
-#define	LOGCONFIG	0x0008	/* config.c debugging			*/
-#define	LOGCAPTURE	0x0010
-#define	LOGEXPORT	0x0020
-#define	LOGSTORAGE	0x0040
-#define	LOGQUERY	0x0080
-#define	LOGSNIFFER	0x0100	/* sniffers debugging 			*/
-#define LOGTIMER	0x0200	/* print timing information 		*/
-#define LOGMODULE	0x0400	/* modules */
-#define LOGIPC		0x0800	/* IPC */
-#define	LOGALL		(LOGUI|LOGWARN|LOGMEM|LOGCONFIG|LOGCAPTURE| \
-				LOGEXPORT|LOGSTORAGE|LOGQUERY|LOGSNIFFER| \
-				LOGTIMER|LOGMODULE|LOGIPC)
-
-#define	V_LOGUI		(LOGUI << 16) 
-#define	V_LOGWARN	(LOGWARN << 16)
-#define	V_LOGMEM	(LOGMEM << 16)
-#define	V_LOGCONFIG	(LOGCONFIG << 16)
-#define	V_LOGCAPTURE	(LOGCAPTURE << 16)
-#define	V_LOGEXPORT	(LOGEXPORT << 16)
-#define	V_LOGSTORAGE	(LOGSTORAGE << 16)
-#define	V_LOGQUERY	(LOGQUERY << 16)
-#define	V_LOGSNIFFER	(LOGSNIFFER << 16)
-#define	V_LOGTIMER	(LOGTIMER << 16)
-#define	V_LOGMODULE	(LOGMODULE << 16)
-#define	V_LOGIPC	(LOGIPC << 16)
 
 /*
  * default values 

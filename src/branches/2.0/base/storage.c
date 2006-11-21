@@ -51,6 +51,7 @@
 
 #define LOG_DOMAIN "ST"
 #include "como.h"
+#include "comopriv.h"
 
 #include "storagepriv.h"
 

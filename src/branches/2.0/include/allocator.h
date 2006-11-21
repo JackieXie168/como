@@ -54,16 +54,18 @@ typedef struct alc {
     void *		data;
 } alc_t;
 
-#define alc_malloc(alc, size)		\
+#define alc_malloc(alc,size)		\
     (alc)->malloc(size, __FILE__, __LINE__, (alc)->data)
 
-#define alc_calloc(alc, nmemb, size)	\
+#define alc_calloc(alc,nmemb,size)	\
     (alc)->calloc(nmemb, size, __FILE__, __LINE__, (alc)->data)
 
-#define alc_free(alc, ptr)		\
+#define alc_free(alc,ptr)		\
     (alc)->free(ptr, __FILE__, __LINE__, (alc)->data)
 
-#define alc_new(alc, type)	alc_malloc(alc, sizeof(type))
-#define alc_new0(alc, type)	alc_calloc(alc, 1, sizeof(type))
+#define alc_new(alc,type)	alc_malloc(alc, sizeof(type))
+#define alc_new0(alc,type)	alc_calloc(alc, 1, sizeof(type))
+
+char *  alc_strdup (alc_t * alc, const char * s);
 
 #endif /*ALLOCATOR_H_*/

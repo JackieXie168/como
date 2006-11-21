@@ -89,6 +89,7 @@
 #include <assert.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "flowtable.h"
 
 /*

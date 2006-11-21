@@ -57,6 +57,7 @@
 
 #define LOG_DOMAIN "SHMEM"
 #include "como.h"
+#include "comopriv.h"
 
 #ifndef MAP_NOSYNC
 #define MAP_NOSYNC 0

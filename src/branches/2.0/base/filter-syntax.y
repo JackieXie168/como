@@ -91,6 +91,7 @@
 
 #define LOG_DOMAIN "FILTER"
 #include "como.h"
+#include "comopriv.h"
 
 #define YYERROR_VERBOSE
 

@@ -61,6 +61,7 @@
 #define LOG_DOMAIN	"IPC"
 
 #include "como.h"
+#include "comopriv.h"
 #include "ipc.h"
 
 #define IPC_CONNECT	0
