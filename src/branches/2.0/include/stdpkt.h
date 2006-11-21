@@ -482,4 +482,7 @@ set_field(char *ptr, size_t size, uint64_t value)
 #define sizeofL3P(pkt)	(COMOP(pkt,l4ofs) - COMOP(pkt,l3ofs))
 #define sizeofL4P(pkt)	(COMOP(pkt,l7ofs) - COMOP(pkt,l4ofs))
 
+#define iptoa(ip) \
+    inet_ntoa(*(struct in_addr *)&ip)
+
 #endif				/* _COMO_STDPKT_H */
