@@ -265,7 +265,6 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	ib->proc.ca->flush = shobj_symbol(ib->shobj, "flush", TRUE);
 	break;
     case PRIV_IEXPORT:
-	ib->proc.ex = como_new0(mdl_iexport_t);
 	ib->proc.ex->init = shobj_symbol(ib->shobj, "ex_init", TRUE);
 	ib->proc.ex->export = shobj_symbol(ib->shobj, "export", TRUE);
 	if (ib->proc.ex->export == NULL &&
