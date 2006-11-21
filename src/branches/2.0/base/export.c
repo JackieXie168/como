@@ -213,7 +213,7 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 	debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
 	i = 0;
 	tuples_foreach(t, &msg->tuples) {
-	    tuples[i++] = t;
+	    tuples[i++] = t->data;
 	}
 
 	assert(i == msg->ntuples);
