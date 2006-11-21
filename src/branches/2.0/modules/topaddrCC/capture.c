@@ -34,7 +34,6 @@
  * This module ranks addresses in terms of bytes.
  * The IP addresses can be destination or sources. 
  */
-
 #include "como.h"
 #include "data.h"
 #include "flowtable.h"
@@ -46,7 +45,6 @@ struct ca_state {
     uhash_t      hfunc; /* hash function */
     int          use_dst; /* copy of cfg value for use_dst */
 };
-
 
 static int
 BY_SRC_pkt_belongs_to_record(pkt_t *pkt, topaddr_tuple_t *t)
@@ -70,6 +68,7 @@ ca_init(mdl_t *self, timestamp_t *ivl)
 
     uhash_initialize(&st->hfunc);
 
+    st->use_dst = cfg->use_dst;
     st->table = flowtable_new(alc, 2048, NULL,
         cfg->use_dst ?
             (flow_match_fn) BY_DST_pkt_belongs_to_record :
@@ -96,6 +95,7 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
         t->addr = key;
         t->bytes = 0;
         t->pkts = 0;
+        t->hash = hash;
         flowtable_insert(st->table, hash, (void *) t);
     }
 

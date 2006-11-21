@@ -37,13 +37,11 @@
 #include <assert.h>
 #include "como.h"
 #include "flowtable.h"
-#include "uhash.h"
 #include "data.h"
 
 typedef struct ex_state ex_state_t;
 struct ex_state {
     flowtable_t *table;
-    uhash_t     hfunc;
     size_t      nrec;
     timestamp_t current_ivl;
 };
@@ -65,50 +63,62 @@ record_cmp(topaddr_record_t *r1, topaddr_record_t *r2)
         (r1->bytes > r2->bytes ? 1 : -1);
 }
 
+void
+reinitialize_state(mdl_t *self, ex_state_t *st)
+{
+    st->nrec = 0;
+    st->table = flowtable_new(mdl_alc(self), 2048, NULL, (flow_match_fn)
+                                tuple_matches_record, NULL);
+}
+
 /*
  * -- ex_init
  */
-void
+ex_state_t *
 ex_init(mdl_t *self)
 {
     alc_t *alc = mdl_alc(self);
     topaddr_config_t *cfg = mdl_get_config(self, topaddr_config_t);
     ex_state_t *st = mdl_malloc(self, sizeof(ex_state_t));
-
-    uhash_initialize(&st->hfunc);
-
-    st->table = flowtable_new(alc, 2048, NULL, (flow_match_fn) tuple_matches_record,
-            NULL);
-
-    st->nrec = 0;
     st->current_ivl = 0;
+    reinitialize_state(self, st);
+    return st;
 }
 
-
+/*
+ * -- dump_state
+ *
+ * Stores all the records and reinitializes the state.
+ */
 static void
-store_records(mdl_t *self, ex_state_t *st)
+dump_state(mdl_t *self, ex_state_t *st)
 {
-    topaddr_record_t *rec;
     void * array[st->nrec];
     flowtable_iter_t it;
     size_t i;
 
-    if (st->nrec == 0)
+    if (st->nrec == 0) /* nothing to do */
         return;
 
-    flowtable_iter_init(st->table, &it);
-
+    /* dump all records into an array */
     i = 0;
-    while ((rec = (topaddr_record_t *)flowtable_iter_get(&it))) {
-        array[i] = rec;
-        flowtable_iter_next(&it);
+    flowtable_iter_init(st->table, &it);
+    while (flowtable_iter_next(&it)) {
+        topaddr_record_t *rec = (topaddr_record_t *)flowtable_iter_get(&it);
+        array[i++] = rec;
     }
-    assert(i == st->nrec);
+    assert(i == st->nrec - 1);
 
+    /* sort the array using record_cmp */
     qsort(array, i, sizeof(void *), (int(*)(const void *, const void *))record_cmp);
 
+    /* store up to 10 addresses */
     for (i = 0; i < MIN(10, st->nrec); i++)
         mdl_store_rec(self, array[i]);
+
+    /* completely reset state */
+    flowtable_destroy(st->table);
+    reinitialize_state(self, st);
 }
 
 void
@@ -122,15 +132,11 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples, timestamp_t ivl_s
     if (ntuples == 0 && st->nrec == 0) /* nothing to do */
         return;
 
-    if (st->current_ivl == 0)
+    if (st->current_ivl == 0) /* first tuples to arrive */
         st->current_ivl = ivl_start;
 
     if (ivl_start != st->current_ivl) { /* need to store */
-        store_records(self, st);
-
-        /* completely reinitialize state */
-        flowtable_destroy(st->table);
-        ex_init(self);
+        dump_state(self, st);
         st->current_ivl = ivl_start;
     }
 
@@ -140,7 +146,9 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples, timestamp_t ivl_s
                 (pkt_t *)t);
 
         if (rec == NULL) {
+            st->nrec++;
             rec = mdl_malloc(self, sizeof(topaddr_record_t));
+            flowtable_insert(st->table, t->hash, (void *)rec);
             rec->addr = t->addr;
             rec->bytes = 0;
             rec->pkts = 0;
@@ -148,6 +156,5 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples, timestamp_t ivl_s
         rec->bytes += t->bytes;
         rec->pkts += t->pkts;
     }
-    return;
 }
 
