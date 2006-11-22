@@ -112,7 +112,7 @@ gen_csharp_sersize(FILE *out, struct_t *st)
     int i;
     size_t fixed = 0;
 
-    fprintf(out, "\tpublic int sersize()\n\t{\n");
+    fprintf(out, "\tpublic override int sersize()\n\t{\n");
     fprintf(out, "\t\tint len = 0;\n");
     for (i = 0; i < st->n_fields; i++) {
         field_t *f = &st->fields[i];
@@ -229,7 +229,7 @@ gen_csharp_serialize(FILE *out, struct_t *st)
 {
     int i;
 
-    fprintf(out, "\tpublic int serialize(byte[] array, int pos)\n\t{\n");
+    fprintf(out, "\tpublic override int serialize(byte[] array, int pos)\n\t{\n");
     for (i = 0; i < st->n_fields; i++) {
         field_t *f = &st->fields[i];
         size_t s;
@@ -281,7 +281,7 @@ gen_csharp_deserialize(FILE *out, struct_t *st)
 {
     int i;
 
-    fprintf(out, "\tpublic int deserialize(byte[] array, int pos)\n\t{\n");
+    fprintf(out, "\tpublic override int deserialize(byte[] array, int pos)\n\t{\n");
     for (i = 0; i < st->n_fields; i++) {
         field_t *f = &st->fields[i];
         size_t s;
@@ -356,11 +356,18 @@ gen_csharp_ctor(FILE *out, struct_t *st, char *name)
 }
 
 void
-gen_csharp_class_header(FILE *out)
+gen_csharp_class_header(FILE *out, const char * module)
 {
     fprintf(out, "/* generated file, do not edit */\n");
+    fprintf(out, "namespace CoMo.Modules.%s {\n", module);
     fprintf(out, "using System;\n");
     fprintf(out, "using System.Runtime.InteropServices;\n\n");
+}
+
+void
+gen_csharp_class_footer(FILE *out, const char * module)
+{
+    fprintf(out, "} // namespace CoMo.Modules.%s \n", module);
 }
 
 void
@@ -369,8 +376,7 @@ gen_csharp_class(FILE *out, struct_t *st)
     char *name = csharpize(st->name);
     int i;
 
-    fprintf(out, "[StructLayout(LayoutKind.Sequential)]\n");
-    fprintf(out, "public class %s\n{\n", name);
+    fprintf(out, "public class %s : CoMo.Record \n{\n", name);
     for (i = 0; i < st->n_fields; i++) {
         field_t *f = &st->fields[i];
 

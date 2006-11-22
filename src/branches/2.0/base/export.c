@@ -43,6 +43,7 @@
 #include <assert.h>
 #include <signal.h>
 
+#define LOG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "storage.h"
@@ -91,15 +92,15 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
      * open output file
      */
     str = como_asprintf("%s/%s", como_ex->st_dir, mdl->name);
-    ie->outfile = csopen(str, CS_WRITER, (off_t) mdl->streamsize,
+    ie->cs_writer = csopen(str, CS_WRITER, (off_t) mdl->streamsize,
 			 (ipc_peer_t *) COMO_ST);
-    if (ie->outfile < 0) {
+    if (ie->cs_writer < 0) {
         warn("cannot start storage for module `%s'\n", mdl->name);
         free(str);
         ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
         return IPC_OK;
     }
-    ie->woff = csgetofs(ie->outfile);
+    ie->woff = csgetofs(ie->cs_writer);
     debug("handle_su_ex_add_module -- output file `%s' open\n", str);
     free(str);
 
@@ -191,7 +192,7 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
     struct tuple *t;
     mdl_t *mdl;
 
-    debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n", msg->ntuples);
+    //debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n", msg->ntuples);
 
     /*
      * locate the module
@@ -200,7 +201,7 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
     if (mdl == NULL)
         error("capture sent tuples from an unknown module\n");
 
-    debug("handle_ca_ex_process_shm_tuples -- tuples for mdl `%s'\n", mdl->name);
+    //debug("handle_ca_ex_process_shm_tuples -- tuples for mdl `%s'\n", mdl->name);
 
     ie = mdl_get_iexport(mdl);
     /*
@@ -212,7 +213,7 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 
 	tuples = como_calloc(msg->ntuples, sizeof(void *));
 
-	debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
+	//debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
 	i = 0;
 	tuples_foreach(t, &msg->tuples) {
 	    tuples[i++] = t->data;
@@ -226,13 +227,13 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 	 */
 	free(tuples);
     } else {
-        debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
+        //debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
         tuples_foreach(t, &msg->tuples) {
 	    mdl_store_rec(mdl, t->data);
         }
     }
 
-    debug("handle_ca_ex_process_shm_tuples -- tuples processed, sending response\n");
+    //debug("handle_ca_ex_process_shm_tuples -- tuples processed, sending response\n");
     ipc_send(peer, EX_CA_TUPLES_PROCESSED, msg, sz);
 
     return IPC_OK;

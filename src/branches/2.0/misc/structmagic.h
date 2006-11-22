@@ -69,7 +69,8 @@ char * csharpize(char *name);
 void lookup_type_info(char *ctype, size_t *sersize, char **class, char **lookup);
 
 /* gen-csclass.c */
-void gen_csharp_class_header(FILE *out);
+void gen_csharp_class_header(FILE *out, const char * module);
+void gen_csharp_class_footer(FILE *out, const char * module);
 void gen_csharp_class(FILE *out, struct_t *st);
 
 /* gen-csglue.c */

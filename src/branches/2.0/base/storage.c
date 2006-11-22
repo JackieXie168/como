@@ -49,7 +49,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>	/* AF_UNIX sockets */
 
-#define LOG_DOMAIN "ST"
+#define LOG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 

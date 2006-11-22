@@ -101,7 +101,7 @@ extern cstype_conv_t cstypes[];
     "\n"                                                                \
     "    if (klass == NULL) {\n"                                        \
     "        klass = mono_class_from_name "                             \
-    "(image, \"CoMo.\" MODULE, NAME);\n"                                \
+    "(image, \"CoMo.Modules.\" MODULE, NAME);\n"                                \
     "        if (klass == NULL)\n"                                      \
     "            errx(1, \"Can't find \" NAME \" in assembly %%s\",\n"  \
     "                    mono_image_get_filename(image));\n"            \
