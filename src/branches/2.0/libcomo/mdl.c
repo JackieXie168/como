@@ -200,9 +200,9 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
         free(str);
 
         switch(i) {
-        case 0: out->serialize = (serialize_fn *) sym; break;
-        case 1: out->deserialize = (deserialize_fn *) sym; break;
-        case 2: out->sersize = (sersize_fn *) sym; break;
+        case 0: out->serialize = (serialize_fn) sym; break;
+        case 1: out->deserialize = (deserialize_fn) sym; break;
+        case 2: out->sersize = (sersize_fn) sym; break;
         }
     }
 
@@ -213,6 +213,9 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
 
 int proxy_mono_load(mdl_t * mdl);
 void * proxy_mono_ex_init(mdl_t * mdl);
+void proxy_mono_export(mdl_t * mdl, void ** tuples, size_t ntuples,
+		  timestamp_t ivl_start, void * state);
+
 
 int
 mdl_load(mdl_t * mdl, mdl_priv_t priv)
@@ -291,7 +294,7 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	    if (proxy_mono_load(mdl) == -1)
 		return -1;
 	    ib->proc.ex->init = proxy_mono_ex_init;
-	    //ib->proc.ex->export = proxy_mono_export;
+	    ib->proc.ex->export = proxy_mono_export;
 	    break;
 	}
 	break;
@@ -370,7 +373,7 @@ mdl_store_rec(mdl_t * mdl, void * rec)
 #if DEBUG
     timestamp_t ts;
     ts = *((timestamp_t *) rec);
-    debug("mdl_store_rec ts = %u\n", TS2SEC(ts));
+    debug("mdl_store_rec: mdl = `%s' ts = %u\n", mdl->name, TS2SEC(ts));
 #endif
 
     ie = mdl_get_iexport(mdl);

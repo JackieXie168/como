@@ -243,7 +243,7 @@ main(int argc, char **argv)
     tnout = safe_fopen(str, "w");
     free(str);
 
-    gen_csharp_class_header(csout);
+    gen_csharp_class_header(csout, module);
     gen_csharp_glue_header(glueout, full_path_input);
     gen_serialization_header(serialout, full_path_input);
     
@@ -280,6 +280,7 @@ main(int argc, char **argv)
         printf("\tC to mono glue\n");
         printf("ok\n");
     }
+    gen_csharp_class_footer(csout, module);
 
     ret = unlink(cpp_output);
     if (ret != 0)

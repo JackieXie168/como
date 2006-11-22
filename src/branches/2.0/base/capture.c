@@ -258,7 +258,8 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
      * Change of interval management
      */
     if (ic->ivl_start != 0) {
-        debug("module `%s': flushing\n", mdl->name);
+        debug("module `%s': flushing %u tuples at interval %lu\n", mdl->name,
+	      ic->tuple_count, TS2SEC(ic->ivl_start));
         if (ic->flush != NULL) /* call flush callback, if defined */
             ic->flush(mdl, ic->ivl_state);
 
@@ -273,7 +274,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             msg.ntuples = ic->tuple_count;
 
             ipc_send(ic->export, CA_EX_PROCESS_SHM_TUPLES, &msg, sizeof(msg));
-            debug("module `%s': flushing - sent shmem tuples msg to CA\n", mdl->name);
+            //debug("module `%s': flushing - sent shmem tuples msg to CA\n", mdl->name);
 
             /* prepare a new empty tuple list */
             tuples_init(&ic->tuples);
@@ -312,7 +313,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             assert(sz == (size_t)(sbuf - msg->data));
             ipc_send(ic->export, CA_EX_PROCESS_SER_TUPLES, msg, sz +
 		     sizeof(msg_process_ser_tuples_t));
-            debug("module `%s': flushing - sent serialized tuples to CA\n", mdl->name);
+            debug("module `%s': flushing - sent serialized tuples to EX\n", mdl->name);
 
             ic->tuple_count = 0;
             debug("module `%s': flushing - capture state cleared\n", mdl->name);
@@ -321,7 +322,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
 
     /* update ivl_start and ivl_end */
     if (next_ts != 0) {
-        debug("module `%s': next IVL\n", mdl->name);
+        //debug("module `%s': next IVL\n", mdl->name);
         ic->ivl_start = next_ts - (next_ts % mdl->flush_ivl);
         ic->ivl_end = ic->ivl_start + mdl->flush_ivl;
     }
@@ -329,7 +330,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
     /* initialize new state */
     pool_clear(ic->ivl_mem);
     if (ic->init) {
-        debug("module `%s': calling init()\n", mdl->name);
+        //debug("module `%s': calling init()\n", mdl->name);
         ic->ivl_state = ic->init(mdl, ic->ivl_start);
     }
 }

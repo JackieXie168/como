@@ -62,7 +62,7 @@ void
 como_init(const char * program, int argc, char ** argv)
 {
     log_set_program(program);
-    if (!isatty(0)) {
+    if (!isatty(fileno(stdout))) {
 	log_set_use_color(FALSE);
     }
     

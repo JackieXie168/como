@@ -841,12 +841,7 @@ fake_config()
     s.device = como_strdup("/traces/trace_eth_1");
     s.args = NULL;
     array_add(sniffer_defs, &s);
-    
-    m.name = como_strdup("traffic2");
-    m.mdlname = como_strdup("trafficCCS");
-    m.args = NULL;
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
+
 #if 0
     m.name = como_strdup("topaddr");
     m.mdlname = como_strdup("topaddrCC");
@@ -854,12 +849,18 @@ fake_config()
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
 
+    m.name = como_strdup("traffic2");
+    m.mdlname = como_strdup("trafficCCS");
+    m.args = NULL;
+    m.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m);
+#endif
+
     m.name = como_strdup("traffic");
     m.mdlname = como_strdup("trafficCC");
     m.args = NULL;
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
-#endif
 
     config.sniffer_defs = sniffer_defs;
     config.mdl_defs = mdl_defs;

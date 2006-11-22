@@ -93,6 +93,7 @@ four methods, and provides an mmap-like interface.
 #include <sys/stat.h>
 #include <assert.h>
 
+#define LOG_DISABLE
 #define LOG_DOMAIN	"ST-CL"
 #include "como.h"
 #include "comopriv.h"
