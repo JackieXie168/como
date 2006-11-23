@@ -157,7 +157,7 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 #endif
     } 
 
-    if (mdl_get_iquery(req->mdl)->print && 
+    if (mdl_get_iquery(req->mdl)->print_rec && 
 	(req->format == QFORMAT_CUSTOM || req->format == QFORMAT_HTML)) {
 	/*
 	 * the module exists but does not support printing records. 

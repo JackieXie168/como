@@ -166,7 +166,7 @@ typedef void   (*ca_flush_fn) (mdl_t * self, void * state);
 typedef void * (*ex_init_fn) (mdl_t * self);
 
 /**
- * ex_init_fn()
+ * ex_export_fn()
  * Run: run from export for each capture state that is flushed.
  * Purpose: update the export state with the information carried in the
  *          capture state, store the results of the performed measurements,
@@ -182,19 +182,44 @@ typedef void   (*ex_export_fn) (mdl_t * self, void ** tuples,
 				size_t tuple_count, timestamp_t ivl_start,
 				void * state);
 
-
-/*
- * qu_print functions
- *
+/**
+ * qu_init_fn()
+ * Run: run once from query when a user query is received.
+ * Purpose: initialize the query state, print the header if necessary.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - format_id: the required output format identifier.
+ *            - args: hashtable of the arguments provided by the user.
+ * Return: the query state.
  */
-typedef void   (*qu_print_header_fn) (mdl_t * self, char *format,
-                                        array_t *args);
-typedef void   (*qu_print_fn) (mdl_t * self, char *format, array_t *args);
-typedef void   (*qu_print_footer_fn) (mdl_t * self, char *format,
-                                        array_t *args);
+typedef void * (*qu_init_fn)   (mdl_t * self, int format_id, hash_t * args);
+
+/**
+ * qu_print_fn()
+ * Run: run from query for each record that has been selected by the user
+ *      query.
+ * Purpose: convert the record into a string that is sent to the user.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - format_id: the required output format identifier.
+ *            - record: the record.
+ *            - state: the query state.
+ * Return: void.
+ */
+typedef void   (*qu_print_rec_fn) (mdl_t * self, int format_id, void * record,
+				   void * state);
+
+/**
+ * qu_finish_fn()
+ * Run: run once from query after all the selected records have been processed.
+ * Purpose: print the footer if necessary.
+ * Arguments: - self: the instance of mdl_t representing the module.
+ *            - format_id: the required output format identifier.
+ *            - state: the query state.
+ * Return: void.
+ */
+typedef void   (*qu_finish_fn) (mdl_t * self, int format_id, void * state);
 
 /*
- * qu_replay function
+ * TODO: qu_replay function
  *
  */
 typedef void   (*qu_replay_fn) (void);

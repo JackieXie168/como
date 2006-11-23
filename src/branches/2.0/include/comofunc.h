@@ -70,8 +70,13 @@ alc_t * mdl_alc(mdl_t * mdl);
 #define mdl_new0(self,type)	alc_new0(mdl_alc(self), type)
 
 
-void * mdl__alloc_config(mdl_t * h, size_t sz);
+void * mdl__alloc_config(mdl_t * mdl, size_t sz);
 void * mdl__alloc_tuple(mdl_t * mdl, size_t sz);
+
+
+void mdl_print(mdl_t * mdl, const char * s);
+void mdl_printf(mdl_t * mdl, const char * fmt, ...);
+
 
 /*
  * capture-client.c
