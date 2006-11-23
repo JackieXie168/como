@@ -56,10 +56,12 @@
  * then terminates.
  */
 
+#if 0
 /* global state */
 extern struct _como map;
 
 static int s_wait_for_modules = 1; 
+#endif
 
 #define HTTP_RESPONSE_400 \
 "HTTP/1.0 400 Bad Request\r\n" \
@@ -87,7 +89,7 @@ static int s_wait_for_modules = 1;
  *
  */
 static char * 
-query_validate(qreq_t * req, int node_id)
+query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 {
     static char httpstr[256];
 
@@ -95,7 +97,7 @@ query_validate(qreq_t * req, int node_id)
         /*
          * no module defined. return warning message and exit
          */
-        logmsg(LOGWARN, "query module not defined\n");
+        warn("query module not defined\n");
 	sprintf(httpstr, HTTP_RESPONSE_400
 		"Module name is missing\n"); 
         return httpstr;
@@ -105,8 +107,7 @@ query_validate(qreq_t * req, int node_id)
         /*
          * start time is after end time, return error message
          */
-        logmsg(LOGWARN,
-               "query start time (%d) after end time (%d)\n", 
+        warn("query start time (%d) after end time (%d)\n", 
                req->start, req->end);
          
 	sprintf(httpstr, HTTP_RESPONSE_400
@@ -115,12 +116,14 @@ query_validate(qreq_t * req, int node_id)
     }
 
     /* check if the module is present in the current configuration */
-    req->mdl = module_lookup(req->module, node_id);
+    //req->mdl = module_lookup(req->module, node_id);
+    req->mdl = NULL;
     if (req->mdl == NULL) {
 	/*
 	 * the module is not present in the configuration file.
 	 * check if we have an alias instead.  
 	 */
+        #if 0
 	alias_t * alias; 
 	int nargs, i; 
 
@@ -130,13 +133,14 @@ query_validate(qreq_t * req, int node_id)
 	} 
 
 	if (alias == NULL) {
-	    logmsg(LOGWARN, "module %s not found\n", req->module);
+        #endif
+	    warn("module %s not found\n", req->module);
 	    sprintf(httpstr, HTTP_RESPONSE_404
 		    "Module \"%s\" not found in the current configuration\n", 
 		    req->module);
 	    return httpstr;
+        #if 0
 	} 
-
 	req->mdl = module_lookup(alias->module, node_id); 
 
 	/* count the query arguments */
@@ -150,26 +154,27 @@ query_validate(qreq_t * req, int node_id)
 	    req->args[i] = safe_strdup(alias->args[i - nargs]); 
 
 	req->args[nargs + alias->ac] = NULL;
+#endif
     } 
 
-    if (!req->mdl->callbacks.print && 
+    if (mdl_get_iquery(req->mdl)->print && 
 	(req->format == QFORMAT_CUSTOM || req->format == QFORMAT_HTML)) {
 	/*
 	 * the module exists but does not support printing records. 
 	 */
-	logmsg(LOGWARN, "module \"%s\" does not have print()\n", req->module);
+	warn("module \"%s\" does not have print()\n", req->module);
 	sprintf(httpstr, HTTP_RESPONSE_500
                 "Module \"%s\" does not have print() callback\n", 
 		req->module);
 	return httpstr;
     } 
 
-    if (!req->mdl->callbacks.replay &&
+    if (mdl_get_iquery(req->mdl)->replay &&
 	req->format == QFORMAT_COMO) {
 	/*	
 	 * the module does not have the replay() callback
 	 */
-        logmsg(LOGWARN, "module \"%s\" does not have replay()\n", req->module);
+        warn("module \"%s\" does not have replay()\n", req->module);
 	sprintf(httpstr, HTTP_RESPONSE_500
 		"Module \"%s\" does not have replay() callback\n", 
 		req->module);
@@ -180,6 +185,7 @@ query_validate(qreq_t * req, int node_id)
      * virtual nodes require some additional manipolation of 
      * the query string. 
      */ 
+    #if 0
     if (node_id > 0) {	/* virtual node */
         /*
          * set the source to whatever it is configured to be.
@@ -200,6 +206,7 @@ query_validate(qreq_t * req, int node_id)
             req->filter_str = req->mdl->filter_str;
         }
     }
+    #endif
 
     /* 
      * there are two types of queries. the ones that just need to print or 
@@ -222,6 +229,8 @@ query_validate(qreq_t * req, int node_id)
      * XXX in the future we will have to check if the module has been running
      *     during the interval of interest.
      */
+/* TODO query-ondemand */
+#if 0
     if (!req->source) { 
 	if (req->mdl->running == RUNNING_ON_DEMAND) {
 	    /*
@@ -264,6 +273,7 @@ query_validate(qreq_t * req, int node_id)
 	    free(running_filter);
 	}
     } else { 
+    #endif
 	/* 
 	 * a source is defined. go look for it and forget about the 
 	 * filter defined in the query. we will have to instantiate a
@@ -275,12 +285,13 @@ query_validate(qreq_t * req, int node_id)
 	 * 
 	 * XXX the source is always a module running in the master node. 
 	 */
+#define module_lookup(x, y) NULL
 	req->src = module_lookup(req->source, 0);
 	if (req->src == NULL) {
             /* No source module found,
              * return an error message to the client and finish
              */
-            logmsg(LOGWARN, "source module not found (%s)\n", req->source);
+            warn("source module not found (%s)\n", req->source);
 	    sprintf(httpstr, HTTP_RESPONSE_404
 		    "Source module \"%s\" not found\n", 
 		    req->source); 
@@ -288,23 +299,26 @@ query_validate(qreq_t * req, int node_id)
         }
 
 /*FIXME	if (!req->src->callbacks.outdesc || !req->src->callbacks.replay) {*/
-	if (!req->src->callbacks.replay) {
+	if (!mdl_get_iquery(req->src)->replay) {
 	    /*	
 	     * the source module does not have the replay() callback or 
 	     * a description of the packets it can generate. return an 
 	     * error message 
 	     */
-            logmsg(LOGWARN, "source module \"%s\" does not support replay()\n",
+            warn("source module \"%s\" does not support replay()\n",
 		   req->source);
 	    sprintf(httpstr, HTTP_RESPONSE_500
 		    "Source module \"%s\" does not support replay()\n", 
 		    req->source); 
             return httpstr;
         }
+    #if 0
     } 
+    #endif
 
     return NULL;		/* everything OK, nothing to say */
 }
+#if 0
 
 
 inline static void
@@ -379,6 +393,7 @@ qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
     assert(sender == map.parent);
     s_wait_for_modules = 0;
 }
+#endif
 
 static char *s_format_names[] = {
     "custom",
@@ -410,8 +425,14 @@ static char *s_format_names[] = {
  *     source of data.
  * 
  */
+
+#define query_recv(a,b,c) -1
+#define service_lookup(...) NULL
+#define query_ondemand(...)
+
 void
-query(int client_fd, int supervisor_fd, int node_id)
+query(int client_fd, int supervisor_fd, int node_id, array_t *mdldefs,
+    UNUSED stats_t *stats, ipc_peer_t * parent)
 {
     qreq_t req;
     int storage_fd, file_fd;
@@ -421,29 +442,36 @@ query(int client_fd, int supervisor_fd, int node_id)
     char *httpstr;
     char *null_args[] = {NULL};
     timestamp_t ts, end_ts;
+    char *outfile;
+    void *como_qu;
+
+    log_set_program("QU");
+    supervisor_fd = ipc_peer_get_fd(parent);
+    memset(&como_qu, 0, sizeof(como_qu));
+
+    ipc_set_user_data(&como_qu);
+    DEBUGGER_WAIT_ATTACH("qu");
 
     /* 
      * every new process has to set its name, specify the type of memory
      * the modules will be able to allocate and use, and change the process
      * name accordingly. 
      */
-    setproctitle(getprocfullname(map.whoami));
+    setproctitle("CAPTURE");
 
     /* 
      * wait for the debugger to attach
      */
-    DEBUGGER_WAIT_ATTACH(map);
+    DEBUGGER_WAIT_ATTACH("qu");
 
-    /* register handlers for IPC messages */
-    ipc_clear();
-    ipc_register(IPC_MODULE_ADD, qu_ipc_module_add);
-    ipc_register(IPC_MODULE_START, qu_ipc_start);
+    /* TODO deregister handlers for IPC messages */
+    /* ipc_init(NULL, NULL, NULL); */
 
-    /* handle the message from SUPERVISOR */ 
-    while (s_wait_for_modules) 
-	ipc_handle(supervisor_fd); 
+    /* XXX needed? handle the message from SUPERVISOR */ 
+    /*while (s_wait_for_modules) 
+	ipc_handle(supervisor_fd); */
  
-    ret = query_recv(&req, client_fd, map.stats->ts); 
+    ret = query_recv(&req, client_fd, stats->ts); 
     if (ret < 0) {
     	if (ret != -1) {
 	    switch (ret) {
@@ -454,7 +482,7 @@ query(int client_fd, int supervisor_fd, int node_id)
 		httpstr = HTTP_RESPONSE_405;
 		break;
 	    }
-	    if (como_writen(client_fd, httpstr, strlen(httpstr)) < 0) {
+	    if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) {
 		err(EXIT_FAILURE, "sending data to the client [%d]",
 		    client_fd);
 	    }
@@ -474,20 +502,20 @@ query(int client_fd, int supervisor_fd, int node_id)
 	return;
     }
 
-    logmsg(LOGQUERY, "query: node: %d module: %s\n",
+    debug("query: node: %d module: %s\n",
 	   node_id, req.module, req.filter_str); 
     if (req.filter_str)
-	logmsg(LOGQUERY, "       filter: %s\n", req.filter_str);
+	debug("       filter: %s\n", req.filter_str);
     if (req.source)
-	logmsg(LOGQUERY, "       source: %s\n", req.source);
-    logmsg(LOGQUERY, "       format: %s\n", s_format_names[req.format]);
-    logmsg(LOGQUERY, "       from %d to %d, wait %s\n", req.start, req.end,
+	debug("       source: %s\n", req.source);
+    debug("       format: %s\n", s_format_names[req.format]);
+    debug("       from %d to %d, wait %s\n", req.start, req.end,
 	   req.wait ? "yes" : "no");
     if (req.args != NULL) { 
 	int n; 
 
         for (n = 0; req.args[n]; n++) 
-	    logmsg(V_LOGQUERY, "       args: %s\n", req.args[n]);
+	    debug("       args: %s\n", req.args[n]);
     } 
 
     /* 
@@ -504,15 +532,15 @@ query(int client_fd, int supervisor_fd, int node_id)
      * cycle. 
      * 
      */
-    httpstr = query_validate(&req, node_id);
+    httpstr = query_validate(&req, node_id, mdldefs);
     if (httpstr != NULL) { 
-	if (como_writen(client_fd, httpstr, strlen(httpstr)) < 0) 
+	if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) 
 	    err(EXIT_FAILURE, "sending data to the client [%d]", client_fd); 
         close(client_fd);
         close(supervisor_fd);
 	return;
     }
-    
+
     /*
      * initializations
      */
@@ -538,7 +566,7 @@ query(int client_fd, int supervisor_fd, int node_id)
 	/*
 	 * produce a response header
 	 */
-	if (como_writen(client_fd, httpstr, strlen(httpstr)) < 0) 
+	if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) 
 	    err(EXIT_FAILURE, "sending data to the client");  
     }
 
@@ -557,17 +585,27 @@ query(int client_fd, int supervisor_fd, int node_id)
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
-    storage_fd = ipc_connect(STORAGE);
-
-    logmsg(V_LOGQUERY, "opening file for reading (%s)\n", req.mdl->output); 
+    /*storage_fd = ipc_connect(STORAGE);*/
+    storage_fd = -1;
+    outfile = como_asprintf("whatever");
+    //debug("opening file for reading (%s)\n", req.mdl->output); 
+    debug("opening file for reading (%s)\n", outfile); 
     mode =  req.wait ? CS_READER : CS_READER_NOBLOCK; 
-    file_fd = csopen(req.mdl->output, mode, 0, storage_fd); 
+    file_fd = csopen(outfile, mode, 0, (ipc_peer_t *) COMO_ST);
+
     if (file_fd < 0) 
-	panic("opening file %s", req.mdl->output);
+	error("opening file %s\n", outfile);
 
     /* seek on the first record */
     ts = TIME2TS(req.start, 0);
     end_ts = TIME2TS(req.end, 0);
+
+#define module_db_seek_by_ts(a,b,c) 0
+#define module_db_record_print(a,b,c,d) -1
+#define handle_print_fail(x) error("handle_print_fail\n")
+#define module_db_record_get(...) (error("TODO module_db_record_get\n"), NULL)
+#define module_db_record_replay(...) NULL
+#define handle_replay_fail(...) error("TODO: handle_replay_fail\n")
     ofs = module_db_seek_by_ts(req.mdl, file_fd, ts);
     if (ofs >= 0) {
 	/* at this point at least one record exists as we seek on it */
@@ -595,15 +633,16 @@ query(int client_fd, int supervisor_fd, int node_id)
 	}
 	for (;;) { 
 	    char * ptr;
-	    len = req.mdl->callbacks.st_recordsize;
+	    //len = req.mdl->callbacks.st_recordsize;
+            len = 0;
 	    ptr = module_db_record_get(file_fd, &ofs, req.mdl, &len, &ts);
 	    if (ptr == NULL) {
 		/* no data, but why ? */
 		if (len == 0) {
 		    break;
 		}
-		panic("reading from file %s ofs %lld len %d",
-		      req.mdl->output, ofs, len);
+		error("reading from file %s ofs %lld len %d\n",
+		      outfile, ofs, len);
 	    }
 	    /*
 	     * Now we have either good data or GR_LOSTSYNC.
@@ -615,12 +654,11 @@ query(int client_fd, int supervisor_fd, int node_id)
 		    /* no more data, notify the end of the 
 		     * stream to the module
 		     */ 
-		    logmsg(V_LOGQUERY, "reached end of file %s\n",
-			   req.mdl->output);
+		    debug("reached end of file %s\n", outfile);
 		    break;
 		}
-		logmsg(V_LOGQUERY, "lost sync, trying next file %s/%016llx\n", 
-		       req.mdl->output, ofs); 
+		debug("lost sync, trying next file %s/%016llx\n", 
+		       outfile, ofs); 
 		continue;
 	    }
 	    
@@ -636,7 +674,7 @@ query(int client_fd, int supervisor_fd, int node_id)
 
 	    case QFORMAT_RAW: 
 		/* send the data to the query client */
-		ret = como_writen(client_fd, ptr, len);
+		ret = como_write(client_fd, ptr, len);
 		if (ret < 0) 
 		     err(EXIT_FAILURE, "sending data to the client"); 
 		break;
@@ -658,8 +696,8 @@ query(int client_fd, int supervisor_fd, int node_id)
 	    }
 	}
     }
-    logmsg(LOGQUERY, "query completed\n"); 
-    
+    warn("query completed\n"); 
+
     /* close the file with STORAGE */
     csclose(file_fd, 0);
     /* close the socket and the file */

@@ -101,8 +101,8 @@ int destroy_socket (const char * path);
 /*
  * util-io.c
  */
-int como_read(int fd, char *buf, size_t len);
-int como_writen(int fd, const char *buf, size_t len);
+int como_read(int fd, void *buf, size_t len);
+int como_write(int fd, const void *buf, size_t len);
 
 /* 
  * util-misc.c

@@ -17,6 +17,7 @@ SET(COMO_SRCS
   metadesc.c
   pktmeta.c
   headerinfo.c
+  query.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
 #  memory.c

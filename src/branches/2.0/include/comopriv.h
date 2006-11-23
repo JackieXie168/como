@@ -365,6 +365,10 @@ struct mdl_iexport {
 };
 
 struct mdl_iquery {
+    qu_print_header_fn  print_header;
+    qu_print_fn         print;
+    qu_print_footer_fn  print_footer;
+    qu_replay_fn        replay;
 };
 
 mdl_isupervisor_t * mdl_get_isupervisor (mdl_t * h);

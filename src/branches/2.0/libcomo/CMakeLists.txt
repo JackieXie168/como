@@ -16,6 +16,7 @@ SET(COMOLIB_SRCS
   shmem.c
   alc.c
   hash.c
+  util-io.c
 )
 
 ADD_LIBRARY(comolib STATIC ${COMOLIB_SRCS})
