@@ -6,7 +6,7 @@ using System;
 public class Export : CoMo.Mdl, CoMo.IExport
 {
 
-    public void ex_init()
+    public void init()
     {
 	Console.WriteLine("ex_init");
 	Console.WriteLine("name: " + name);

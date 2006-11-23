@@ -37,6 +37,7 @@
  * Whether it tracks packets or bytes can be decided at configuration time. 
  *
  */
+#include <time.h>
 
 #include "como.h"
 #include "data.h"
@@ -75,6 +76,16 @@ enum {
     FORMAT_GNUPLOT
 };
 
+typedef struct query_format {
+    int		id;
+    char *	name;
+    char *	content_type;
+} query_format_t;
+
+#define QUERY_FORMATS_BEGIN	query_format_t formats[] = {
+#define QUERY_FORMATS_END	{-1, NULL, NULL}};
+
+
 QUERY_FORMATS_BEGIN
     {FORMAT_PRETTY, "pretty", "text/plain"},
     {FORMAT_PLAIN, "plain", "text/plain"},
@@ -85,29 +96,33 @@ QUERY_FORMATS_END
 static void
 counter_rec_aggregate(tuple_t * agg, tuple_t * rec, mdl_t * self)
 {
-    agg->pkts += rec->pkts;
-    agg->bytes += rec->bytes;
+    agg->pkts[0] += rec->pkts[1];
+    agg->bytes[0] += rec->bytes[1];
+    agg->pkts[0] += rec->pkts[1];
+    agg->bytes[0] += rec->bytes[1];
 }
 
 static void
 counter_rec_normalize(tuple_t * agg, int granularity, mdl_t * self)
 {
-    agg->bytes /= granularity; 
-    agg->pkts /= granularity;
+    agg->bytes[0] /= granularity; 
+    agg->pkts[0] /= granularity;
+    agg->bytes[1] /= granularity; 
+    agg->pkts[1] /= granularity;
 }
 
 void *
-qu_init(mdl_t * self, qures_t * qr, int format_id, hash_t * args)
+qu_init(mdl_t * self, int format_id, hash_t * args)
 {
     int granularity = 1;
     char *val;
     
     switch (format_id) {
     case FORMAT_GNUPLOT:
-	qures_print(qr, GNUPLOTHDR);
+	mdl_print(self, GNUPLOTHDR);
 	break;
     case FORMAT_PRETTY:
-	qures_print(qr, PRETTYHDR);
+	mdl_print(self, PRETTYHDR);
 	break;
     }
     
@@ -116,28 +131,30 @@ qu_init(mdl_t * self, qures_t * qr, int format_id, hash_t * args)
 	    /* aggregate multiple records into one to reduce 
 	     * communication messages. 
 	     */
-	    granularity = MAX(atoi(val) / TIME2SEC(self->flush_ivl, 1);
+	    granularity = MAX(atoi(val) / TS2SEC(self->flush_ivl), 1);
     }
     
     if (granularity != 1) {
-	qures_enable_aggregation(qr, granularity,
-				    counter_rec_aggregate,
-				    counter_rec_normalize);
+/* TODO:
+	mdl_enable_aggregation(self, granularity,
+				 counter_rec_aggregate,
+				 counter_rec_normalize);
+*/
     }
 
     return NULL;
 }
 
 void
-qu_finish(mdl_t * self, qures_t * qr, int format_id, void * ctx)
+qu_finish(mdl_t * self, int format_id, void * state)
 {
     if (format_id == FORMAT_GNUPLOT) {
-	qures_print(qr, GNUPLOTFMT);
+	mdl_print(self, GNUPLOTFMT);
     }
 }
 
 void
-print(mdl_t * self, qures_t * qr, int format_id, tuple_t * r, void * ctx)
+print_rec(mdl_t * self, int format_id, tuple_t * r, void * state)
 {
     float mbps;
     time_t t;
@@ -145,20 +162,21 @@ print(mdl_t * self, qures_t * qr, int format_id, tuple_t * r, void * ctx)
     switch (format_id) {
     case FORMAT_PRETTY:
 	t = (time_t) TS2SEC(r->ts);
-	qures_printf(qr, PRETTYFMT, 
-	            asctime(localtime(&t)), TS2SEC(r->ts), TS2USEC(r->ts), 
-		    r->bytes, r->pkts); 
+	mdl_printf(self, PRETTYFMT, 
+		   asctime(localtime(&t)), TS2SEC(r->ts), TS2USEC(r->ts), 
+		   r->bytes[0], r->pkts[0]); 
 	break;
     case FORMAT_PLAIN:
-	qures_printf(qr, PLAINFMT, mbps, r->pkts);
+	mdl_printf(self, PLAINFMT, TS2SEC(r->ts), r->ts, r->bytes[0],
+		   r->pkts[0]);
 	break;
     case FORMAT_GNUPLOT:
-	mbps = 8.0 * (float) bytes / 1000000.0; 
-	qures_printf(qr, GNUPLOTFMT, TS2SEC(r->ts), mbps, r->pkts);
+	mbps = 8.0 * (float) r->bytes[0] / 1000000.0; 
+	mdl_printf(self, GNUPLOTFMT, TS2SEC(r->ts), mbps, r->pkts[0]);
 	break;
     case FORMAT_MBPS:
-	mbps = 8.0 * (float) bytes / 1000000.0; 
-	qures_printf(qr, MBPSFMT, TS2SEC(r->ts), r->ts, r->bytes, r->pkts);
+	mbps = 8.0 * (float) r->bytes[0] / 1000000.0; 
+	mdl_printf(self, MBPSFMT, mbps, r->pkts[0]);
 	break;
     }
 }

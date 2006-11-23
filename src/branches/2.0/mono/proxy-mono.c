@@ -225,7 +225,7 @@ proxy_mono_ex_init(mdl_t * mdl)
 
 
     /* invoke ex_init() */
-    method = mono_class_get_method_from_name(klass, "ex_init", -1);
+    method = mono_class_get_method_from_name(klass, "init", -1);
     assert(method != NULL);
     
     mono_runtime_invoke(method, s->mdl, NULL, NULL);
