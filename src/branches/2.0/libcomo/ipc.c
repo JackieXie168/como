@@ -224,29 +224,6 @@ ipc_peer_connection_point(const ipc_peer_full_t * p)
     return cp;
 }
 
-/*
- * -- ipc_write
- * 
- * keeps writing until complete.
- */
-static ssize_t
-ipc_write(int fd, const void * buf, size_t count)
-{
-    size_t n = 0;
-
-    while (n < count) {
-	ssize_t ret = write(fd, buf + n, count - n);
-
-	if (ret == -1)
-	    return -1;
-
-        n += (size_t) ret;
-    }
-   
-    return (ssize_t) n; /* == count */
-}
-
-
 static inline void
 swap_msg(ipc_msg_t * msg)
 {
@@ -295,31 +272,6 @@ ipc_destroy_socket(const ipc_peer_full_t * p)
     
     return r;
 }
-
-
-/*
- * -- ipc_read
- * 
- * keeps writing until complete.
- */
-static ssize_t
-ipc_read(int fd, void * buf, size_t count)
-{
-    size_t n = 0;
-    
-    while (n < count) {
-        ssize_t ret = read(fd, buf + n, count - n);
-        if (ret == -1)
-            return -1;
-        if (ret == 0) /* EOF */
-            break;
-        
-        n += (size_t) ret;
-    }
-    
-    return (ssize_t) n; /* <= count */
-}
-
 
 
 void
@@ -448,7 +400,7 @@ ipc_send(ipc_peer_t * dst_, ipc_type type, const void * data, size_t sz)
     
     memcpy(msg->data, data, sz);
     
-    if (ipc_write(dst->fd, msg, sizeof(ipc_msg_t) + sz) == -1) {
+    if (como_write(dst->fd, msg, sizeof(ipc_msg_t) + sz) == -1) {
 	return IPC_ERR;
     }
     
@@ -467,11 +419,11 @@ ipc_send(ipc_peer_t * dst_, ipc_type type, const void * data, size_t sz)
     msg.sender = *me;
     msg.len = sz;
 
-    if (ipc_write(dst->fd, &msg, sizeof(ipc_msg_t)) == -1) {
+    if (como_write(dst->fd, &msg, sizeof(ipc_msg_t)) == -1) {
 	return IPC_ERR;
     }
     
-    if (sz > 0 && ipc_write(dst->fd, data, sz) == -1) {
+    if (sz > 0 && como_write(dst->fd, data, sz) == -1) {
 	return IPC_ERR;
     }
 
@@ -498,7 +450,7 @@ ipc_handle(int fd)
     int swap = 0;
 
     /* read the message header first */
-    r = (size_t) ipc_read(fd, &msg, sizeof(ipc_msg_t)); 
+    r = (size_t) como_read(fd, &msg, sizeof(ipc_msg_t)); 
     if (r != sizeof(ipc_msg_t)) {
 	if (r == 0)
 	    return IPC_EOF;
@@ -549,7 +501,7 @@ ipc_handle(int fd)
 	 */
 	//buf = como_malloc(msg.len);
 	buf = alloca(msg.len);
-	r = (size_t) ipc_read(fd, buf, msg.len);
+	r = (size_t) como_read(fd, buf, msg.len);
 	if (r != msg.len) {
 	    if (x != NULL) {
 		warn("Can't read entire IPC message from %s@%s on fd %d.\n",
@@ -660,7 +612,7 @@ ipc_receive(ipc_peer_t * peer, ipc_type * type, void * data, size_t * sz,
     }
 
     /* read the message header first */
-    r = (size_t) ipc_read(x->fd, &msg, sizeof(ipc_msg_t)); 
+    r = (size_t) como_read(x->fd, &msg, sizeof(ipc_msg_t)); 
     if (r != sizeof(ipc_msg_t)) {
 	if (r == 0)
 	    return IPC_EOF;
@@ -684,15 +636,15 @@ ipc_receive(ipc_peer_t * peer, ipc_type * type, void * data, size_t * sz,
     if (msg.len > 0) {
 	if (msg.len <= *sz) {
 	    /* user provided buffer is suitable to contain the message */
-	    r = (size_t) ipc_read(x->fd, data, msg.len);
+	    r = (size_t) como_read(x->fd, data, msg.len);
 	} else {
 	    /* user provided buffer is NOT suitable to contain the message */
-	    r = (size_t) ipc_read(x->fd, data, *sz);
+	    r = (size_t) como_read(x->fd, data, *sz);
 	    if (r == *sz) {
 		void *buf;
 		size_t r2;
 		buf = alloca(msg.len - *sz);
-		r2 = (size_t) ipc_read(x->fd, buf, msg.len - *sz);
+		r2 = (size_t) como_read(x->fd, buf, msg.len - *sz);
 		if (r2 == msg.len - *sz) {
 		    r += r2;
 		} else {

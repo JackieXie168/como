@@ -182,6 +182,23 @@ typedef void   (*ex_export_fn) (mdl_t * self, void ** tuples,
 				size_t tuple_count, timestamp_t ivl_start,
 				void * state);
 
+
+/*
+ * qu_print functions
+ *
+ */
+typedef void   (*qu_print_header_fn) (mdl_t * self, char *format,
+                                        array_t *args);
+typedef void   (*qu_print_fn) (mdl_t * self, char *format, array_t *args);
+typedef void   (*qu_print_footer_fn) (mdl_t * self, char *format,
+                                        array_t *args);
+
+/*
+ * qu_replay function
+ *
+ */
+typedef void   (*qu_replay_fn) (void);
+
 struct mdl {
     /* public fields */
     timestamp_t	flush_ivl;

@@ -81,8 +81,8 @@ typedef struct qreq_t {
 /* 
  * prototypes 
  */
-void query          (ipc_peer_full_t * p, int supervisor_fd,
-		     int client_fd, como_node_t * node);
+/*void query          (ipc_peer_full_t * p, int supervisor_fd,
+		     int client_fd, como_node_t * node);*/
 int  query_recv     (qreq_t * q, int sd, timestamp_t now);
 void query_ondemand (int client, qreq_t * req, int node_id);
 
