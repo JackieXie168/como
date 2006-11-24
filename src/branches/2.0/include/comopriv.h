@@ -269,6 +269,10 @@ void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
 void export_main  (ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 
+void query_main  (ipc_peer_full_t * child, ipc_peer_t * parent,
+		   memmap_t * shmemmap,int client_fd, como_node_t * node);
+
+
 /* como.c */
 
 typedef struct como_env {
@@ -385,5 +389,6 @@ void   mdl_serialize   (uint8_t ** sbuf, const mdl_t * h);
 size_t mdl_sersize     (const mdl_t * src);
 void   mdl_deserialize (uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc,
 			mdl_priv_t priv);
+mdl_t *mdl_lookup(array_t *mdls, const char *name);
 
 #endif /*COMOPRIV_H_*/

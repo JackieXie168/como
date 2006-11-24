@@ -394,48 +394,20 @@ mdl_store_rec(mdl_t * mdl, void * rec)
     cscommit(ie->cs_writer, ie->woff);
 }
 
-#if 0
-uint8_t *
-mdl_store_rec(mdl_t * h, size_t sz, timestamp_t ts)
+mdl_t *
+mdl_lookup(array_t *mdls, const char *name)
 {
-    mdl_iexport_t *ie;
-    strec_t *r;
-    
-    ie = mdl_get_iexport(h);
-    
-    sz += sizeof(timestamp_t);
-    ie->cs_cisz = sz + sizeof(size_t);
-    
-    r = (strec_t *) csmap(ie->cs_writer, ie->woff, (ssize_t *) &ie->cs_cisz);
-    if (r == NULL)
-	error("fail csmap for module %s", h->name);
+    mdl_t *mdl;
+    int i;
 
-    if ((ssize_t) ie->cs_cisz == -1) {
-	warn("Can't write to disk for module %s\n", h->name);
-	return NULL;
+    for (i = 0; i < mdls->len; i++) {
+        mdl = array_at(mdls, mdl_t *, i);
+        if (! strcmp(mdl->name, name))
+            return mdl;
     }
-
-    r->size = sz;
-    r->ts = ts;
-    
-    return r->data; /* pointer to data */
+    return NULL;
 }
 
-
-
-void
-mdl_store_commit(mdl_t * h)
-{
-    mdl_iexport_t *ie;
-    
-    ie = mdl_get_iexport(h);
-    
-    assert(ie->cs_cisz > 0 );
-    ie->woff += ie->cs_cisz;
-    cscommit(ie->cs_writer, ie->woff);
-    ie->cs_cisz = 0;
-}
-#endif
 /* QUERY */
 #if 0
 strec_t *

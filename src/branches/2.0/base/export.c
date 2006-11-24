@@ -463,6 +463,7 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */
 
     /* register handlers for IPC messages */ 
+    /* todo deregister IPC handlers */
     ipc_set_user_data(&como_ex);
     ipc_register(SU_EX_ADD_MODULE, (ipc_handler_fn) handle_su_ex_add_module);
     ipc_register(CA_EX_PROCESS_SER_TUPLES, (ipc_handler_fn) handle_ca_ex_process_ser_tuples);
