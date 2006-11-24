@@ -606,7 +606,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
     if (file_fd < 0) 
 	error("opening file %s\n", dbname);
-    free(dbname);
+    //free(dbname);
 
     /* seek on the first record */
     ts = TIME2TS(req.start, 0);
@@ -639,9 +639,19 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	for (;;) { 
 	    csrec_t *rec;
 	    
-	    rec = csgetrec(file_fd);
+	    rec = csgetrec(file_fd, ofs);
 	    if (rec == NULL) {
-		error("csgetrec() failed\n");
+		ofs = csseek(file_fd, CS_SEEK_FILE_NEXT);
+		if (ofs == -1) {
+		    /* no more data, notify the end of the
+		     * stream to the module
+		     */
+		    notice("reached end of file %s\n", dbname);
+		    break;
+		}
+		notice("lost sync, trying next file %s/%016llx\n",
+		       dbname, ofs);
+		continue;
 	    }
 	    
 	    if (ts >= end_ts) {
@@ -671,7 +681,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		break;
 	    }
 	    
-	    csnextrec(file_fd); /* TODO check error */
+	    ofs += rec->sz;
 	}
 	/* notify the end of stream to the module */
 	if (format_id != FORMAT_COMO && format_id != FORMAT_RAW) {

@@ -547,7 +547,7 @@ csclose(int fd, off_t ofs)
  * 
  * returns the current offset of the file. 
  */
-off_t
+inline off_t
 csgetofs(int fd)
 {
     assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL); 
@@ -561,10 +561,8 @@ csgetofs(int fd)
  * finds the one with the closest start time to the requested one. 
  * We do a linear search (instead of a faster binary search) because
  * right now csseek only supports CS_SEEK_FILE_PREV and CS_SEEK_FILE_NEXT. 
- * Furthermore, we dont have any idea on how large the records are and we 
- * have no index for the timestamp. The function returns the offset of 
- * the file to be read or -1 in case of error.
- *
+ * The function returns the offset of the file to be read or -1 in case
+ * of error.
  */
 off_t
 csseek_ts(int fd, timestamp_t where)
@@ -573,14 +571,13 @@ csseek_ts(int fd, timestamp_t where)
     off_t ofs;
     csrec_t *rec;
 
-    len = sizeof(csrec_t);
-
     ofs = csgetofs(fd);
 
     /* 
      * first, find the right file in the bytestream 
      */
     for (;;) { 
+	len = sizeof(csrec_t);
 
 	/* read the first record */
 	rec = csmap(fd, ofs, &len); 
@@ -659,6 +656,27 @@ csseek_ts(int fd, timestamp_t where)
     }
 
     return ofs;
+}
+
+csrec_t *
+csgetrec(int fd, off_t ofs)
+{
+    ssize_t len;
+    csrec_t *rec;
+    
+    len = sizeof(csrec_t);
+    rec = csmap(fd, ofs, &len);
+    if (rec == NULL)
+	return NULL;
+
+    if (rec->ts == 0) {
+	return NULL;
+    }
+
+    len = rec->sz;
+    rec = csmap(fd, ofs, &len);
+
+    return rec;
 }
 
 /* end of file */
