@@ -76,16 +76,6 @@ enum {
     FORMAT_GNUPLOT
 };
 
-typedef struct query_format {
-    int		id;
-    char *	name;
-    char *	content_type;
-} query_format_t;
-
-#define QUERY_FORMATS_BEGIN	query_format_t formats[] = {
-#define QUERY_FORMATS_END	{-1, NULL, NULL}};
-
-
 QUERY_FORMATS_BEGIN
     {FORMAT_PRETTY, "pretty", "text/plain"},
     {FORMAT_PLAIN, "plain", "text/plain"},

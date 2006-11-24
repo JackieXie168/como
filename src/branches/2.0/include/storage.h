@@ -69,17 +69,25 @@ typedef enum {
 #endif
 } csmethod_t;
 
+typedef struct csrec {
+    size_t	sz;
+    timestamp_t	ts;
+    uint8_t	data[0];
+} csrec_t;
 
 /* 
  * Function prototypes 
  */
 
-int    csopen   (const char * name, csmode_t mode, off_t size,
-		 ipc_peer_t * storage);
-off_t  csgetofs (int fd);
-void * csmap    (int fd, off_t ofs, ssize_t * sz);
-void   cscommit (int fd, off_t ofs);
-off_t  csseek   (int fd, csmethod_t wh);
-void   csclose  (int fd, off_t ofs);
+int       csopen    (const char * name, csmode_t mode, off_t size,
+		     ipc_peer_t * storage);
+off_t     csgetofs  (int fd);
+void *    csmap     (int fd, off_t ofs, ssize_t * sz);
+void      cscommit  (int fd, off_t ofs);
+off_t     csseek    (int fd, csmethod_t wh);
+off_t     csseek_ts (int fd, timestamp_t where);
+csrec_t * csgetrec  (int fd);
+off_t     csnextrec (int fd);
+void      csclose   (int fd, off_t ofs);
 
 #endif	/* STORAGE_H_ */

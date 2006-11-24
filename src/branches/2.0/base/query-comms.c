@@ -386,13 +386,13 @@ parse_timestr(char * str, timestamp_t * base)
 static int
 query_parse(qreq_t * q, char * buf, timestamp_t now)
 {
-    int max_args, nargs;
     char *p, *t;
     char *uri, *qs = NULL;
 
     p = strchr(buf, '\n');
     *p = '\0';
-    logmsg(V_LOGQUERY, "HTTP request: %s\n", buf);
+
+    notice("HTTP request: %s\n", buf);
 
     /* provide some default values */
     memset(q, 0, sizeof(qreq_t));
@@ -400,27 +400,8 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
     q->start = TS2SEC(now);
     q->end = ~0;
     q->format = QFORMAT_CUSTOM;
-    q->wait = 1;
-
-    /* 
-     * do a first pass to figure out how much space we need
-     * to store all the request parameters (i.e. args strings)
-     * 
-     * NOTE: max_args will always be at least one (i.e., the NULL entry
-     *       to indicate end of the arguments). 
-     */
-    max_args = 1; 
-    p = strchr(buf, '?');
-    if (p != NULL) {
-        do { 
-            p = strchr(p+1, '&'); 
-            max_args++; 
-        } while (p != NULL && strlen(p) > 1);
-    }
-
-    /* allocate a new request data structures */
-    q->args = safe_calloc(max_args, sizeof(char *)); 
-    nargs = 0;
+    q->wait = TRUE;
+    q->args = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
 
     /* 
      * check if the request is valid. look for GET and HTTP/1 
@@ -483,7 +464,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
     /* Query string decoding */
     if (qs != NULL) {
 	char *cp, *name, *value;
-	int copy_value;
+	int insert_arg; /* if TRUE insert argument into args hashtable */
 	cp = name = qs;
 	value = NULL;
 	for (;;) {
@@ -498,8 +479,8 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		uri_unescape(name);
 	    } else if (*cp == '&' || *cp == '\0') {
 		int done = (*cp == '\0');
-		/* copy the argument into query args by default */
-		copy_value = 1;
+		/* insert the argument into query args by default */
+		insert_arg = TRUE;
 		*cp = '\0';
 		if (value == cp || value == NULL) {
 		    if (strcmp(name, "status") == 0) {
@@ -522,7 +503,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		    if (strcmp(name + 1, "odule") == 0 &&
 			uri[1] == '\0') {
 			q->module = strdup(value);
-			copy_value = 0;
+			insert_arg = FALSE;
 		    }
 		    break;
 		case 'f':
@@ -530,51 +511,43 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		    if (strcmp(name + 1, "ilter") == 0) {
 			q->filter_str = strdup(value);
 			parse_filter(value, NULL, &(q->filter_cmp));
-			copy_value = 0;
+			insert_arg = FALSE;
 		    /* format */
 		    } else if (strcmp(name + 1, "ormat") == 0) {
-			if (strcmp(value, "raw") == 0) {
-			    q->format = QFORMAT_RAW;
-			    copy_value = 0;
-			} else if (strcmp(value, "como") == 0) {
-			    q->format = QFORMAT_COMO;
-			    copy_value = 0;
-			} else if (strcmp(value, "html") == 0) {
-			    q->format = QFORMAT_HTML;
-			    /* copy_value = 1; */
-			}
+			q->format = como_strdup(value);
+			insert_arg = FALSE;
 		    }
 		    break;
 		case 's':
 		    /* start */
 		    if (strcmp(name + 1, "tart") == 0) {
 			q->start = atoi(value);
-			copy_value = 0;
+			insert_arg = FALSE;
 		    /* source */
 		    } else if (strcmp(name + 1, "ource") == 0) {
 			q->source = strdup(value);
-			copy_value = 0;
+			insert_arg = FALSE;
 		    /* status */
 		    } else if (strcmp(name + 1, "tatus") == 0) {
 			q->mode = QMODE_SERVICE;
 			q->service = "status";
-			copy_value = 0;
+			insert_arg = FALSE;
 		    }
 		    break;
 		case 'e':
 		    /* end */
 		    if (strcmp(name + 1, "nd") == 0) {
 			q->end = atoi(value);
-			copy_value = 0;
+			insert_arg = FALSE;
 		    }
 		    break;
 		case 'w':
 		    /* wait */
 		    if (strcmp(name + 1, "ait") == 0) {
 			if (strcmp(value, "no") == 0) {
-			    q->wait = 0;
+			    q->wait = FALSE;
 			}
-			copy_value = 0;
+			insert_arg = FALSE;
 		    }
 		    break;
 		case 't':
@@ -587,15 +560,13 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 			    *t = '\0';
 			    q->start = parse_timestr(value, &current);
 			    q->end = parse_timestr(t + 1, &current);
-			    copy_value = 0;
+			    insert_arg = FALSE;
 			}
 		    }
 		    break;
 		}
-		if (copy_value == 1 && value != NULL) {
-		    asprintf(&q->args[nargs], "%s=%s", name, value);
-		    nargs++;
-		    assert(nargs < max_args);
+		if (insert_arg == 1 && value != NULL) {
+		    hash_insert_string(q->args, name, value);
 		}
 		if (done) {
 		    break;
@@ -636,13 +607,16 @@ query_recv(qreq_t * q, int sd, timestamp_t now)
     for (;;) {
 	/* leave last byte unused, so we are sure to find a \0 there. */
 	rd = read(sd, buf + ofs, sizeof(buf) - ofs - 1);
-	logmsg(V_LOGQUERY, "query_recv read returns %d\n", rd);
+
+	debug("query_recv read returns %d\n", rd);
+
 	if (rd < 0)	/* other end closed connection ? */
 	    return -1; 
 	ofs += rd;
 
 	if (strstr(buf, "\r\n\r\n") != NULL || strstr(buf, "\n\n") != NULL)
 	    return query_parse(q, buf, now); 
+
 	if (rd == 0 || buf[0] < ' ')  /* invalid string */
 	    break;
     }

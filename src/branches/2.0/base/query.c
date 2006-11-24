@@ -56,13 +56,6 @@
  * then terminates.
  */
 
-#if 0
-/* global state */
-extern struct _como map;
-
-static int s_wait_for_modules = 1; 
-#endif
-
 #define HTTP_RESPONSE_400 \
 "HTTP/1.0 400 Bad Request\r\n" \
 "Content-Type: text/plain\r\n\r\n"
@@ -79,6 +72,17 @@ static int s_wait_for_modules = 1;
 "HTTP/1.0 500 Internal Server Error\r\n" \
 "Content-Type: text/plain\r\n\r\n"
 
+enum {
+    FORMAT_COMO = -2,
+    FORMAT_RAW = -3
+};
+
+static const qu_format_t QU_FORMAT_COMO =
+{FORMAT_COMO, "como", "application/octet-stream"};
+
+static const qu_format_t QU_FORMAT_RAW =
+{FORMAT_RAW, "raw", "application/octet-stream"};
+
 /* 
  * -- query_validate
  * 
@@ -89,9 +93,10 @@ static int s_wait_for_modules = 1;
  *
  */
 static char * 
-query_validate(qreq_t * req, UNUSED como_node_t *node)
+query_validate(qreq_t * req, como_node_t * node)
 {
     static char httpstr[2048];
+    mdl_t *mdl;
     mdl_iquery_t *iq;
 
     if (req->module == NULL) {
@@ -117,8 +122,8 @@ query_validate(qreq_t * req, UNUSED como_node_t *node)
     }
 
     /* check if the module is present in the current configuration */
-    req->mdl = mdl_lookup(node->mdls, req->module);
-    if (req->mdl == NULL) {
+    mdl = mdl_lookup(node->mdls, req->module);
+    if (mdl == NULL) {
 	/*
 	 * the module is not present in the configuration file.
 	 * check if we have an alias instead.  
@@ -136,7 +141,7 @@ query_validate(qreq_t * req, UNUSED como_node_t *node)
 #endif
 	    warn("module %s not found\n", req->module);
 	    sprintf(httpstr, HTTP_RESPONSE_404
-		    "Module \"%s\" not found in the current configuration\n", 
+		    "Module `%s' not found in the current configuration\n",
 		    req->module);
 	    return httpstr;
 #if 0
@@ -157,27 +162,65 @@ query_validate(qreq_t * req, UNUSED como_node_t *node)
 #endif
     }
 
+    /*
+     * mdl comes from supervisor
+     * create a shallow copy of mdl but with a different private state
+     */
+    req->mdl = como_new0(mdl_t);
+    *req->mdl = *mdl;
+    req->mdl->priv = NULL;
+    mdl_load(req->mdl, PRIV_IQUERY);
+    
     iq = mdl_get_iquery(req->mdl);
+    
+    /*
+     * set the qu_format
+     */
+    if (strcmp(req->format, "como") == 0) {
+	req->qu_format = &QU_FORMAT_COMO;
+    } else if (strcmp(req->format, "raw") == 0) {
+	req->qu_format = &QU_FORMAT_RAW;
+    } else {
+	int i;
+	for (i = 0; iq->formats[i].id != -1; i++) {
+	    if (strcmp(iq->formats[i].name, req->format) == 0)
+		break;
+	}
+	if (iq->formats[i].id == -1) {
+	    /*
+	     * the module exists but doesn't support the given output format
+	     */
+	    warn("module `%s' does not support format `%s'\n",
+		 req->module, req->format);
+	    sprintf(httpstr, HTTP_RESPONSE_500
+		    "Module `%s' does not support format `%s'\n", 
+		    req->module, req->format);
+	    return httpstr;
+	}
+	req->qu_format = &iq->formats[i];
+    }
+
 
     if (iq->print_rec == NULL && 
-	(req->format == QFORMAT_CUSTOM || req->format == QFORMAT_HTML)) {
+	(req->qu_format != &QU_FORMAT_COMO &&
+	req->qu_format != &QU_FORMAT_RAW)) {
 	/*
 	 * the module exists but does not support printing records. 
 	 */
-	warn("module \"%s\" does not have print()\n", req->module);
+	warn("module `%s' does not have print()\n", req->module);
 	sprintf(httpstr, HTTP_RESPONSE_500
-                "Module \"%s\" does not have print() callback\n", 
+                "Module `%s' does not have print() callback\n", 
 		req->module);
 	return httpstr;
     } 
 
-    if (iq->replay == NULL && req->format == QFORMAT_COMO) {
+    if (iq->replay == NULL && req->qu_format == &QU_FORMAT_COMO) {
 	/*	
 	 * the module does not have the replay() callback
 	 */
-        warn("module \"%s\" does not have replay()\n", req->module);
+        warn("module `%s' does not have replay()\n", req->module);
 	sprintf(httpstr, HTTP_RESPONSE_500
-		"Module \"%s\" does not have replay() callback\n", 
+		"Module `%s' does not have replay() callback\n", 
 		req->module);
 	return httpstr;
     }
@@ -240,7 +283,7 @@ query_validate(qreq_t * req, UNUSED como_node_t *node)
 		   req->mdl->name);
 	    
 	    sprintf(httpstr, HTTP_RESPONSE_400
-		    "Module \"%s\" is running on-demand. A source is required "
+		    "Module `%s' is running on-demand. A source is required "
 		    "to run it.\n", req->mdl->name);
 	    return httpstr;
 	}
@@ -264,7 +307,7 @@ query_validate(qreq_t * req, UNUSED como_node_t *node)
 		       "module %s found but it is not using filter (%s)\n",
 		       req->module, req->filter_str); 
 		sprintf(httpstr, HTTP_RESPONSE_404
-			"Module %s found but it is not using filter \"%s\"\n", 
+			"Module %s found but it is not using filter `%s'\n", 
 			req->module, req->filter_str);
 		free(running_filter);
 		return httpstr;
@@ -290,7 +333,7 @@ query_validate(qreq_t * req, UNUSED como_node_t *node)
              */
             warn("source module not found (%s)\n", req->source);
 	    sprintf(httpstr, HTTP_RESPONSE_404
-		    "Source module \"%s\" not found\n", 
+		    "Source module `%s' not found\n", 
 		    req->source); 
             return httpstr;
         }
@@ -302,10 +345,10 @@ query_validate(qreq_t * req, UNUSED como_node_t *node)
 	     * a description of the packets it can generate. return an 
 	     * error message 
 	     */
-            warn("source module \"%s\" does not support replay()\n",
+            warn("source module `%s' does not support replay()\n",
 		   req->source);
 	    sprintf(httpstr, HTTP_RESPONSE_500
-		    "Source module \"%s\" does not support replay()\n", 
+		    "Source module `%s' does not support replay()\n", 
 		    req->source); 
             return httpstr;
         }
@@ -321,7 +364,7 @@ inline static void
 handle_print_fail(module_t *mdl)
 {
     if (errno == ENODATA) {
-	panicx("module \"%s\" failed to print\n", mdl->name);
+	panicx("module `%s' failed to print\n", mdl->name);
     } else {
 	err(EXIT_FAILURE, "sending data to the client");
     }
@@ -332,7 +375,7 @@ inline static void
 handle_replay_fail(module_t *mdl)
 {
     if (errno == ENODATA) {
-	panicx("module \"%s\" failed to print\n", mdl->name);
+	panicx("module `%s' failed to print\n", mdl->name);
     } else {
 	err(EXIT_FAILURE, "sending data to the client");
     }
@@ -391,13 +434,6 @@ qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
 }
 #endif
 
-static char *s_format_names[] = {
-    "custom",
-    "raw",
-    "como",
-    "html"
-};
-
 /*
  * -- query
  *
@@ -428,19 +464,21 @@ static char *s_format_names[] = {
 
 void
 query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-                 UNUSED memmap_t * shmemmap, UNUSED int client_fd,
-                 como_node_t * node)
+	   UNUSED memmap_t * shmemmap, int client_fd, como_node_t * node)
 {
     qreq_t req;
     int storage_fd, file_fd, supervisor_fd;
     off_t ofs; 
-    ssize_t len;
     int mode, ret;
     char *httpstr;
-    char *null_args[] = {NULL};
     timestamp_t ts, end_ts;
-    char *outfile;
+    char *dbname;
     void *como_qu;
+    int format_id;
+    mdl_iquery_t *iq;
+    alc_t *alc;
+    uint8_t *sbuf;
+    void *mdlrec;
 
     log_set_program("QU");
     supervisor_fd = ipc_peer_get_fd(parent);
@@ -452,7 +490,6 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     DEBUGGER_WAIT_ATTACH("qu");
 
     ipc_set_user_data(&como_qu);
-    ipc_init((ipc_peer_full_t *) COMO_QU, NULL, NULL);
 
     /* XXX needed? handle the message from SUPERVISOR */ 
     /*while (s_wait_for_modules) 
@@ -470,8 +507,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		break;
 	    }
 	    if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) {
-		err(EXIT_FAILURE, "sending data to the client [%d]",
-		    client_fd);
+		error("sending data to the client [%d]", client_fd);
 	    }
     	}
 	close(client_fd);
@@ -495,15 +531,17 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	debug("       filter: %s\n", req.filter_str);
     if (req.source)
 	debug("       source: %s\n", req.source);
-    debug("       format: %s\n", s_format_names[req.format]);
+    debug("       format: %s\n", req.format);
     debug("       from %d to %d, wait %s\n", req.start, req.end,
 	   req.wait ? "yes" : "no");
+#ifdef DEBUG
     if (req.args != NULL) { 
-	int n; 
-
-        for (n = 0; req.args[n]; n++) 
-	    debug("       args: %s\n", req.args[n]);
-    } 
+	hash_iter_t it;
+	debug("       args: %s=%s\n",
+	      hash_iter_get_string_key(&it),
+	      hash_iter_get_value(&it));
+    }
+#endif
 
     /* 
      * validate the query and find the relevant modules. 
@@ -522,40 +560,21 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     httpstr = query_validate(&req, node);
     if (httpstr != NULL) { 
 	if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) 
-	    err(EXIT_FAILURE, "sending data to the client [%d]", client_fd); 
+	    error("sending data to the client [%d]", client_fd); 
         close(client_fd);
         close(supervisor_fd);
 	return;
     }
 
     /*
-     * initializations
+     * produce a response header
      */
     httpstr = NULL;
-    switch (req.format) {
-    case QFORMAT_CUSTOM:
-        httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n";
-	break;
-
-    case QFORMAT_HTML:
-	httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n";
-	break;
-
-    case QFORMAT_COMO:
-	// httpstr = "HTTP/1.0 200 OK\r\n"
-	//	  "Content-Type: application/octet-stream\r\n\r\n";
-	break;
-    default:
-	break;
-    }
-    
-    if (httpstr != NULL) {
-	/*
-	 * produce a response header
-	 */
-	if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) 
-	    err(EXIT_FAILURE, "sending data to the client");  
-    }
+    httpstr = como_asprintf("HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n",
+			    req.qu_format->content_type);
+    if (como_write(client_fd, httpstr, strlen(httpstr)) < 0)
+	error("sending data to the client");
+    free(httpstr);
 
     /* 
      * if we have to retrieve the data using the replay callback of
@@ -567,21 +586,27 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	query_ondemand(client_fd, &req, node_id); 
 	assert_not_reached();
     }
+    
+    iq = mdl_get_iquery(req.mdl);
+    iq->client_fd = client_fd;
+    
+    format_id = req.qu_format->id;
 
     /* 
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
-    /*storage_fd = ipc_connect(STORAGE);*/
-    storage_fd = -1;
-    outfile = como_asprintf("whatever");
-    //debug("opening file for reading (%s)\n", req.mdl->output); 
-    debug("opening file for reading (%s)\n", outfile); 
+    storage_fd = ipc_connect(COMO_ST);
+
+    dbname = como_asprintf("%s/%s/%s", como_env_dbdir(), node->name,
+			   req.mdl->name);
+    debug("opening file for reading (%s)\n", dbname); 
     mode =  req.wait ? CS_READER : CS_READER_NOBLOCK; 
-    file_fd = csopen(outfile, mode, 0, (ipc_peer_t *) COMO_ST);
+    file_fd = csopen(dbname, mode, 0, (ipc_peer_t *) COMO_ST);
 
     if (file_fd < 0) 
-	error("opening file %s\n", outfile);
+	error("opening file %s\n", dbname);
+    free(dbname);
 
     /* seek on the first record */
     ts = TIME2TS(req.start, 0);
@@ -593,22 +618,11 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 #define module_db_record_get(...) (error("TODO module_db_record_get\n"), NULL)
 #define module_db_record_replay(...) NULL
 #define handle_replay_fail(...) error("TODO: handle_replay_fail\n")
-    ofs = module_db_seek_by_ts(req.mdl, file_fd, ts);
+    ofs = csseek_ts(file_fd, ts);
     if (ofs >= 0) {
 	/* at this point at least one record exists as we seek on it */
-	switch (req.format) {
-	case QFORMAT_CUSTOM:
-	case QFORMAT_HTML:
-	    /* first print callback. we need to make sure that req.args != NULL. 
-	     * if this is not the case we just make something up
-	     */
-	    if (req.args == NULL) {
-		req.args = null_args;
-	    }
-	    if (module_db_record_print(req.mdl, NULL, req.args, client_fd) < 0)
-		handle_print_fail(req.mdl);
-	    break;
-	case QFORMAT_COMO:
+	switch (format_id) {
+	case FORMAT_COMO:
 #if 0
 	    /*
 	     * TODO:transmit the output stream description
@@ -616,71 +630,53 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 #endif
 	    break;
 	default:
+	    /* first print callback. we need to make sure that req.args != NULL. 
+	     * if this is not the case we just make something up
+	     */
+	    iq->state = iq->init(req.mdl, format_id, req.args);
 	    break;
 	}
 	for (;;) { 
-	    char * ptr;
-	    //len = req.mdl->callbacks.st_recordsize;
-            len = 0;
-	    ptr = module_db_record_get(file_fd, &ofs, req.mdl, &len, &ts);
-	    if (ptr == NULL) {
-		/* no data, but why ? */
-		if (len == 0) {
-		    break;
-		}
-		error("reading from file %s ofs %lld len %d\n",
-		      outfile, ofs, len);
-	    }
-	    /*
-	     * Now we have either good data or GR_LOSTSYNC.
-	     * If lost sync, move to the next file and try again. 
-	     */
-	    if (ptr == GR_LOSTSYNC) {
-		ofs = csseek(file_fd, CS_SEEK_FILE_NEXT);
-		if (ofs == -1) { 
-		    /* no more data, notify the end of the 
-		     * stream to the module
-		     */ 
-		    debug("reached end of file %s\n", outfile);
-		    break;
-		}
-		debug("lost sync, trying next file %s/%016llx\n", 
-		       outfile, ofs); 
-		continue;
+	    csrec_t *rec;
+	    
+	    rec = csgetrec(file_fd);
+	    if (rec == NULL) {
+		error("csgetrec() failed\n");
 	    }
 	    
 	    if (ts >= end_ts) {
 		break;
 	    }
 	    
-	    switch (req.format) {
-	    case QFORMAT_COMO: 	
+	    switch (format_id) {
+	    case FORMAT_COMO: 	
 		if (module_db_record_replay(req.mdl, ptr, client_fd))
 		    handle_replay_fail(req.mdl);
 		break;
 
-	    case QFORMAT_RAW: 
+	    case FORMAT_RAW: 
 		/* send the data to the query client */
-		ret = como_write(client_fd, ptr, len);
+		ret = como_write(client_fd, rec, rec->sz);
 		if (ret < 0) 
 		     err(EXIT_FAILURE, "sending data to the client"); 
 		break;
 
-	    case QFORMAT_CUSTOM: 
-	    case QFORMAT_HTML:
-		if (module_db_record_print(req.mdl, ptr, NULL, client_fd))
-		    handle_print_fail(req.mdl);
-		break;
-	    default:
+	    default: 
+		/* TODO: deserialize rec */
+		sbuf = (uint8_t *) &rec->ts;
+		alc = como_alc();
+		/* ... */
+
+		iq->print_rec(req.mdl, format_id, mdlrec, iq->state);
 		break;
 	    }
+	    
+	    csnextrec(file_fd); /* TODO check error */
 	}
 	/* notify the end of stream to the module */
-	if (req.format == QFORMAT_CUSTOM || req.format == QFORMAT_HTML) {
+	if (format_id != FORMAT_COMO && format_id != FORMAT_RAW) {
 	    /* print the footer */
-	    if (module_db_record_print(req.mdl, NULL, NULL, client_fd)) {
-		handle_print_fail(req.mdl);
-	    }
+	    iq->finish(req.mdl, format_id, iq->state);
 	}
     }
     warn("query completed\n"); 
