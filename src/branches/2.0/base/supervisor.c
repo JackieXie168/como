@@ -158,7 +158,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
 
                 /* TODO only send compatible modules */
 
-                mdl = &array_at(mdls, mdl_t, i);
+                mdl = array_at(mdls, mdl_t *, i);
                 sz = mdl_sersize(mdl);
                 buf = sbuf = como_malloc(sz);
 
@@ -191,7 +191,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
 
                 /* TODO only send compatible modules */
 
-                mdl = &array_at(mdls, mdl_t, i);
+                mdl = array_at(mdls, mdl_t *, i);
                 sz = mdl_sersize(mdl);
                 buf = sbuf = como_malloc(sz);
 
@@ -263,7 +263,7 @@ su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
 	uint8_t *sermdl, *sbuf;
 	size_t sz;
 
-	mdl = &array_at(mdls, mdl_t, i);
+	mdl = array_at(mdls, mdl_t *, i);
 	sz = mdl_sersize(mdl);
 	sermdl = sbuf = como_malloc(sz);
 
@@ -510,6 +510,7 @@ como_node_handle_query(como_node_t * node)
     struct sockaddr_in addr;
     ipc_peer_full_t *peer;
     socklen_t len;
+    pid_t pid;
     int cd;
     
     len = sizeof(addr);
@@ -525,7 +526,7 @@ como_node_handle_query(como_node_t * node)
      * start a query process. 
      */
     peer = ipc_peer_child(COMO_QU, cd);
-    //start_child(peer, query, cd, node);
+    pid = start_child(NULL, query_main, s_como_su->memmap, -1, node);
     close(cd);
 }
 
@@ -607,10 +608,8 @@ como_su_run(como_su_t * como_su)
     node0 = &array_at(como_su->nodes, como_node_t, 0);
     mdls = node0->mdls;
     for (i = 0; i < mdls->len; i++) {
-	mdl_t *mdl;
-	mdl = &array_at(mdls, mdl_t, i);
-
 /*
+	mdl_t *mdl = array_at(mdls, mdl_t *, i);
 	if (mdl_init(mdl)) {
 	    remove_module(&map, mdl);
 	    continue; 
@@ -729,32 +728,31 @@ void
 como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
 		    alc_t * alc)
 {
-    mdl_t mdl;
     int i;
     for (i = 0; i < mdl_defs->len; i++) {
 	mdl_def_t *def;
 	mdl_isupervisor_t *is;
+        mdl_t *mdl = alc_new0(alc, mdl_t);
 	
 	def = &array_at(mdl_defs, mdl_def_t, i);
 	
-	memset(&mdl, 0, sizeof(mdl_t));
-	mdl.name = alc_strdup(alc, def->name);
-	mdl.mdlname = alc_strdup(alc, def->mdlname);
-	mdl.streamsize = def->streamsize;
+	mdl->name = alc_strdup(alc, def->name);
+	mdl->mdlname = alc_strdup(alc, def->mdlname);
+	mdl->streamsize = def->streamsize;
 	
-	if (mdl_load(&mdl, PRIV_ISUPERVISOR) < 0) {
-	    //mdl_destroy(&mdl);
+	if (mdl_load(mdl, PRIV_ISUPERVISOR) < 0) {
+	    //mdl_destroy(mdl);
 	    continue;
 	}
 	
-	is = mdl_get_isupervisor(&mdl);
-	mdl.config = is->init(&mdl, def->args);
-	if (mdl.config == NULL) {
-	    warn("Initialization of module `%s` failed.\n", mdl.name);
+	is = mdl_get_isupervisor(mdl);
+	mdl->config = is->init(mdl, def->args);
+	if (mdl->config == NULL) {
+	    warn("Initialization of module `%s` failed.\n", mdl->name);
 	    continue;
 	}
 
-	array_add(node->mdls, &mdl);
+	array_add(node->mdls, mdl);
     }
 }
 
@@ -912,7 +910,7 @@ main(int argc, char ** argv)
     node.location = como_strdup("Unknown");
     node.type = como_strdup("Unknown");
     node.query_port = DEFAULT_QUERY_PORT;
-    node.mdls = array_new(sizeof(mdl_t));
+    node.mdls = array_new(sizeof(mdl_t *));
     if (mkdir(como_su->env->dbdir, 0700) == -1 && errno != EEXIST)
         error("cannot create db dir `%s'\n", como_su->env->dbdir);
 

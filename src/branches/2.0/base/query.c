@@ -89,9 +89,10 @@ static int s_wait_for_modules = 1;
  *
  */
 static char * 
-query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
+query_validate(qreq_t * req, UNUSED como_node_t *node)
 {
-    static char httpstr[256];
+    static char httpstr[2048];
+    mdl_iquery_t *iq;
 
     if (req->module == NULL) {
         /*
@@ -116,14 +117,13 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
     }
 
     /* check if the module is present in the current configuration */
-    //req->mdl = module_lookup(req->module, node_id);
-    req->mdl = NULL;
+    req->mdl = mdl_lookup(node->mdls, req->module);
     if (req->mdl == NULL) {
 	/*
 	 * the module is not present in the configuration file.
 	 * check if we have an alias instead.  
 	 */
-        #if 0
+#if 0
 	alias_t * alias; 
 	int nargs, i; 
 
@@ -133,13 +133,13 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 	} 
 
 	if (alias == NULL) {
-        #endif
+#endif
 	    warn("module %s not found\n", req->module);
 	    sprintf(httpstr, HTTP_RESPONSE_404
 		    "Module \"%s\" not found in the current configuration\n", 
 		    req->module);
 	    return httpstr;
-        #if 0
+#if 0
 	} 
 	req->mdl = module_lookup(alias->module, node_id); 
 
@@ -155,9 +155,11 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 
 	req->args[nargs + alias->ac] = NULL;
 #endif
-    } 
+    }
 
-    if (mdl_get_iquery(req->mdl)->print_rec && 
+    iq = mdl_get_iquery(req->mdl);
+
+    if (iq->print_rec == NULL && 
 	(req->format == QFORMAT_CUSTOM || req->format == QFORMAT_HTML)) {
 	/*
 	 * the module exists but does not support printing records. 
@@ -169,8 +171,7 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 	return httpstr;
     } 
 
-    if (mdl_get_iquery(req->mdl)->replay &&
-	req->format == QFORMAT_COMO) {
+    if (iq->replay == NULL && req->format == QFORMAT_COMO) {
 	/*	
 	 * the module does not have the replay() callback
 	 */
@@ -181,11 +182,12 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 	return httpstr;
     }
 
+    /* validation of virtual nodes and ondemand queries */
+#if 0
     /* 
      * virtual nodes require some additional manipolation of 
      * the query string. 
      */ 
-    #if 0
     if (node_id > 0) {	/* virtual node */
         /*
          * set the source to whatever it is configured to be.
@@ -206,7 +208,6 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
             req->filter_str = req->mdl->filter_str;
         }
     }
-    #endif
 
     /* 
      * there are two types of queries. the ones that just need to print or 
@@ -229,8 +230,6 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
      * XXX in the future we will have to check if the module has been running
      *     during the interval of interest.
      */
-/* TODO query-ondemand */
-#if 0
     if (!req->source) { 
 	if (req->mdl->running == RUNNING_ON_DEMAND) {
 	    /*
@@ -273,7 +272,6 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 	    free(running_filter);
 	}
     } else { 
-    #endif
 	/* 
 	 * a source is defined. go look for it and forget about the 
 	 * filter defined in the query. we will have to instantiate a
@@ -285,8 +283,7 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 	 * 
 	 * XXX the source is always a module running in the master node. 
 	 */
-#define module_lookup(x, y) NULL
-	req->src = module_lookup(req->source, 0);
+	req->src = mdl_lookup(mdls, req->source);
 	if (req->src == NULL) {
             /* No source module found,
              * return an error message to the client and finish
@@ -312,9 +309,8 @@ query_validate(qreq_t * req, UNUSED int node_id, UNUSED array_t *mdldefs)
 		    req->source); 
             return httpstr;
         }
-    #if 0
     } 
-    #endif
+#endif
 
     return NULL;		/* everything OK, nothing to say */
 }
@@ -431,11 +427,12 @@ static char *s_format_names[] = {
 #define query_ondemand(...)
 
 void
-query(int client_fd, int supervisor_fd, int node_id, array_t *mdldefs,
-    UNUSED stats_t *stats, ipc_peer_t * parent)
+query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
+                 UNUSED memmap_t * shmemmap, UNUSED int client_fd,
+                 como_node_t * node)
 {
     qreq_t req;
-    int storage_fd, file_fd;
+    int storage_fd, file_fd, supervisor_fd;
     off_t ofs; 
     ssize_t len;
     int mode, ret;
@@ -449,23 +446,13 @@ query(int client_fd, int supervisor_fd, int node_id, array_t *mdldefs,
     supervisor_fd = ipc_peer_get_fd(parent);
     memset(&como_qu, 0, sizeof(como_qu));
 
-    ipc_set_user_data(&como_qu);
-    DEBUGGER_WAIT_ATTACH("qu");
-
-    /* 
-     * every new process has to set its name, specify the type of memory
-     * the modules will be able to allocate and use, and change the process
-     * name accordingly. 
-     */
-    setproctitle("CAPTURE");
-
     /* 
      * wait for the debugger to attach
      */
     DEBUGGER_WAIT_ATTACH("qu");
 
-    /* TODO deregister handlers for IPC messages */
-    /* ipc_init(NULL, NULL, NULL); */
+    ipc_set_user_data(&como_qu);
+    ipc_init((ipc_peer_full_t *) COMO_QU, NULL, NULL);
 
     /* XXX needed? handle the message from SUPERVISOR */ 
     /*while (s_wait_for_modules) 
@@ -495,15 +482,15 @@ query(int client_fd, int supervisor_fd, int node_id, array_t *mdldefs,
     if (req.mode == QMODE_SERVICE) {
 	service_fn service = service_lookup(req.service);
 	if (service) {
-	    service(client_fd, node_id, &req);
+	    service(client_fd, node, &req);
 	}
 	close(client_fd);
 	close(supervisor_fd);
 	return;
     }
 
-    debug("query: node: %d module: %s\n",
-	   node_id, req.module, req.filter_str); 
+    debug("query: node: %s (#%d) module: %s\n",
+	   node->name, node->id, req.module, req.filter_str); 
     if (req.filter_str)
 	debug("       filter: %s\n", req.filter_str);
     if (req.source)
@@ -532,7 +519,7 @@ query(int client_fd, int supervisor_fd, int node_id, array_t *mdldefs,
      * cycle. 
      * 
      */
-    httpstr = query_validate(&req, node_id, mdldefs);
+    httpstr = query_validate(&req, node);
     if (httpstr != NULL) { 
 	if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) 
 	    err(EXIT_FAILURE, "sending data to the client [%d]", client_fd); 

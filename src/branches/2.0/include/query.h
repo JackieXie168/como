@@ -89,7 +89,7 @@ void query_ondemand (int client, qreq_t * req, int node_id);
 /*
  * services
  */
-typedef int (*service_fn) (int client_fd, int node_id, qreq_t * qreq);
+typedef int (*service_fn) (int client_fd, como_node_t *node, qreq_t * qreq);
 
 service_fn service_lookup(const char *name);
 

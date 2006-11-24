@@ -539,18 +539,12 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
 {
     mdl_icapture_t *ic;
     array_t *mdls = como_ca->mdls;
-    mdl_t *mdl = NULL;
-    int i;
+    mdl_t *mdl;
 
     debug("capture - export attaches to module `%s'\n", msg->mdl_name);
 
-    for (i = 0; i < mdls->len; i++) {
-        mdl = array_at(mdls, mdl_t *, i);
-        if (! strcmp(mdl->name, msg->mdl_name))
-            break;
-    }
-
-    if (i == mdls->len) {
+    mdl = mdl_lookup(mdls, msg->mdl_name);
+    if (mdl == NULL) {
         warn("export attaches to an unknown module `%s'\n",
             msg->mdl_name);
         return IPC_CLOSE;
@@ -588,20 +582,15 @@ static int
 ca_ipc_module_del(UNUSED ipc_peer_t * peer, delmsg_t *msg,
                 UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
 {
-    module_t *mdl;
-    int i;
+    mdl_t *mdl;
 
     debug("capture - deleting module `%s'\n", msg->mdl_name);
 
     /* only the parent process should send this message */
     //assert(sender == map.parent);
 
-    for (i = 0; i < mdls->len; i++) {
-        mdl = &array_at(mdls, mdl_t, i);
-        if (! strcmp(mdl->name, msg->mdl_name))
-            break;
-    }
-    if (i == mdls->len) {
+    mdl = mdl_lookup(mdls, msg->mdl_name);
+    if (mdl == NULL) {
         warn("deletion of unknown module `%s' requested\n");
         return IPC_OK; /* XXX what should we do? */
     }
