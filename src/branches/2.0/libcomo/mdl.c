@@ -225,6 +225,7 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
     const char *libdir;
     int ret;
     ex_impl_t *ex_impl;
+    qu_impl_t *qu_impl;
 
     ib = como_new0(mdl_ibase_t);
     mdl->priv = ib;
@@ -299,7 +300,25 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	}
 	break;
     case PRIV_IQUERY:
-	ib->proc.qu = como_new0(mdl_iquery_t);
+	qu_impl = shobj_symbol(ib->shobj, "qu_impl", FALSE);
+	switch (*qu_impl) {
+	case QU_IMPL_NONE:
+	break;
+	case QU_IMPL_C:
+	    ib->proc.qu->init = shobj_symbol(ib->shobj, "qu_init", TRUE);
+	    ib->proc.qu->finish = shobj_symbol(ib->shobj, "qu_finish", FALSE);
+	    ib->proc.qu->print_rec = shobj_symbol(ib->shobj, "print_rec", TRUE);
+	    ib->proc.qu->formats = shobj_symbol(ib->shobj, "qu_formats", TRUE);
+	    break;
+	case QU_IMPL_MONO:
+/*
+	    if (proxy_mono_load(mdl) == -1)
+		return -1;
+	    ib->proc.ex->init = proxy_mono_ex_init;
+	    ib->proc.ex->export = proxy_mono_export;
+*/
+	    break;
+	}
 	break;
     }
     

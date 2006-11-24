@@ -51,10 +51,9 @@ typedef enum qmode_t {
 } qmode_t;
 
 typedef enum qformat_t {
-    QFORMAT_CUSTOM = 0,	/* any format (print() should know better) */
-    QFORMAT_RAW,	/* raw binary data */
     QFORMAT_COMO,	/* output of replay() callback */
-    QFORMAT_HTML	/* print() with format=html */
+    QFORMAT_RAW,	/* raw binary data */
+    QFORMAT_CUSTOM	/* any format (print() should know better) */
 } qformat_t;
 
 /* 
@@ -69,11 +68,12 @@ typedef struct qreq_t {
     uint32_t	start;		/* query starts at */
     uint32_t	end;		/* query ends at */
     int		wait;		/* set if query should wait for data */
-    qformat_t	format;		/* query response format */
-
+    char *	format;		/* query response format */
+    int		format_id;	/* format identifier */
     char *	source;		/* source module to read data from */
-    char **	args;		/* arguments to be passed to module */
+    hash_t *	args;		/* arguments to be passed to module */
 
+    qu_format_t const *qu_format;
     mdl_t *	mdl;		/* module producing data -- using print() */
     mdl_t *	src;		/* module retrieving data -- using load() */
 } qreq_t;

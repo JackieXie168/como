@@ -553,4 +553,112 @@ csgetofs(int fd)
     assert(fd >= 0 && fd < CS_MAXCLIENTS && files[fd] != NULL); 
     return files[fd]->offset;
 } 
+
+/* 
+ * -- csseek_ts
+ * 
+ * This function looks into the first record of each file until it 
+ * finds the one with the closest start time to the requested one. 
+ * We do a linear search (instead of a faster binary search) because
+ * right now csseek only supports CS_SEEK_FILE_PREV and CS_SEEK_FILE_NEXT. 
+ * Furthermore, we dont have any idea on how large the records are and we 
+ * have no index for the timestamp. The function returns the offset of 
+ * the file to be read or -1 in case of error.
+ *
+ */
+off_t
+csseek_ts(int fd, timestamp_t where)
+{
+    ssize_t len;
+    off_t ofs;
+    csrec_t *rec;
+
+    len = sizeof(csrec_t);
+
+    ofs = csgetofs(fd);
+
+    /* 
+     * first, find the right file in the bytestream 
+     */
+    for (;;) { 
+
+	/* read the first record */
+	rec = csmap(fd, ofs, &len); 
+	if (rec == NULL) { 
+	    if (len == 0) {
+		/* 
+		 * we hit EOF. this can only happen if the file has
+		 * just been created with zero length and no records 
+		 * have been written yet. so, go back one file and 
+		 * use that one as starting point. 
+		 */
+		ofs = csseek(fd, CS_SEEK_FILE_PREV);
+		break; 
+	    }
+	    return -1;	/* error */
+	} 
+
+	/* use the current record timestamp to move to the correct file */
+	if (rec->ts < where) {
+	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
+	} else {
+	    /* found. go one file back; */
+	    ofs = csseek(fd, CS_SEEK_FILE_PREV);
+	} 
+
+	/* 
+	 * if the seek failed it means we are
+	 * at the first or last file. return the 
+	 * offset of this file and be done. 
+	 */
+	if (ofs == -1) {
+	    ofs = csgetofs(fd);
+	    break; 
+	}
+    }
+
+    /* 
+     * then find the record inside the file 
+     */
+    for (;;) {
+	len = sizeof(csrec_t);
+
+	/* 
+ 	 * mmap len bytes starting from last ofs. 
+	 * 
+	 */ 
+	rec = csmap(fd, ofs, &len); 
+	if (rec == NULL) {
+	    if (len != 0) {
+/*
+		warn("error reading file %s: %s\n",
+		       mdl->output, strerror(errno));
+*/
+	    }
+	    /* there's no data */
+	    ofs = -1;
+	    break;
+	}
+
+	/*
+	 * check if we have lost sync (indicated by a zero timestamp)
+	 */
+	if (rec->ts == 0) {
+	    /*
+	     * If lost sync, move to the next file and try again. 
+	     */
+	    ofs = csseek(fd, CS_SEEK_FILE_NEXT);
+	    continue;
+	}
+
+	if (rec->ts >= where) {
+	    break;
+	}
+	ofs += rec->sz;
+
+    }
+
+    return ofs;
+}
+
 /* end of file */

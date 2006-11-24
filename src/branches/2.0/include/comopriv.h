@@ -370,11 +370,13 @@ struct mdl_iexport {
 
 struct mdl_iquery {
     int			cs_reader;
+    int			client_fd;
     
     qu_init_fn		init;
     qu_print_rec_fn	print_rec;
     qu_finish_fn	finish;
     qu_replay_fn        replay;
+    qu_format_t *	formats;
     
     void *		state;
 };

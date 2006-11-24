@@ -103,6 +103,15 @@ typedef enum running_t {
     RUNNING_ON_DEMAND			/* running in query on demand */
 } running_t;
 
+typedef struct qu_format {
+    int		id;
+    char *	name;
+    char *	content_type;
+} qu_format_t;
+
+#define QUERY_FORMATS_BEGIN	qu_format_t qu_formats[] = {
+#define QUERY_FORMATS_END	{-1, NULL, NULL}};
+
 /*
  * Module callbacks
  */
@@ -244,6 +253,13 @@ typedef enum ex_impl
     EX_IMPL_C,
     EX_IMPL_MONO,
 } ex_impl_t;
+
+typedef enum qu_impl
+{
+    QU_IMPL_NONE,
+    QU_IMPL_C,
+    QU_IMPL_MONO,
+} qu_impl_t;
 
 
 typedef struct capabilities_t {
