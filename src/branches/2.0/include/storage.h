@@ -86,8 +86,7 @@ void *    csmap     (int fd, off_t ofs, ssize_t * sz);
 void      cscommit  (int fd, off_t ofs);
 off_t     csseek    (int fd, csmethod_t wh);
 off_t     csseek_ts (int fd, timestamp_t where);
-csrec_t * csgetrec  (int fd);
-off_t     csnextrec (int fd);
+csrec_t * csgetrec  (int fd, off_t ofs);
 void      csclose   (int fd, off_t ofs);
 
 #endif	/* STORAGE_H_ */
