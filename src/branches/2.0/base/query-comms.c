@@ -42,6 +42,8 @@
 
 #include "como.h"
 #include "query.h"
+#include "hash.h"
+#include "comopriv.h"
 
 /*
  * Communication support for the query modules.
@@ -261,12 +263,12 @@ parse_relativetime(char * str, int multiplier, timestamp_t base)
     } 
     
     if (len > 0) {
-	logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
+	warn("time %s incorrect, using current time\n", str); 
 	return ts; 
     }
 
     return (time_t) timegm(&timeinfo); 
-} 
+}
 
 
 /* 
@@ -323,7 +325,7 @@ parse_timestr(char * str, timestamp_t * base)
 	} 
 		
 	if (len > 0) {
-	    logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
+	    warn("time %s incorrect, using current time\n", str); 
 	    return TS2SEC(*base); 
 	} 
 
@@ -344,7 +346,7 @@ parse_timestr(char * str, timestamp_t * base)
 	return TS2SEC(*base);
 
     default: 	
-	logmsg(LOGWARN, "time %s incorrect, using current time\n", str); 
+	warn("time %s incorrect, using current time\n", str); 
 	return TS2SEC(*base);
     } 
 
@@ -399,7 +401,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
     q->mode = QMODE_MODULE;
     q->start = TS2SEC(now);
     q->end = ~0;
-    q->format = QFORMAT_CUSTOM;
+    q->qu_format = NULL;
     q->wait = TRUE;
     q->args = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
 

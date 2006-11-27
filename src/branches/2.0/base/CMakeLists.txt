@@ -18,6 +18,7 @@ SET(COMO_SRCS
   pktmeta.c
   headerinfo.c
   query.c
+  query-comms.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
 #  memory.c
@@ -31,7 +32,6 @@ SET(COMO_SRCS
 #  ipc.c
 #  modules.c
 #  query.c
-#  query-comms.c
 #  query-ondemand.c
 #  services.c
 #  capture.c

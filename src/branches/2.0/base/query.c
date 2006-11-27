@@ -77,11 +77,14 @@ enum {
     FORMAT_RAW = -3
 };
 
-static const qu_format_t QU_FORMAT_COMO =
+const qu_format_t QU_FORMAT_COMO =
 {FORMAT_COMO, "como", "application/octet-stream"};
 
-static const qu_format_t QU_FORMAT_RAW =
+const qu_format_t QU_FORMAT_RAW =
 {FORMAT_RAW, "raw", "application/octet-stream"};
+
+/* stats 'inherited' from SU */
+extern stats_t *como_stats;
 
 /* 
  * -- query_validate
@@ -458,7 +461,7 @@ qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 
-#define query_recv(a,b,c) -1
+//#define query_recv(a,b,c) -1
 #define service_lookup(...) NULL
 #define query_ondemand(...)
 
@@ -495,7 +498,8 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     /*while (s_wait_for_modules) 
 	ipc_handle(supervisor_fd); */
  
-    ret = query_recv(&req, client_fd, stats->ts); 
+    ret = query_recv(&req, client_fd, como_stats->ts); 
+
     if (ret < 0) {
     	if (ret != -1) {
 	    switch (ret) {
@@ -583,6 +587,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
      * execute this query.
      */
     if (req.source) {
+        warn("TODO -- query_ondemand\n");
 	query_ondemand(client_fd, &req, node_id); 
 	assert_not_reached();
     }
@@ -612,28 +617,31 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     ts = TIME2TS(req.start, 0);
     end_ts = TIME2TS(req.end, 0);
 
-#define module_db_seek_by_ts(a,b,c) 0
-#define module_db_record_print(a,b,c,d) -1
-#define handle_print_fail(x) error("handle_print_fail\n")
-#define module_db_record_get(...) (error("TODO module_db_record_get\n"), NULL)
 #define module_db_record_replay(...) NULL
 #define handle_replay_fail(...) error("TODO: handle_replay_fail\n")
     ofs = csseek_ts(file_fd, ts);
     if (ofs >= 0) {
 	/* at this point at least one record exists as we seek on it */
 	switch (format_id) {
+        case FORMAT_RAW:
 	case FORMAT_COMO:
-#if 0
 	    /*
 	     * TODO:transmit the output stream description
 	     */
-#endif
 	    break;
 	default:
-	    /* first print callback. we need to make sure that req.args != NULL. 
+	    /*
+             * first print callback. we need to make sure that req.args != NULL. 
 	     * if this is not the case we just make something up
 	     */
 	    iq->state = iq->init(req.mdl, format_id, req.args);
+
+            /*
+             * set up a FILE * to be able to fprintf() to the user.
+             */
+            iq->clientfile = fdopen(client_fd, "w");
+            if (iq->clientfile) 
+                error("cannot fdopen() on client_fd\n");
 	    break;
 	}
 	for (;;) { 
@@ -671,14 +679,13 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		     err(EXIT_FAILURE, "sending data to the client"); 
 		break;
 
-	    default: 
-		/* TODO: deserialize rec */
-		sbuf = (uint8_t *) &rec->ts;
-		alc = como_alc();
-		/* ... */
-
-		iq->print_rec(req.mdl, format_id, mdlrec, iq->state);
-		break;
+	    default:
+                /* TODO: deserialize rec */
+                sbuf = (uint8_t *) &rec->ts;
+                alc = como_alc();
+                req.mdl->priv->mdl_record.deserialize(&sbuf, &mdlrec, alc);
+                iq->print_rec(req.mdl, format_id, mdlrec, iq->state);
+                break;
 	    }
 	    
 	    ofs += rec->sz;
@@ -689,6 +696,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    iq->finish(req.mdl, format_id, iq->state);
 	}
     }
+    free(dbname);
     warn("query completed\n"); 
 
     /* close the file with STORAGE */

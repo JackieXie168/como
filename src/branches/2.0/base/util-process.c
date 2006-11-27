@@ -54,7 +54,6 @@ static struct {
 
 static int s_children = 0; 
 
-
 /*
  * -- start_child 
  * 
@@ -67,7 +66,9 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 	    memmap_t * shmemmap, int client_fd, como_node_t * node)
 {
     pid_t pid;
-    int i;
+    int i, p[2];
+    char c;
+
     ipc_peer_t * who = (ipc_peer_t *) child;
 
     /* find a slot for the child */
@@ -80,10 +81,31 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 	return -1; 
     } 
 
+    /*
+     * set a pipe which will be used to tell child it may start.
+     * this avoids a race condition when the child exists before
+     * SU has registered it.
+     */
+    pipe(p);
+
     /* ok, fork a regular process and return pid to the caller. */
+    debug("start_child -- forking\n");
     pid = fork();
-    if (pid == 0) {	/* child */
+
+    if (pid < 0) { /* fork() fails */
+	warn("fork() failed: %s\n", strerror(errno));
+        close(p[0]);
+        close(p[1]);
+        return -1;
+    }
+    else if (pid == 0) {	/* child */
 	int supervisor_fd;
+
+        debug("child: waiting for start signal\n");
+        close(p[1]);                  /* not going to write to the pipe */
+        como_read(p[0], &c, 1);       /* wait for start signal */
+        close(p[0]);                  /* done with the pipe */
+        debug("child: starting\n");
 	
 #ifdef ENABLE_PROFILING
 	enable_profiling();
@@ -113,9 +135,15 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 	exit(0);
     }
 
-    s_child_info[i].who = child;
+    /* parent */
+    close(p[0]); /* will not read from pipe */
+
+    s_child_info[i].who = child; /* register the child info */
     s_child_info[i].pid = pid;
     s_children++;
+
+    como_write(p[1], &c, 1); /* child process can start now */
+    close(p[1]);             /* done with the pipe */
     
     return pid;
 }
@@ -145,8 +173,9 @@ handle_children()
 	if (s_child_info[j].pid == pid) {
 	    who = (ipc_peer_t *) s_child_info[j].who;
 	    break;
-	}
+        }
     }
+    assert (who != NULL);
 
     if (j == s_children) {
 	/* don't bother about unknown children */
@@ -199,7 +228,8 @@ spawn_child(ipc_peer_full_t * child, const char * path, ...)
     va_list va;
     int argc = 1;
     const char *arg;
-    int i;
+    int i, p[2];
+    char c;
     
     va_start(va, path);
     arg = va_arg(va, const char *);
@@ -209,14 +239,30 @@ spawn_child(ipc_peer_full_t * child, const char * path, ...)
     }
     va_end(va);
     
+    /*
+     * set a pipe which will be used to tell child it may start.
+     * this avoids a race condition when the child exists before
+     * SU has registered it.
+     */
+    pipe(p);
+
+    debug("spawn_child -- forking\n");
     pid = fork();
-    if (pid == -1) {
+    if (pid == -1) { /* fork() failure */
 	warn("fork() failed: %s\n", strerror(errno));
+        close(p[0]);
+        close(p[1]);
 	return -1;
     }
-    if (pid == 0) {
-	/* child process */
+    else if (pid == 0) { /* child process */
 	char * argv[argc + 1];
+
+        close(p[1]);
+
+        debug("child: waiting for start signal\n");
+        como_read(p[0], &c, 1);
+        close(p[0]);
+        debug("child: starting\n");
 
         argv[0] = (char *)path;
 	i = 1;
@@ -231,12 +277,17 @@ spawn_child(ipc_peer_full_t * child, const char * path, ...)
 	i = execv(path, argv);
 	assert(i == -1);
 	error("Can't execute %s: %s\n", path, strerror(errno));
-    }
+    } 
+
+    close(p[0]);
 
     i = s_children;
     s_child_info[i].who = child;
     s_child_info[i].pid = pid;
     s_children++;
+
+    como_write(p[1], &c, 1); /* child registered, may start */
+    close(p[1]);
 
     return pid;
 }
