@@ -379,6 +379,7 @@ struct mdl_iquery {
     qu_format_t *	formats;
     
     void *		state;
+    FILE *              clientfile;
 };
 
 mdl_isupervisor_t * mdl_get_isupervisor (mdl_t * h);

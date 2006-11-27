@@ -526,7 +526,7 @@ como_node_handle_query(como_node_t * node)
      * start a query process. 
      */
     peer = ipc_peer_child(COMO_QU, cd);
-    pid = start_child(NULL, query_main, s_como_su->memmap, -1, node);
+    pid = start_child(peer, query_main, s_como_su->memmap, cd, node);
     close(cd);
 }
 
