@@ -730,12 +730,12 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
             if (!isIP) 
 		return 0;
             if (t->data->asn.direction == 0)			/* src */
-                z = asn_test((N32(IP(src_ip))), t->data->asn.asn);
+                z = asn_test((H32(IP(src_ip))), t->data->asn.asn);
             else if (t->data->ipaddr.direction == 1)		/* dst */
-                z = asn_test((N32(IP(dst_ip))), t->data->asn.asn);
+                z = asn_test((H32(IP(dst_ip))), t->data->asn.asn);
             else 						/* addr */
-                z = asn_test((N32(IP(src_ip))), t->data->asn.asn) ||
-		    asn_test((N32(IP(dst_ip))), t->data->asn.asn);
+                z = asn_test((H32(IP(src_ip))), t->data->asn.asn) ||
+		    asn_test((H32(IP(dst_ip))), t->data->asn.asn);
             break;
         case Tether:
             if (!isETH && !isVLAN) 
