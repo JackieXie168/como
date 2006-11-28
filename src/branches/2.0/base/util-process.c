@@ -106,7 +106,7 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
         como_read(p[0], &c, 1);       /* wait for start signal */
         close(p[0]);                  /* done with the pipe */
         debug("child: starting\n");
-	
+
 #ifdef ENABLE_PROFILING
 	enable_profiling();
 #endif
@@ -119,6 +119,7 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 	// fclose(stdout); // XXX
 	// fclose(stderr); // XXX
 
+        /* ipc_finish will close all FDs. We must retain a copy of client_fd */
 	ipc_finish(FALSE);
 	ipc_init(child, NULL, NULL);
 	
@@ -166,8 +167,10 @@ handle_children()
 
     pid = wait3(&statbuf, WNOHANG, NULL);
     if (pid <= 0) {
+        debug("handle_children -- nothing to do\n", pid);
 	return 0;
     } 
+    debug("handle_children (pid=%d)\n", pid);
 
     for (j = 0; j < s_children; j++) {
 	if (s_child_info[j].pid == pid) {
@@ -194,7 +197,6 @@ handle_children()
 	}
 	s_children = i + 1;
     }
-
 
     if (WIFEXITED(statbuf)) {
 	if (WEXITSTATUS(statbuf) == EXIT_SUCCESS) { 

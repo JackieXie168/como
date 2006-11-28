@@ -713,7 +713,6 @@ como_su_run(como_su_t * como_su)
 		    warn("error on IPC handle from %d\n", i);
 		case IPC_CLOSE:
 		case IPC_EOF:
-		    close(i);
 		    event_loop_del(&como_su->el, i);
 		    break;
 		}

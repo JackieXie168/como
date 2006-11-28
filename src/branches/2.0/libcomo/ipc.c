@@ -139,8 +139,10 @@ ipc_peer_destroy(ipc_peer_full_t * p)
     if (p == NULL)
 	return;
     free(p->at);
-    if (p->fd != -1)
+    if (p->fd != -1) {
+        debug("ipc_peer_destroy -- closing fd %d\n", p->fd);
 	close(p->fd);
+    }
     free(p);
 }
 
@@ -452,18 +454,20 @@ ipc_handle(int fd)
     /* read the message header first */
     r = (size_t) como_read(fd, &msg, sizeof(ipc_msg_t)); 
     if (r != sizeof(ipc_msg_t)) {
-	if (r == 0)
-	    return IPC_EOF;
-    	
 	/* find the sender of the message */
 	x = lookup_peer(fd);
 	if (x != NULL) {
-	    warn("Malformed IPC message received from %s@%s on fd %d.\n",
-		 x->name, x->at, fd);
+            if (r != 0)
+                warn("Malformed IPC message received from %s@%s on fd %d.\n",
+                        x->name, x->at, fd);
+	    ipc_peer_list_remove(&s_peers, x);
+	    ipc_peer_destroy(x); /* calls close */
 	} else {
 	    warn("Invalid IPC message received on fd %d.\n", fd);
 	    debug("Have you callend ipc_handle on a non-IPC fd?\n");
 	}
+	if (r == 0)
+	    return IPC_EOF;
 	return IPC_ERR;
     }
 	    
@@ -547,13 +551,13 @@ ipc_handle(int fd)
 	int ic;
 	ic = s_handlers[msg.type]((ipc_peer_t *) x, buf, msg.len, swap,
 				  s_user_data);
-	if (ic == IPC_CLOSE) {
+	if (ic == IPC_CLOSE || ic == IPC_ERR) {
 	    notice("Closing connection to peer %s on fd %d\n", x->name, fd);
 	    ipc_peer_list_remove(&s_peers, x);
 	    ipc_peer_destroy(x); /* calls close */
 	}
         else
-            assert(ic == IPC_OK || ic == IPC_ERR);
+            assert(ic == IPC_OK);
 	
 	//free(buf);
 	return ic;
