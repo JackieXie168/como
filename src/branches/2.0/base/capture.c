@@ -1843,8 +1843,6 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 #endif
 	end_tsctimer(como_stats->ca_loop_timer);
 	end_tsctimer(como_stats->ca_full_timer);
-
-
     }
 }
 

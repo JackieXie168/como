@@ -42,12 +42,14 @@
 #include "ipc.h"
 #include "query.h"
 
+extern stats_t *como_stats;
 
 /* global state */
-extern struct _como map;
+//extern struct _como map;
 
+#if 0
 static timestamp_t
-start_timestamp(module_t * mdl, int storage_fd)
+start_timestamp(mdl_t * mdl, int storage_fd)
 {
     int file_fd = -1;
     off_t ofs;
@@ -72,6 +74,7 @@ start_timestamp(module_t * mdl, int storage_fd)
     
     return ts;
 }
+#endif
 
 
 /* 
@@ -82,14 +85,13 @@ start_timestamp(module_t * mdl, int storage_fd)
  * and some load information (memory usage, no. of modules, average traffic). 
  */
 int
-service_status(int client_fd, int node_id,
+service_status(int client_fd, como_node_t *node,
                __attribute__((__unused__)) qreq_t * qreq) 
 {
     char buf[2048]; 
     char datebuf[30];
     char * httpstr;
-    module_t * mdl;
-    node_t * node;
+    mdl_t * mdl;
     time_t start, last; 
     struct tm * timedata; 
     int storage_fd;
@@ -97,33 +99,29 @@ service_status(int client_fd, int node_id,
     int secs, dd, hh, mm, ss; 
     uint64_t ld_15m = 0, ld_1h = 0, ld_6h = 0, ld_1d = 0;
     int i;
-    timestamp_t node_src_ts = 0;
-
-    /* first find the node */ 
-    assert(node_id < map.node_count); 
-    node = &map.node[node_id];
+    /*timestamp_t node_src_ts = 0;*/
 
     /* send HTTP header */
     httpstr = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n";
-    ret = como_writen(client_fd, httpstr, strlen(httpstr)); 
+    ret = como_write(client_fd, httpstr, strlen(httpstr)); 
     if (ret < 0) 
 	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
     /* send name, location, version, build date, speed and data source 
      * all information that is static and present in the map 
      */
-
     len = sprintf(buf, "\nNode: %s | %s | %s\n",
 	    node->name, node->location, node->type); 
 
     /* print the starting time */
-    start = TS2SEC(map.stats->first_ts); 
+    start = TS2SEC(como_stats->first_ts);
+    start = 0;
     timedata = gmtime(&start); 
     strftime(datebuf, sizeof(datebuf), "%a %B %e %T %Z %Y", timedata); 
     len += sprintf(buf + len, "Start: %u | %s\n", (unsigned) start, datebuf); 
 		
     /* print the last timestamp */
-    last = TS2SEC(map.stats->ts); 
+    last = TS2SEC(como_stats->ts);
     timedata = gmtime(&last); 
     strftime(datebuf, sizeof(datebuf), "%a %B %e %T %Z %Y", timedata); 
     len += sprintf(buf + len, "Current: %u | %s\n", (unsigned) last, datebuf); 
@@ -136,19 +134,19 @@ service_status(int client_fd, int node_id,
     ss = secs % 60;
     len += sprintf(buf + len, "Duration: %dd %dh %dm %ds\n", dd, hh, mm, ss); 
     
-    if (node_id == 0) {
+    if (node->id == 0) {
 	/* print the load */
 	for (i = 0; i < 15; i++) {
-	    ld_15m += map.stats->load_15m[i];
+	    ld_15m += como_stats->load_15m[i];
 	}
 	for (i = 0; i < 60; i++) {
-	    ld_1h += map.stats->load_1h[i];
+	    ld_1h += como_stats->load_1h[i];
 	}
 	for (i = 0; i < 360; i++) {
-	    ld_6h += map.stats->load_6h[i];
+	    ld_6h += como_stats->load_6h[i];
 	}
 	for (i = 0; i < 1440; i++) {
-	    ld_1d += map.stats->load_1d[i];
+	    ld_1d += como_stats->load_1d[i];
 	}
 	len += sprintf(buf + len, "Load: %llu | %llu | %llu | %llu\n",
 		       ld_15m, ld_1h, ld_6h, ld_1d);
@@ -159,7 +157,7 @@ service_status(int client_fd, int node_id,
 	len += sprintf(buf + len, "Comment: %s\n", node->comment); 
 
     /* send the results */
-    ret = como_writen(client_fd, buf, len);
+    ret = como_write(client_fd, buf, len);
     if (ret < 0)
 	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
@@ -168,15 +166,17 @@ service_status(int client_fd, int node_id,
      * and read the very first timestamp. we will send this information 
      * to let the user know how much past data is available to each module
      */
-    storage_fd = ipc_connect(STORAGE); 
+    storage_fd = ipc_connect(COMO_ST);
+    storage_fd = -1;
 
     /* 
      * if this is the master node (i.e. node 0) and there 
      * are virtual nodes, send the list of virtual nodes as well
      */ 
+    #if 0
     if (node_id == 0) { 
 	for (i = 1; i < map.node_count; i++) {
-	    node_t * nd = &map.node[i];
+	    como_node_t * nd = &map.node[i];
 
 	    len = sprintf(buf, "Virtual: %s | %s | %s | ", 
 			  nd->name, nd->location, nd->type);
@@ -198,39 +198,42 @@ service_status(int client_fd, int node_id,
 	    node_src_ts = start_timestamp(mdl, storage_fd);
 	}
     }
+    #endif
 
     /* send list of loaded modules */
-    for (idx = 0; idx <= map.module_last; idx++) {
+    for (idx = 0; idx < node->mdls->len; idx++) {
 	timestamp_t ts;
-	alias_t * alias;
+	/*alias_t * alias;*/
+        mdl = array_at(node->mdls, mdl_t *, idx);
 
-	mdl = &map.modules[idx]; 
+	/*if (mdl->status == MDL_UNUSED) 
+	    continue; */
 
-	if (mdl->status == MDL_UNUSED) 
-	    continue; 
-
-	if (mdl->node != node_id)
-	    continue; 
-
+        #if 0
 	if (mdl->running != RUNNING_ON_DEMAND) {
 	    /* we now look at the very first record for this module 
     	     * to get an idea on how far in the past a query could go. 
  	     */
+            #endif
+            #define start_timestamp(...) 0
  	    ts = start_timestamp(mdl, storage_fd);
+            #if 0
 	} else {
 	    ts = node_src_ts;
 	}
+        #endif
 	    
 	len = sprintf(buf, "Module: %-15s | %s | %u | %s%s | %s\n",
-		      mdl->name, mdl->filter_str, TS2SEC(ts),
-		      mdl->callbacks.formats,
-		      mdl->callbacks.replay ? " como" : "",
+		      mdl->name, mdl->filter, TS2SEC(ts),
+		      /*mdl->callbacks.formats*/ "TODO_print_formats",
+		      /*mdl->callbacks.replay ? " como" : ""*/ "",
 		      (mdl->description? mdl->description : "--"));
 
-	ret = como_writen(client_fd, buf, len);
+	ret = como_write(client_fd, buf, len);
 	if (ret < 0)
 	    err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
+        #if 0
 	/* 
 	 * before moving to the next module, check if this one has 
          * any aliases. we should print them as well in the ?status query
@@ -249,13 +252,14 @@ service_status(int client_fd, int node_id,
 		err(EXIT_FAILURE, 
 		    "sending status to the client [%d]", client_fd);
 	 } 
+         #endif
     } 
 
     /* print version and copyright information */
     len = sprintf(buf, "\n-- CoMo v%s (built: %s %s)\n", COMO_VERSION, 
 		__DATE__, __TIME__); 
 
-    ret = como_writen(client_fd, buf, len);
+    ret = como_write(client_fd, buf, len);
     if (ret < 0)
 	err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 
@@ -263,3 +267,4 @@ service_status(int client_fd, int node_id,
     
     return 0;
 }
+

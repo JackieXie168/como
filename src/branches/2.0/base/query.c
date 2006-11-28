@@ -461,8 +461,6 @@ qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 
-//#define query_recv(a,b,c) -1
-#define service_lookup(...) NULL
 #define query_ondemand(...)
 
 void

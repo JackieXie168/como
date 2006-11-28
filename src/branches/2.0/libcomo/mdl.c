@@ -427,6 +427,29 @@ mdl_lookup(array_t *mdls, const char *name)
     return NULL;
 }
 
+void
+mdl_printf(mdl_t * mdl, const char * fmt, ...)
+{
+    mdl_iquery_t *iq = mdl_get_iquery(mdl);
+    FILE *f =iq->clientfile;
+    va_list ap;
+
+    debug("vfprintf to client\n");
+    va_start(ap, fmt);
+    vfprintf(f, fmt, ap);
+    va_end(ap);
+    debug("vfprintf done\n");
+
+    fflush(f);
+}
+
+void
+mdl_print(mdl_t *mdl, const char *str)
+{
+    mdl_printf(mdl, "%s", str);
+}
+
+
 /* QUERY */
 #if 0
 strec_t *
