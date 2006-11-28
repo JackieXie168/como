@@ -2,7 +2,7 @@ INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 
 SET(SERVICES
   status
-  trace
+#  trace
 )
 
 #
@@ -23,7 +23,7 @@ FOREACH(service ${SERVICES})
   # Replace - with _ in the C service name
   STRING(REPLACE "-" "_" _cservice ${service})
   WRITE_FILE(${SERVICES_LIST}
-"extern int service_${_cservice}(int client_fd, int node_id, qreq_t * qreq);" APPEND)
+"extern int service_${_cservice}(int client_fd, como_node_t * node, qreq_t * qreq);" APPEND)
 ENDFOREACH(service)
 
 WRITE_FILE(${SERVICES_LIST}
@@ -40,3 +40,8 @@ WRITE_FILE(${SERVICES_LIST}
 "    { NULL, NULL } };" APPEND)
 
 ADD_LIBRARY(services STATIC ${SERVICES})
+
+# create a 'services_library' target that base can depend on
+ADD_CUSTOM_TARGET(services_library)
+ADD_DEPENDENCIES(services_library services)
+

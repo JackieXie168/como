@@ -748,11 +748,12 @@ como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
 	is = mdl_get_isupervisor(mdl);
 	mdl->config = is->init(mdl, def->args);
 	if (mdl->config == NULL) {
-	    warn("Initialization of module `%s` failed.\n", mdl->name);
+	    warn("Initialization of module `%s' failed.\n", mdl->name);
 	    continue;
 	}
 
-	array_add(node->mdls, mdl);
+	array_add(node->mdls, &mdl);
+        mdl = array_at(node->mdls, mdl_t *, 0);
     }
 }
 
@@ -840,25 +841,25 @@ fake_config()
     s.args = NULL;
     array_add(sniffer_defs, &s);
 
-#if 0
     m.name = como_strdup("topaddr");
     m.mdlname = como_strdup("topaddrCC");
     m.args = NULL;
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
 
+#if 0
     m.name = como_strdup("traffic2");
     m.mdlname = como_strdup("trafficCCS");
     m.args = NULL;
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
-#endif
 
     m.name = como_strdup("traffic");
     m.mdlname = como_strdup("trafficCC");
     m.args = NULL;
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
+#endif
 
     config.sniffer_defs = sniffer_defs;
     config.mdl_defs = mdl_defs;

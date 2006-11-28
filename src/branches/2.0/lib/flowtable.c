@@ -499,7 +499,7 @@ flowtable_iter_next(flowtable_iter_t * iter)
     /* Remember that real->entry may have been deleted */
 
     while (real->next_entry == NULL) {
-	if (real->next_bucket >= real->table->lastBucket) {
+	if (real->next_bucket > real->table->lastBucket) {
 	    /* invalidate iter and return false */
 	    real->entry = NULL;
 	    real->table = NULL;

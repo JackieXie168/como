@@ -36,11 +36,12 @@
 #include <errno.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "ipc.h"
 #include "query.h"
 
 int
-service_trace(int client_fd, __attribute__((__unused__)) int node_id,
+service_trace(int client_fd, __attribute__((__unused__)) como_node_t * node,
               qreq_t * qreq)
 {
     int capture_fd;
@@ -54,11 +55,11 @@ service_trace(int client_fd, __attribute__((__unused__)) int node_id,
     /* send HTTP header */
     http_resp = "HTTP/1.0 200 OK\r\n"
 		"Content-Type: application/octet-stream\r\n\r\n";
-    ret = como_writen(client_fd, http_resp, strlen(http_resp)); 
+    ret = como_write(client_fd, http_resp, strlen(http_resp)); 
     if (ret < 0)
 	goto error;
 
-    capture_fd = ipc_connect(CAPTURE);
+    capture_fd = ipc_connect(COMO_CA);
     if (capture_fd < 0)
 	goto error;
     
@@ -79,15 +80,15 @@ service_trace(int client_fd, __attribute__((__unused__)) int node_id,
 	    continue;
 	}
 	
-	x = como_writen(client_fd, (char *) pkt, sizeof(pkt_t));
+	x = como_write(client_fd, (char *) pkt, sizeof(pkt_t));
 	if (x < 0) {
-	    logmsg(LOGWARN, "service trace error: %s\n", strerror(errno));
+	    warn("service trace error: %s\n", strerror(errno));
 	    goto error;
 	}
 	/* TODO: padding */
-	x = como_writen(client_fd, pkt->payload, pkt->caplen);
+	x = como_write(client_fd, pkt->payload, pkt->caplen);
 	if (x < 0) {
-	    logmsg(LOGWARN, "service trace error: %s\n", strerror(errno));
+	    warn("service trace error: %s\n", strerror(errno));
 	    goto error;
 	}
     }
@@ -104,3 +105,4 @@ error:
     ret = -1;
     goto done;
 }
+

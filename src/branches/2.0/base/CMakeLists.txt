@@ -19,8 +19,10 @@ SET(COMO_SRCS
   headerinfo.c
   query.c
   query-comms.c
+  services.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
+#  capture-client.c
 #  memory.c
 #  config.c
 #  inline.c
@@ -31,12 +33,7 @@ SET(COMO_SRCS
 #  util-socket.c
 #  ipc.c
 #  modules.c
-#  query.c
 #  query-ondemand.c
-#  services.c
-#  capture.c
-#  capture-client.c
-#  supervisor.c
 #  storage.c
 #  storage-client.c
 #  ${COMO_SOURCE_DIR}/lib/bitmap.c
@@ -45,7 +42,6 @@ SET(COMO_SRCS
 #  ${COMO_SOURCE_DIR}/lib/macutils.c
 #  ${COMO_SOURCE_DIR}/lib/printpkt.c
 #  ${COMO_SOURCE_DIR}/lib/mempool.c
-#  ${COMO_SOURCE_DIR}/lib/uhash.c
 #  ${COMO_SOURCE_DIR}/lib/pattern_search.c
 )
 
@@ -160,7 +156,8 @@ ENDIF(NOT ENABLE_SHARED_MODULES)
 
 TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/sniffers/libsniffers.a)
 
-#TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
+ADD_DEPENDENCIES(como services_library)
+TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
 
 TARGET_LINK_LIBRARIES(como m)
 

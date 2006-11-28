@@ -107,7 +107,7 @@ dump_state(mdl_t *self, ex_state_t *st)
         topaddr_record_t *rec = (topaddr_record_t *)flowtable_iter_get(&it);
         array[i++] = rec;
     }
-    assert(i == st->nrec - 1);
+    assert(i == st->nrec);
 
     /* sort the array using record_cmp */
     qsort(array, i, sizeof(void *), (int(*)(const void *, const void *))record_cmp);

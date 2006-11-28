@@ -46,6 +46,6 @@ service_lookup(const char *name)
 	    return bs->service;
 	}
     }
-    logmsg(LOGWARN, "service %s is not built in\n", name);
+    warn("service %s is not built in\n", name);
     return NULL;
 }
