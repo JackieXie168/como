@@ -610,7 +610,7 @@ query_recv(qreq_t * q, int sd, timestamp_t now)
 	/* leave last byte unused, so we are sure to find a \0 there. */
 	rd = read(sd, buf + ofs, sizeof(buf) - ofs - 1);
 
-	debug("query_recv read returns %d\n", rd);
+	debug("query_recv from fd %d read returns %d\n", sd, rd);
 
 	if (rd < 0)	/* other end closed connection ? */
 	    return -1; 
