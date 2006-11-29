@@ -129,45 +129,62 @@ FOREACH (MODULE ${MODULES})
   ADD_CFILE(${MODULE_SERIAL})
   ADD_CFILE(${MODULE_TYPENAMES})
   ADD_CFILE(${MODULE_LANGDEF})
-  
-  IF(EXISTS ${MODULE_EXPORT_C})     # check what the lang is
-    WRITE_FILE(${MODULE_LANGDEF} "
-#include \"como.h\"
-ex_impl_t ex_impl = EX_IMPL_C;
-")
+
+  SET(EXPORT_IN_C)
+  SET(EXPORT_IN_MONO)
+  IF(EXISTS ${MODULE_EXPORT_C})
+    SET(EXLANG "EX_IMPL_C")
+    SET(EXPORT_IN_C 1)
+    MESSAGE("\t\texport: implemented in C")
   ELSE(EXISTS ${MODULE_EXPORT_C})
-    IF(EXISTS ${MODULE_EXPORT_CSHARP})
-      WRITE_FILE(${MODULE_LANGDEF} "
-#include \"como.h\"
-ex_impl_t ex_impl = EX_IMPL_MONO;
-")
-    ELSE(EXISTS ${MODULE_EXPORT_CSHARP})
-          WRITE_FILE(${MODULE_LANGDEF} "
-#include \"como.h\"
-ex_impl_t ex_impl = EX_IMPL_NONE;
-")
-    ENDIF(EXISTS ${MODULE_EXPORT_CSHARP})
+    IF (EXISTS ${MODULE_EXPORT_CSHARP})
+      SET(EXLANG "EX_IMPL_MONO")
+      SET(EXPORT_IN_MONO 1)
+      MESSAGE("\t\texport: implemented in MONO")
+    ELSE (EXISTS ${MODULE_EXPORT_CSHARP})
+      SET(EXLANG "EX_IMPL_NONE")
+      MESSAGE("\t\texport: not implemented")
+    ENDIF (EXISTS ${MODULE_EXPORT_CSHARP})
   ENDIF(EXISTS ${MODULE_EXPORT_C})
 
-  IF(EXISTS ${MODULE_EXPORT_C})     # export in C
+  SET(QUERY_IN_C)
+  SET(QUERY_IN_MONO)
+  IF(EXISTS ${MODULE_QUERY_C})
+    SET(QULANG "QU_IMPL_C")
+    SET(QUERY_IN_C 1)
+    MESSAGE("\t\tquery: implemented in C")
+  ELSE(EXISTS ${MODULE_QUERY_C})
+    IF (EXISTS ${MODULE_QUERY_CSHARP})
+      SET(QULANG "QU_IMPL_MONO")
+      SET(QUERY_IN_MONO 1)
+      MESSAGE("\t\tquery: implemented in MONO")
+    ELSE (EXISTS ${MODULE_QUERY_CSHARP})
+      SET(QULANG "QU_IMPL_NONE")
+      MESSAGE("\t\tquery: not implemented")
+    ENDIF (EXISTS ${MODULE_QUERY_CSHARP})
+  ENDIF(EXISTS ${MODULE_QUERY_C})
+
+  WRITE_FILE(${MODULE_LANGDEF} "#include \"como.h\"
+ex_impl_t ex_impl = ${EXLANG};
+qu_impl_t qu_impl = ${QULANG};
+")
+
+  IF(EXPORT_IN_C)
     CHECK_EXISTANCE(${MODULE_EXPORT_C} "export")
     ADD_CFILE(${MODULE_EXPORT_C})
-  ENDIF(EXISTS ${MODULE_EXPORT_C})
+  ENDIF(EXPORT_IN_C)
 
-  IF(EXISTS ${MODULE_EXPORT_CSHARP}) # export in C#
+  IF(QUERY_IN_C)
+    CHECK_EXISTANCE(${MODULE_QUERY_C} "query")
+    ADD_CFILE(${MODULE_QUERY_C})
+  ENDIF(QUERY_IN_C)
+
+  IF(EXPORT_IN_MONO OR QUERY_IN_MONO)
     IF (NOT MONO_FOUND)
       MESSAGE(FATAL_ERROR "module ${MODULE} requires mono")
     ENDIF(NOT MONO_FOUND)
-    IF (EXISTS ${MODULE_EXPORT_C})
-      MESSAGE(FATAL_ERROR "module ${MODULE} has both C and CSharp export")
-    ENDIF(EXISTS ${MODULE_EXPORT_C})
     ADD_CFILE(${MODULE_CSGLUE})
-  ENDIF(EXISTS ${MODULE_EXPORT_CSHARP})
-
-  IF(EXISTS ${MODULE_QUERY_C})     # query in C
-    CHECK_EXISTANCE(${MODULE_QUERY_C} "query")
-    ADD_CFILE(${MODULE_QUERY_C})
-  ENDIF(EXISTS ${MODULE_QUERY_C})
+  ENDIF(EXPORT_IN_MONO OR QUERY_IN_MONO)
 
   # add cflags to C files
   SET_SOURCE_FILES_PROPERTIES(${MODULE_CFILES}
