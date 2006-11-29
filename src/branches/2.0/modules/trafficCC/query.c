@@ -83,6 +83,8 @@ QUERY_FORMATS_BEGIN
     {FORMAT_GNUPLOT, "gnuplot", "text/plain"},
 QUERY_FORMATS_END
 
+DEFAULT_FORMAT = "pretty";
+
 static void
 counter_rec_aggregate(tuple_t * agg, tuple_t * rec, mdl_t * self)
 {

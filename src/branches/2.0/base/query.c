@@ -175,6 +175,14 @@ query_validate(qreq_t * req, como_node_t * node)
     mdl_load(req->mdl, PRIV_IQUERY);
     
     iq = mdl_get_iquery(req->mdl);
+
+    /*
+     * if necessary first get the default format
+     */
+    if (req->format == NULL)
+        req->format = como_strdup(iq->dflt_format);
+    if (req->format == NULL) /* mdl has no default */
+        req->format = como_strdup("como");
     
     /*
      * set the qu_format
@@ -533,7 +541,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	debug("       filter: %s\n", req.filter_str);
     if (req.source)
 	debug("       source: %s\n", req.source);
-    debug("       format: %s\n", req.format);
+    debug("       format: %s\n", req.format ? req.format : "(default)");
     debug("       from %d to %d, wait %s\n", req.start, req.end,
 	   req.wait ? "yes" : "no");
 #ifdef DEBUG
@@ -631,18 +639,19 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	     */
 	    break;
 	default:
-	    /*
-             * first print callback. we need to make sure that req.args != NULL. 
-	     * if this is not the case we just make something up
-	     */
-	    iq->state = iq->init(req.mdl, format_id, req.args);
-
             /*
              * set up a FILE * to be able to fprintf() to the user.
              */
             iq->clientfile = fdopen(client_fd, "w");
             if (iq->clientfile) 
                 error("cannot fdopen() on client_fd\n");
+
+	    /*
+             * first print callback. we need to make sure that req.args != NULL. 
+	     * if this is not the case we just make something up
+	     */
+	    iq->state = iq->init(req.mdl, format_id, req.args);
+
 	    break;
 	}
 	for (;;) { 
@@ -664,6 +673,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    }
 	    
 	    if (ts >= end_ts) {
+                debug("end -- next ts is %llu, end ts is %llu\n", ts, end_ts);
 		break;
 	    }
 	    
@@ -698,7 +708,6 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	}
     }
     free(dbname);
-    warn("query completed\n"); 
 
     /* close the file with STORAGE */
     csclose(file_fd, 0);

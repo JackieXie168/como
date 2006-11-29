@@ -402,6 +402,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
     q->start = TS2SEC(now);
     q->end = ~0;
     q->qu_format = NULL;
+    q->format = NULL;
     q->wait = TRUE;
     q->args = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
 
@@ -504,18 +505,24 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		    /* backward compatible => uri == "/" */
 		    if (strcmp(name + 1, "odule") == 0 &&
 			uri[1] == '\0') {
-			q->module = strdup(value);
+                        if (q->module)
+                            free(q->module);
+			q->module = como_strdup(value);
 			insert_arg = FALSE;
 		    }
 		    break;
 		case 'f':
 		    /* filter */
 		    if (strcmp(name + 1, "ilter") == 0) {
-			q->filter_str = strdup(value);
+                        if (q->filter_str)
+                            free(q->filter_str);
+			q->filter_str = como_strdup(value);
 			parse_filter(value, NULL, &(q->filter_cmp));
 			insert_arg = FALSE;
 		    /* format */
 		    } else if (strcmp(name + 1, "ormat") == 0) {
+                        if (q->format)
+                            free(q->format);
 			q->format = como_strdup(value);
 			insert_arg = FALSE;
 		    }
@@ -527,7 +534,9 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 			insert_arg = FALSE;
 		    /* source */
 		    } else if (strcmp(name + 1, "ource") == 0) {
-			q->source = strdup(value);
+                        if (q->source)
+                            free(q->source);
+			q->source = como_strdup(value);
 			insert_arg = FALSE;
 		    /* status */
 		    } else if (strcmp(name + 1, "tatus") == 0) {

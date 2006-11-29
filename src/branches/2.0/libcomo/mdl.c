@@ -304,12 +304,18 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	switch (*qu_impl) {
 	case QU_IMPL_NONE:
 	break;
-	case QU_IMPL_C:
+	case QU_IMPL_C: {
+            char **strptr;
 	    ib->proc.qu->init = shobj_symbol(ib->shobj, "qu_init", TRUE);
 	    ib->proc.qu->finish = shobj_symbol(ib->shobj, "qu_finish", FALSE);
 	    ib->proc.qu->print_rec = shobj_symbol(ib->shobj, "print_rec", TRUE);
 	    ib->proc.qu->formats = shobj_symbol(ib->shobj, "qu_formats", TRUE);
+
+            strptr = shobj_symbol(ib->shobj, "qu_dflt_fmt", TRUE);
+	    ib->proc.qu->dflt_format = strptr ? *strptr : NULL;
+
 	    break;
+        }
 	case QU_IMPL_MONO:
 /*
 	    if (proxy_mono_load(mdl) == -1)
