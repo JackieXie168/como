@@ -92,6 +92,7 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 
     if (t == NULL) { /* tuple not found, create a new entry */
         t = mdl_alloc_tuple(self, topaddr_tuple_t);
+        t->ts = pkt->ts;
         t->addr = key;
         t->bytes = 0;
         t->pkts = 0;

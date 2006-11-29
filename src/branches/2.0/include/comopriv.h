@@ -377,6 +377,7 @@ struct mdl_iquery {
     qu_finish_fn	finish;
     qu_replay_fn        replay;
     qu_format_t *	formats;
+    char *              dflt_format;
     
     void *		state;
     FILE *              clientfile;

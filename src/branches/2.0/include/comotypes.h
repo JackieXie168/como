@@ -111,6 +111,7 @@ typedef struct qu_format {
 
 #define QUERY_FORMATS_BEGIN	qu_format_t qu_formats[] = {
 #define QUERY_FORMATS_END	{-1, NULL, NULL}};
+#define DEFAULT_FORMAT          char * qu_dflt_fmt
 
 /*
  * Module callbacks
