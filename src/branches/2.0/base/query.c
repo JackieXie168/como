@@ -539,9 +539,12 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 #ifdef DEBUG
     if (req.args != NULL) { 
 	hash_iter_t it;
-	debug("       args: %s=%s\n",
-	      hash_iter_get_string_key(&it),
-	      hash_iter_get_value(&it));
+        hash_iter_init(req.args, &it);
+        debug("\targs:\n");
+        while(hash_iter_next(&it))
+            debug("\t\t%s=>%s\n",
+                    hash_iter_get_string_key(&it),
+                    hash_iter_get_value(&it));
     }
 #endif
 
