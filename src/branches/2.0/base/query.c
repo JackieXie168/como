@@ -643,7 +643,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
              * set up a FILE * to be able to fprintf() to the user.
              */
             iq->clientfile = fdopen(client_fd, "w");
-            if (iq->clientfile) 
+            if (iq->clientfile == NULL) 
                 error("cannot fdopen() on client_fd\n");
 
 	    /*
@@ -672,8 +672,8 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		continue;
 	    }
 	    
-	    if (ts >= end_ts) {
-                debug("end -- next ts is %llu, end ts is %llu\n", ts, end_ts);
+	    if (rec->ts >= end_ts) {
+                debug("end -- next ts is %llu, end ts is %llu\n", rec->ts, end_ts);
 		break;
 	    }
 	    

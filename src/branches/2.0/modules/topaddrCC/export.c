@@ -152,7 +152,7 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples, timestamp_t ivl_s
             rec->addr = t->addr;
             rec->bytes = 0;
             rec->pkts = 0;
-            rec->ts = t->ts;
+            rec->ts = ivl_start;
         }
         rec->bytes += t->bytes;
         rec->pkts += t->pkts;
