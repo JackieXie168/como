@@ -77,11 +77,14 @@ ca_init(mdl_t *self, timestamp_t *ivl)
     return st;
 }
 
-int
+void
 capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 {
     topaddr_tuple_t *t;
     uint32_t key, hash;
+
+    if (!isIP)
+        return;
 
     /* get the hash for the packet */
     key = st->use_dst ? N32(IP(dst_ip)) : N32(IP(src_ip));
@@ -112,6 +115,6 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 	t->pkts++;
     } 
 
-    return 0;
+    return;
 }
 
