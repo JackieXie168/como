@@ -444,7 +444,7 @@ enum INMExtended_information_type {
 static int
 sflow_tag_next_flow_sample(SFTag * tag, SFLFlow_sample_element * el)
 {
-    int res;
+    int res = SF_OK;
 
     el->tag = sf_read32(tag->dg);
     if (tag->dg->hdr.datagram_version == 5) {
