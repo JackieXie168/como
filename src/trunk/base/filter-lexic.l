@@ -91,7 +91,7 @@ IFACE		input|output
 {DIR}           {
                 if (!strcmp(yytext, "src"))
                     yflval.byte = 0;
-                if (!strcmp(yytext, "dst"))
+                else if (!strcmp(yytext, "dst"))
                     yflval.byte = 1;
                 else 		/* host or addr */
                     yflval.byte = -1;
