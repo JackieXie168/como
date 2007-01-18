@@ -8,17 +8,19 @@ class GroupManager {
     var $passwords_file;
     var $groups;
     var $absroot;
+    var $groupdir;
     var $nodedb;
     var $results;
     var $htpasswd_bin;
 
     function GroupManager($G) {
         $this->absroot = $G['ABSROOT'];
+        $this->groupdir = $G['ABSROOT'] . "/groups";
         $this->nodedb = $G['NODEDB'];
         $this->results = $G['RESULTS'];
         $this->groups_file = $G['ABSROOT'].'/'.$G['NODEDB'].'/'.'groups';
         $this->passwords_file = $G['ABSROOT'].'/'.$G['NODEDB'].'/'.'passwords';
-	$this->htpasswd_bin = $G['HTPASSWD'];
+		$this->htpasswd_bin = $G['HTPASSWD'];
 
         if (!file_exists($this->groups_file)) {
             $this->groups = array();
@@ -68,8 +70,8 @@ class GroupManager {
     {
         unset($this->groups[$name]);
 
-        $src = $this->absroot.'/'.$name;
-        $dst = $this->absroot.'/OLDGROUPS/'.$name;
+        $src = $this->groupdir.'/'.$name;
+        $dst = $this->groupdir.'/OLDGROUPS/'.$name;
 
         if (file_exists($dst)) { # if dest exists, append a number
             $i = 2;
@@ -146,7 +148,7 @@ class GroupManager {
 
     function deployGroup($group)
     {
-        $filename = $this->absroot.'/'.$group.'/'.$this->nodedb.'/nodes.lst';
+        $filename = $this->groupdir.'/'.$group.'/'.$this->nodedb.'/nodes.lst';
         $str = '';
         foreach ($this->groups[$group] as $node)
             $str .= "$node\n";
@@ -159,7 +161,7 @@ class GroupManager {
             $this->reportFailure($filename);
         }
 
-        $filename = $this->absroot.'/'.$group.'/'.$this->nodedb.'/mygroup';
+        $filename = $this->groupdir.'/'.$group.'/'.$this->nodedb.'/mygroup';
         $ret = file_put_contents($filename, $group);
         if ($ret === false)
             $this->reportFailure($filename);
@@ -170,7 +172,7 @@ class GroupManager {
      */
     function deployAdminGroup()
     {
-        $filename = $this->absroot.'/admin/'.$this->nodedb.'/nodes.lst';
+        $filename = $this->groupdir.'/admin/'.$this->nodedb.'/nodes.lst';
         $str = '';
         foreach ($this->groups as $group => $nodes)
             foreach ($nodes as $node)
@@ -180,7 +182,7 @@ class GroupManager {
         if ($ret === false)
             $this->reportFailure($filename);
 
-        $filename = $this->absroot.'/admin/'.$this->nodedb.'/mygroup';
+        $filename = $this->groupdir.'/admin/'.$this->nodedb.'/mygroup';
         $ret = file_put_contents($filename, 'admin');
         if ($ret === false)
             $this->reportFailure($filename);
@@ -203,8 +205,7 @@ class GroupManager {
 
     function createGroupDir($user)
     {
-        $dir = $this->absroot.'/'.$user.'/';
-
+        $dir = $this->groupdir.'/'.$user.'/';
         $this->my_mkdir($dir);
         $this->my_mkdir($dir.'/'.$this->nodedb);
         $this->my_mkdir($dir.'/'.$this->results);
@@ -213,17 +214,26 @@ class GroupManager {
         $links = array("dashboard.php", "generic_query.php", "index.php",
             "loadcontent.php", "mainstage.php", "sysinfo.php", "search.php",
             "customize.php");
-
+        $phpdir = $this->absroot . "/php";
         foreach ($links as $l)
-            $this->my_symlink("../php/$l", $dir . $l);
+            $this->my_symlink("$phpdir/$l", $dir . $l);
 
         $links = array("getdata.php", "pack.jar", "prefuse.jar");
 
         foreach ($links as $l)
             $this->my_symlink("../../java/$l", $dir . "java/$l");
 
-        if ($user == 'admin')
+        if ($user == 'admin') {
             $this->my_symlink('../'.$this->nodedb, $dir.$this->nodedb);
+
+			$links = array("manage.html", "managenode.php", "manage.php",  
+                           "nodeview.html", "nodeview.php");
+            $admindir = $this->absroot . "/admin";
+			foreach ($links as $l)
+                
+				$this->my_symlink("$admindir/$l", $dir . $l);
+
+        }
 
         // create .htaccess file
         if ($user != 'public') {

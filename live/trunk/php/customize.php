@@ -1,11 +1,11 @@
 <!-- $Id: customize.php 897 2006-10-19 15:00:30Z rgass $ --> 
-
 <?php
-    require_once ("../comolive.conf");
-    require_once ("../class/node.class.php");
-    include_once ("../include/framing.php");
-    $G = init_global();
+    $ABSROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_FILENAME']);
 
+    require_once ("$ABSROOT/comolive.conf");
+    $G = init_global();
+    require_once ("class/node.class.php");
+    include_once ("include/framing.php");
     function failure_message() 
     { 
 	print_header(0, null);
@@ -128,10 +128,10 @@
 	$node->saveConfig($selectmods); 
     }
 
-    $header = simple_header("../"); 
+    $header = simple_header("$G['WEBROOT']"); 
 
     $main_info = print_modules($node, 'main');
     $sec_info = print_modules($node, 'secondary');
-    include ("../html/customize.html");
+    include ("html/customize.html");
 ?>
 

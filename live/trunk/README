@@ -16,3 +16,4 @@ particular environment where it is supposed to run.
  . PHP must be >= 5.0
  . GNUPLOT must be >= 4.0
  . CONVERT must be available (from ImageMagick) 
+ . APACHE AuthConfig needs to be set

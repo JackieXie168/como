@@ -12,15 +12,17 @@
  */ 
 function zoom_in($start, $end, $node, $basequery, $timebound)
 { 
+    $WEBROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_NAME']);
+
     $interval = $end - $start; 
 
     if ($interval < $timebound) 
-	return "<img src=../images/zoom-in.png align=middle>";
+	return "<img src=$WEBROOT/images/zoom-in.png align=middle>";
 
     $zstart = $start + floor($interval/4);
     $zend = $end - floor($interval/4);
     $button = "<a href=\"$basequery&start=$zstart&end=$zend\">";
-    $button = $button . "<img src=../images/zoom-in.png align=middle></a>";
+    $button = $button . "<img src=testin/$ABSROOT/images/zoom-in.png align=middle></a>";
 
     return $button; 
 } 
@@ -34,6 +36,8 @@ function zoom_in($start, $end, $node, $basequery, $timebound)
  */ 
 function zoom_out($start, $end, $node, $basequery, $timebound)
 { 
+    $WEBROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_NAME']);
+
     $interval = $end - $start; 
 
     $zstart = $start - $interval;
@@ -45,7 +49,7 @@ function zoom_out($start, $end, $node, $basequery, $timebound)
 	$zend = $now;
 
     $button = "<a href=\"$basequery&start=$zstart&end=$zend\">";
-    $button = $button . "<img src=../images/zoom-out.png align=middle></a>";
+    $button = $button . "<img src=$WEBROOT/images/zoom-out.png align=middle></a>";
 
     return $button; 
 } 
@@ -58,10 +62,12 @@ function zoom_out($start, $end, $node, $basequery, $timebound)
  */ 
 function forward($start, $end, $node, $basequery, $timebound)
 { 
+    $WEBROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_NAME']);
+
     $now = $node->curtime - ($node->curtime % $timebound); 
 
     if ($end >= $now)
-	return "<img src=../images/forward.png align=middle>";
+	return "<img src=$WEBROOT/images/forward.png align=middle>";
 
     $shift = floor(($end - $start)/2); 
     $fstart = $start + $shift; 
@@ -75,7 +81,7 @@ function forward($start, $end, $node, $basequery, $timebound)
     } 
     
     $button = "<a href=\"$basequery&start=$fstart&end=$fend\">";
-    $button = $button . "<img src=../images/forward.png align=middle ";
+    $button = $button . "<img src=$WEBROOT/images/forward.png align=middle ";
     $button = $button . "alt=\"$shift_text\"></a>";
 
     return $button; 
@@ -91,10 +97,12 @@ function forward($start, $end, $node, $basequery, $timebound)
  */ 
 function backward($start, $end, $node, $basequery, $timebound)
 { 
+    $WEBROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_NAME']);
+
     $past = $node->start - ($node->start % $timebound); 
 
     if ($start <= $past)
-	return "<img src=../images/backward.png align=middle>";
+	return "<img src=$WEBROOT/images/backward.png align=middle>";
 
     $shift = floor(($end - $start)/2); 
     $fstart = $start - $shift; 
@@ -108,7 +116,7 @@ function backward($start, $end, $node, $basequery, $timebound)
     } 
     
     $button = "<a href=\"$basequery&start=$fstart&end=$fend\">";
-    $button = $button . "<img src=../images/backward.png align=middle "; 
+    $button = $button . "<img src=$WEBROOT/images/backward.png align=middle "; 
     $button = $button . "alt=\"$shift_text\"></a>";
 
     return $button; 
@@ -124,8 +132,10 @@ function backward($start, $end, $node, $basequery, $timebound)
  */
 function detail_button($basequery)
 { 
+    $WEBROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_NAME']);
+
     $button = "<a target=new href=\"$basequery\">";
-    $button = $button . "<img src=../images/zoom-ascii.png align=middle ";
+    $button = $button . "<img src=$WEBROOT/images/zoom-ascii.png align=middle ";
     $button = $button . "alt=\"Details\"></a>";
     return $button; 
 } 
@@ -139,8 +149,10 @@ function detail_button($basequery)
  */
 function until_now($start, $end, $basequery)
 {
+    $WEBROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_NAME']);
+
     $button = "<a href=\"$basequery&start=$start&end=$end\">";
-    $button = $button . "<img src=../images/forward-now.png align=middle ";
+    $button = $button . "<img src=$WEBROOT/images/forward-now.png align=middle ";
     $button = $button . "alt=\"forward until present time\"></a>";
 
     return $button;

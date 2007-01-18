@@ -7,7 +7,7 @@
  * javascript code for the submenus. 
  *
  */ 
-require_once "../class/nodedb.class.php";
+require_once "class/nodedb.class.php";
 
 function do_header($comonode, $G) 
 { 
@@ -46,7 +46,7 @@ function do_header($comonode, $G)
 	      "&nbsp;&nbsp;&nbsp;Help&nbsp;&nbsp;&nbsp;</a></li>\n";
 
     if ($customize) {
-        $header .= "<li>\n<a href=\"$webroot/admin\">".
+        $header .= "<li>\n<a href=\"$webroot/groups/admin\">".
 	"&nbsp;&nbsp;&nbsp;Setup&nbsp;&nbsp;&nbsp;</a></li>\n";
     }
 

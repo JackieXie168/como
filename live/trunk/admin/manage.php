@@ -1,9 +1,13 @@
 <?php
-/*  $Id: managenode.php 891 2006-10-18 17:21:48Z rgass $  */
-require_once ("../comolive.conf");
-require_once ("../class/groupmanager.class.php");
+/*  $Id:$  */
 
+    $patterns = array ("/\/groups.*/", "/\/admin.*/", "/\/config.*/" );
+    $ABSROOT = preg_replace($patterns, '', $_SERVER['SCRIPT_FILENAME']);
+
+require_once ("$ABSROOT/comolive.conf");
 $G = init_global();
+
+require_once ("class/groupmanager.class.php");
 
 function haveparam($name) {
     return array_key_exists($name, $_GET);
@@ -45,11 +49,11 @@ else if ($action == 'add_node') {
             $m->addNode($g, $node);
         $m->deploy();
     } else {
-        require_once ("../include/framing.php");
+        require_once ("include/framing.php");
         $header = do_header(NULL, $G);
         $footer = do_footer(NULL);
         $groups = $m->getGroups();
-        include "nodeview.html";
+        include ("nodeview.html");
         exit;
     }
 }

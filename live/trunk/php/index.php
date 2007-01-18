@@ -1,13 +1,6 @@
 <?php
     /*  $Id$  */
     /* 
-     * this is the entry page to the CoMolive! site. show the banner
-     * and add the usual html header stuff. 
-     */
-    include("../include/framing.php");
-    $header = simple_header("../");
-    $footer = simple_footer();
-    /* 
      * look for comolive.conf. it is a required file but cannot use
      * require_once directly because it causes a warning on the screen 
      * and nothing else. First we check if the file exists. If not we 
@@ -21,9 +14,17 @@
      * 
      */ 
 
-    if (!file_exists("../comolive.conf")) {
-        require_once "../include/framing.php";
-        require_once "../include/helper-messages.php";
+    $patterns = array ("/\/groups.*/", "/\/admin.*/", "/\/config.*/", "/\/php.*/" );
+	$ABSROOT = preg_replace($patterns, '', $_SERVER['SCRIPT_FILENAME']);
+    /* 
+     * this is the entry page to the CoMolive! site. show the banner
+     * and add the usual html header stuff. 
+     */
+
+    if (!file_exists("$ABSROOT/comolive.conf")) {
+        ini_set('include_path', ini_get('include_path').':'.$ABSROOT);
+        require_once "include/framing.php";
+        require_once "include/helper-messages.php";
         $header = simple_header('..');
         $footer = simple_footer();
         $mesg = "Thanks for downloading CoMoLive!<br>";
@@ -34,11 +35,15 @@
         exit;
     }
 
-    require_once "../comolive.conf";
-    require_once "../class/nodedb.class.php";
-
+    require_once ("$ABSROOT/comolive.conf");
     if (!(isset ($G)))
-	$G = init_global();
+		$G = init_global();
+    include("include/framing.php");
+    $header = simple_header($G['WEBROOT']);
+    $footer = simple_footer();
+
+    require_once "class/nodedb.class.php";
+
 
     $db = new NodeDB($G);
     $nodes = $db->getNodeList();
@@ -53,7 +58,7 @@
     $isAdmin = 0;
     if ($db->getGroup() == 'admin') {
         $isAdmin = 1;
-        require_once "../class/groupmanager.class.php";
+        require_once "class/groupmanager.class.php";
         /*
          * we are admin. need to render not only the nodes
          * but also the groups they belong to, so we do
@@ -105,6 +110,5 @@
 
     $header = do_header(NULL, $G);
     $footer = do_footer(NULL);
-
-    include ("../html/nodelist.html");
+    include ("html/nodelist.html");
 ?>
