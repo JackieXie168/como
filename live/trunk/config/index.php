@@ -3,14 +3,6 @@
 $REVISION = substr('\$Revision$', 11, -2);
 
 /*  This file creates the main configuration file for CoMoLive!  */
-/*  Include the framing information to create headers and footers  */     
-include("../include/framing.php");
-include("../include/helper-messages.php");
-include("../include/helper-filesystem.php");
-include("../class/groupmanager.class.php");
-
-$header = simple_header("../");
-$footer = simple_footer();
 
 /*  This is our way of initially finding the location of the webserver
  *  root directory.  Once this page loads, it gives you the option 
@@ -18,6 +10,18 @@ $footer = simple_footer();
  */
 $webroot = ereg_replace("/config.*", "",  $_SERVER['SCRIPT_NAME']);
 $absroot = ereg_replace("/config.*", "",  $_SERVER['SCRIPT_FILENAME']);
+ini_set('include_path', ini_get('include_path').':'.$absroot);
+$inc_path = ini_get('include_path');
+
+/*  Include the framing information to create headers and footers  */     
+include("include/framing.php");
+include("include/helper-messages.php");
+include("include/helper-filesystem.php");
+include("class/groupmanager.class.php");
+
+$header = simple_header("../");
+$footer = simple_footer();
+
 
 /*  Check if the comolive.conf file already exists  */
 if (file_exists("../comolive.conf")) {
@@ -46,7 +50,11 @@ $opts = array('TIMEPERIOD', 'TIMEBOUND', 'RESOLUTION', 'RESULTS', 'NODEDB',
     'HTPASSWD', 'GNUPLOT', 'CONVERT', 'WEBROOT', 'ABSROOT', 'PASSWORD', 'DOT',
     'PYTHON');
 
-/*  Brief description of the options in the file  */
+/*  
+ *  Brief description of the options in the file  
+ *  These values are past from the configuration page 
+ */
+
 $desc['TIMEPERIOD'] = "The default amount of time that CoMo should\n" .
                    "query initially (in seconds)";
 
@@ -112,21 +120,14 @@ if ($action == "install") {
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
-    $dir = "$absroot/admin";
-    if (!(check_writable($dir))) {
-        generic_message(ERROR_DIRNOTWRITABLE($dir));
-    }
-    $dir = "$absroot"; # XXX as of now absroot must be writable. need to fix.
-    if (!(check_writable($dir))) {
-        generic_message(ERROR_DIRNOTWRITABLE($dir));
-    }
-    $dir = "$absroot/OLDGROUPS";
+    $dir = "$absroot/groups";
     if (!(check_writable($dir))) {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
 
     /* create a config file for the user to copy to ABSROOT */
-    write_config($G, $opts, $desc, "comolive.conf");
+    $config_file = $absroot . "/" . $G['RESULTS'] . "/comolive.conf";
+    write_config($G, $opts, $desc, $config_file);
 
     /*  create the public and admin site directories  */
     $gm = new GroupManager($G);
@@ -136,7 +137,7 @@ if ($action == "install") {
 
     $m = "Configuration complete.  Copy the comolive.conf file " .
          "to the web root.<br><pre>" . 
-         "mv $absroot/config/comolive.conf $absroot/<br></pre>" .
+         "mv $config_file $absroot/<br></pre>" .
          "You can make changes to the config file by " . 
          "editing comolive.conf<br>" . 
          "Click <a href=$webroot/>here</a> when you have moved the file";
@@ -165,6 +166,9 @@ function write_config($G, $opts, $desc, $outfile) {
 
         if ($opt == 'PASSWORD')
             continue; // never makes it into cfg file
+    
+        if ($opt == 'ABSROOT')
+            $absroot = $G[$opt];
 
         $c .= comment($desc[$opt]);
         if ($opt == 'CONVERT')
@@ -208,6 +212,8 @@ function write_config($G, $opts, $desc, $outfile) {
     "     */\n" .
     "    \$GLOBAL['DOT'] = \"/usr/local/bin/dot\";\n" .
     "    \$GLOBAL['PYTHON'] = \"/usr/bin/python\"; \n\n" .
+    "    ini_set('include_path', ini_get('include_path').':$absroot'); \n" .
+    "    \$GLOBAL['INI'] = ini_get('include_path'); \n\n" .
     "    /*  Return the Variable  */\n" .
     "    return(\$GLOBAL);\n" .
     "}\n" .

@@ -1,18 +1,22 @@
 <?php
     /*  $Id$  */
-    require_once "../class/node.class.php";	/* Node class */
-    require_once "../class/nodedb.class.php";   /* NodeDB class */
 
-    require_once "../include/framing.php"; 	/* header/footer functions */
-    require_once "../include/vcrbuttons.php";      /* zoom_in, zoom_out, etc. */
-    require_once "../include/getinputvars.php.inc";/* init_env */ 
+	$ABSROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_FILENAME']);
 
-    if (!file_exists("../comolive.conf")) {
+    if (!file_exists("$ABSROOT/comolive.conf")) {
         print "Please create a comolive.conf file";
-	exit; 
+		exit; 
     } else {
-        include_once "../comolive.conf";		/* init_global */
+        include_once "$ABSROOT/comolive.conf";		/* init_global */
+		$G = init_global(); 
     }
+
+    require_once "class/node.class.php";	/* Node class */
+    require_once "class/nodedb.class.php";   /* NodeDB class */
+
+    require_once "include/framing.php"; 	/* header/footer functions */
+    require_once "include/vcrbuttons.php";      /* zoom_in, zoom_out, etc. */
+    require_once "include/getinputvars.php.inc";/* init_env */ 
 
     /*  get the node hostname and port number */
     if (!isset($_GET['comonode'])) {
@@ -22,7 +26,6 @@
 	exit;
     }
 
-    $G = init_global(); 
 
     $comonode = $_GET['comonode'];
     $db = new NodeDB($G);
@@ -38,7 +41,7 @@
 	/* cannot connect to node, fail with error */
 	$header = do_header(NULL, $G); 
 	$footer = do_footer(); 
-	include "../html/node_failure.html"; 
+	include "html/node_failure.html"; 
 	exit;
     }
 
@@ -54,7 +57,7 @@
         $mes = $mes . "Please check your modules.<br><br>";
         $mes = $mes . "Host = $comonode.<br>";
         $generic_message = $mes;
-        include ("../html/generic_message.html");
+        include ("html/generic_message.html");
         exit;
     }
 
@@ -143,5 +146,5 @@
     $footer = do_footer(); 
 
     // include the HTML template 
-    include "../html/dashboard.html"; 
+    include "html/dashboard.html"; 
 ?>

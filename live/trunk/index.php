@@ -1,7 +1,7 @@
 <?php
     if (!file_exists("comolive.conf")) {
-        header ("Location: admin/index.php");
+        header ("Location: php/index.php");
     } else {
-        header ("Location: public/index.php");
+        header ("Location: groups/public/index.php");
     }
 ?>

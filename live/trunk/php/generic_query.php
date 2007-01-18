@@ -1,16 +1,20 @@
 <?php
-    require_once ("../comolive.conf");
-    require_once ("../class/node.class.php");
-    require_once ("../class/nodedb.class.php");
-    require_once ("../class/query.class.php");
-    require_once ("../include/framing.php");
-    require_once ("../include/getinputvars.php.inc");
+    $ABSROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_FILENAME']);
+
+    require_once ("$ABSROOT/comolive.conf");
+    $G = init_global();
+
+    require_once ("class/node.class.php");
+    require_once ("class/nodedb.class.php");
+    require_once ("class/query.class.php");
+    require_once ("include/framing.php");
+    require_once ("include/getinputvars.php.inc");
 
     /*  get the node hostname and port number */
     if (!isset($_GET['comonode'])) { 
         print "This file requires the comonode=host:port arg passed to it<br>";
         print "Thanks for playing!<br><br><br><br><br><br><br>";
-        include("../include/footer.php.inc");
+        include("include/footer.php.inc");
         exit;
     }
 
@@ -22,12 +26,11 @@
     else
         $extra = "";
 
-    $G = init_global();
     $db = new NodeDB($G);
     if (! $db->hasNode($comonode)) {
         print "You do not have permission to access host:port<br>";
         print "Thanks for playing!<br><br><br><br><br><br><br>";
-        include("../include/footer.php.inc");
+        include("include/footer.php.inc");
     }
     
     $node = new Node ("$comonode", $G);
@@ -91,7 +94,7 @@
         $data[0] = 1;
         $data[1] = file_get_contents($G['RESULTS'] . "/" . $filename);
     } else {
-	/*  File doesn't exist or USECACHE is off, regen file  */
+		/*  File doesn't exist or USECACHE is off, regen file  */
 
         /*  If USEBLINC is not set, then just print out the html formatted
          *  text that CoMo will return

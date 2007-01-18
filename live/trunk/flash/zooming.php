@@ -12,7 +12,7 @@
     $info .= $docroot . "/" . $filename . ".jpg"; 
 
     /* where to find the cursor */
-    $info .= "&cursor=../flash/global_cursor.swf";
+    $info .= "&cursor=$docroot/flash/global_cursor.swf";
 
     /* the query that the flash client needs to send back */
     $info .= "&link=dashboard.php&target=_TOP";
@@ -26,14 +26,14 @@
         codebase="http://macromedia.com/cabs/flash/swflash.cab#version=7,0,0,0" 
         width="600" height="450" id="zooming" align="middle">
     <param name="allowScriptAccess" value="sameDomain">
-    <param name="movie" value="../flash/zooming.swf?<?php echo($info);?>">
+    <param name="movie" value="<?php echo $docroot?>/flash/zooming.swf?<?php echo($info);?>">
     <param name="loop" value="false">
     <param name="menu" value="false">
     <param name="quality" value="medium">
     <param name="salign" value="r">
     <param name="wmode" value="opaque">
     <param name="bgcolor" value="#ffffff">
-    <embed src="../flash/zooming.swf?<?php echo($info);?>"
+    <embed src="<?php echo $docroot?>/flash/zooming.swf?<?php echo($info);?>"
 	   loop="false" menu="false" quality="medium"  salign="r"  
            wmode="opaque" bgcolor="#ffffff" width="600" height="450" 
            name="zoom" align="middle" allowScriptAccess="sameDomain" 

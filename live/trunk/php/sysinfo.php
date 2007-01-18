@@ -1,13 +1,19 @@
 <!--  $Id$  -->
 
 <?php
-    require_once "../class/node.class.php";        /* Node class */
-    include_once "../comolive.conf";               /* init_global */
+    $ABSROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_FILENAME']);
 
-    if (!file_exists("../comolive.conf")) {
+    if (!file_exists("$ABSROOT/comolive.conf")) {
         print "Please create a comolive.conf file";
         exit;
     }
+
+	include_once "$ABSROOT/comolive.conf";        /* init_global */
+    $G = init_global();
+
+    require_once ("class/node.class.php");        /* Node class */
+
+
 
     /*  get the node hostname and port number */
     if (!isset($_GET['comonode'])) {
@@ -18,12 +24,11 @@
 
     $comonode = $_GET['comonode'];
 
-    $G = init_global();
 
     $node = new Node($comonode, $G);
     if ($node->status == false) {
         /* cannot connect to node, fail with error */
-        include ("../html/node_failure.html");
+        include ("html/node_failure.html");
         exit;
     }
 
@@ -37,5 +42,5 @@
     else 
         $comment = ""; 
 
-    include ("../html/sysinfo.html");
+    include ("html/sysinfo.html");
 ?>

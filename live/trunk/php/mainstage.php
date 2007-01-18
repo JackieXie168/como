@@ -1,13 +1,16 @@
 <?php
     /* $Id$ */
-    require_once ("../comolive.conf");
+	$ABSROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_FILENAME']);
+
+    require_once ("$ABSROOT/comolive.conf");
     if (!(isset($G)))
         $G = init_global();
-    require_once ("../class/node.class.php");
-    require_once ("../class/query.class.php");
-    require_once ("../include/getinputvars.php.inc");
-    require_once "../class/nodedb.class.php";
+    require_once ("class/node.class.php");
+    require_once ("class/query.class.php");
+    require_once ("include/getinputvars.php.inc");
+    require_once ("class/nodedb.class.php");
 
+    $WEBROOT = $G['WEBROOT'];
     /*  get the node hostname and port number */
     if (!isset($_GET['comonode'])) {
 	print "{$_SERVER['SCRIPT_FILENAME']}";
@@ -64,7 +67,7 @@
 ?>
 <html>
   <head>
-    <link rel="stylesheet" type="text/css" name="como" href="../css/live.css">
+    <link rel="stylesheet" type="text/css" name="como" href="<?php echo $WEBROOT?>/css/live.css">
 <style type="text/css">
       #nav ul {
 	border-bottom: 1px solid; 
@@ -156,10 +159,10 @@
                     print "<img src=$filename.jpg>";
                 } else {
                     print "<!-- Using flash here -->";
-                    include("../flash/zooming.php");
+                    include("$WEBROOT/flash/zooming.php");
                 }
             } else {
-                print "<img src=../images/blankplot.jpg>";
+                print "<img src=$WEBROOT/images/blankplot.jpg>";
             }
         } else if ($format == 'conversation_graph') {
             ?>
