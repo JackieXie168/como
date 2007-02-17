@@ -82,7 +82,7 @@ main(int argc, char *argv[])
     logmsg(LOGUI, "----------------------------------------------------\n");
     logmsg(LOGUI, "  CoMo v%s (built %s %s)\n",
 			COMO_VERSION, __DATE__, __TIME__ ); 
-    logmsg(LOGUI, "  Copyright (c) 2004-2005, Intel Corporation\n"); 
+    logmsg(LOGUI, "  Copyright (c) 2004-2007, Intel Corporation\n"); 
     logmsg(LOGUI, "  All rights reserved.\n"); 
     logmsg(LOGUI, "----------------------------------------------------\n");
     logmsg(V_LOGUI, "... workdir %s\n", map.workdir);
