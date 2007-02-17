@@ -41,6 +41,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <glob.h>	/* glob */
 #include <assert.h>
 
 #include "como.h"
@@ -70,6 +71,9 @@ struct pcap_me {
 					   byte order */
     to_como_radio_fn	to_como_radio;  /* pointer to the radio header
 					   conversion function */
+    glob_t		files;		/* result of device pattern */
+    size_t		file_idx;	/* index of current file in
+					   files.gl_pathv */
     off_t		file_size;	/* size fo trace file */
     off_t		nread;
     size_t		map_size;	/* size of mmap */
@@ -114,41 +118,25 @@ swaps(uint16_t x)
 }
 
 
-/*
- * -- sniffer_init
- * 
- */
-static sniffer_t *
-sniffer_init(const char * device, const char * args)
+static int
+open_next_file(struct pcap_me * me)
 {
-    struct pcap_me *me;
-    struct pcap_file_header pf;
+    char *device;
     struct stat trace_stat;
+    struct pcap_file_header pf;
     size_t sz;
-    
-    me = safe_calloc(1, sizeof(struct pcap_me));
 
-    me->sniff.max_pkts = 8192;
-    me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
-    me->map_size = PCAP_DEFAULT_MAPSIZE;
-
-    if (args) { 
-	/* process input arguments */
-	char *p;
-
-	if ((p = strstr(args, "mapsize=")) != NULL) {
-	    me->map_size = atoi(p + 8);
-	    me->map_size = ROUND_32(me->map_size);
-	    if (me->map_size < PCAP_MIN_MAPSIZE) {
-	    	me->map_size = PCAP_MIN_MAPSIZE;
-	    }
-	    if (me->map_size > PCAP_MAX_MAPSIZE) {
-		me->map_size = PCAP_MAX_MAPSIZE;
-	    }
-	}
+    if (me->sniff.fd >= 0) {
+	me->sniff.flags |= SNIFF_TOUCHED;
+	me->file_idx++;
+	if (me->file_idx >= me->files.gl_pathc)
+	    goto error;
+	close(me->sniff.fd);
     }
 
     /* open the trace file */
+    device = me->files.gl_pathv[me->file_idx];
+    logmsg(LOGSNIFFER, "sniffer-pcap: opening file %s\n", device);
     me->sniff.fd = open(device, O_RDONLY);
     if (me->sniff.fd < 0) {
 	logmsg(LOGWARN, "sniffer-pcap: error while opening file %s: %s\n",
@@ -163,6 +151,10 @@ sniffer_init(const char * device, const char * args)
 	goto error;
     }
     me->file_size = trace_stat.st_size;
+
+    me->base = NULL;
+    me->nread = me->off = sizeof(struct pcap_file_header);
+    me->remap = 0;
 
     /* read the pcap file header */    
     sz = sizeof(struct pcap_file_header);
@@ -234,6 +226,58 @@ sniffer_init(const char * device, const char * args)
 	goto error;
     }
 
+    return 0;
+
+error:
+    return -1;
+}
+
+
+/*
+ * -- sniffer_init
+ * 
+ */
+static sniffer_t *
+sniffer_init(const char * device, const char * args)
+{
+    struct pcap_me *me;
+    
+    me = safe_calloc(1, sizeof(struct pcap_me));
+
+    me->sniff.max_pkts = 8192;
+    me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
+    me->map_size = PCAP_DEFAULT_MAPSIZE;
+
+    if (args) { 
+	/* process input arguments */
+	char *p;
+
+	if ((p = strstr(args, "mapsize=")) != NULL) {
+	    me->map_size = atoi(p + 8);
+	    me->map_size = ROUND_32(me->map_size);
+	    if (me->map_size < PCAP_MIN_MAPSIZE) {
+	    	me->map_size = PCAP_MIN_MAPSIZE;
+	    }
+	    if (me->map_size > PCAP_MAX_MAPSIZE) {
+		me->map_size = PCAP_MAX_MAPSIZE;
+	    }
+	}
+    }
+
+    /* 
+     * list all files that match the given pattern. 
+     */
+    if (glob(device, GLOB_ERR | GLOB_TILDE, NULL, &me->files) < 0) {
+	logmsg(LOGWARN, "sniffer-pcap: error matching %s: %s\n",
+	       device, strerror(errno));
+	goto error;
+    }
+	
+    if (me->files.gl_pathc == 0) { 
+	logmsg(LOGWARN, "sniffer-pcap: no files match %s\n", device);
+	goto error;
+    }
+
     /* create the capture buffer */
     if (capbuf_init(&me->capbuf, args, NULL, PCAP_MIN_BUFSIZE,
 		    PCAP_MAX_BUFSIZE) < 0)
@@ -273,6 +317,24 @@ sniffer_setup_metadesc(sniffer_t * s)
 }
 
 
+static int
+mmap_next_region(struct pcap_me * me)
+{
+    if (me->base != NULL) {
+	munmap(me->base, me->map_size);
+    }
+    /* mmap the trace file */
+    me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
+			     me->sniff.fd, me->remap);
+    if (me->base == MAP_FAILED) {
+	logmsg(LOGWARN, "sniffer-pcap: mmap failed: %s\n",
+	       strerror(errno));
+	return -1;
+    }
+    return 0;
+}
+
+
 /* 
  * -- sniffer_start
  * 
@@ -288,17 +350,14 @@ sniffer_start(sniffer_t * s)
     int ps, mp; /* page size, maximum packet size */
     int r;
     
-    /* mmap the trace file */
-    me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
-			     me->sniff.fd, 0);
-    if (me->base == MAP_FAILED) {
-	logmsg(LOGWARN, "sniffer-pcap: mmap failed: %s\n",
-	       strerror(errno));
-	close(me->sniff.fd);
+    me->sniff.fd = -1;
+    me->file_idx = 0;
+    if (open_next_file(me) < 0)
 	return -1;
-    }
-    me->nread = me->off = sizeof(struct pcap_file_header);
-    
+
+    if (mmap_next_region(me) < 0)
+	return -1;
+
     /*
      * compute remap offset using the system pagesize and the maximum
      * packet length.
@@ -338,10 +397,12 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	    /* we've finished but the ppbuf is not empty */
 	    return 0;
 	}
-        return -1;       /* end of file, nothing left to do */
+	if (open_next_file(me) < 0) {
+	    return -1; /* end of file, nothing left to do */
+	}
     }
 
-    if (me->nread > me->remap) {
+    if (me->nread >= me->remap) {
 	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
 	    /* can't call munmap while the ppbuf contains some valid packets
 	     * pointing to the currently mmaped memory */
@@ -349,15 +410,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	}
 	/* we've read all the packets that fit in the mmaped memory, now
 	 * mmap the next area of the trace file */
-	munmap(me->base, me->map_size);
-	me->base = (char *) mmap(NULL, me->map_size,
-				 PROT_READ, MAP_PRIVATE,
-				 me->sniff.fd, me->remap);
-	if (me->base == MAP_FAILED) {
-	    logmsg(LOGWARN, "sniffer-pcap: mmap failed: %s\n",
-		   strerror(errno));
+	if (mmap_next_region(me) < 0)
 	    return -1;
-	}
 	me->off = me->nread - me->remap;
 	me->remap += me->remap_sz;
     }
