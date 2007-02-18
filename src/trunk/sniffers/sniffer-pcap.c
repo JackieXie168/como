@@ -150,11 +150,15 @@ open_next_file(struct pcap_me * me)
 	       device, strerror(errno));
 	goto error;
     }
-    me->file_size = trace_stat.st_size;
+
+    if (me->base) {
+	munmap(me->base, me->map_size);
+    }
 
     me->base = NULL;
     me->nread = me->off = sizeof(struct pcap_file_header);
     me->remap = 0;
+    me->file_size = trace_stat.st_size;
 
     /* read the pcap file header */    
     sz = sizeof(struct pcap_file_header);

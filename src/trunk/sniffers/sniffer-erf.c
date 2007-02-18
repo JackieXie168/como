@@ -106,11 +106,15 @@ open_next_file(struct erf_me * me)
 	       device, strerror(errno));
 	goto error;
     }
-    me->file_size = trace_stat.st_size;
+
+    if (me->base) {
+	munmap(me->base, me->map_size);
+    }
 
     me->base = NULL;
     me->nread = me->off = 0;
     me->remap = 0;
+    me->file_size = trace_stat.st_size;
 
     return 0;
 
