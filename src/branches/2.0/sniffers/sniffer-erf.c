@@ -84,7 +84,7 @@ open_next_file(struct erf_me * me)
     struct stat trace_stat;
 
     if (me->sniff.fd >= 0) {
-	me->sniff.flags |= SNIFF_TOUCHED;
+        me->sniff.priv->touched = 1;
 	me->file_idx++;
 	if (me->file_idx >= me->files.gl_pathc)
 	    goto error;
@@ -95,14 +95,14 @@ open_next_file(struct erf_me * me)
     device = me->files.gl_pathv[me->file_idx];
     me->sniff.fd = open(device, O_RDONLY);
     if (me->sniff.fd < 0) {
-	logmsg(LOGWARN, "sniffer-erf: error while opening file %s: %s\n",
+	warn("sniffer-erf: error while opening file %s: %s\n",
 	       device, strerror(errno));
 	goto error;
     }
     
     /* get the trace file size */
     if (fstat(me->sniff.fd, &trace_stat) < 0) {
-	logmsg(LOGWARN, "sniffer-erf: failed to stat file %s: %s\n",
+	warn("sniffer-erf: failed to stat file %s: %s\n",
 	       device, strerror(errno));
 	goto error;
     }
@@ -124,11 +124,11 @@ error:
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, alc_t *alc)
 {
     struct erf_me *me;
     
-    me = safe_calloc(1, sizeof(struct erf_me));
+    me = alc_new0(alc, struct erf_me);
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
@@ -154,13 +154,13 @@ sniffer_init(const char * device, const char * args)
      * list all files that match the given pattern. 
      */
     if (glob(device, GLOB_ERR | GLOB_TILDE, NULL, &me->files) < 0) {
-	logmsg(LOGWARN, "sniffer-erf: error matching %s: %s\n",
+	warn("sniffer-erf: error matching %s: %s\n",
 	       device, strerror(errno));
 	goto error;
     }
 	
     if (me->files.gl_pathc == 0) { 
-	logmsg(LOGWARN, "sniffer-erf: no files match %s\n", device);
+	warn("sniffer-erf: no files match %s\n", device);
 	goto error;
     }
     
@@ -176,19 +176,21 @@ error:
 }
 
 
-static void
-sniffer_setup_metadesc(sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(UNUSED sniffer_t * s, alc_t *alc)
 {
     metadesc_t *outmd;
     pkt_t *pkt;
 
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(s, 0);
+    outmd = metadesc_new(NULL, alc, 0);
     
     pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
     pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
     pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
     pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
+
+    return outmd;
 }
 
 
@@ -202,8 +204,7 @@ mmap_next_region(struct erf_me * me)
     me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
 			     me->sniff.fd, me->remap);
     if (me->base == MAP_FAILED) {
-	logmsg(LOGWARN, "sniffer-erf: mmap failed: %s\n",
-	       strerror(errno));
+	warn("sniffer-erf: mmap failed: %s\n", strerror(errno));
 	return -1;
     }
     return 0;
@@ -414,12 +415,12 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, alc_t *alc)
 {
     struct erf_me *me = (struct erf_me *) s;
 
     capbuf_finish(&me->capbuf);
-    free(me);
+    alc_free(alc, me);
 }
 
 

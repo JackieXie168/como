@@ -5,10 +5,10 @@ INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/base)
 # Sniffers always compiled
 #
 SET(SNIFFERS
-  como
-  ondemand
   pcap
-  sflow
+  #como
+  #ondemand
+  #sflow
 )
 
 #
@@ -25,14 +25,14 @@ IF(UNIX)
   ENDIF(PCAP_FOUND)
   
 # flow-tools support
-  IF(FTLIB_FOUND)
-    SET(SNIFFERS
-      ${SNIFFERS}
-      flowtools
-      netflow
-    )
-    INCLUDE_DIRECTORIES(${FTLIB_INCLUDE_DIR})
-  ENDIF(FTLIB_FOUND)
+#  IF(FTLIB_FOUND)
+#    SET(SNIFFERS
+#      ${SNIFFERS}
+#      flowtools
+#      netflow
+#    )
+#    INCLUDE_DIRECTORIES(${FTLIB_INCLUDE_DIR})
+#  ENDIF(FTLIB_FOUND)
 
 # DAG support
   IF(DAG_FOUND)
@@ -49,26 +49,22 @@ ENDIF(UNIX)
 #
 # Sniffers specific to Linux
 #
-IF(LINUX)
-  SET(SNIFFERS
-    ${SNIFFERS}
-    radio
-  )
-ENDIF(LINUX)
+#IF(LINUX)
+#  SET(SNIFFERS
+#    ${SNIFFERS}
+#    radio
+#  )
+#ENDIF(LINUX)
 
 #
 # Sniffers specific to FreeBSD
 #
-IF(FREEBSD)
-  SET(SNIFFERS
-    ${SNIFFERS}
-    bpf
-  )
-ENDIF(FREEBSD)
-
-SET(SNIFFERS
-  pcap
-)
+#IF(FREEBSD)
+#  SET(SNIFFERS
+#    ${SNIFFERS}
+#    bpf
+#  )
+#ENDIF(FREEBSD)
 
 #
 # Write sniffers-list.h

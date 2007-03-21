@@ -41,6 +41,7 @@
 #include "como.h"
 #include "sniffers.h"
 #include "pcap.h"
+#include "comopriv.h"
 
 #include "capbuf.c"
 
@@ -88,12 +89,12 @@ struct libpcap_me {
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, alc_t * alc)
 {
     struct libpcap_me *me;
     char* libpcap_name = NULL;
 
-    me = safe_calloc(1, sizeof(struct libpcap_me));
+    me = alc_new0(alc, struct libpcap_me);
     
     me->sniff.max_pkts = 128;
     me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
@@ -112,9 +113,8 @@ sniffer_init(const char * device, const char * args)
 	if ((p = strstr(args, "snaplen=")) != NULL) {
 	    me->snaplen = atoi(p + 8);
 	    if (me->snaplen < 1 || me->snaplen > 65536) {
-		logmsg(LOGWARN,
-		       "sniffer-libpcap: invalid snaplen %d, using %d\n",
-		       me->snaplen, LIBPCAP_DEFAULT_SNAPLEN);
+		warn("sniffer-libpcap: invalid snaplen %d, using %d\n",
+                        me->snaplen, LIBPCAP_DEFAULT_SNAPLEN);
 		me->snaplen = LIBPCAP_DEFAULT_SNAPLEN;
 	    }
 	}
@@ -123,8 +123,7 @@ sniffer_init(const char * device, const char * args)
 	}
     }
 
-    logmsg(V_LOGSNIFFER, 
-	   "sniffer-libpcap: device %s, promisc %d, snaplen %d, timeout %d\n",
+    debug("sniffer-libpcap: device %s, promisc %d, snaplen %d, timeout %d\n",
 	   device, me->promisc, me->snaplen, me->timeout);
 
     /* link the libpcap library */
@@ -132,7 +131,7 @@ sniffer_init(const char * device, const char * args)
     me->handle = dlopen(libpcap_name, RTLD_NOW);
 
     if (me->handle == NULL) { 
-	logmsg(LOGWARN, "sniffer-libpcap: error opening %s: %s\n",
+	warn("sniffer-libpcap: error opening %s: %s\n",
 	       libpcap_name, dlerror());
 	goto error;
     } 
@@ -160,15 +159,15 @@ error:
 }
 
 
-static void
-sniffer_setup_metadesc(sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(sniffer_t * s, alc_t *alc)
 {
     struct libpcap_me *me = (struct libpcap_me *) s;
     metadesc_t *outmd;
     pkt_t *pkt;
 
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(s, 0);
+    outmd = metadesc_new(NULL, alc, 0);
     
     pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
     COMO(caplen) = me->snaplen;
@@ -176,6 +175,8 @@ sniffer_setup_metadesc(sniffer_t * s)
     COMO(caplen) = me->snaplen;
     pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
     COMO(caplen) = me->snaplen;
+
+    return outmd;
 }
 
 
@@ -208,11 +209,11 @@ sniffer_start(sniffer_t * s)
     
     /* check for initialization errors */
     if (me->pcap == NULL) {
-	logmsg(LOGWARN, "sniffer-libpcap: error: %s\n", me->errbuf);
+	warn("sniffer-libpcap: error: %s\n", me->errbuf);
 	goto error;
     }
     if (me->errbuf[0] != '\0') {
-	logmsg(LOGWARN, "sniffer-libpcap: %s\n", me->errbuf);
+	warn("sniffer-libpcap: %s\n", me->errbuf);
     }
     
     /*
@@ -220,7 +221,7 @@ sniffer_start(sniffer_t * s)
      * sniffer_next() will try to fill the entire buffer before returning.
      */
     if (sp_setnonblock(me->pcap, 1, me->errbuf) < 0) {
-        logmsg(LOGWARN, "%s\n", me->errbuf);
+        warn("%s\n", me->errbuf);
         goto error;
     }
     
@@ -235,7 +236,7 @@ sniffer_start(sniffer_t * s)
     /* we do not support DLT_ values different from EN10MB. for 802.11
      * frames one can use sniffer-radio instead. 
      */
-	logmsg(LOGWARN, "sniffer-libpcap: unrecognized datalink format\n" );
+	warn("sniffer-libpcap: unrecognized datalink format\n" );
 	goto error;
     }
     
@@ -368,13 +369,13 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, alc_t *alc)
 {
     struct libpcap_me *me = (struct libpcap_me *) s;
     
     dlclose(me->handle);
     capbuf_finish(&me->capbuf);
-    free(me);
+    alc_free(alc, me);
 }
 
 
