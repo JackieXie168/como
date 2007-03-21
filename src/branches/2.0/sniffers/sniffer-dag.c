@@ -64,11 +64,11 @@ struct dag_me {
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, alc_t *alc)
 {
     struct dag_me *me;
     
-    me = safe_calloc(1, sizeof(struct dag_me));
+    me = alc_new0(alc, struct dag_me);
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_POLL | SNIFF_SHBUF;
@@ -87,19 +87,21 @@ error:
 }
 
 
-static void
-sniffer_setup_metadesc(sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(UNUSED sniffer_t * s, alc_t *alc)
 {
     metadesc_t *outmd;
     pkt_t *pkt;
 
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(s, 0);
+    outmd = metadesc_new(NULL, alc, 0);
     
     pkt = metadesc_tpl_add(outmd, "link:eth:any:any");
     pkt = metadesc_tpl_add(outmd, "link:vlan:any:any");
     pkt = metadesc_tpl_add(outmd, "link:isl:any:any");
     pkt = metadesc_tpl_add(outmd, "link:hdlc:any:any");
+
+    return outmd;
 }
 
 
@@ -295,12 +297,12 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, alc_t *alc)
 {
     struct dag_me *me = (struct dag_me *) s;
 
     capbuf_finish(&me->capbuf);
-    free(me);
+    alc_free(alc, me);
 }
 
 
