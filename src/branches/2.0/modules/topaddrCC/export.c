@@ -57,13 +57,13 @@ tuple_matches_record(topaddr_tuple_t *t, topaddr_record_t *r)
 }
 
 static int
-record_cmp(topaddr_record_t *r1, topaddr_record_t *r2)
+record_cmp(topaddr_record_t **r1, topaddr_record_t **r2)
 {
-    return r1->bytes == r2->bytes ? 0 :
-        (r1->bytes > r2->bytes ? 1 : -1);
+    return (*r1)->bytes == (*r2)->bytes ? 0 :
+        ((*r1)->bytes > (*r2)->bytes ? -1 : 1);
 }
 
-void
+static void
 reinitialize_state(mdl_t *self, ex_state_t *st)
 {
     st->nrec = 0;
@@ -110,7 +110,8 @@ dump_state(mdl_t *self, ex_state_t *st)
     assert(i == st->nrec);
 
     /* sort the array using record_cmp */
-    qsort(array, i, sizeof(void *), (int(*)(const void *, const void *))record_cmp);
+    qsort(array, st->nrec, sizeof(void *),
+            (int(*)(const void *, const void *))record_cmp);
 
     /* store up to 10 addresses */
     for (i = 0; i < MIN(10, st->nrec); i++)

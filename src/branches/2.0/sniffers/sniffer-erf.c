@@ -41,10 +41,12 @@
 #include <errno.h>
 #include <string.h>     /* bcopy */
 
+#define LOG_DOMAIN "sniffer-erf"
 #include "como.h"
 #include "sniffers.h"
 
 #include "capbuf.c"
+
 
 /*
  * SNIFFER  ---    Endace ERF file 
@@ -95,15 +97,13 @@ open_next_file(struct erf_me * me)
     device = me->files.gl_pathv[me->file_idx];
     me->sniff.fd = open(device, O_RDONLY);
     if (me->sniff.fd < 0) {
-	warn("sniffer-erf: error while opening file %s: %s\n",
-	       device, strerror(errno));
+	warn("error while opening file %s: %s\n", device, strerror(errno));
 	goto error;
     }
     
     /* get the trace file size */
     if (fstat(me->sniff.fd, &trace_stat) < 0) {
-	warn("sniffer-erf: failed to stat file %s: %s\n",
-	       device, strerror(errno));
+	warn("failed to stat file %s: %s\n", device, strerror(errno));
 	goto error;
     }
     me->file_size = trace_stat.st_size;
@@ -154,13 +154,12 @@ sniffer_init(const char * device, const char * args, alc_t *alc)
      * list all files that match the given pattern. 
      */
     if (glob(device, GLOB_ERR | GLOB_TILDE, NULL, &me->files) < 0) {
-	warn("sniffer-erf: error matching %s: %s\n",
-	       device, strerror(errno));
+	warn("error matching %s: %s\n", device, strerror(errno));
 	goto error;
     }
 	
     if (me->files.gl_pathc == 0) { 
-	warn("sniffer-erf: no files match %s\n", device);
+	warn("no files match %s\n", device);
 	goto error;
     }
     
@@ -204,7 +203,7 @@ mmap_next_region(struct erf_me * me)
     me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
 			     me->sniff.fd, me->remap);
     if (me->base == MAP_FAILED) {
-	warn("sniffer-erf: mmap failed: %s\n", strerror(errno));
+	warn("mmap failed: %s\n", strerror(errno));
 	return -1;
     }
     return 0;
