@@ -38,6 +38,7 @@
 #include <errno.h>
 #include <dlfcn.h>	/* dlopen */
 
+#define LOG_DOMAIN "sniffer-libpcap"
 #include "como.h"
 #include "sniffers.h"
 #include "pcap.h"
@@ -113,7 +114,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
 	if ((p = strstr(args, "snaplen=")) != NULL) {
 	    me->snaplen = atoi(p + 8);
 	    if (me->snaplen < 1 || me->snaplen > 65536) {
-		warn("sniffer-libpcap: invalid snaplen %d, using %d\n",
+		warn("invalid snaplen %d, using %d\n",
                         me->snaplen, LIBPCAP_DEFAULT_SNAPLEN);
 		me->snaplen = LIBPCAP_DEFAULT_SNAPLEN;
 	    }
@@ -123,7 +124,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
 	}
     }
 
-    debug("sniffer-libpcap: device %s, promisc %d, snaplen %d, timeout %d\n",
+    debug("device %s, promisc %d, snaplen %d, timeout %d\n",
 	   device, me->promisc, me->snaplen, me->timeout);
 
     /* link the libpcap library */
@@ -131,7 +132,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
     me->handle = dlopen(libpcap_name, RTLD_NOW);
 
     if (me->handle == NULL) { 
-	warn("sniffer-libpcap: error opening %s: %s\n",
+	warn("error opening %s: %s\n",
 	       libpcap_name, dlerror());
 	goto error;
     } 
@@ -209,11 +210,11 @@ sniffer_start(sniffer_t * s)
     
     /* check for initialization errors */
     if (me->pcap == NULL) {
-	warn("sniffer-libpcap: error: %s\n", me->errbuf);
+	warn("error: %s\n", me->errbuf);
 	goto error;
     }
     if (me->errbuf[0] != '\0') {
-	warn("sniffer-libpcap: %s\n", me->errbuf);
+	warn("%s\n", me->errbuf);
     }
     
     /*
@@ -236,7 +237,7 @@ sniffer_start(sniffer_t * s)
     /* we do not support DLT_ values different from EN10MB. for 802.11
      * frames one can use sniffer-radio instead. 
      */
-	warn("sniffer-libpcap: unrecognized datalink format\n" );
+	warn("unrecognized datalink format\n");
 	goto error;
     }
     

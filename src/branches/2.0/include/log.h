@@ -50,9 +50,6 @@ char * log_level_name (log_level_t level);
 #define error(args...) \
 log_out(LOG_DOMAIN, LOG_LEVEL_ERROR, args)
 
-#define debug(args...) \
-log_out(LOG_DOMAIN, LOG_LEVEL_DEBUG, args)
-
 #define warn(args...) \
 log_out(LOG_DOMAIN, LOG_LEVEL_WARNING, args)
 

@@ -114,7 +114,5 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 	t->bytes += H16(IP(len));
 	t->pkts++;
     } 
-
-    return;
 }
 
