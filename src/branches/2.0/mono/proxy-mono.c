@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdlib.h>
 
 #include <mono/jit/jit.h>
 #include <mono/metadata/assembly.h>
@@ -141,7 +142,7 @@ proxy_mono_load(mdl_t * mdl)
     
     klass = mono_class_from_name(s->image, ns, "Export");
     if (klass == NULL) {
-	warn("mono_class_from_name() failed.\n");
+	warn("mono_class_from_name(\"%s\") failed.\n", ns);
 	free(ns);
 	free(s);
 	return -1;
@@ -270,4 +271,17 @@ proxy_mono_export(UNUSED mdl_t * mdl, void ** tuples, size_t ntuples,
     mono_runtime_invoke(method, s->mdl, args, NULL);
 }
 
+/*
+ * -- proxy_mono_init
+ *
+ * Add/modify the MONO_PATH to como.dll
+ */
+void
+proxy_mono_init(char *mono_path)
+{
+    char *np, *p = getenv("MONO_PATH");
+
+    np = como_asprintf("%s%s%s", p ? p : "", p ? ":" : "", mono_path);
+    setenv("MONO_PATH", np, 1);
+}
 

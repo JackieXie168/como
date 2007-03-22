@@ -296,6 +296,32 @@ struct como_node {
     timestamp_t		live_thresh;
 };
 
+/*
+ * CoMo configuration structs
+ */
+
+typedef struct _sniffer_def sniffer_def_t;
+typedef struct _mdl_def mdl_def_t;
+typedef struct _como_config como_config_t;
+
+struct _sniffer_def {
+    char *	name;
+    char *	device;
+    char *	args;
+};
+
+struct _mdl_def {
+    char *	name;
+    char *	mdlname;
+    hash_t *	args;
+    uint64_t	streamsize;
+};
+
+struct _como_config {
+    array_t *		sniffer_defs;
+    array_t *		mdl_defs;
+    char *              mono_path;
+};
 
 
 /* 

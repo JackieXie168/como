@@ -46,25 +46,6 @@
 #include "query.h"	// XXX query();
 #include "ipc.h"
 
-typedef struct sniffer_def {
-    char *	name;
-    char *	device;
-    char *	args;
-} sniffer_def_t;
-
-typedef struct mdl_def {
-    char *	name;
-    char *	mdlname;
-    hash_t *	args;
-    uint64_t	streamsize;
-} mdl_def_t;
-
-
-typedef struct como_config {
-    array_t *		sniffer_defs;
-    array_t *		mdl_defs;
-} como_config_t;
-
 typedef struct como_su {
     como_env_t *	env;
     event_loop_t	el;
@@ -82,7 +63,7 @@ typedef struct como_su {
     alc_t		shalc;
 
     FILE *		logfile;	/* log file */
-    como_config_t *	config;
+    /*como_config_t *	config;*/
     ipc_peer_t *	ca;		/* CAPTURE */
     
     pid_t		su_pid;
@@ -90,6 +71,7 @@ typedef struct como_su {
 
 como_su_t *s_como_su; /* used in cleanup only */
 stats_t *como_stats;
+como_config_t *como_config;
 
 
 #define SIZEOF_LOGMSG_DOMAIN	8
@@ -835,8 +817,8 @@ fake_config()
     sniffer_defs = array_new(sizeof(sniffer_def_t));
     mdl_defs = array_new(sizeof(mdl_def_t));
 
-    s.name = como_strdup("pcap");
-    s.device = como_strdup("/traces/trace_eth_1");
+    s.name = como_strdup("erf");
+    s.device = como_strdup("/home/traces/traca_gran.erf");
     s.args = NULL;
     array_add(sniffer_defs, &s);
 
@@ -846,7 +828,6 @@ fake_config()
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
 
-#if 0
     m.name = como_strdup("traffic2");
     m.mdlname = como_strdup("trafficCCS");
     m.args = NULL;
@@ -858,10 +839,10 @@ fake_config()
     m.args = NULL;
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
-#endif
 
     config.sniffer_defs = sniffer_defs;
     config.mdl_defs = mdl_defs;
+    config.mono_path = "mono";
     
     return &config;    
 }
@@ -926,7 +907,7 @@ main(int argc, char ** argv)
      * parse command line and configuration files
      */
     //configure(&map, argc, argv);
-    como_su->config = fake_config();
+    como_config = fake_config();
 
     /* write welcome message */ 
     msg("----------------------------------------------------\n");
@@ -962,11 +943,8 @@ main(int argc, char ** argv)
     como_su->accept_fd = ipc_listen();
     
     node0 = &array_at(como_su->nodes, como_node_t, 0);
-    como_node_init_sniffers(node0, como_su->config->sniffer_defs,
-			    &como_su->shalc);
-
-    como_node_init_mdls(node0, como_su->config->mdl_defs,
-			como_su->alc);
+    como_node_init_sniffers(node0, como_config->sniffer_defs, &como_su->shalc);
+    como_node_init_mdls(node0, como_config->mdl_defs, como_su->alc);
 
     /* spawn STORAGE */
     spawn_child(COMO_ST, "base/como-storage", como_su->env->workdir,
