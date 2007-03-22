@@ -58,6 +58,9 @@ struct _como_ex {
     hash_t *mdls; /* mdl name to mdl */
 };
 
+/* config 'inherited' from supervisor */
+extern como_config_t *como_config;
+
 
 /* 
  * -- handle_su_ex_add_module
@@ -455,6 +458,9 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
     env = como_env();
     como_ex.st_dir = como_asprintf("%s/%s", env->dbdir, node->name);
+
+    /* initialize mono */
+    proxy_mono_init(como_config->mono_path);
     
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 

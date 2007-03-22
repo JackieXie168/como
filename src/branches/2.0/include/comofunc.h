@@ -204,6 +204,14 @@ const headerinfo_t * headerinfo_lookup_with_name_and_layer(const char *name,
 const headerinfo_t * headerinfo_lookup_with_type_and_layer(uint32_t type,
 							   layer_t l);
 
+/*
+ * proxy-mono.c
+ */
+void proxy_mono_init(char *mono_path);
+int proxy_mono_load(mdl_t * mdl);
+void * proxy_mono_ex_init(mdl_t * mdl);
+void proxy_mono_export(mdl_t * mdl, void ** tuples, size_t ntuples,
+        timestamp_t ivl_start, void * state);
 
 #define assert_not_reached()	\
     error("%s:%d should not be reached.\n", __FILE__, __LINE__)

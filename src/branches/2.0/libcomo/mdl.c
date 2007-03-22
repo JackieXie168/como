@@ -209,14 +209,6 @@ mdl_load_serializable(serializable_t *out, shobj_t *shobj, char *what)
     return 0;
 }
 
-
-
-int proxy_mono_load(mdl_t * mdl);
-void * proxy_mono_ex_init(mdl_t * mdl);
-void proxy_mono_export(mdl_t * mdl, void ** tuples, size_t ntuples,
-		  timestamp_t ivl_start, void * state);
-
-
 int
 mdl_load(mdl_t * mdl, mdl_priv_t priv)
 {
