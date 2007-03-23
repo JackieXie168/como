@@ -63,6 +63,13 @@
 #define PCAP_MIN_MAPSIZE	(1*1024*1024)	// 1 MB
 #define PCAP_MAX_MAPSIZE	(32*1024*1024)	// 32 MB
 
+typedef struct mmap_area {
+    char *              base;           /* base pointer of the area */
+    off_t               nread;          /* read packets index */
+    off_t               off;            /* start offset */
+    off_t               remap;          /* remap offset */
+} mmap_area_t;
+
 struct pcap_me {
     sniffer_t		sniff;		/* common fields, must be the first */
     enum COMOTYPE	type;		/* como layer type */
@@ -72,14 +79,12 @@ struct pcap_me {
     to_como_radio_fn	to_como_radio;  /* pointer to the radio header
 					   conversion function */
     off_t		file_size;	/* size fo trace file */
-    off_t		nread;
-    size_t		map_size;	/* size of mmap */
     int			snaplen; 	/* capture length */
-    char *		base;		/* mmap addres */
-    off_t		off;
-    off_t		remap_sz;
-    off_t		remap;
     capbuf_t		capbuf;
+    mmap_area_t         mmaps[2];       /* mmapped areas of the trace file */
+    uint8_t             cur;            /* current mmapped area */
+    size_t		map_size;	/* size of mmap */
+    off_t		remap_sz;
 };
 
 /* libpcap magic */
@@ -137,9 +142,14 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
 
     me->sniff.device = alc_strdup(alc, device);
 
-    me->sniff.max_pkts = 8192;
+    /* XXX damores 22-03-07
+     * this max_ptks value could be insufficient to get a full timebin,
+     * depending on the monitored link speed.
+     */
+    me->sniff.max_pkts = 16384;
     me->sniff.flags = SNIFF_FILE | SNIFF_SELECT;
     me->map_size = PCAP_DEFAULT_MAPSIZE;
+    me->cur = 1;
 
     if (args) { 
 	/* process input arguments */
@@ -282,6 +292,38 @@ sniffer_setup_metadesc(sniffer_t * s, alc_t * alc)
 }
 
 
+static int
+mmap_next_region(struct pcap_me * me)
+{
+    uint8_t old, new;
+
+    old = me->cur;
+    new = ~(me->cur) & 0x01;
+
+    if (me->mmaps[new].base != NULL) {
+        munmap(me->mmaps[new].base, me->map_size);
+    }
+        
+    /* mmap the next part of the trace file in a new memory region */
+    me->mmaps[new].base = (char *) mmap(NULL, me->map_size, PROT_READ,
+                                      MAP_PRIVATE, me->sniff.fd,
+                                      me->mmaps[old].remap);
+    
+    if (me->mmaps[new].base == MAP_FAILED) {
+	warn("mmap failed: %s\n", strerror(errno));
+	return -1;
+    }
+    
+    me->mmaps[new].off = me->mmaps[old].nread - me->mmaps[old].remap;
+    me->mmaps[new].remap = me->mmaps[old].remap + me->remap_sz;
+    me->mmaps[new].nread = me->mmaps[old].nread;
+    
+    me->cur = new;
+
+    return 0;
+}
+
+
 /* 
  * -- sniffer_start
  * 
@@ -298,14 +340,11 @@ sniffer_start(sniffer_t * s)
     int r;
     
     /* mmap the trace file */
-    me->base = (char *) mmap(NULL, me->map_size, PROT_READ, MAP_PRIVATE,
-			     me->sniff.fd, 0);
-    if (me->base == MAP_FAILED) {
-	warn("mmap failed: %s\n", strerror(errno));
-	close(me->sniff.fd);
+    if (mmap_next_region(me) < 0)
 	return -1;
-    }
-    me->nread = me->off = sizeof(struct pcap_file_header);
+
+    me->mmaps[me->cur].nread = me->mmaps[me->cur].off =
+        sizeof(struct pcap_file_header);
     
     /*
      * compute remap offset using the system pagesize and the maximum
@@ -318,7 +357,7 @@ sniffer_start(sniffer_t * s)
 	r += ps;
     }
     me->remap_sz = (off_t) (me->map_size - r);
-    me->remap = me->remap_sz;
+    me->mmaps[me->cur].remap = me->remap_sz;
     
     return 0;
 }
@@ -341,33 +380,15 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
     timestamp_t first_seen = 0;
 
     /* TODO: handle truncated traces */
-    if (me->nread >= me->file_size) {
-	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
-	    /* we've finished but the ppbuf is not empty */
-	    return 0;
-	}
+    if (me->mmaps[me->cur].nread >= me->file_size) {
         return -1;       /* end of file, nothing left to do */
     }
 
-    if (me->nread > me->remap) {
-	if (ppbuf_get_count(me->sniff.ppbuf) > 0) {
-	    /* can't call munmap while the ppbuf contains some valid packets
-	     * pointing to the currently mmaped memory */
-	    return 0;
-	}
+    if (me->mmaps[me->cur].nread > me->mmaps[me->cur].remap) {
 	/* we've read all the packets that fit in the mmaped memory, now
 	 * mmap the next area of the trace file */
-	munmap(me->base, me->map_size);
-	me->base = (char *) mmap(NULL, me->map_size,
-				 PROT_READ, MAP_PRIVATE,
-				 me->sniff.fd, me->remap);
-	if (me->base == MAP_FAILED) {
-	    warn("mmap failed: %s\n",
-		   strerror(errno));
+	if (mmap_next_region(me) < 0)
 	    return -1;
-	}
-	me->off = me->nread - me->remap;
-	me->remap += me->remap_sz;
     }
 
     npkts = 0;
@@ -380,11 +401,11 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 #ifdef BUILD_FOR_ARM
 	pcap_hdr_t tmp_ph;
 #endif
-	off_t left = me->file_size - me->nread;
+	off_t left = me->file_size - me->mmaps[me->cur].nread;
 	int drop_this = 0;
-	char *base = me->base + me->off;
+	char *base = me->mmaps[me->cur].base + me->mmaps[me->cur].off;
 
-	if (me->nread > me->remap)
+	if (me->mmaps[me->cur].nread > me->mmaps[me->cur].remap)
 	    break;
 
 	/* do we have a pcap header? */
@@ -533,8 +554,8 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	} else {
 	    (*dropped_pkts)++;
 	}
-	me->off += sizeof(pcap_hdr_t) + ph->caplen;
-	me->nread += sizeof(pcap_hdr_t) + ph->caplen;
+	me->mmaps[me->cur].off += sizeof(pcap_hdr_t) + ph->caplen;
+	me->mmaps[me->cur].nread += sizeof(pcap_hdr_t) + ph->caplen;
     }
 
     return 0;
@@ -549,11 +570,15 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 static void
 sniffer_stop(sniffer_t * s)
 {
+    int i;
     struct pcap_me *me = (struct pcap_me *) s;
     
-    if (me->base) {
-    	munmap(me->base, me->map_size);
+    for (i = 0; i <= 1; i++) {
+        if (me->mmaps[i].base) {
+            munmap(me->mmaps[i].base, me->map_size);
+        }
     }
+
     close(me->sniff.fd);
 }
 

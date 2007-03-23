@@ -115,7 +115,6 @@ service_status(int client_fd, como_node_t *node,
 
     /* print the starting time */
     start = TS2SEC(como_stats->first_ts);
-    start = 0;
     timedata = gmtime(&start); 
     strftime(datebuf, sizeof(datebuf), "%a %B %e %T %Z %Y", timedata); 
     len += sprintf(buf + len, "Start: %u | %s\n", (unsigned) start, datebuf); 
