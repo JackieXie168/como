@@ -83,8 +83,9 @@ const qu_format_t QU_FORMAT_COMO =
 const qu_format_t QU_FORMAT_RAW =
 {FORMAT_RAW, "raw", "application/octet-stream"};
 
-/* stats 'inherited' from SU */
+/* vars 'inherited' from SU */
 extern stats_t *como_stats;
+extern como_config_t *como_config;
 
 /* 
  * -- query_validate
@@ -182,7 +183,7 @@ query_validate(qreq_t * req, como_node_t * node)
     if (req->format == NULL)
         req->format = como_strdup(iq->dflt_format);
     if (req->format == NULL) /* mdl has no default */
-        req->format = como_strdup("como");
+        req->format = como_strdup("plain");
     
     /*
      * set the qu_format
@@ -325,7 +326,7 @@ query_validate(qreq_t * req, como_node_t * node)
 	    }
 	    free(running_filter);
 	}
-    } else { 
+    } else {
 	/* 
 	 * a source is defined. go look for it and forget about the 
 	 * filter defined in the query. we will have to instantiate a
@@ -349,7 +350,7 @@ query_validate(qreq_t * req, como_node_t * node)
             return httpstr;
         }
 
-/*FIXME	if (!req->src->callbacks.outdesc || !req->src->callbacks.replay) {*/
+/*FIXME	if (!req->src->callbacks.outdesc || !req->src->callbacks.replay) */
 	if (!mdl_get_iquery(req->src)->replay) {
 	    /*	
 	     * the source module does not have the replay() callback or 
@@ -363,7 +364,7 @@ query_validate(qreq_t * req, como_node_t * node)
 		    req->source); 
             return httpstr;
         }
-    } 
+    }
 #endif
 
     return NULL;		/* everything OK, nothing to say */
@@ -499,6 +500,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     DEBUGGER_WAIT_ATTACH("qu");
 
     ipc_set_user_data(&como_qu);
+    proxy_mono_init(como_config->mono_path);
 
     /* XXX needed? handle the message from SUPERVISOR */ 
     /*while (s_wait_for_modules) 
@@ -620,7 +622,6 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
     if (file_fd < 0) 
 	error("opening file %s\n", dbname);
-    //free(dbname);
 
     /* seek on the first record */
     ts = TIME2TS(req.start, 0);
@@ -651,10 +652,11 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	     * if this is not the case we just make something up
 	     */
 	    iq->state = iq->init(req.mdl, format_id, req.args);
+            debug("module `%s': qu_init() done\n", req.mdl->name);
 
 	    break;
 	}
-	for (;;) { 
+	for (;;) {
 	    csrec_t *rec;
 	    
 	    rec = csgetrec(file_fd, ofs);

@@ -78,9 +78,24 @@ public interface IExport
 
 public interface IQuery
 {
-    void init(int format_id, Hashtable args);
-    void finish(int format_id);
-    void print_rec(int format_id, Record r);
+    void init(string format, Hashtable args);
+    void finish(string format);
+    void print_rec(string format, Record r);
+}
+
+public class QueryFormat
+{
+    //int id;
+    string name;
+    string content_type;
+
+    public QueryFormat(string name, string content_type)
+    {
+	this.name = name;
+	this.content_type = content_type;
+    }
+    public string Name          { get { return name;         } }
+    public string ContentType   { get { return content_type; } }
 }
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
@@ -92,7 +107,7 @@ public class FormatAttribute : System.Attribute
     
     public FormatAttribute(int id, string name, string content_type)
     {
-	this.id= id;
+	this.id = id;
 	this.name = name;
 	this.content_type = content_type;
     }
@@ -150,6 +165,18 @@ public sealed class TS
     public static ulong from_time(uint sec, uint usec)
     {
 	return (((ulong) sec) << 32) + ((((ulong) usec) << 32) / 1000000);
+    }
+
+    public static float to_float(ulong ts)
+    {
+        return sec(ts) + (float)usec(ts)/1000000;
+    }
+
+    public static string to_string(ulong ts)
+    {
+        System.DateTime dt = new System.DateTime(1970, 1, 1, 0, 0, 0, 0);
+        dt = dt.AddSeconds(TS.sec(ts));
+        return String.Format("{0:r}", dt);
     }
 }
 

@@ -42,8 +42,6 @@
 #include "comotypes.h"
 #include "ipc.h"
 
-
-
 /*
  * mdl.c
  */
@@ -208,8 +206,14 @@ const headerinfo_t * headerinfo_lookup_with_type_and_layer(uint32_t type,
  * proxy-mono.c
  */
 void proxy_mono_init(char *mono_path);
-int proxy_mono_load(mdl_t * mdl);
+int proxy_mono_load_export(mdl_t * mdl);
+int proxy_mono_load_query(mdl_t * mdl);
+qu_format_t * proxy_mono_get_formats(mdl_t * mdl, char **dflt_format);
 void * proxy_mono_ex_init(mdl_t * mdl);
+void * proxy_mono_qu_init(mdl_t * mdl, int format_id, hash_t * args);
+void proxy_mono_qu_finish(mdl_t * self, int format_id, void * state);
+void proxy_mono_qu_print_rec(mdl_t * self, int format_id, void * record,
+    void * state);
 void proxy_mono_export(mdl_t * mdl, void ** tuples, size_t ntuples,
         timestamp_t ivl_start, void * state);
 

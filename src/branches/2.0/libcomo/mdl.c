@@ -276,15 +276,14 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	    ib->proc.ex->init = shobj_symbol(ib->shobj, "ex_init", TRUE);
 	    ib->proc.ex->export = shobj_symbol(ib->shobj, "export", FALSE);
 	    if (ib->proc.ex->export == NULL &&
-		ib->mdl_tuple.serialize != ib->mdl_record.serialize)
-	    {
+                    ib->mdl_tuple.serialize != ib->mdl_record.serialize) {
 		warn("module `%s' doesn't implement export but tuple and "
 		     "record are not identical.\n", mdl->name);
 		return -1;
 	    }
 	    break;
 	case EX_IMPL_MONO:
-	    if (proxy_mono_load(mdl) == -1)
+	    if (proxy_mono_load_export(mdl) == -1)
 		return -1;
 	    ib->proc.ex->init = proxy_mono_ex_init;
 	    ib->proc.ex->export = proxy_mono_export;
@@ -295,7 +294,7 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	qu_impl = shobj_symbol(ib->shobj, "qu_impl", FALSE);
 	switch (*qu_impl) {
 	case QU_IMPL_NONE:
-	break;
+            break;
 	case QU_IMPL_C: {
             char **strptr;
 	    ib->proc.qu->init = shobj_symbol(ib->shobj, "qu_init", TRUE);
@@ -308,14 +307,20 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 
 	    break;
         }
-	case QU_IMPL_MONO:
-/*
-	    if (proxy_mono_load(mdl) == -1)
+	case QU_IMPL_MONO: {
+            /*MonoProperty *prop;
+            gpointer iter = NULL;*/
+	    if (proxy_mono_load_query(mdl) == -1)
 		return -1;
-	    ib->proc.ex->init = proxy_mono_ex_init;
-	    ib->proc.ex->export = proxy_mono_export;
-*/
+
+	    ib->proc.qu->init = proxy_mono_qu_init;
+	    ib->proc.qu->finish = proxy_mono_qu_finish;
+	    ib->proc.qu->print_rec = proxy_mono_qu_print_rec;
+
+            ib->proc.qu->formats = proxy_mono_get_formats(mdl,
+                &ib->proc.qu->dflt_format);
 	    break;
+        }
 	}
 	break;
     }

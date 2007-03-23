@@ -206,11 +206,11 @@ qu_impl_t qu_impl = ${QULANG};
     ADD_CUSTOM_TARGET("${MODULE}-Csharp" ALL DEPENDS ${MODULE_DLL})
     ADD_CUSTOM_COMMAND(
         OUTPUT ${MODULE_DLL}
-        COMMAND ${MONO_MCS} -out:${MODULE_DLL}
-            -target:library -lib:${COMO_BINARY_DIR}/mono
-            -r:como.dll
-            ${MODULE_EXPORT_CSHARP} ${MODULE_CSCLASS}
+        COMMAND ${MONO_MCS} -out:${MODULE_DLL} -target:library
+            -lib:${COMO_BINARY_DIR}/mono -r:como.dll ${MODULE_EXPORT_CSHARP}
+            ${MODULE_QUERY_CSHARP} ${MODULE_CSCLASS}
         MAIN_DEPENDENCY ${MODULE_EXPORT_CSHARP}
+        DEPENDS ${MODULE_QUERY_CSHARP}
         DEPENDS ${MODULE_CSCLASS} ${COMO_BINARY_DIR}/mono/como.dll
     )
   ENDIF(EXISTS ${MODULE_EXPORT_CSHARP})
