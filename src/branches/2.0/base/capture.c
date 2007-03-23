@@ -103,6 +103,7 @@ typedef struct como_ca {
 
     timestamp_t		live_th;
 
+    uint32_t            timebin;    /* capture timebin (in microseconds) */
 } como_ca_t;
 
 como_ca_t *s_como_ca;
@@ -714,6 +715,8 @@ handle_su_ca_start(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
 	como_ca->min_flush_ivl = TIME2TS(1, 0);
     }
 
+    como_ca->timebin = 100000;
+
     msg("starting to capture packets\n");
     como_ca->ready = TRUE;
     return IPC_OK;
@@ -1100,6 +1103,27 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
     batch->last_pkt_ts = pkt->ts;
 }
 
+
+/*
+ * -- cmp_ts
+ *
+ * compares a timestamp with a timebin.
+ * returns -1, 0, or 1 if the timestamp is smaller, equal to, or greater
+ * than the timebin, respectively.
+ *
+ */
+static int
+cmp_ts(timestamp_t ts, uint32_t tb)
+{
+    if (TS2SEC(ts) > 0 || TS2USEC(ts) > tb)
+        return 1;
+    else if (TS2USEC(ts) == tb)
+        return 0;
+    else
+        return -1;
+}
+
+
 /*
  * -- batch_create
  * 
@@ -1175,6 +1199,12 @@ batch_create(int force_batch, como_ca_t * como_ca)
 	}
     }
 
+    /* if we do not have a complete timebin, wait until we receive more
+     * packets from the sniffers */
+    if (prev_last_pkt_ts != 0 &&
+        cmp_ts(max_last_pkt_ts - prev_last_pkt_ts, como_ca->timebin) < 0)
+        return NULL;
+
     /* create the batch structure */
 
     batch = alc_new0(&como_ca->shalc, batch_t);
@@ -1238,6 +1268,13 @@ batch_create(int force_batch, como_ca_t * como_ca)
 	if (ppbuf->count == 0)
 	    if ((max_last_pkt_ts - ppbuf->last_pkt_ts) <= live_th)
 		break;
+
+        /* if we already have a complete timebin, break out of the loop */
+        pkt_t *pkt;
+        pkt = ppbuf_get(ppbuf);
+        if (prev_last_pkt_ts != 0 &&
+            cmp_ts(pkt->ts - prev_last_pkt_ts, como_ca->timebin) >= 0)
+            break;
     }
 
     if (batch->count < batch->reserved)
