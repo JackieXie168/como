@@ -63,7 +63,6 @@ typedef struct como_su {
     alc_t		shalc;
 
     FILE *		logfile;	/* log file */
-    /*como_config_t *	config;*/
     ipc_peer_t *	ca;		/* CAPTURE */
     
     pid_t		su_pid;
@@ -313,6 +312,7 @@ cleanup()
     asprintf(&cmd, "rm -rf %s\n", workdir);
     system(cmd);
     free(cmd);
+    /* TODO wait for children processes */
     msg("--- done, thank you for using CoMo\n");
 }
   
@@ -817,8 +817,8 @@ fake_config()
     sniffer_defs = array_new(sizeof(sniffer_def_t));
     mdl_defs = array_new(sizeof(mdl_def_t));
 
-    s.name = como_strdup("erf");
-    s.device = como_strdup("/home/traces/traca_gran.erf");
+    s.name = como_strdup("pcap");
+    s.device = como_strdup("../example-trace.pcap");
     s.args = NULL;
     array_add(sniffer_defs, &s);
 
