@@ -20,11 +20,16 @@ SET(MODULES
 #  trace
   trafficCC
   topaddrCC
-  trafficCCS
 #  hwtm
 #  tuple
 #  unknown-ports
 )
+
+IF(MONO_FOUND)
+SET(MODULES ${MODULES}
+  trafficCCS
+)
+ENDIF(MONO_FOUND)
 
 #IF(FTLIB_FOUND)
 #  SET(MODULES

@@ -191,6 +191,7 @@ ADD_DEFINITIONS(-include ${COMO_SOURCE_DIR}/include/os.h)
 # If we have mono, add the appropirate support.
 #
 IF(MONO_FOUND)
+  ADD_DEFINITIONS(-DMONO_SUPPORT)
   ADD_SUBDIRECTORY(mono)
 ENDIF(MONO_FOUND)
 

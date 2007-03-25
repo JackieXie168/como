@@ -459,8 +459,10 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     env = como_env();
     como_ex.st_dir = como_asprintf("%s/%s", env->dbdir, node->name);
 
+#ifdef MONO_SUPPORT
     /* initialize mono */
     proxy_mono_init(como_config->mono_path);
+#endif
     
     /* register handlers for signals */ 
     signal(SIGPIPE, exit); 

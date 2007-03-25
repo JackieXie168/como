@@ -500,7 +500,9 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     DEBUGGER_WAIT_ATTACH("qu");
 
     ipc_set_user_data(&como_qu);
+#ifdef MONO_SUPPORT
     proxy_mono_init(como_config->mono_path);
+#endif
 
     /* XXX needed? handle the message from SUPERVISOR */ 
     /*while (s_wait_for_modules) 
