@@ -283,11 +283,17 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	    }
 	    break;
 	case EX_IMPL_MONO:
+	    #ifdef MONO_SUPPORT
 	    if (proxy_mono_load_export(mdl) == -1)
 		return -1;
 	    ib->proc.ex->init = proxy_mono_ex_init;
 	    ib->proc.ex->export = proxy_mono_export;
 	    break;
+            #else
+	    warn("module `%s' implemented in mono, but mono support not "
+			    "complied in\n", mdl->name);
+	    return -1;
+            #endif
 	}
 	break;
     case PRIV_IQUERY:
@@ -308,6 +314,7 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	    break;
         }
 	case QU_IMPL_MONO: {
+	    #ifdef MONO_SUPPORT
             /*MonoProperty *prop;
             gpointer iter = NULL;*/
 	    if (proxy_mono_load_query(mdl) == -1)
@@ -320,6 +327,11 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
             ib->proc.qu->formats = proxy_mono_get_formats(mdl,
                 &ib->proc.qu->dflt_format);
 	    break;
+            #else
+	    warn("module `%s' implemented in mono, but mono support not "
+			    "complied in\n", mdl->name);
+	    return -1;
+            #endif
         }
 	}
 	break;
