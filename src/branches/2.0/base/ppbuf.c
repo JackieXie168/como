@@ -46,6 +46,7 @@ struct ppbuf {
     int		size;		/* number of allocated items in pp array */
     pkt_t **	pp;
     timestamp_t	last_pkt_ts;
+    timestamp_t	first_pkt_ts;
     int		id;		/* sniffer id */
     ppbuf_list_entry_t	next;
 };
@@ -115,6 +116,8 @@ ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
     assert(ppbuf->captured <= ppbuf->size);
 
     ppbuf->last_pkt_ts = pkt->ts;
+    if (ppbuf->first_pkt_ts == 0)
+        ppbuf->first_pkt_ts = pkt->ts;
 
     pkt->input = ppbuf->id;
     
