@@ -1123,6 +1123,22 @@ cmp_ts(timestamp_t ts, uint32_t tb)
         return -1;
 }
 
+/*
+ * -- align_ts
+ *
+ * aligns a timestamp to a timebin
+ *
+ */
+static timestamp_t
+align_ts(timestamp_t ts, uint32_t tb)
+{
+    timestamp_t t;
+    
+    t = TIME2TS(TS2SEC(ts), (TS2USEC(ts) - TS2USEC(ts) % tb));
+
+    return t;
+}
+
 
 /*
  * -- batch_create
@@ -1138,11 +1154,13 @@ batch_create(int force_batch, como_ca_t * como_ca)
     ppbuf_t *ppbuf;
     ppbuf_list_t ppblist;
     timestamp_t max_last_pkt_ts = 0;
+    timestamp_t min_first_pkt_ts = ~0;
     int pc = 0;
     static timestamp_t prev_last_pkt_ts;
     int one_full_flag = 0;
     sniffer_list_t * sniffers;
     timestamp_t live_th;
+    pkt_t *next_pkt;
     
     sniffers = como_ca->sniffers;
     live_th = como_ca->live_th;
@@ -1151,7 +1169,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
     /*
      * count packets
-     * find max(last packet timestamp)
+     * find max(last packet timestamp) and min(first packet timestamp)
      * determine if any sniffer has filled its buffer
      */
     sniffer_list_foreach(sniff, sniffers) {
@@ -1166,6 +1184,9 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
 	if (ppbuf->last_pkt_ts > max_last_pkt_ts)
 	    max_last_pkt_ts = ppbuf->last_pkt_ts;
+
+        if (ppbuf->first_pkt_ts < min_first_pkt_ts)
+            min_first_pkt_ts = ppbuf->first_pkt_ts;
 
 	if (ppbuf->count == ppbuf->size)
 	    one_full_flag = 1;
@@ -1201,8 +1222,9 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
     /* if we do not have a complete timebin, wait until we receive more
      * packets from the sniffers */
-    if (prev_last_pkt_ts != 0 &&
-        cmp_ts(max_last_pkt_ts - prev_last_pkt_ts, como_ca->timebin) < 0)
+    if (prev_last_pkt_ts == 0)
+        prev_last_pkt_ts = align_ts(min_first_pkt_ts, como_ca->timebin);
+    if (cmp_ts(max_last_pkt_ts - prev_last_pkt_ts, como_ca->timebin) < 0)
         return NULL;
 
     /* create the batch structure */
@@ -1253,6 +1275,11 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
 	assert(ppbuf);
 
+        /* if we already have a complete timebin, break out of the loop */
+        next_pkt = ppbuf_get(ppbuf);
+        if (cmp_ts(next_pkt->ts - prev_last_pkt_ts, como_ca->timebin) >= 0)
+            break;
+
 	/* update batch */
 	batch_append(batch, ppbuf);
 	pc--;
@@ -1268,13 +1295,6 @@ batch_create(int force_batch, como_ca_t * como_ca)
 	if (ppbuf->count == 0)
 	    if ((max_last_pkt_ts - ppbuf->last_pkt_ts) <= live_th)
 		break;
-
-        /* if we already have a complete timebin, break out of the loop */
-        pkt_t *pkt;
-        pkt = ppbuf_get(ppbuf);
-        if (prev_last_pkt_ts != 0 &&
-            cmp_ts(pkt->ts - prev_last_pkt_ts, como_ca->timebin) >= 0)
-            break;
     }
 
     if (batch->count < batch->reserved)
@@ -1300,7 +1320,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
     batch->ref_mask = 1LL;
     
-    prev_last_pkt_ts = batch->last_pkt_ts;
+    prev_last_pkt_ts = align_ts(next_pkt->ts, como_ca->timebin);
 
     return batch;
 }
