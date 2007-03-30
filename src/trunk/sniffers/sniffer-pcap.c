@@ -129,7 +129,7 @@ open_next_file(struct pcap_me * me)
     if (me->sniff.fd >= 0) {
 	me->sniff.flags |= SNIFF_TOUCHED;
 	me->file_idx++;
-	if (me->file_idx >= me->files.gl_pathc)
+	if (me->file_idx >= (size_t) me->files.gl_pathc)
 	    goto error;
 	close(me->sniff.fd);
     }
