@@ -74,6 +74,7 @@ void * mdl__alloc_tuple(mdl_t * mdl, size_t sz);
 
 void mdl_print(mdl_t * mdl, const char * s);
 void mdl_printf(mdl_t * mdl, const char * fmt, ...);
+void mdl_write(mdl_t *mdl, const char *str, size_t len);
 
 
 /*

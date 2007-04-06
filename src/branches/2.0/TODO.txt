@@ -1,0 +1,34 @@
+TODO list for 2.0
+----------------
+
+This is a list of pending features / bug fixes / whatever before
+2.0 can be released. It is not exhaustive, just a place to keep
+a record of pending work.
+
+* Sniffers:
+
+sniffer-bpf.c
+sniffer-como.c
+sniffer-flowtools.c
+sniffer-netflow.c
+sniffer-ondemand.c
+sniffer-radio.c
+sniffer-sflow.c
+sniffer-sk98.c
+sniffer-wpcap.c
+
+* Parse como.conf
+
+ - Preferably, write a new parser with flex and bison.
+
+
+* Features
+
+ - replay()
+
+* Bugs
+
+ - Query dies when /?module=mdl&args... query scheme is used by client.
+   A rewrite of the parser with flex and bison would also be nice.
+
+
