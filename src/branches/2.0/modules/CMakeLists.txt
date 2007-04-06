@@ -17,7 +17,7 @@ SET(MODULES
 #  topaddr
 #  tophwaddr
 #  topports
-#  trace
+  traceCC
   trafficCC
   topaddrCC
 #  hwtm
@@ -197,6 +197,9 @@ qu_impl_t qu_impl = ${QULANG};
 
   # Compile C code
   ADD_LIBRARY(${MODULE} SHARED ${MODULE_CFILES})
+  ADD_DEPENDENCIES(${MODULE} modules_library)
+  TARGET_LINK_LIBRARIES(${MODULE} ${COMO_BINARY_DIR}/lib/libcomomdl.a)
+
   SET_TARGET_PROPERTIES(${MODULE} PROPERTIES PREFIX "")
   IF(APPLE)
   SET_TARGET_PROPERTIES(${MODULE}

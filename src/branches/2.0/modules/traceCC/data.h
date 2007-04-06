@@ -27,50 +27,25 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: traffic.c 978 2006-11-01 15:23:18Z m_canini $
+ * $Id: trace.c 1012 2006-11-13 15:04:31Z jsanjuas $
  */
 
-/*
- * Traffic Load 
- *
- * Compute input/output pkt/byte count on the monitored link.
- * Whether it tracks packets or bytes can be decided at configuration time. 
- *
- */
+#include "como.h"
 
-#include <stdio.h>
-#include <time.h>
-#include "module.h"
-#include "data.h"
+#define BUFSIZE	2048
 
-void * 
-init(mdl_t * self, hash_t * args)
-{
-    config_t * config; 
-    int i;
-    pkt_t *pkt;
-    metadesc_t *inmd;
-    char *val;
+como_tuple como_record struct record {
+    timestamp_t ts;
+    int len; 
+    uint8_t buf[BUFSIZE];
+};
 
-    config = mdl_alloc_config(self, config_t);
+como_config struct config {
+    uint32_t snaplen; 		/* bytes to capture in each packet */ 
+};
 
-    config->meas_ivl = 1;
-    config->iface = -1; 
+typedef struct record record_t;
+typedef struct config config_t;
 
-    /* get config args */
-    if ((val = hash_lookup_string(args, "interval")))
-        config->meas_ivl = atoi(val);
-    if ((val = hash_lookup_string(args, "interface")))
-        config->iface = atoi(val);
+#define SNAPLEN_MAX	(BUFSIZE - sizeof(pkt_t))
 
-    /* setup indesc */
-/*
-    inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
-    
-    pkt = metadesc_tpl_add(inmd, "none:none:none:none");
-*/    
-    self->flush_ivl = TIME2TS(config->meas_ivl, 0);
-    
-    return config;
-}

@@ -446,7 +446,7 @@ void
 mdl_printf(mdl_t * mdl, const char * fmt, ...)
 {
     mdl_iquery_t *iq = mdl_get_iquery(mdl);
-    FILE *f =iq->clientfile;
+    FILE *f = iq->clientfile;
     va_list ap;
 
     debug("vfprintf to client\n");
@@ -462,6 +462,15 @@ void
 mdl_print(mdl_t *mdl, const char *str)
 {
     mdl_printf(mdl, "%s", str);
+}
+
+void
+mdl_write(mdl_t *mdl, const char *str, size_t len)
+{
+    mdl_iquery_t *iq = mdl_get_iquery(mdl);
+    FILE *f = iq->clientfile;
+    fwrite(str, len, 1, f);
+    fflush(f);
 }
 
 
