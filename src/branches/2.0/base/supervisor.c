@@ -803,7 +803,7 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 }
 
 static como_config_t *
-fake_config()
+fake_config(alc_t *alc)
 {
     static como_config_t config;
     
@@ -824,19 +824,22 @@ fake_config()
 
     m.name = como_strdup("topaddr");
     m.mdlname = como_strdup("topaddrCC");
-    m.args = NULL;
+    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
 
+#if MONO
     m.name = como_strdup("traffic2");
     m.mdlname = como_strdup("trafficCCS");
-    m.args = NULL;
+    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
+#endif
 
     m.name = como_strdup("traffic");
     m.mdlname = como_strdup("trafficCC");
-    m.args = NULL;
+    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    hash_insert_string(m.args, "interval", "1");
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
 
@@ -907,7 +910,7 @@ main(int argc, char ** argv)
      * parse command line and configuration files
      */
     //configure(&map, argc, argv);
-    como_config = fake_config();
+    como_config = fake_config(&alc);
 
     /* write welcome message */ 
     msg("----------------------------------------------------\n");

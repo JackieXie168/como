@@ -14,5 +14,3 @@ como_config struct traffic_config {
 typedef struct traffic_tuple tuple_t;
 typedef struct traffic_config config_t;
 
-#define FLOWDESC struct traffic_tuple
-

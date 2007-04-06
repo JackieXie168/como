@@ -39,12 +39,13 @@
 #include "data.h"
 
 topaddr_config_t *
-init(mdl_t * self, char *args[])
+init(mdl_t * self, hash_t * args)
 {
     topaddr_config_t *config;
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
+    char *val;
     
     config = mdl_alloc_config(self, topaddr_config_t);
     config->use_dst = 1; 
@@ -56,24 +57,18 @@ init(mdl_t * self, char *args[])
     /* 
      * process input arguments 
      */
-    /*for (i = 0; args && args[i]; i++) { 
-	char * wh;
-
-	wh = index(args[i], '=') + 1; 
-	if (!strncmp(args[i], "interval", 8)) {
-	    config->meas_ivl = atoi(wh); 
-	} else if (!strncmp(args[i], "topn", 4)) {
-	    config->topn = atoi(wh);
-	} else if (!strncmp(args[i], "mask", 4)) {
-	    config->mask = atoi(wh); 
-	} else if (!strncmp(args[i], "align-to", 8)) {
-	    config->last_export = atoi(wh); 
-	} else if (!strncmp(args[i], "use-dst", 7)) {
-	    config->use_dst = 1;
-	} else if (!strncmp(args[i], "use-src", 7)) {
-	    config->use_dst = 0;
-	}
-    }*/
+    if ((val = hash_lookup_string(args, "interval")))
+        config->meas_ivl = atoi(val);
+    if ((val = hash_lookup_string(args, "topn")))
+        config->topn = atoi(val);
+    if ((val = hash_lookup_string(args, "mask")))
+        config->mask = atoi(val);
+    if ((val = hash_lookup_string(args, "align-to")))
+        config->last_export = atoi(val);
+    if ((val = hash_lookup_string(args, "use-dst")))
+        config->use_dst = 1;
+    if ((val = hash_lookup_string(args, "use-src")))
+        config->use_dst = 0;
 
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
