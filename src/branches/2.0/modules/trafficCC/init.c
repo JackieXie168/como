@@ -50,24 +50,19 @@ init(mdl_t * self, hash_t * args)
     int i;
     pkt_t *pkt;
     metadesc_t *inmd;
+    char *val;
 
     config = mdl_alloc_config(self, config_t);
 
     config->meas_ivl = 1;
     config->iface = -1; 
 
-/*
-    for (i = 0; args && args[i]; i++) {
-	char * wh;
+    /* get config args */
+    if ((val = hash_lookup_string(args, "interval")))
+        config->meas_ivl = atoi(val);
+    if ((val = hash_lookup_string(args, "interface")))
+        config->iface = atoi(val);
 
-	wh = index(args[i], '=') + 1;
-        if (strstr(args[i], "interval")) {
-            config->meas_ivl = atoi(wh);
-        } else if (strstr(args[i], "interface")) {
-            config->iface = atoi(wh);
-	} 
-    }
-*/    
     /* setup indesc */
 /*
     inmd = metadesc_define_in(self, 0);

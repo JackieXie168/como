@@ -62,9 +62,12 @@ typedef int (*compare_hash_keys_fn) (const void *keyPtr1, const void *keyPtr2);
  * Acceptable key types for hash tables:
  *
  * HASHKEYS_STRING:		The keys are strings, the pointer is stored in
- *				the entry.
+ *				the entry. It is safe to pass NULL hashKeyFn or
+ *				compareKeysFn to hash_new and hash_new_full.
+ *
  * HASHKEYS_ULONG:		The keys are ulongs, the value is stored
  *				in the entry.
+ *
  * HASHKEYS_POINTER:		The keys are pointers to arbitrary types, the
  *				pointer is stored in the entry.
  */
