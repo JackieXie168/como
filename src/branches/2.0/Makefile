@@ -18,6 +18,8 @@ clean: cmake
 	cd $(BUILD_TYPE) && make clean
 
 cmake:
+	which cmake || (echo; echo "CoMo depends on CMake \
+ (http://www.cmake.org) to build. Please install CMake first."; echo)
 	mkdir -p $(BUILD_TYPE)
 	cd $(BUILD_TYPE) && \
 	    cmake .. -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(MAKEFLAGS)
