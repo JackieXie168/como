@@ -20,6 +20,7 @@ SET(MODULES
   traceCC
   trafficCC
   topaddrCC
+  tupleCC
 #  hwtm
 #  tuple
 #  unknown-ports

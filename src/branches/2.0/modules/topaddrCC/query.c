@@ -140,7 +140,7 @@ qu_init(mdl_t * self, int format_id, hash_t * args)
 }
 
 void
-qu_finish(mdl_t * self, int format_id, topaddr_record_t * r, void * state)
+qu_finish(mdl_t * self, int format_id, void * state)
 {
     if (format_id == FORMAT_HTML)
 	mdl_print(self, HTMLFOOTER);  
