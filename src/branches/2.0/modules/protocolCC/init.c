@@ -27,45 +27,56 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: trace.c 1012 2006-11-13 15:04:31Z jsanjuas $
+ * $Id: protocol.c 1012 2006-11-13 15:04:31Z jsanjuas $
+ */
+
+/*
+ * Protocol module
+ *
+ * This module computes the number of packets and bytes per protocol.
+ * Output: packets/bytes per protocol over 1s intervals
+ *
  */
 
 #include "module.h"
 #include "data.h"
 
 config_t *
-init(mdl_t * self, hash_t * args)
+init(mdl_t * self, hash_t *args)
 {
     config_t *config;
-    int i; 
-    /* pkt_t *pkt;
-    metadesc_t *inmd, *outmd; */
+    int i;
+    /*pkt_t *pkt;
+    metadesc_t *inmd;*/
     char *val;
 
     config = mdl_alloc_config(self, config_t);
-    config->snaplen = SNAPLEN_MAX;
+    bzero(config, sizeof(config_t));
+    config->meas_ivl = 1;
 
-    /* get config args */
-    if ((val = hash_lookup_string(args, "snaplen"))) {
-        config->snaplen = atoi(val);  /* set the snaplen */
-        if (config->snaplen > SNAPLEN_MAX)
-		config->snaplen = SNAPLEN_MAX;
-    }
+    /* reset protocols array */
+    bzero(config->proto, IPPROTO_MAX); 
+    config->proto[0] = IPPROTO_TCP; 
+    config->proto[1] = IPPROTO_UDP; 
+    config->proto[2] = IPPROTO_ICMP; 
+    config->proto[3] = IPPROTO_ESP; 
+    config->num_proto = 4; 
 
+    /* 
+     * process input arguments 
+     */
+    if ((val = hash_lookup_string(args, "interval")))
+        config->meas_ivl = atoi(val);
+    
     /* setup indesc */
     /*inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(1, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
-    pkt = metadesc_tpl_add(inmd, "none:none:none:none");*/
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xffff;*/
 
-    /* setup outdesc */
-    /*outmd = metadesc_define_out(self, 0);
-    
-    pkt = metadesc_tpl_add(outmd, "any:any:any:any");
-    COMO(caplen) = config->snaplen;*/
-
-    self->flush_ivl = TIME2TS(1, 0);
-
+    self->flush_ivl = TIME2TS(config->meas_ivl, 0);
     return config;
 }
 

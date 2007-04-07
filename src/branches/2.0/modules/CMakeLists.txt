@@ -12,11 +12,11 @@ SET(MODULES
 #  macssi
 #  nfexlist
 #  pattern-search
-#  protocol
 #  ssid
 #  topaddr
 #  tophwaddr
 #  topports
+  protocolCC
   traceCC
   trafficCC
   topaddrCC

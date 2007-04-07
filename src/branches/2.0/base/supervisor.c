@@ -849,6 +849,12 @@ fake_config(alc_t *alc)
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
 
+    m.name = como_strdup("protocol");
+    m.mdlname = como_strdup("protocolCC");
+    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    m.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m);
+
     config.sniffer_defs = sniffer_defs;
     config.mdl_defs = mdl_defs;
     config.mono_path = "mono";
