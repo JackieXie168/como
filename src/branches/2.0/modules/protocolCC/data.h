@@ -27,45 +27,25 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: trace.c 1012 2006-11-13 15:04:31Z jsanjuas $
+ * $Id: protocol.c 1012 2006-11-13 15:04:31Z jsanjuas $
  */
 
 #include "module.h"
-#include "data.h"
 
-config_t *
-init(mdl_t * self, hash_t * args)
-{
-    config_t *config;
-    int i; 
-    /* pkt_t *pkt;
-    metadesc_t *inmd, *outmd; */
-    char *val;
+#define IPPROTO_MAX 256 /* XXX should be grabbed from include file */
 
-    config = mdl_alloc_config(self, config_t);
-    config->snaplen = SNAPLEN_MAX;
+como_tuple como_record struct record {
+    timestamp_t ts;
+    uint64_t bytes[IPPROTO_MAX];
+    uint32_t pkts[IPPROTO_MAX];
+};
 
-    /* get config args */
-    if ((val = hash_lookup_string(args, "snaplen"))) {
-        config->snaplen = atoi(val);  /* set the snaplen */
-        if (config->snaplen > SNAPLEN_MAX)
-		config->snaplen = SNAPLEN_MAX;
-    }
+como_config struct config {
+    int meas_ivl;     /* measurement interval */
+    uint8_t proto[256]; 
+    int num_proto; 
+    int no_records;
+};
 
-    /* setup indesc */
-    /*inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(1, 0);
-    
-    pkt = metadesc_tpl_add(inmd, "none:none:none:none");*/
-
-    /* setup outdesc */
-    /*outmd = metadesc_define_out(self, 0);
-    
-    pkt = metadesc_tpl_add(outmd, "any:any:any:any");
-    COMO(caplen) = config->snaplen;*/
-
-    self->flush_ivl = TIME2TS(1, 0);
-
-    return config;
-}
-
+typedef struct record record_t;
+typedef struct config config_t;

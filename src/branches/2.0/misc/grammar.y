@@ -39,6 +39,7 @@
 
 #define MAX_STRUCTS 1024
 int num_structs;
+char *input_file;
 struct_t *structs[MAX_STRUCTS + 1];
 struct_t *current_struct;
 
@@ -200,7 +201,7 @@ yyerror(char *s)
     /* TODO open file and print line where error was found */
     printf("parse error at file \"%s\", line %d, column %d\n", current_file,
             line, col);
-    printf("(cpp output file: line %d)\n", cpp_line);
+    printf("(cpp output file \"%s\", line %d)\n", input_file, cpp_line);
     printf("[s = %s]\n", s);
     exit(1);
 }
@@ -210,6 +211,7 @@ int yyparse(void);
 void
 parse(char *input)
 {
+    input_file = input;
     yyin = fopen(input, "r");      
     if (yyin == NULL)
         err(1, "cannot open input file '%s'", input);

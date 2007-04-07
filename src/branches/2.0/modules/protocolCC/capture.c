@@ -27,45 +27,43 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: trace.c 1012 2006-11-13 15:04:31Z jsanjuas $
+ * $Id: protocol.c 1012 2006-11-13 15:04:31Z jsanjuas $
  */
+
+#include <strings.h>
 
 #include "module.h"
 #include "data.h"
 
-config_t *
-init(mdl_t * self, hash_t * args)
+/*
+ * all the state we need is a single record which we keep updating.
+ */
+record_t *
+ca_init(mdl_t *self, timestamp_t ts)
 {
-    config_t *config;
-    int i; 
-    /* pkt_t *pkt;
-    metadesc_t *inmd, *outmd; */
-    char *val;
+    record_t *r = mdl_alloc_tuple(self, record_t);
+    r->ts = ts;
+    bzero(r->bytes, sizeof(r->bytes));
+    bzero(r->pkts, sizeof(r->pkts));
 
-    config = mdl_alloc_config(self, config_t);
-    config->snaplen = SNAPLEN_MAX;
+    return r;
+}
 
-    /* get config args */
-    if ((val = hash_lookup_string(args, "snaplen"))) {
-        config->snaplen = atoi(val);  /* set the snaplen */
-        if (config->snaplen > SNAPLEN_MAX)
-		config->snaplen = SNAPLEN_MAX;
+int
+capture(mdl_t *self, pkt_t *pkt, record_t *x)
+{
+    if (COMO(type) == COMOTYPE_NF) {
+        x->bytes[IP(proto)] += H32(NF(pktcount))*COMO(len)*H16(NF(sampling));
+        x->pkts[IP(proto)] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+    } else if (COMO(type) == COMOTYPE_SFLOW) {
+	x->bytes[IP(proto)] += (uint64_t) COMO(len) * 
+					(uint64_t) H32(SFLOW(sampling_rate));
+	x->pkts[IP(proto)] += H32(SFLOW(sampling_rate));
+    } else {
+        x->bytes[IP(proto)] += COMO(len); 
+        x->pkts[IP(proto)]++;
     }
 
-    /* setup indesc */
-    /*inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(1, 0);
-    
-    pkt = metadesc_tpl_add(inmd, "none:none:none:none");*/
-
-    /* setup outdesc */
-    /*outmd = metadesc_define_out(self, 0);
-    
-    pkt = metadesc_tpl_add(outmd, "any:any:any:any");
-    COMO(caplen) = config->snaplen;*/
-
-    self->flush_ivl = TIME2TS(1, 0);
-
-    return config;
+    return 0;
 }
 
