@@ -403,6 +403,7 @@ memmap_calloc(size_t nmemb, size_t size, const char * file, int line,
     
     size *= nmemb;
     ptr = memmap_malloc(size, file, line, m);
+    /* XXX check if out of memory */
     memset(ptr, 0, size);
     return ptr;
 }

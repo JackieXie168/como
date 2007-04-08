@@ -34,6 +34,7 @@
 #include <string.h>
 #include <assert.h>
 
+#define LOG_DISABLE
 #define LOG_DOMAIN "MDL"
 #include "como.h"
 #include "comopriv.h"
