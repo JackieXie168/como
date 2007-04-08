@@ -34,3 +34,4 @@ sniffer-wpcap.c
  - deserialize_string should work when the target structure field
    is a character array. Right now only works when target is a char pointer.
 
+ - Capture and Export may enter an IPC deadlock
