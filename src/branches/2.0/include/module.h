@@ -74,7 +74,7 @@
  * somewhere in the module_t data structure (opaque to modules). 
  * we use CONFIG() to retrieve the state from that structure 
  */
-#define CONFIG(x)	(((module_t *) (x))->config)
+//#define CONFIG(x)	(((module_t *) (x))->config)
 
 /* 
  * ESTATE is defined by each individual module and stored 
@@ -82,20 +82,21 @@
  * we use ESTATE() to retrieve the state from that structure 
  */
 
-#define ESTATE(x)	(((module_t *) (x))->estate)
+//#define ESTATE(x)	(((module_t *) (x))->estate)
 
 /* 
  * FSTATE is defined by each individual module and stored 
  * somewhere in the module_t data structure (opaque to modules). 
  * we use FSTATE() to retrieve the state from that structure 
  */
-#define FSTATE(x)	(((module_t *) (x))->fstate)
+//#define FSTATE(x)	(((module_t *) (x))->fstate)
 
 /*
  * Macros to copy integers from host to network byte order. 
  * They advance the buffer pointer of the proper amount as well. 
  * This macros are supposed to be used by store()
  */
+/*
 #define PUTH8(x, val) {         \
     uint8_t v = val;            \
     memcpy(x, &v, sizeof(v));   \
@@ -119,12 +120,13 @@
     memcpy(x, &v, sizeof(v));   \
     x = ((char *)x) + 8; 	\
 }
-
+*/
 /*
  * Macros to copy integers directly in network byte order
  * They advance the buffer pointer of the proper amount as well. 
  * This macros are supposed to be used by store()
  */
+/*
 #define PUTN8(x, val)   PUTH8(x, val)
 
 #define PUTN16(x, val) {        \
@@ -144,7 +146,7 @@
     memcpy(x, &v, sizeof(v));   \
     x = ((char *)x) + 8; 	\
 }
-
+*/
 
 /*
  * Macros to read values from a buf and convert them from network 
@@ -152,6 +154,7 @@
  * amount as well. This macros are supposed to be used by the 
  * print()/replay()/load() callbacks
  */
+/*
 #define GETH8(x, val) {         	\
     memcpy(val, x, 1); 		  	\
     x = ((char *)x) + 1; 		\
@@ -174,7 +177,7 @@
     *val = NTOHLL(*val);		\
     x = ((char *)x) + 8; 		\
 }
-
+*/
 
 /*
  * Macros to read values from a buf and keep them in network byte order. 
@@ -182,6 +185,7 @@
  * This macros are supposed to be used by the print()/replay()/load() 
  * callbacks.
  */
+/*
 #define GETN8(x, val) 		GETH8(x, val)
  
 #define GETN16(x, val) {                \
@@ -198,7 +202,7 @@
     memcpy(val, x, 8);                  \
     x = ((char *)x) + 8;                \
 }
-
+*/
 
 #ifndef MAX
 #define MAX(a,b) 	(((a) > (b))? (a) : (b))
