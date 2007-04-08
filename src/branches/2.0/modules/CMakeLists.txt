@@ -20,6 +20,7 @@ SET(MODULES
   traceCC
   trafficCC
   topaddrCC
+  tophwaddrCC
   tupleCC
 #  hwtm
 #  tuple

@@ -54,17 +54,17 @@
 
 /* flush and freeze/unfreeze thresholds */
 #define MB(m)				((m)*1024*1024)
-#define FREEZE_THRESHOLD(mem)		(MB(mem)*3/4)
-#define THAW_THRESHOLD(mem)		(MB(mem)*1/8)
-
-/* global state */
-extern struct _como map;
+#define FREEZE_THRESHOLD(mem)		(mem*3/4)
+#define THAW_THRESHOLD(mem)		(mem*1/8)
 
 #define CA_MAXCLIENTS		(64 - 1)	/* 1 is CAPTURE itself */
 
 #define CACLIENT_NOSAMPLING_THRESH	0.25
 #define CACLIENT_SAMPLING_THRESH	0.35
 #define CACLIENT_WAIT_THRESH		0.65
+
+/* config 'inherited' from supervisor */
+extern como_config_t *como_config;
 
 typedef struct cabuf_cl {
     ipc_peer_t *peer;		/* peer to communicate with the client */
@@ -274,6 +274,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             msg.ivl_start = ic->ivl_start;
             msg.ntuples = ic->tuple_count;
 
+            como_stats->table_queue++;
             ipc_send(ic->export, CA_EX_PROCESS_SHM_TUPLES, &msg, sizeof(msg));
             //debug("module `%s': flushing - sent shmem tuples msg to CA\n", mdl->name);
 
@@ -312,6 +313,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
                 mdl->priv->mdl_tuple.serialize(&sbuf, t->data);
 
             assert(sz == (size_t)(sbuf - msg->data));
+            como_stats->table_queue++;
             ipc_send(ic->export, CA_EX_PROCESS_SER_TUPLES, msg, sz +
 		     sizeof(msg_process_ser_tuples_t));
             debug("module `%s': flushing - sent serialized tuples to EX\n", mdl->name);
@@ -622,7 +624,9 @@ handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer,
 	t = tuples_next(t);
 	alc_free(&como_ca->shalc, t2);
     }
-    
+
+    como_stats->table_queue--;
+
     return IPC_OK;
 }
 
@@ -1453,7 +1457,8 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
 	if (sniff->priv->touched == TRUE)
 	    touched++;
 
-	if (sniff->priv->state == SNIFFER_ACTIVE)
+	if (sniff->priv->state == SNIFFER_ACTIVE ||
+                sniff->priv->state == SNIFFER_FROZEN)
 	    active++;
     }
 
@@ -1856,48 +1861,47 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    else
 		batch_free(batch);
 	}
-#if 0
-	/* 
-	 * we check the memory usage and stop any sniffer that is 
-	 * running from file if the usage is above the FREEZE_THRESHOLD. 
-	 * this will give EXPORT some time to process the tables and free
-	 * memory. we resume as soon as memory usage goes below the 
-	 * THAW_THRESHOLD, or EXPORT has no data to process (hence no mem
-         * is going to be free'd).
-	 */
 
-	if (map.stats->table_queue == 0 ||
-                map.stats->mem_usage_cur < THAW_THRESHOLD(map.mem_size)) {
+	/* 
+         * Check shared mem usage. If above FREEZE_THRESHOLD, and export
+         * has work to do, freeze sniffers that read from files. If below
+         * THAW_THRESHOLD, or export has no work left (therefore it cannot
+         * free any memory) then thaw any sniffer.
+	 */
+	if (como_stats->table_queue == 0 || memmap_usage(shmemmap) <
+                THAW_THRESHOLD(como_config->shmem_size)) {
 	    /* 
              * either memory is below threshold or export cannot free more mem.
              * unfreeze any source.
 	     */
-	    for (src = map.sources; src; src = src->next) {
-		sniffer_t *sniff = src->sniff;
-
-		if (sniff->flags & SNIFF_FROZEN) {
-		    sniff->flags &= ~SNIFF_FROZEN;
-		    sniff->flags |= SNIFF_TOUCHED;
-		    notice("unfreezing sniffer %s\n", src->cb->name);
+            sniffer_list_foreach(sniff, sniffers) {
+		if (sniff->priv->state == SNIFFER_FROZEN) {
+		    sniff->priv->state = SNIFFER_ACTIVE;
+                    sniff->priv->touched = TRUE;
+		    warn("unfreezing sniffer %s on %s\n", sniff->cb->name,
+                            sniff->device);
 		}
 	    }
-	} else if (map.stats->mem_usage_cur > FREEZE_THRESHOLD(map.mem_size)) {
+	} else if (memmap_usage(shmemmap) >
+                        FREEZE_THRESHOLD(como_config->shmem_size)) {
             /*
              * too much mem being used, freeze sniffer running from files.
              */
-	    for (src = map.sources; src; src = src->next) {
-		sniffer_t *sniff = src->sniff;
-
-		if (sniff->flags & SNIFF_INACTIVE)
+            sniffer_list_foreach(sniff, sniffers) {
+		if (sniff->priv->state == SNIFFER_INACTIVE)
 		    continue;
+            
+                if (sniff->priv->state == SNIFFER_FROZEN)
+                    continue;
 
 		if (sniff->flags & SNIFF_FILE) {
-		    sniff->flags |= SNIFF_FROZEN | SNIFF_TOUCHED;
-		    notice("freezing sniffer %s\n", src->cb->name);
+		    sniff->priv->state = SNIFFER_FROZEN;
+                    sniff->priv->touched = TRUE;
+		    warn("high mem usage. Freezing sniffer %s on %s\n",
+                            sniff->cb->name, sniff->device);
 		}
-	    }
+            }
 	}
-#endif
 	end_tsctimer(como_stats->ca_loop_timer);
 	end_tsctimer(como_stats->ca_full_timer);
     }

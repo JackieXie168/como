@@ -321,6 +321,8 @@ struct _como_config {
     array_t *		sniffer_defs;
     array_t *		mdl_defs;
     char *              mono_path;
+
+    size_t              shmem_size;
 };
 
 

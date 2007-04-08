@@ -773,6 +773,7 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 	}
 	
 	s->cb = cb;
+        s->device = como_strdup(def->device);
 
 	/* check that the sniffer is consistent with the sniffers already
 	 * configured */
@@ -824,6 +825,12 @@ fake_config(alc_t *alc)
 
     m.name = como_strdup("topaddr");
     m.mdlname = como_strdup("topaddrCC");
+    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    m.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m);
+
+    m.name = como_strdup("tophwaddr");
+    m.mdlname = como_strdup("tophwaddrCC");
     m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
@@ -946,7 +953,8 @@ main(int argc, char ** argv)
      * Initialize the shared memory region.
      * CAPTURE and QUERY processes will be able to see it.
      */
-#define SHMEM_SIZE 64*1024*1024
+#define SHMEM_SIZE 256*1024*1024
+    como_config->shmem_size = SHMEM_SIZE;
     como_su->shmem = shmem_create(SHMEM_SIZE, NULL);
     como_su->memmap = memmap_create(como_su->shmem, 2048);
     memmap_alc_init(como_su->memmap, &como_su->shalc);
