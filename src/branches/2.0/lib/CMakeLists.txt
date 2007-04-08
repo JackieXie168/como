@@ -5,6 +5,7 @@ SET(COMOMDL_SRCS
   uhash.c
   printpkt.c
   protoname.c
+  bitmap.c
 )
 
 ADD_LIBRARY(comomdl STATIC ${COMOMDL_SRCS})

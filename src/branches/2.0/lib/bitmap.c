@@ -105,9 +105,9 @@ mdl_new_bitmap(void *mdl_self, size_t max_elements)
 {
     bitmap_t *bm;
 
-    bm = mem_mdl_malloc(mdl_self, sizeof(bitmap_t));
+    bm = mdl_malloc(mdl_self, sizeof(bitmap_t));
     _initialize_bitmap(bm, max_elements);
-    bm->map = mem_mdl_malloc(mdl_self, bm->bytes);
+    bm->map = mdl_malloc(mdl_self, bm->bytes);
     bzero(bm->map, bm->bytes);
     return bm;
 }
@@ -117,9 +117,9 @@ new_bitmap(size_t max_elements)
 {
     bitmap_t *bm;
 
-    bm = safe_malloc(sizeof(bitmap_t));
+    bm = como_malloc(sizeof(bitmap_t));
     _initialize_bitmap(bm, max_elements);
-    bm->map = safe_malloc(bm->bytes); /* no need to bzero */
+    bm->map = como_malloc(bm->bytes); /* no need to bzero */
     return bm;
 }
 
@@ -138,8 +138,8 @@ destroy_bitmap(bitmap_t *bm)
 void
 mdl_destroy_bitmap(void *mdl_self, bitmap_t *bm)
 {
-    mem_mdl_free(mdl_self, bm->map);
-    mem_mdl_free(mdl_self, bm);
+    mdl_free(mdl_self, bm->map);
+    mdl_free(mdl_self, bm);
 }
 
 #define which_byte(x) ((x)>>3) /* (x / 8) */
