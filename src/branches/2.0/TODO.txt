@@ -5,6 +5,7 @@ This is a list of pending features / bug fixes / whatever before
 2.0 can be released. It is not exhaustive, just a place to keep
 a record of pending work.
 
+
 * Sniffers:
 
 sniffer-bpf.c
@@ -17,6 +18,14 @@ sniffer-sflow.c
 sniffer-sk98.c
 sniffer-wpcap.c
 
+
+* Modules:
+
+autofocus
+supersources
+multiple pattern search
+
+
 * Parse como.conf
 
  - Preferably, write a new parser with flex and bison.
@@ -25,6 +34,14 @@ sniffer-wpcap.c
 * Features
 
  - replay()
+
+ - Load Shedding
+        . port basic functionality from CoMo 0.5.
+        . take into account that CoMo may not always run at the highest
+          priority.
+        . manage context switches and CPU cycles of the export process.
+        . revise buffer discovery algorithm.
+
 
 * Bugs
 
