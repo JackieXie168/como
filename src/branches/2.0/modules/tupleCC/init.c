@@ -36,7 +36,6 @@ config_t *
 init(mdl_t * self, hash_t *args)
 {
     config_t *config;
-    int i; 
     /*pkt_t * pkt; 
     metadesc_t *inmd, *outmd;*/
     char *val;

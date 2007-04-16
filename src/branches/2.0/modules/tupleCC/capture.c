@@ -65,7 +65,7 @@ pkt_belongs_to_record(pkt_t *pkt, record_t *r)
 }
 
 ca_state_t *
-ca_init(mdl_t *self, timestamp_t *ivl)
+ca_init(mdl_t *self, timestamp_t ivl)
 {
     alc_t *alc = mdl_alc(self);
     config_t *config = mdl_get_config(self, config_t);

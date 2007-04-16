@@ -60,7 +60,7 @@ BY_DST_pkt_belongs_to_record(pkt_t *pkt, topaddr_tuple_t *t)
 
 
 ca_state_t *
-ca_init(mdl_t *self, timestamp_t *ivl)
+ca_init(mdl_t *self, timestamp_t ivl)
 {
     alc_t *alc = mdl_alc(self);
     topaddr_config_t *cfg = mdl_get_config(self, topaddr_config_t);

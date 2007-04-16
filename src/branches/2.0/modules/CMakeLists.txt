@@ -21,6 +21,7 @@ SET(MODULES
   trafficCC
   topaddrCC
   tophwaddrCC
+  topportsCC
   tupleCC
 #  hwtm
 #  tuple

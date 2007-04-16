@@ -61,7 +61,7 @@ macro_particle(char *type)
  */
 static void
 gen_serialization_skel_scalar(FILE *out, char *name, char *type, char *op,
-        char *sep, int unroll)
+        char *sep)
 {
     char *particle = macro_particle(type);
     char *param1 = "buffer, ";
@@ -78,52 +78,31 @@ gen_serialization_skel_scalar(FILE *out, char *name, char *type, char *op,
         }
     }
     
-    fprintf(out, "\t%s%s_%s(%s%sx->%s%s)%s\n", sep, op,
-            macro_particle(type), param1, accessor, name, param3,
-            unroll ? "" : ";");
+    fprintf(out, "\t%s%s_%s(%s%sx->%s%s);\n", sep, op,
+            macro_particle(type), param1, accessor, name, param3);
 }
 
 static void
-gen_serialization_skel_unidim(FILE *out, field_t *f, char *op, char *sep,
-        int unroll)
+gen_serialization_skel_unidim(FILE *out, field_t *f, char *op, char *sep)
 {
     char name[1024];
 
-    if (unroll) {
-        int a;
-        for (a = 0; a < f->arrlen; a++) {
-            sprintf(name, "%s[%d]", f->name, a);
-            gen_serialization_skel_scalar(out, name, f->type, op, sep, unroll);
-        }
-
-    } else {
-        sprintf(name, "%s[it1]", f->name);
-        fprintf(out, "\tfor (it1 = 0; it1 < %d; it1++)\n\t", f->arrlen);
-        gen_serialization_skel_scalar(out, name, f->type, op, sep, unroll);
-    }
+    sprintf(name, "%s[it1]", f->name);
+    fprintf(out, "\tfor (it1 = 0; it1 < %d; it1++)\n\t", f->arrlen);
+    gen_serialization_skel_scalar(out, name, f->type, op, sep);
 }
 
 
 static void
-gen_serialization_skel_bidim(FILE *out, field_t *f, char *op, char *sep,
-        int unroll)
+gen_serialization_skel_bidim(FILE *out, field_t *f, char *op, char *sep)
 {
     char name[1024];
 
-    if (unroll) {
-        int a, b;
-        for (a = 0; a < f->arrlen; a++)
-            for (b = 0; b < f->arrlen2; b++) {
-                sprintf(name, "%s[%d][%d]", f->name, a, b);
-                gen_serialization_skel_scalar(out, name, f->type, op, sep, unroll);
-        }
-    } else {
-        sprintf(name, "%s[a][b]", f->name);
-        fprintf(out, "\tfor (it1 = 0; it1 < %d; it1++)\n"
-                "\t\tfor (it2 = 0; it2 < %d; it2++)\n\t\t\t",
-                f->arrlen, f->arrlen2);
-        gen_serialization_skel_scalar(out, name, f->type, op, sep, unroll);
-    }
+    sprintf(name, "%s[a][b]", f->name);
+    fprintf(out, "\tfor (it1 = 0; it1 < %d; it1++)\n"
+            "\t\tfor (it2 = 0; it2 < %d; it2++)\n\t\t\t",
+            f->arrlen, f->arrlen2);
+    gen_serialization_skel_scalar(out, name, f->type, op, sep);
 }
 
 /*
@@ -133,24 +112,13 @@ gen_serialization_skel_bidim(FILE *out, field_t *f, char *op, char *sep,
  * and the help of some macros, we generate serialization, deserialization
  * and serialized_size functions of a struct.
  *
- * The caller can choose whether to generate an unrolled skeleton (useful
- * for serialized_size) or a rolled skeleton (with loops, generates more
- * compact code).
- *
- * Unrolled skeletons may contain a lot of code, so large array fields
- * will take a lot of code. In the case of serialized_size, though, most
- * of the code will be translated at compile time into a static value, plus
- * some strlen's. Not unrolling loops would most likely prevent the compiler
- * from pre-calculating that much. Some optimization could be made for the
- * case of serialized_size, but we choose to avoid code duplication.
- *
  * XXX beware likely performance hit on very large arrays of strings
  *
  */
 static void
 gen_serialization_skel(FILE *out, struct_t *st, char *op)
 {
-    int i;
+    int i, need_first, need_second;
 
     char *ret_type = "void";
     char *first_param = "char **buffer, ";
@@ -158,7 +126,6 @@ gen_serialization_skel(FILE *out, struct_t *st, char *op)
     char *last_statement = "";
     char *third_param = "";
     char *sep = "";
-    int unroll = 0;
 
     if (! strcmp(op, "deserialize")) { /* particularities of operations */
         third_param = ", alc_t *alloc";
@@ -169,10 +136,9 @@ gen_serialization_skel(FILE *out, struct_t *st, char *op)
     else if (!strcmp(op, "sersize")) {
         first_param = "";
         ret_type = "int";
-        unroll = 1;
-        sep = "+";
-        first_statement = "return 0";
-        last_statement = ";";
+        sep = "value += ";
+        first_statement = "int value = 0;";
+        last_statement = "return value;";
     }
 
     fprintf(out, "%s\n%s_%s(%sstruct %s *%sx%s)\n{\n",
@@ -183,27 +149,25 @@ gen_serialization_skel(FILE *out, struct_t *st, char *op)
     if (first_statement)
         fprintf(out, "\t%s\n", first_statement);
 
-    if (! unroll) { /* not unrolling. if necessary, print iterators */
-        int need_first = 0, need_second = 0;
-        for (i = 0; i < st->n_fields; i++) {
-            field_t *f = &st->fields[i];
-            int ndim = f->dim;
-            if (!strcmp(f->type, "char"))
-                ndim--;
-            if (ndim > 0)
-                need_first = 1;
-            if (ndim == 2) {
-                need_second = 1;
-                break;
-            }
+    /* if necessary, print iterators */
+    for (i = 0; i < st->n_fields; i++) {
+        field_t *f = &st->fields[i];
+        int ndim = f->dim;
+        if (!strcmp(f->type, "char"))
+            ndim--;
+        if (ndim > 0)
+            need_first = 1;
+        if (ndim == 2) {
+            need_second = 1;
+            break;
         }
-        if (need_first)
-            fprintf(out, "\tint it1;\n");
-        if (need_second)
-            fprintf(out, "\tint it2;\n");
-        if (need_first || need_second)
-            fprintf(out, "\n");
     }
+    if (need_first)
+        fprintf(out, "\tint it1;\n");
+    if (need_second)
+        fprintf(out, "\tint it2;\n");
+    if (need_first || need_second)
+        fprintf(out, "\n");
 
     sep = sep == NULL ? "" : sep;
 
@@ -212,13 +176,13 @@ gen_serialization_skel(FILE *out, struct_t *st, char *op)
         char is_char = !strcmp(f->type, "char");
 
         if (f->dim == 0 || (f->dim == 1 && is_char)) /* not an array */
-            gen_serialization_skel_scalar(out, f->name, f->type, op, sep, unroll);
+            gen_serialization_skel_scalar(out, f->name, f->type, op, sep);
 
         else if (f->dim == 1 || (f->dim == 2 && is_char)) /* unidim array */
-            gen_serialization_skel_unidim(out, f, op, sep, unroll);
+            gen_serialization_skel_unidim(out, f, op, sep);
 
         else if (f->dim == 2) /* bidimensional array */
-            gen_serialization_skel_bidim(out, f, op, sep, unroll);
+            gen_serialization_skel_bidim(out, f, op, sep);
 
         else /* !? */
             errx(1, "Hit a bug. Please contact CoMo developers.");

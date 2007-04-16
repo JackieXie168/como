@@ -835,6 +835,12 @@ fake_config(alc_t *alc)
     m.streamsize = 512*1024*1024; /* 512 MB */
     array_add(mdl_defs, &m);
 
+    m.name = como_strdup("topports");
+    m.mdlname = como_strdup("topportsCC");
+    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    m.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m);
+
 #if MONO
     m.name = como_strdup("traffic2");
     m.mdlname = como_strdup("trafficCCS");
