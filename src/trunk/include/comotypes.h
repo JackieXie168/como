@@ -53,7 +53,7 @@ typedef struct _callbacks       callbacks_t;    /* callbacks */
 typedef struct _callbacks       module_cb_t;    /* callbacks */
 typedef struct _flushmsg        flushmsg_t;     /* message capture/export */
 
-typedef struct memmap_t         memmap_t;      /* opaque, memory manager */
+typedef struct _memmap          memmap_t;      /* opaque, memory manager */
 typedef struct _expiredmap	expiredmap_t;	/* expired list of mem maps */
 
 typedef struct _record 	        rec_t;          /* table record header */
@@ -505,8 +505,9 @@ struct _statistics {
     int table_queue; 		/* expired tables in capture->export queue */
     int batch_queue;		/* pending batches */
     int ca_clients;		/* capture clients */
-    size_t mem_usage_cur; 	/* current shared memory usage */
-    size_t mem_usage_peak; 	/* peak shared memory usage */
+    uint mem_usage_cur; 	/* current shared memory usage */
+    uint mem_waste_cur; 	/* current shared memory usage */
+    uint mem_usage_peak; 	/* peak shared memory usage */
     uint64_t pkts; 		/* sniffed packets so far */
     int drops; 			/* global packet drop counter */
     
