@@ -68,6 +68,7 @@ int match_module(module_t * a, module_t * b);
  * memory.c
  */
 uint memory_usage();
+uint memory_waste();
 uint memory_peak();
 
 allocator_t * allocator_safe();
