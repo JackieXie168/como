@@ -64,6 +64,8 @@ static int s_max_fd;
 
 static int s_wait_for_modules = 2;
 
+static size_t s_sum_max_pkts = 0; 	/* sum of pkts across all sniffers */
+
 static timestamp_t s_min_flush_ivl = 0;
 
 static int s_active_modules = 0;
@@ -640,6 +642,40 @@ batch_process(batch_t * batch)
 }
 
 
+/*
+ *
+ * initializes the cabuf kept in the static variable s_cabuf.
+ *
+ */
+static void
+cabuf_init(size_t size)
+{
+    source_t *src;
+
+    /*
+     * allocate the buffer of pointers to captured packets in shared
+     * memory.   
+     */
+    s_cabuf.size = size;
+    s_cabuf.pp = mem_calloc(s_cabuf.size, sizeof(pkt_t *));
+    s_cabuf.has_clients_support = 1;
+
+    for (src = map.sources; src; src = src->next) {
+        sniffer_t *sniff = src->sniff;
+ 
+        if (sniff->flags & SNIFF_INACTIVE)
+            continue;
+    
+        /*
+         * if a sniffer doesn't expose the payloads in shared memory
+         * we turn off the support for clients
+         */
+        if (!(sniff->flags & SNIFF_SHBUF))
+            s_cabuf.has_clients_support = 0;
+    }
+}  
+
+
 /* 
  * -- ca_ipc_module_add
  * 
@@ -867,6 +903,9 @@ ca_ipc_start(procname_t sender, void *buf,
 	}
 
 	logmsg(LOGCAPTURE, "sniffers enabled\n");
+
+	/* initialize capture buffer */
+	cabuf_init(s_sum_max_pkts);
     }
 }
 
@@ -1074,41 +1113,6 @@ ca_ipc_cca_ack_batch(__attribute__((__unused__)) procname_t sender,
 	TQ_POP(&s_cabuf.batches, batch, next);
 	map.stats->batch_queue--;
 	batch_free(batch);
-    }
-}
-
-
-/*
- * -- cabuf_init
- * 
- * initializes the cabuf kept in the static variable s_cabuf.
- * 
- */
-static void
-cabuf_init(size_t size)
-{
-    source_t *src;
-
-    /*
-     * allocate the buffer of pointers to captured packets in shared
-     * memory.
-     */
-    s_cabuf.size = size;
-    s_cabuf.pp = mem_calloc(s_cabuf.size, sizeof(pkt_t *));
-    s_cabuf.has_clients_support = 1;
-
-    for (src = map.sources; src; src = src->next) {
-	sniffer_t *sniff = src->sniff;
-
-	if (sniff->flags & SNIFF_INACTIVE)
-	    continue;
-
-	/*
-	 * if a sniffer doesn't expose the payloads in shared memory
-	 * we turn off the support for clients
-	 */
-	if (!(sniff->flags & SNIFF_SHBUF))
-	    s_cabuf.has_clients_support = 0;
     }
 }
 
@@ -1651,7 +1655,6 @@ capture_mainloop(int accept_fd, int supervisor_fd,
     fd_set ipc_fds;
     int done_msg_sent = 0;
     int force_batch = 0;
-    size_t sum_max_pkts = 0; /* sum of max pkts across initialized sniffers */
     int avg_batch_len = 0;
     int wait_for_clients = 0;
 
@@ -1719,11 +1722,8 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 	/* setup the sniffer metadesc */
 	src->cb->setup_metadesc(sniff);
 
-	sum_max_pkts += src->sniff->max_pkts;
+	s_sum_max_pkts += src->sniff->max_pkts;
     }
-
-    /* initialize the capture buffer */
-    cabuf_init(sum_max_pkts);
 
     /*
      * This is the actual main loop where we monitor the various
@@ -1966,6 +1966,7 @@ capture_mainloop(int accept_fd, int supervisor_fd,
 	 */
 
 	map.stats->mem_usage_cur = memory_usage();
+	map.stats->mem_waste_cur = memory_waste();
 	map.stats->mem_usage_peak = memory_peak();
 
 	if (map.stats->table_queue == 0 ||
