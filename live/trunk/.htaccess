@@ -1,0 +1,5 @@
+<Files ~ "^.*\.([Cc][Oo][Nn][Ff])"> 
+    Order allow,deny
+    Deny from all
+    Satisfy All
+</Files>
