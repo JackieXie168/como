@@ -823,6 +823,12 @@ fake_config(alc_t *alc)
     s.args = NULL;
     array_add(sniffer_defs, &s);
 
+    m.name = como_strdup("ethtypes");
+    m.mdlname = como_strdup("ethtypesCC");
+    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    m.streamsize = 512*1024*1024; /* 512 MB */
+    array_add(mdl_defs, &m);
+
     m.name = como_strdup("topaddr");
     m.mdlname = como_strdup("topaddrCC");
     m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);

@@ -4,7 +4,6 @@ SET(MODULES
 #  apps
 #  assoc
 #  dhcp
-#  ethtypes
 #  ewma
 #  frames
 #  ipssi
@@ -15,6 +14,7 @@ SET(MODULES
 #  topaddr
 #  tophwaddr
 #  topports
+  ethtypesCC
   flowcountCC
   protocolCC
   traceCC
