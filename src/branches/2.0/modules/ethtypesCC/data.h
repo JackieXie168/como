@@ -27,41 +27,40 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: protocol.c 1012 2006-11-13 15:04:31Z jsanjuas $
+ * $Id: ethtypes.c 1012 2006-11-13 15:04:31Z jsanjuas $
  */
-
-#include <strings.h>
 
 #include "module.h"
-#include "data.h"
 
-/*
- * all the state we need is a single record which we keep updating.
- */
-record_t *
-ca_init(mdl_t *self, timestamp_t ts)
-{
-    record_t *r = mdl_alloc_tuple(self, record_t);
-    r->ts = ts;
-    bzero(r->bytes, sizeof(r->bytes));
-    bzero(r->pkts, sizeof(r->pkts));
+#define MAX_TYPES		16
 
-    return r;
-}
+como_tuple struct et_tuple {
+    timestamp_t ts;
+    uint64_t bytes[MAX_TYPES];
+    uint32_t pkts[MAX_TYPES];
+};
 
-void
-capture(mdl_t *self, pkt_t *pkt, record_t *x)
-{
-    if (COMO(type) == COMOTYPE_NF) {
-        x->bytes[IP(proto)] += H32(NF(pktcount))*COMO(len)*H16(NF(sampling));
-        x->pkts[IP(proto)] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
-    } else if (COMO(type) == COMOTYPE_SFLOW) {
-	x->bytes[IP(proto)] += (uint64_t) COMO(len) * 
-					(uint64_t) H32(SFLOW(sampling_rate));
-	x->pkts[IP(proto)] += H32(SFLOW(sampling_rate));
-    } else {
-        x->bytes[IP(proto)] += COMO(len); 
-        x->pkts[IP(proto)]++;
-    }
-}
+typedef struct et_record_entry rentry_t;
+struct et_record_entry {
+    uint64_t bytes;
+    uint32_t pkts;
+};
+
+struct et_record {
+    timestamp_t	ts;
+    uint32_t	count;
+    rentry_t    entry[0];
+};
+
+#define TYPES_LTBL_MAX 512
+como_config struct et_config {
+    int		meas_ivl;	/* measurement interval */
+    int		types_count;
+    uint16_t    code[TYPES_LTBL_MAX];
+    char        *name[TYPES_LTBL_MAX];
+};
+
+typedef struct et_tuple tuple_t;
+typedef struct et_record record_t;
+typedef struct et_config config_t;
 

@@ -27,41 +27,43 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: protocol.c 1012 2006-11-13 15:04:31Z jsanjuas $
+ * $Id: ethtypes.c 1012 2006-11-13 15:04:31Z jsanjuas $
  */
 
-#include <strings.h>
-
-#include "module.h"
 #include "data.h"
+#include "module.h"
 
-/*
- * all the state we need is a single record which we keep updating.
- */
-record_t *
+tuple_t *
 ca_init(mdl_t *self, timestamp_t ts)
 {
-    record_t *r = mdl_alloc_tuple(self, record_t);
-    r->ts = ts;
-    bzero(r->bytes, sizeof(r->bytes));
-    bzero(r->pkts, sizeof(r->pkts));
+    tuple_t *t = mdl_alloc_tuple(self, tuple_t);
+    t->ts = ts;
+    memset(t->bytes, 0, sizeof(t->bytes));
+    memset(t->pkts, 0, sizeof(t->pkts));
 
-    return r;
+    return t;
 }
 
+
 void
-capture(mdl_t *self, pkt_t *pkt, record_t *x)
+capture(mdl_t * self, pkt_t *pkt, tuple_t *t)
 {
-    if (COMO(type) == COMOTYPE_NF) {
-        x->bytes[IP(proto)] += H32(NF(pktcount))*COMO(len)*H16(NF(sampling));
-        x->pkts[IP(proto)] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
-    } else if (COMO(type) == COMOTYPE_SFLOW) {
-	x->bytes[IP(proto)] += (uint64_t) COMO(len) * 
-					(uint64_t) H32(SFLOW(sampling_rate));
-	x->pkts[IP(proto)] += H32(SFLOW(sampling_rate));
+    config_t *config = mdl_get_config(self, config_t);
+    int i;
+
+    /* config table lookup. if not found, match last entry */
+    for (i = 0; i < config->types_count - 1; i++)
+        if (config->code[i] == COMO(l3type))
+            break;
+
+    /* update record */
+    if (COMO(type) == COMOTYPE_SFLOW) {
+	t->bytes[i] += (uint64_t) COMO(len) *
+		       (uint64_t) H32(SFLOW(sampling_rate));
+	t->pkts[i] += H32(SFLOW(sampling_rate));
     } else {
-        x->bytes[IP(proto)] += COMO(len); 
-        x->pkts[IP(proto)]++;
+	t->bytes[i] += COMO(len);
+	t->pkts[i]++;
     }
 }
 

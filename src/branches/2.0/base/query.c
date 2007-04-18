@@ -695,10 +695,11 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		break;
 
 	    default:
-                /* TODO: deserialize rec */
                 sbuf = (uint8_t *) &rec->ts;
                 alc = como_alc();
+                debug("deserializing record\n", req.mdl->name);
                 req.mdl->priv->mdl_record.deserialize(&sbuf, &mdlrec, alc);
+                debug("calling print_rec\n", req.mdl->name);
                 iq->print_rec(req.mdl, format_id, mdlrec, iq->state);
                 break;
 	    }
