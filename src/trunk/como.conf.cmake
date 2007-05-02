@@ -39,6 +39,12 @@
 
 #query-port	44444
 
+# Address to which the query port is bound.
+# Note that localhost is any address.
+# Default: localhost
+
+#query-address	localhost
+
 # Node information. The following information is reported 
 # by the node when it receives a ?status query. 
 
@@ -50,14 +56,17 @@
 # Virtual nodes. It is possible to define virtual nodes 
 # that run the same set of modules of the main node but 
 # on a subset of traffic. The virtual nodes would reply 
-# to queries on a dedicated port number. For the syntax
-# of the filter expression see the description of the
-# module filter below.
+# to queries on a dedicated port number bound to either
+# the address specified for the node or a different
+# custom address. For the syntax of the filter
+# expression see the description of the module filter
+# below.
 
 #virtual-node	"Virtual Node"
 #  location	"Unknown"
 #  type		"Unknown"
 #  query-port	55555
+#  query-address localhost
 #  filter	"udp and port 53"
 #end
 

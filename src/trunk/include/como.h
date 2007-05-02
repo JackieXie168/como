@@ -58,6 +58,7 @@ struct _node {
     char * type; 
     char * comment;
     int query_port;		/* port for incoming queries */
+    char * query_address;	/* address to bind the query port to */
     char * source;		/* source module for all virtual modules */
     char * filter_str;          /* filter expression */
     char ** args;               /* parameters for the modules */
