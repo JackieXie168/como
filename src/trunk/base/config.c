@@ -66,6 +66,7 @@ enum tokens {
     TOK_MODULE_MAX,
     TOK_OUTPUT,
     TOK_QUERYPORT,
+    TOK_QUERYADDR,
     TOK_SNIFFER,
     TOK_STREAMSIZE,
     TOK_ARGS,
@@ -131,6 +132,7 @@ keyword_t keywords[] = {
     { "module",      TOK_MODULE,      2, CTX_GLOBAL|CTX_ALIAS },
     { "module-limit",TOK_MODULE_MAX,  2, CTX_GLOBAL },
     { "query-port",  TOK_QUERYPORT,   2, CTX_GLOBAL|CTX_VIRTUAL },
+    { "query-address",TOK_QUERYADDR,  2, CTX_GLOBAL|CTX_VIRTUAL },
     { "sniffer",     TOK_SNIFFER,     3, CTX_GLOBAL },
     { "memsize",     TOK_MEMSIZE,     2, CTX_GLOBAL },
     { "output",      TOK_OUTPUT,      2, CTX_MODULE },
@@ -542,6 +544,10 @@ do_config(struct _como * m, int argc, char *argv[])
 	}
 	break;
 
+    case TOK_QUERYADDR:
+	safe_dup(&m->node[node_id].query_address, argv[1]);
+	break;
+
     case TOK_DESCRIPTION:
 	if (scope == CTX_MODULE) 
 	    safe_dup(&mdl->description, argv[1]);
@@ -716,6 +722,7 @@ do_config(struct _como * m, int argc, char *argv[])
 	safe_dup(&m->node[node_id].name, argv[1]);
 	m->node[node_id].location = strdup("Unknown");
 	m->node[node_id].type = strdup("Unknown");
+	m->node[node_id].query_address = m->node[0].query_address;
 	m->node_count++;
 	scope = CTX_VIRTUAL; 
 	break;
@@ -1210,6 +1217,7 @@ init_map(struct _como * m)
     m->node[0].location = strdup("Unknown");
     m->node[0].type = strdup("Unknown");
     m->node[0].query_port = DEFAULT_QUERY_PORT;
+    m->node[0].query_address = strdup("localhost");
     m->node_count = 1;
     m->debug_sleep = 20;
     m->asnfile = NULL;

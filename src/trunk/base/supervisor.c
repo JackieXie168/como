@@ -379,7 +379,8 @@ supervisor_mainloop(int accept_fd)
     for (i = 0; i < map.node_count; i++) { 
 	char *buf;
 
-	asprintf(&buf, "S:http://localhost:%d/", map.node[i].query_port);
+	asprintf(&buf, "S:http://%s:%d/", map.node[i].query_address,
+		 map.node[i].query_port);
 	external_fd[i] = create_socket(buf, NULL);
 	if (external_fd[i] < 0)
 	    panic("creating the socket %s", buf);
