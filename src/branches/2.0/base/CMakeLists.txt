@@ -22,20 +22,6 @@ SET(COMO_SRCS
   services.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
-#  capture-client.c
-#  memory.c
-#  config.c
-#  inline.c
-#  os.c
-#  util-io.c
-#  util-safe.c
-#  util-misc.c
-#  util-socket.c
-#  ipc.c
-#  modules.c
-#  query-ondemand.c
-#  storage.c
-#  storage-client.c
 #  ${COMO_SOURCE_DIR}/lib/bitmap.c
 #  ${COMO_SOURCE_DIR}/lib/hash.c
 #  ${COMO_SOURCE_DIR}/lib/heap.c
