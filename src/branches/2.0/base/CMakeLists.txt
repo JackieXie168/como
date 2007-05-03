@@ -6,20 +6,20 @@ SET(STORAGE_SRCS
 )
 
 SET(COMO_SRCS
-  supervisor.c
-  util-process.c
+  asn.c
   capture.c
   export.c
-  asn.c
-  sniffers.c
+  headerinfo.c
   ieee80211frames.c
-  radio.c
   metadesc.c
   pktmeta.c
-  headerinfo.c
   query.c
   query-comms.c
+  radio.c
   services.c
+  sniffers.c
+  supervisor.c
+  util-process.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
 #  ${COMO_SOURCE_DIR}/lib/bitmap.c
