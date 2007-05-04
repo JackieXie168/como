@@ -803,6 +803,7 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 
 }
 
+#if 0
 static como_config_t *
 fake_config(alc_t *alc)
 {
@@ -886,6 +887,7 @@ fake_config(alc_t *alc)
     
     return &config;    
 }
+#endif
 
 
 /*
@@ -943,12 +945,6 @@ main(int argc, char ** argv)
     como_su->nodes = array_new(sizeof(como_node_t));
     array_add(como_su->nodes, &node);
 
-    /*
-     * parse command line and configuration files
-     */
-    //configure(&map, argc, argv);
-    como_config = fake_config(&alc);
-
     /* write welcome message */ 
     msg("----------------------------------------------------\n");
     msg("  CoMo v%s (built %s %s)\n",
@@ -956,6 +952,14 @@ main(int argc, char ** argv)
     msg("  Copyright (c) 2004-2006, Intel Corporation\n"); 
     msg("  All rights reserved.\n"); 
     msg("----------------------------------------------------\n");
+
+    /*
+     * parse command line and configuration files
+     */
+    //configure(&map, argc, argv);
+    //como_config = fake_config(&alc);
+    como_config = parse_config_file("como.conf", &alc);
+
     notice("... workdir %s\n", como_su->env->workdir);
 
 

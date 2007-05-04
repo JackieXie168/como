@@ -54,6 +54,9 @@ ENDIF(MONO_FOUND)
 ADD_CUSTOM_TARGET(FilterLexic echo "Creating filter-lexic.c")
 ADD_CUSTOM_TARGET(FilterSyntax echo "Creating filter-syntax.c")
 
+ADD_CUSTOM_TARGET(ConfigLexic echo "Creating config-lexic.c")
+ADD_CUSTOM_TARGET(ConfigSyntax echo "Creating config-syntax.c")
+
 #
 # Create custom command for flex/lex (note the outputs)
 #
@@ -64,6 +67,15 @@ ADD_CUSTOM_COMMAND(
 	    ${COMO_SOURCE_DIR}/base/filter-lexic.l
 	TARGET FilterLexic
 	OUTPUTS ${COMO_BINARY_DIR}/base/filter-lexic.c
+)
+
+ADD_CUSTOM_COMMAND(
+	SOURCE ${COMO_SOURCE_DIR}/base/config-lexic.l
+	COMMAND ${FLEX_EXECUTABLE}
+	ARGS -Pyc -o${COMO_BINARY_DIR}/base/config-lexic.c
+	    ${COMO_SOURCE_DIR}/base/config-lexic.l
+	TARGET ConfigLexic
+	OUTPUTS ${COMO_BINARY_DIR}/base/config-lexic.c
 )
 
 #
@@ -79,17 +91,29 @@ ADD_CUSTOM_COMMAND(
 	OUTPUTS ${COMO_BINARY_DIR}/base/filter-syntax.c
 )
 
-#
-# Add filter-syntax.c to COMO_SRCS
-#
-SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/filter-syntax.c)
+ADD_CUSTOM_COMMAND(
+	SOURCE ${COMO_SOURCE_DIR}/base/config-syntax.y
+	COMMAND ${BISON_EXECUTABLE} 
+	ARGS -p yc -y ${COMO_SOURCE_DIR}/base/config-syntax.y
+	    -o ${COMO_BINARY_DIR}/base/config-syntax.c
+	TARGET ConfigSyntax
+	DEPENDS ${COMO_BINARY_DIR}/base/config-lexic.c
+	OUTPUTS ${COMO_BINARY_DIR}/base/config-syntax.c
+)
 
 #
-# Since filter-syntax.c does not exist yet when cmake is run, mark
-# it as generated
+# Add filter-syntax.c and config-syntax.c to COMO_SRCS
+#
+SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/filter-syntax.c)
+SET(COMO_SRCS ${COMO_SRCS} ${COMO_BINARY_DIR}/base/config-syntax.c)
+
+#
+# Since .y and .l do not exist yet when cmake is run, mark them as generated
 #
 SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-lexic.c GENERATED)
+SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/config-lexic.c GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-syntax.c GENERATED)
+SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/config-syntax.c GENERATED)
 
 #
 # Some versions of flex (at least 2.5.33) produce code with comparisons between
