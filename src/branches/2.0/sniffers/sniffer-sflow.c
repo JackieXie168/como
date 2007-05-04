@@ -94,11 +94,11 @@ typedef struct _SFTag {
  */
 /* #define SNIFFER_SFLOW_DEBUG */
 #ifdef SNIFFER_SFLOW_DEBUG
-#define sf_log(format...)	logmsg(LOGWARN, format)
+#define sf_log(format...)	warn(format)
 #else
 #define sf_log(format...)
 #endif
-#define sf_warning(format...)	logmsg(LOGWARN, format)
+#define sf_warning(format...)	warn(format)
 
 
 static inline uint32_t
@@ -606,11 +606,11 @@ struct sflow_me {
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, UNUSED alc_t *alc)
 {
     struct sflow_me *me;
     
-    me = safe_calloc(1, sizeof(struct sflow_me));
+    me = alc_calloc(alc, 1, sizeof(struct sflow_me));
 
     me->sniff.max_pkts = 2400;
     me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
@@ -664,15 +664,15 @@ error:
     return NULL;
 }
 
-static void
-sniffer_setup_metadesc(sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(sniffer_t * s, alc_t *alc)
 {
     struct sflow_me *me = (struct sflow_me *) s;
     metadesc_t *outmd;
     pkt_t *pkt;
 
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(s, 1, "sampling_rate");
+    outmd = metadesc_new(NULL, alc, 1, "sampling_rate");
 
     outmd->ts_resolution = TIME2TS(1, 0);
 
@@ -730,6 +730,8 @@ sniffer_setup_metadesc(sniffer_t * s)
 	assert_not_reached();
 	break;
     }
+
+    return outmd;
 }
 
 /*
@@ -750,8 +752,7 @@ sniffer_start(sniffer_t * s)
     /* create a socket */
     me->sniff.fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (me->sniff.fd == -1) {
-	logmsg(LOGWARN, "sniffer-sflow: can't create socket: %s\n",
-	       strerror(errno));
+	warn("sniffer-sflow: can't create socket: %s\n", strerror(errno));
 	return -1;
     }
 
@@ -766,8 +767,7 @@ sniffer_start(sniffer_t * s)
 	if (bindinfo) {
 	    addr_in.sin_addr = *((struct in_addr *) bindinfo->h_addr);
 	} else {
-	    logmsg(LOGWARN,
-		   "sniffer-sflow: unresolved ip address %s: %s\n",
+	    warn("sniffer-sflow: unresolved ip address %s: %s\n",
 		   me->device, strerror(h_errno));
 	    return -1;
 	}
@@ -778,8 +778,7 @@ sniffer_start(sniffer_t * s)
     /* bind the socket */
     if (bind(me->sniff.fd, (struct sockaddr *) &addr_in, sizeof(addr_in))
 	== -1) {
-	logmsg(LOGWARN, "sniffer-sflow: can't bind socket: %s\n",
-	       strerror(errno));
+	warn("sniffer-sflow: can't bind socket: %s\n", strerror(errno));
 	return -1;
     }
 
@@ -849,8 +848,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	me->first_sn = dg.hdr.sequence_number;
     } else if (me->last_sn >= dg.hdr.sequence_number
 	       && dg.hdr.sequence_number > me->first_sn) {
-	logmsg(LOGWARN,
-	       "sniffer-sflow: received sflow datagram with a lower sequence "
+	warn("sniffer-sflow: received sflow datagram with a lower sequence "
 	       "number than expected\n");
 	return 0;
     }
@@ -1170,7 +1168,7 @@ sniffer_stop(sniffer_t * s)
 }
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, UNUSED alc_t *alc)
 {
     struct sflow_me *me = (struct sflow_me *) s;
 
