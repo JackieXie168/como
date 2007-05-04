@@ -64,7 +64,7 @@ define_sniffer(char *name, char *device, UNUSED char *args, como_config_t *cfg)
 void
 initialize_module_def(mdl_def_t *mdl, alc_t *alc)
 {
-    bzero(&mdl, sizeof(mdl));
+    bzero(mdl, sizeof(mdl));
     mdl->args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     mdl->streamsize = 128 * 1024 * 1024;
 }
@@ -80,7 +80,7 @@ define_module(mdl_def_t *mdl, como_config_t *cfg)
     if (mdl->output == NULL)
         mdl->output = como_strdup(mdl->name);
     if (mdl->mdlname == NULL)
-        mdl->mdlname = como_strdup(mdl->mdlname);
+        mdl->mdlname = como_strdup(mdl->name);
 
     array_add(cfg->mdl_defs, mdl);
 }
