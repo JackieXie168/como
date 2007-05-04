@@ -124,6 +124,8 @@ SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/config-syntax.c GENERATED)
 #
 SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-lexic.c COMPILE_FLAGS -Wno-sign-compare)
 SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/filter-syntax.c COMPILE_FLAGS -Wno-sign-compare)
+SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/config-lexic.c COMPILE_FLAGS -Wno-sign-compare)
+SET_SOURCE_FILES_PROPERTIES(${COMO_BINARY_DIR}/base/config-syntax.c COMPILE_FLAGS -Wno-sign-compare)
 
 #
 # Include binary directory to include filter-lexic.c and filter-syntax.c
