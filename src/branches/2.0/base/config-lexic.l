@@ -105,6 +105,8 @@ args            { return TOK_ARGS; }
 args-file       { return TOK_ARGSFILE; }
 running         { return TOK_RUNNING; }
 end             { return TOK_END; }
+=               { return TOK_EQUALS; }
+,               { return TOK_COMMA; }
 
 {NUMBER}GB      {
                     yclval.number = atoll(yytext) * 1024 * 1024 * 1024;
@@ -134,6 +136,7 @@ end             { return TOK_END; }
                     return TOK_STRING;
                 }
 " "
+
 #.*             /* comment til end of line */
 \t
 \n              {   ycline++; return TOK_NEWLINE; }
@@ -141,6 +144,9 @@ end             { return TOK_END; }
 [a-zA-Z0-9-]+   {
                     warn("line %d: ignoring unknown keyword: `%s'\n", ycline,
                             yctext);
+                }
+.               {
+                    warn("line %d: junk `%s' found\n", ycline, yctext);
                 }
 
 %%

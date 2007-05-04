@@ -85,7 +85,7 @@ report_parse_error(void)
 %token TOK_DBPATH TOK_LIBDIR TOK_MEMSIZE TOK_QUERY_PORT TOK_NAME TOK_LOCATION
 %token TOK_TYPE TOK_COMMENT TOK_SNIFFER TOK_FILESIZE TOK_MODULE TOK_DESCRIPTION
 %token TOK_SOURCE TOK_OUTPUT TOK_FILTER TOK_HASHSIZE TOK_STREAMSIZE TOK_ARGS
-%token TOK_ARGSFILE TOK_RUNNING TOK_END TOK_NEWLINE
+%token TOK_ARGSFILE TOK_RUNNING TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
 %token <string> TOK_STRING
 %token <number> TOK_NUMBER
 
@@ -112,19 +112,9 @@ keyword: /* a global keyword */
     | TOK_TYPE TOK_STRING { cfg->type = $2; }
     | TOK_COMMENT TOK_STRING { cfg->comment = $2; }
 
-    | TOK_FILESIZE TOK_NUMBER {
-        if ($2 < 0 || $2 >= 1 * 1024 * 1024 * 1024) {
-            warn("filesize %d invalid, must be in range 0-1GB\n", $2);
-        }
-        cfg->filesize = $2;
-    }
+    | TOK_FILESIZE TOK_NUMBER { set_filesize($2, cfg); }
 
-    | TOK_QUERY_PORT TOK_NUMBER {
-        if ($2 < 0 || $2 >= 65536) {
-            error("query port %d invalid, must be in range 0-65535\n", $2);
-        }
-        cfg->query_port = $2;
-    }
+    | TOK_QUERY_PORT TOK_NUMBER { set_queryport($2, cfg); }
 ;
 
 sniffer_def: /* the definition of a sniffer */
@@ -149,7 +139,7 @@ module_def:
     TOK_END TOK_NEWLINE {
         /* save the module defn */
         mdl.name = $3;
-        array_add(cfg->mdl_defs, &mdl);
+        define_module(&mdl, cfg);
     }
 ;
 
@@ -158,7 +148,7 @@ module_keywords: module_keywords module_keyword | module_keyword;
 
 module_keyword:
       TOK_NEWLINE
-    /* | TOK_ARGS args_list TOK_NEWLINE (TODO) */
+    | TOK_ARGS args_list TOK_NEWLINE
     | TOK_SOURCE TOK_STRING TOK_NEWLINE      { mdl.mdlname = $2; }
     | TOK_OUTPUT TOK_STRING TOK_NEWLINE      { mdl.output = $2; }
     | TOK_DESCRIPTION TOK_STRING TOK_NEWLINE { mdl.descr = $2; }
@@ -170,7 +160,8 @@ module_keyword:
     | error TOK_NEWLINE { report_parse_error(); }
 ;
 
-/* args_list: args_list TOK_STRING | TOK_STRING; (TODO) */
+args_list: args_list TOK_COMMA arg | arg;
+arg: TOK_STRING TOK_EQUALS TOK_STRING { hash_insert_string(mdl.args, $1, $3); }
 
 %%
 

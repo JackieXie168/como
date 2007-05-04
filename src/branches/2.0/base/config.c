@@ -32,6 +32,7 @@
  */
 
 #include <unistd.h> /* getopt */
+#include <stdlib.h> /* atoll */
 
 #include "como.h"
 #include "comopriv.h"
@@ -41,8 +42,6 @@
     "[-m mem-size] [-v logflags] " \
     "[-s sniffer[:device[:\"args\"]]] [module[:\"module args\"] " \
     "[filter]]\n"
-
-
 
 void
 define_sniffer(char *name, char *device, UNUSED char *args, como_config_t *cfg)
@@ -56,6 +55,47 @@ define_sniffer(char *name, char *device, UNUSED char *args, como_config_t *cfg)
     array_add(cfg->sniffer_defs, &sniff);
 }
 
+/*
+ * -- define_module
+ *
+ * Check a module definition, fix whatever needed, add it to the cfg.
+ */
+void
+define_module(mdl_def_t *mdl, como_config_t *cfg)
+{
+    /* TODO: do the checks here */
+    array_add(cfg->mdl_defs, mdl);
+}
+
+/*
+ * -- set_filesize
+ */
+void
+set_filesize(int64_t size, como_config_t *cfg)
+{
+    if (size < 0 || size >= 1 * 1024 * 1024 * 1024) {
+        warn("filesize %d invalid, must be in range 0-1GB\n", cfg);
+        warn("defaulting to 128MB\n");
+        size = 128 * 1024 * 1024;
+    }
+
+    cfg->filesize = size;
+}
+
+/*
+ * -- set_queryport
+ */
+void
+set_queryport(int64_t port, como_config_t *cfg)
+{
+    if (port < 0 || port >= 65536) {
+        warn("query port %d invalid, must be in range 0-65535\n", port);
+        warn("defaulting to 44444\n");
+        port = 44444;
+    }
+
+    cfg->query_port = port;
+}
 
 /*
  * -- configure
@@ -112,7 +152,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 	    break;
 
 	case 'p':
-	    cfg->query_port = atoi(optarg);
+            set_queryport(atoll(optarg), cfg);
 	    break;
 
         case 's':    /* sniffer */
@@ -144,8 +184,8 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 #endif
 
         case '?':   /* unknown */
-            error("unrecognized cmdline option (%s)\n" USAGE, argv[optind],
-                    argv[0]);
+            error("unrecognized cmdline option (%s)\n\n" USAGE "\n",
+                    argv[optind], argv[0]);
 
         case ':':   /* missing argument */
             error("missing argument for option (%s)\n", argv[optind]);
@@ -154,6 +194,12 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         default:    /* should never get here... */
             error(USAGE, argv[0]);
         }
+    }
+
+    while (optind < argc) { /* module definitions follow */
+        warn("TODO: specify modules in cmdline (%s)\n", argv[optind]);
+
+        optind++;
     }
 
     return cfg;
