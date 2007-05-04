@@ -28,9 +28,9 @@ multiple pattern search
 
 * Configuration
 
- - Preferably, write a new parser with flex and bison.
  - Do more error checking.
  - Fix example.conf
+ - argsfile keyword
 
 * Features
 

@@ -56,6 +56,20 @@ define_sniffer(char *name, char *device, UNUSED char *args, como_config_t *cfg)
 }
 
 /*
+ * -- initialize_module_def
+ *
+ * Initialize a module definition with the default
+ * values.
+ */
+void
+initialize_module_def(mdl_def_t *mdl, alc_t *alc)
+{
+    bzero(&mdl, sizeof(mdl));
+    mdl->args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    mdl->streamsize = 128 * 1024 * 1024;
+}
+
+/*
  * -- define_module
  *
  * Check a module definition, fix whatever needed, add it to the cfg.
@@ -63,7 +77,11 @@ define_sniffer(char *name, char *device, UNUSED char *args, como_config_t *cfg)
 void
 define_module(mdl_def_t *mdl, como_config_t *cfg)
 {
-    /* TODO: do the checks here */
+    if (mdl->output == NULL)
+        mdl->output = como_strdup(mdl->name);
+    if (mdl->mdlname == NULL)
+        mdl->mdlname = como_strdup(mdl->mdlname);
+
     array_add(cfg->mdl_defs, mdl);
 }
 

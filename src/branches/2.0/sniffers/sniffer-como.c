@@ -41,6 +41,7 @@
 #include <assert.h>
 
 #include "como.h"
+#include "comopriv.h"
 #include "sniffers.h" 
 
 #include "capbuf.c"
@@ -76,11 +77,11 @@ struct como_me {
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, alc_t *alc)
 {
     struct como_me *me;
     
-    me = safe_calloc(1, sizeof(struct como_me));
+    me = alc_calloc(alc, 1, sizeof(struct como_me));
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
@@ -102,9 +103,10 @@ error:
 }
 
 
-static void
-sniffer_setup_metadesc(__attribute__((__unused__)) sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(UNUSED sniffer_t * s, UNUSED alc_t *alc)
 {
+    return NULL; /* TODO !? */
 }
 
 
@@ -120,36 +122,32 @@ sniffer_start(sniffer_t * s)
 {
     struct como_me *me = (struct como_me *) s;
     int ret;
-    char *msg, *path = NULL;
     char *http_res = NULL; /* HTTP response */
-    char *res_end;
+    char *res_end, *msg;
     size_t http_res_sz;
     size_t rdn, cpn;
     
-    me->sniff.fd = create_socket(me->device, &path);
+    me->sniff.fd = create_socket(me->device, 0);
     if (me->sniff.fd < 0) { 
-	logmsg(LOGWARN, "sniffer-como: cannot create socket: %s\n", 
-	       strerror(errno)); 
+	warn("sniffer-como: cannot create socket: %s\n", strerror(errno)); 
 	goto error;
     } 
     
     /* build the HTTP request */
-    asprintf(&msg, "GET %s HTTP/1.0\r\n\r\n", path);
-    ret = como_writen(me->sniff.fd, msg, strlen(msg));
+    asprintf(&msg, "GET %s HTTP/1.0\r\n\r\n", me->device + strlen("http:/"));
+    ret = como_write(me->sniff.fd, msg, strlen(msg));
     free(msg);
-    free(path);
-    path = NULL;
     if (ret < 0) {
-	logmsg(LOGWARN, "sniffer-como: write error: %s\n", strerror(errno));
+	warn("sniffer-como: write error: %s\n", strerror(errno));
 	goto error;
     } 
 
     /* receives the HTTP response if present */
     http_res_sz = 32;
-    http_res = safe_malloc(http_res_sz);
+    http_res = como_malloc(http_res_sz);
     ret = como_read(me->sniff.fd, http_res, http_res_sz);
     if (ret < 0) {
-	logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
+	warn("sniffer-como: read error: %s\n", strerror(errno));
 	goto error;
     }
     rdn = (size_t) ret;
@@ -164,17 +162,16 @@ sniffer_start(sniffer_t * s)
 		break;
 	    }
 	    http_res_sz = http_res_sz * 2;
-	    http_res = safe_realloc(http_res, http_res_sz);
+	    http_res = como_realloc(http_res, http_res_sz);
 	    ret = como_read(me->sniff.fd, http_res + rdn, http_res_sz - rdn);
 	    if (ret < 0) {
-		logmsg(LOGWARN, "sniffer-como: read error: %s\n", strerror(errno));
+		warn("sniffer-como: read error: %s\n", strerror(errno));
 		goto error;
 	    }
 	    rdn += (size_t) ret;
 	}
 	if (strncmp(http_res + 9, "200 OK", 6) != 0) {
-	    logmsg(LOGWARN, "sniffer-como: unsuccessful HTTP request: %s\n",
-		   me->device);
+	    warn("sniffer-como: unsuccessful HTTP request: %s\n", me->device);
 	    goto error;
 	}
     } else {
@@ -196,7 +193,6 @@ sniffer_start(sniffer_t * s)
    return 0;
 error:
     close(me->sniff.fd);
-    free(path);
     free(http_res);
     return -1;
 }
@@ -322,7 +318,7 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, UNUSED alc_t *alc)
 {
     struct como_me *me = (struct como_me *) s;
 
