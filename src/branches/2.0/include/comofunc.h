@@ -85,9 +85,15 @@ void	cca_destroy  (cca_t * cca);
 pkt_t * cca_next_pkt (cca_t * cca);
 
 /*
+ * config.c
+ */
+void define_sniffer(char *name, char *device, char *args, como_config_t *cfg);
+como_config_t *configure(int argc, char **argv, alc_t *alc, como_config_t *cfg);
+
+/*
  * config-syntax.y
  */
-como_config_t * parse_config_file(char *file, alc_t *alc);
+como_config_t * parse_config_file(char *file, alc_t *alc, como_config_t *cfg);
 
 /* 
  * filter-syntax.c

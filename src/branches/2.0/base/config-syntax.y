@@ -62,19 +62,7 @@ void ycerror(char *fmt, ...);
 /* global variables */
 alc_t *alc;
 static mdl_def_t mdl;
-static como_config_t cfg; /* result */
-
-void
-define_sniffer(char *name, char *device, UNUSED char *args)
-{
-    sniffer_def_t sniff;
-
-    sniff.name = name;
-    sniff.device = device;
-    sniff.args = NULL;
-
-    array_add(cfg.sniffer_defs, &sniff);
-}
+static como_config_t *cfg; /* result */
 
 void
 report_parse_error(void)
@@ -115,38 +103,38 @@ item:
 ;
 
 keyword: /* a global keyword */
-      TOK_DBPATH TOK_STRING { cfg.db_path = $2; }
-    | TOK_LIBDIR TOK_STRING { cfg.libdir = $2; }
-    | TOK_MEMSIZE TOK_NUMBER { cfg.shmem_size = $2; }
+      TOK_DBPATH TOK_STRING { cfg->db_path = $2; }
+    | TOK_LIBDIR TOK_STRING { cfg->libdir = $2; }
+    | TOK_MEMSIZE TOK_NUMBER { cfg->shmem_size = $2; }
 
-    | TOK_NAME TOK_STRING { cfg.name = $2; }
-    | TOK_LOCATION TOK_STRING { cfg.location = $2; }
-    | TOK_TYPE TOK_STRING { cfg.type = $2; }
-    | TOK_COMMENT TOK_STRING { cfg.comment = $2; }
+    | TOK_NAME TOK_STRING { cfg->name = $2; }
+    | TOK_LOCATION TOK_STRING { cfg->location = $2; }
+    | TOK_TYPE TOK_STRING { cfg->type = $2; }
+    | TOK_COMMENT TOK_STRING { cfg->comment = $2; }
 
     | TOK_FILESIZE TOK_NUMBER {
         if ($2 < 0 || $2 >= 1 * 1024 * 1024 * 1024) {
             warn("filesize %d invalid, must be in range 0-1GB\n", $2);
         }
-        cfg.filesize = $2;
+        cfg->filesize = $2;
     }
 
     | TOK_QUERY_PORT TOK_NUMBER {
         if ($2 < 0 || $2 >= 65536) {
             error("query port %d invalid, must be in range 0-65535\n", $2);
         }
-        cfg.query_port = $2;
+        cfg->query_port = $2;
     }
 ;
 
 sniffer_def: /* the definition of a sniffer */
     TOK_SNIFFER TOK_STRING TOK_STRING TOK_NEWLINE {
         /* sniffer + type + iface/filename */
-        define_sniffer($2, $3, NULL);
+        define_sniffer($2, $3, NULL, cfg);
     }
     | TOK_SNIFFER TOK_STRING TOK_STRING TOK_STRING TOK_NEWLINE {
         /* same plus options */
-        define_sniffer($2, $3, $4);
+        define_sniffer($2, $3, $4, cfg);
     }
 ;
 
@@ -161,7 +149,7 @@ module_def:
     TOK_END TOK_NEWLINE {
         /* save the module defn */
         mdl.name = $3;
-        array_add(cfg.mdl_defs, &mdl);
+        array_add(cfg->mdl_defs, &mdl);
     }
 ;
 
@@ -170,7 +158,7 @@ module_keywords: module_keywords module_keyword | module_keyword;
 
 module_keyword:
       TOK_NEWLINE
-    | TOK_ARGS args_list TOK_NEWLINE
+    /* | TOK_ARGS args_list TOK_NEWLINE (TODO) */
     | TOK_SOURCE TOK_STRING TOK_NEWLINE      { mdl.mdlname = $2; }
     | TOK_OUTPUT TOK_STRING TOK_NEWLINE      { mdl.output = $2; }
     | TOK_DESCRIPTION TOK_STRING TOK_NEWLINE { mdl.descr = $2; }
@@ -182,7 +170,7 @@ module_keyword:
     | error TOK_NEWLINE { report_parse_error(); }
 ;
 
-args_list: args_list TOK_STRING | TOK_STRING;
+/* args_list: args_list TOK_STRING | TOK_STRING; (TODO) */
 
 %%
 
@@ -201,14 +189,10 @@ void ycerror(char *fmt, ...)
 }
 
 como_config_t *
-parse_config_file(char *f, alc_t *my_alc)
+parse_config_file(char *f, alc_t *my_alc, como_config_t *my_cfg)
 {
+    cfg = my_cfg;
     alc = my_alc;
-
-    bzero(&cfg, sizeof(cfg));
-
-    cfg.mdl_defs = array_new(sizeof(mdl_def_t));
-    cfg.sniffer_defs = array_new(sizeof(sniffer_def_t));
 
     ycin = fopen(f, "r");
     if (ycin == NULL) {
@@ -216,5 +200,5 @@ parse_config_file(char *f, alc_t *my_alc)
     }
 
     ycparse();
-    return &cfg;
+    return cfg;
 }

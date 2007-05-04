@@ -338,6 +338,8 @@ struct _como_config {
     size_t      filesize;
     int         query_port;
     size_t      shmem_size;
+
+    int         exit_when_done;
 };
 
 

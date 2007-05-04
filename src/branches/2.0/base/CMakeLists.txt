@@ -8,6 +8,7 @@ SET(STORAGE_SRCS
 SET(COMO_SRCS
   asn.c
   capture.c
+  config.c
   export.c
   headerinfo.c
   ieee80211frames.c
