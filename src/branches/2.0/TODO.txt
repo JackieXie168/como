@@ -26,10 +26,11 @@ supersources
 multiple pattern search
 
 
-* Parse como.conf
+* Configuration
 
  - Preferably, write a new parser with flex and bison.
-
+ - Do more error checking.
+ - Fix example.conf
 
 * Features
 
@@ -74,5 +75,4 @@ multiple pattern search
  ptr_array.h (companion of unused ptr_array.c)
 
  - Remove commented code or old structs in include/*.h
-
 

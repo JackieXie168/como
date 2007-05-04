@@ -902,6 +902,7 @@ fake_config(alc_t *alc)
 int
 main(int argc, char ** argv)
 {
+    static como_config_t cfg;
     como_su_t *como_su;
     como_node_t *node0;
     como_node_t node;
@@ -956,13 +957,9 @@ main(int argc, char ** argv)
     /*
      * parse command line and configuration files
      */
-    //configure(&map, argc, argv);
-    //como_config = fake_config(&alc);
-    como_config = parse_config_file("como.conf", &alc);
+    como_config = configure(argc, argv, &alc, &cfg);
 
     notice("... workdir %s\n", como_su->env->workdir);
-
-
     notice("log level: %s\n", log_level_name(log_get_level())); 
 
     /*
