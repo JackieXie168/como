@@ -169,7 +169,8 @@ optional_module_keywords: | module_keywords;
 module_keywords: module_keywords module_keyword | module_keyword;
 
 module_keyword:
-    TOK_ARGS args_list TOK_NEWLINE
+      TOK_NEWLINE
+    | TOK_ARGS args_list TOK_NEWLINE
     | TOK_SOURCE TOK_STRING TOK_NEWLINE      { mdl.mdlname = $2; }
     | TOK_OUTPUT TOK_STRING TOK_NEWLINE      { mdl.output = $2; }
     | TOK_DESCRIPTION TOK_STRING TOK_NEWLINE { mdl.descr = $2; }
@@ -180,8 +181,9 @@ module_keyword:
     /*| TOK_RUNNING TOK_STRING (TODO) */
     | error TOK_NEWLINE { report_parse_error(); }
 ;
-args_list: args_list TOK_STRING | TOK_STRING
-;
+
+args_list: args_list TOK_STRING | TOK_STRING;
+
 %%
 
 #include "config-lexic.c"
