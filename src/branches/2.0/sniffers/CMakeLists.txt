@@ -8,7 +8,7 @@ SET(SNIFFERS
   pcap
   #como
   #ondemand
-  #sflow
+  sflow
 )
 
 #
