@@ -84,6 +84,11 @@ cca_t * cca_open     (int cd);
 void	cca_destroy  (cca_t * cca);
 pkt_t * cca_next_pkt (cca_t * cca);
 
+/*
+ * config-syntax.y
+ */
+como_config_t * parse_config_file(char *file, alc_t *alc);
+
 /* 
  * filter-syntax.c
  */

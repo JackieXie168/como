@@ -313,16 +313,31 @@ struct _sniffer_def {
 struct _mdl_def {
     char *	name;
     char *	mdlname;
+    char *      output;
+    char *      filter;
+    char *      descr;
+
     hash_t *	args;
     uint64_t	streamsize;
+    uint64_t	hashsize;
 };
 
 struct _como_config {
-    array_t *		sniffer_defs;
-    array_t *		mdl_defs;
-    char *              mono_path;
+    array_t *	sniffer_defs;
+    array_t *	mdl_defs;
 
-    size_t              shmem_size;
+    char *      mono_path;
+    char *      db_path;
+    char *      libdir;
+
+    char *      name;
+    char *      location;
+    char *      type;
+    char *      comment;
+
+    size_t      filesize;
+    int         query_port;
+    size_t      shmem_size;
 };
 
 

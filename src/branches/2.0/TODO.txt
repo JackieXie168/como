@@ -56,3 +56,23 @@ multiple pattern search
    is a character array. Right now only works when target is a char pointer.
 
  - Capture and Export may enter an IPC deadlock
+
+* Code cleanups
+
+ - Either port or remove old/unused code.
+    base/old
+    modules/old
+    old_code/
+    lib/unused_code
+
+ - Examine the utility of the following includes, which right now CoMo2.0 can compile without
+
+ heap.h (companion of unused heap.c)
+ macutils.h (companion of unused macutils.c)
+ mempool.h (companion of unused mempool.c)
+ pattern_search.h (companion of unused pattern_search.c)
+ ptr_array.h (companion of unused ptr_array.c)
+
+ - Remove commented code or old structs in include/*.h
+
+
