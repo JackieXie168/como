@@ -966,9 +966,7 @@ main(int argc, char ** argv)
      * Initialize the shared memory region.
      * CAPTURE and QUERY processes will be able to see it.
      */
-#define SHMEM_SIZE 256*1024*1024
-    como_config->shmem_size = SHMEM_SIZE;
-    como_su->shmem = shmem_create(SHMEM_SIZE, NULL);
+    como_su->shmem = shmem_create(como_config->shmem_size, NULL);
     como_su->memmap = memmap_create(como_su->shmem, 2048);
     memmap_alc_init(como_su->memmap, &como_su->shalc);
     
