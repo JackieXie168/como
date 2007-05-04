@@ -63,7 +63,7 @@ struct ondemand_me {
     const char *	device;		/* source module name */
     int			fd;		/* cs file descriptor */
     int			storage_fd;     /* ipc socket */
-    module_t *		mdl;		/* source module */
+    mdl_t *		mdl;		/* source module */
     int			node;		/* node id */
     timestamp_t		start;		/* start timestamp */
     timestamp_t		end;		/* end timestamp */
@@ -83,7 +83,7 @@ sniffer_init(const char * device, const char * args)
 {
     struct ondemand_me *me;
     
-    me = safe_calloc(1, sizeof(struct ondemand_me));
+    me = como_calloc(1, sizeof(struct ondemand_me));
     me->storage_fd = -1; 
     me->sniff.fd = -1; 
     me->sniff.max_pkts = 8192;
@@ -91,8 +91,7 @@ sniffer_init(const char * device, const char * args)
     me->device = device;
 
     if (me->device == NULL || strlen(me->device) == 0) {
-	logmsg(LOGWARN, "sniffer-ondemand: "
-	       "device must contain a valid module\n");
+	warn("sniffer-ondemand: device must contain a valid module\n");
 	goto error;
     }
     
@@ -159,23 +158,23 @@ sniffer_start(sniffer_t * s)
      * connect to the storage process, open the module output file 
      * and then start reading the file and send the data back 
      */
-    me->storage_fd = ipc_connect(STORAGE);
+    me->storage_fd = ipc_connect(COMO_ST);
     if (me->storage_fd == IPC_ERR)
 	goto error;
     
     /* find the module */
-    me->mdl = module_lookup(me->device, me->node);
+    me->mdl = mdl_lookup(me->device, me->node);
     if (me->mdl == NULL) {
-	logmsg(LOGWARN, "sniffer-ondemand: "
+	warn("sniffer-ondemand: "
 	       "module \"%s\" [%d] not found\n", me->device, me->node);
 	goto error;
     }
     
-    logmsg(V_LOGSNIFFER, "opening file for reading (%s)\n", me->mdl->output);
+    debug("opening file for reading (%s)\n", me->mdl->output);
     me->sniff.fd = csopen(me->mdl->output, CS_READER_NOBLOCK, 0,
                           me->storage_fd); 
     if (me->sniff.fd < 0) {
-	logmsg(LOGWARN, "sniffer-ondemand: "
+	warn("sniffer-ondemand: "
 	       "error while opening file %s\n", me->mdl->output);
 	goto error;
     }
@@ -183,7 +182,7 @@ sniffer_start(sniffer_t * s)
     /* seek on the first record */
     me->resume_ofs = module_db_seek_by_ts(me->mdl, me->sniff.fd, me->start);
     if (me->resume_ofs < 0) {
-	logmsg(LOGWARN, "sniffer-ondemand: "
+	warn("sniffer-ondemand: "
 	       "error while seeking file %s\n", me->mdl->output);
 	goto error;
     }
@@ -243,7 +242,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	ptr = module_db_record_get(me->fd, &ofs, me->mdl, &len, &ts);
 	if (ptr == NULL) {
 	    if (len != 0) {
-		logmsg(LOGWARN, "error reading file %s: %s\n",
+		warn("error reading file %s: %s\n",
 		       me->mdl->output, strerror(errno));
 		/* error */
 		return -1;
@@ -258,7 +257,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	 */
 	if (ptr == GR_LOSTSYNC) {
 	    ofs = csseek(me->fd, CS_SEEK_FILE_NEXT);
-	    logmsg(LOGSNIFFER, "lost sync, trying next file %s/%016llx\n", 
+	    debug("lost sync, trying next file %s/%016llx\n", 
 		   me->mdl->output, ofs);
 	    continue;
 	}

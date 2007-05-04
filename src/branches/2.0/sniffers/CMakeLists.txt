@@ -6,7 +6,7 @@ INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/base)
 #
 SET(SNIFFERS
   pcap
-  #como
+  como
   #ondemand
   sflow
 )

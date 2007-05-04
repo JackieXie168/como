@@ -606,7 +606,7 @@ struct sflow_me {
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args, UNUSED alc_t *alc)
+sniffer_init(const char * device, const char * args, alc_t *alc)
 {
     struct sflow_me *me;
     

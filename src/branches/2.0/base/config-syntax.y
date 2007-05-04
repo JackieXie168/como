@@ -131,8 +131,7 @@ sniffer_def: /* the definition of a sniffer */
 module_def:
     TOK_MODULE {
         /* initialize the defn */
-        bzero(&mdl, sizeof(mdl));
-        mdl.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+        initialize_module_def(&mdl, alc);
     }
     TOK_STRING TOK_NEWLINE
     optional_module_keywords
