@@ -124,7 +124,7 @@ como_config_t *
 configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 {
     static const char *opts = "hc:D:L:p:m:v:x:s:e";
-    int c, cfg_file_count = 0;
+    int i, c, cfg_file_count = 0;
     #define MAX_CFGFILES 1024
     char *cfg_files[MAX_CFGFILES];
 
@@ -143,7 +143,6 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     cfg->libdir = "";
     alc = alc;
 
-    
     while ((c = getopt(argc, argv, opts)) != -1) {
         switch(c) {
         case 'h':
@@ -158,7 +157,6 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
             if (cfg_file_count >= MAX_CFGFILES)
                 error("too many config files\n");
             cfg_files[cfg_file_count++] = optarg;
-            parse_config_file(optarg, alc, cfg);
 	    break;
 
 	case 'D':	/* db-path */
@@ -214,9 +212,14 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         }
     }
 
+    for (i = 0; i < cfg_file_count; i++) /* parse config files here */
+        parse_config_file(cfg_files[i], alc, cfg);
+
+    if (cfg_file_count == 0) /* no cfg files given, try using the default */
+        parse_config_file(DEFAULT_CFGFILE, alc, cfg);
+
     while (optind < argc) { /* module definitions follow */
         warn("TODO: specify modules in cmdline (%s)\n", argv[optind]);
-
         optind++;
     }
 

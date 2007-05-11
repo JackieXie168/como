@@ -15,6 +15,11 @@
 
 #librarydir	"/where/are/modules"
 
+# Path to como-storage
+
+storage-path "@CMAKE_INSTALL_PREFIX@@INST_BINDIR@/como-storage"
+
+
 # File in MRT format (see draft-ietf-grow-mrt-03.txt) that
 # gives the IP address ranges announced by each autonomous
 # system (AS) [eg a global routing table]. See the RIS
@@ -108,28 +113,6 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 
 #live-threshold	10000
 
-# Log messages that are printed to stdout.
-# Valid keywords are:
-#
-#   ui:  	User interface
-#   warn: 	Warning messages
-#   mem: 	Memory manager
-#   conf:  	Configuration 
-#   ca:  	CAPTURE process
-#   ex:  	EXPORT process
-#   st:  	STORAGE process
-#   qu:  	QUERY process
-#   sniff:  	Sniffers 
-#   timer: 	Timers 
-#   ipc: 	Inter process communications
-#   all:	All log messages
-#
-# the flag v- (or verbose-) can be added in front of any 
-# keyword (e.g., v-warn) to request verbose logging. 
-# Default: warn,ui
-
-#logflags	warn,ui	
-
 # Set the maximum size of each individual file in the
 # stream for each module. Any denominator (KB,MB,GB) can be
 # used, however filesize must be less than 1GB.
@@ -142,14 +125,16 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #
 # module "example"
 #   description	"Config sample"	# description (default: <empty>)
-#   source	"example.so"	# module shared object (default: example.so)
+#   source	"example"	# name of module shared object, e.g. 'example'
+#                               #   means example.so (and example.dll if
+#                               #   it exists. default: example)
 #   output	"example"	# output file (default: example)
 #   filter      "tcp"		# select packets of interest (default: ALL)
 #   streamsize	256MB		# max output file size (default: 256MB)
 #   hashsize	1		# estimated concurrent entries (default: 1)
 #   memsize	1024		# private memory in bytes (default: 0)
 #   streamsize  10GB		# stream size on disk (default: 256MB)
-#   args	"name=value"	# arguments to be passed to the module. 
+#   args	"name" = "value"# arguments to be passed to the module. 
 #   args-file	"path/to/file"	# specify a file from where to read arguments.
 #   running	"on-demand"	# specify running mode (default: normal)
 # end
@@ -208,8 +193,9 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #		default: unused
 
 module "traffic"
+  source        "trafficCC"             # implemented by trafficCC.so
   description	"Packet/Bytes counter"
-  args		"interval=1"
+  args		"interval" = "1"
 # args		"interface=1"
 end
 

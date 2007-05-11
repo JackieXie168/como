@@ -31,6 +31,7 @@ multiple pattern search
  - Do more error checking.
  - Fix example.conf
  - argsfile keyword
+ - get modules from cmdline
 
 * Features
 

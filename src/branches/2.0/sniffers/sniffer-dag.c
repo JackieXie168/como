@@ -126,7 +126,7 @@ sniffer_start(sniffer_t * s)
         return -1;  /* errno is set */
 
     /* configure DAG */ 
-    if (dag_configure(me->sniff.fd, (char *) me->args) < 0)
+    if (dag_configure(me->sniff.fd, (char *) (me->args ? me->args : "")) < 0)
         return -1;  /* errno is set */
 
     /* attach to stream 0 */

@@ -987,7 +987,7 @@ main(int argc, char ** argv)
     como_node_init_mdls(node0, como_config->mdl_defs, como_su->alc);
 
     /* spawn STORAGE */
-    spawn_child(COMO_ST, "base/como-storage", como_su->env->workdir,
+    spawn_child(COMO_ST, como_config->storage_path, como_su->env->workdir,
             "134217728", NULL);
 
     if (node0->sniffers_count > 0) {

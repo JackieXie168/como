@@ -85,6 +85,7 @@ NUMBER          {DIGIT}+
 
 db-path         { return TOK_DBPATH; }
 librarydir      { return TOK_LIBDIR; }
+storage-path	{ return TOK_STORAGEPATH; }
 memsize         { return TOK_MEMSIZE; }
 query-port      { return TOK_QUERY_PORT; }
 
