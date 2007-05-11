@@ -86,6 +86,7 @@ report_parse_error(void)
 %token TOK_TYPE TOK_COMMENT TOK_SNIFFER TOK_FILESIZE TOK_MODULE TOK_DESCRIPTION
 %token TOK_SOURCE TOK_OUTPUT TOK_FILTER TOK_HASHSIZE TOK_STREAMSIZE TOK_ARGS
 %token TOK_ARGSFILE TOK_RUNNING TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
+%token TOK_STORAGEPATH
 %token <string> TOK_STRING
 %token <number> TOK_NUMBER
 
@@ -105,6 +106,7 @@ item:
 keyword: /* a global keyword */
       TOK_DBPATH TOK_STRING { cfg->db_path = $2; }
     | TOK_LIBDIR TOK_STRING { cfg->libdir = $2; }
+    | TOK_STORAGEPATH TOK_STRING { cfg->storage_path = $2; }
     | TOK_MEMSIZE TOK_NUMBER { cfg->shmem_size = $2; }
 
     | TOK_NAME TOK_STRING { cfg->name = $2; }

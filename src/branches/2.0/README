@@ -30,7 +30,7 @@ It is also possible to install the CoMo using:
 # make install
 
 This will install the CoMo binary, the plug-in modules and the man page.
-An example configuration file is created in `/usr/local/como/etc/como/como.conf`.
+An example configuration file is created in `/usr/local/etc/como/como.conf`.
 
 --------------------------------------------------------------------------
 Copyright (c) 2004-2006 Intel Corporation

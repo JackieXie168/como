@@ -326,6 +326,7 @@ struct _como_config {
     array_t *	sniffer_defs;
     array_t *	mdl_defs;
 
+    char *      storage_path;
     char *      mono_path;
     char *      db_path;
     char *      libdir;
