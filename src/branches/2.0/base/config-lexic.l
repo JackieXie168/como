@@ -108,6 +108,7 @@ running         { return TOK_RUNNING; }
 end             { return TOK_END; }
 =               { return TOK_EQUALS; }
 ,               { return TOK_COMMA; }
+asnfile         { return TOK_ASNFILE; }
 
 {NUMBER}GB      {
                     yclval.number = atoll(yytext) * 1024 * 1024 * 1024;

@@ -140,8 +140,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     cfg->shmem_size = 64 * 1024 * 1024;
     cfg->db_path = "/tmp/como-data";
     cfg->filesize = 128 * 1024 * 1024;
-    cfg->libdir = "";
-    alc = alc;
+    cfg->libdir = DEFAULT_LIBDIR;
 
     while ((c = getopt(argc, argv, opts)) != -1) {
         switch(c) {

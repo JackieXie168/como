@@ -531,6 +531,7 @@ handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     ic->status = MDL_WAIT_FOR_EXPORT;
 
     ipc_send(peer, CA_SU_MODULE_ADDED, NULL, 0);
+    msg("adding module %s\n", mdl->name);
 
     return IPC_OK;
 }
@@ -1632,6 +1633,8 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	}
 	sniff->priv->state = SNIFFER_ACTIVE;
 
+        msg("sniffer %s (%s) started\n", sniff->cb->name, sniff->device);
+
 	sum_max_pkts += sniff->max_pkts;
     }
 
@@ -1687,9 +1690,9 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
 
 	/* wait for messages, sniffers or up to the polling interval */
-	if (active_sniff > 0) {
-	    //FIXME: event_loop_set_timeout(&como_ca.el, &timeout);
-	}
+	if (active_sniff > 0)
+	    event_loop_set_timeout(&como_ca.el, &timeout);
+
 	n_ready = event_loop_select(&como_ca.el, &r);
 	if (n_ready < 0) {
 	    continue;
@@ -1808,6 +1811,7 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		 *     OK packets. Fixing this needs a new "dying"
 		 *     state to be added.  so TODO!   RNC1 21SEP06
 		 */
+                debug("stopping sniffer `%s': res < 0\n", sniff->cb->name);
 		ppbuf_free(sniff);
 		/* disable the sniffer */
 		sniff->priv->state = SNIFFER_INACTIVE;
