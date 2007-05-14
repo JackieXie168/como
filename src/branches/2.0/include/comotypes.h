@@ -330,6 +330,7 @@ struct _como_config {
     char *      mono_path;
     char *      db_path;
     char *      libdir;
+    char *      asn_file;
 
     char *      name;
     char *      location;

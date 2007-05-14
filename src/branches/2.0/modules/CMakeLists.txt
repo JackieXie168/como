@@ -209,6 +209,8 @@ qu_impl_t qu_impl = ${QULANG};
       PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
   ENDIF(APPLE)
 
+  INSTALL_TARGETS(${INST_LIBDIR} ${MODULE})
+
   # Compile C# code
   IF(EXISTS ${MODULE_EXPORT_CSHARP})
     CHECK_EXISTANCE(${MODULE_EXPORT_CSHARP} "export") # just for the output
@@ -224,6 +226,7 @@ qu_impl_t qu_impl = ${QULANG};
         DEPENDS ${MODULE_QUERY_CSHARP}
         DEPENDS ${MODULE_CSCLASS} ${COMO_BINARY_DIR}/mono/como.dll
     )
+    INSTALL_TARGETS(${INST_LIBDIR} "${MODULE}-Csharp")
   ENDIF(EXISTS ${MODULE_EXPORT_CSHARP})
 ENDFOREACH (MODULE)
 

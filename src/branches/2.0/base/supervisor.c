@@ -990,6 +990,9 @@ main(int argc, char ** argv)
     spawn_child(COMO_ST, como_config->storage_path, como_su->env->workdir,
             "134217728", NULL);
 
+    /* read ASN file */
+    asn_readfile(como_config->asn_file);
+
     if (node0->sniffers_count > 0) {
 	ipc_peer_full_t *ca;
 	pid_t pid;
