@@ -98,7 +98,7 @@ sniffer_init(const char * device, const char * args, alc_t *alc)
     
     return (sniffer_t *) me;
 error:
-    free(me);
+    alc_free(alc, me);
     return NULL; 
 }
 
@@ -318,12 +318,12 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s, UNUSED alc_t *alc)
+sniffer_finish(sniffer_t * s, alc_t *alc)
 {
     struct como_me *me = (struct como_me *) s;
 
     capbuf_finish(&me->capbuf);
-    free(me);
+    alc_free(alc, me);
 }
 
 

@@ -185,7 +185,7 @@ sniffer_init(const char * device, const char * args, alc_t *alc)
 
     return (sniffer_t *) me;
 error:
-    free(me);
+    alc_free(alc, me);
     return NULL;
 }
 

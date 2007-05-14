@@ -660,7 +660,7 @@ sniffer_init(const char * device, const char * args, alc_t *alc)
 
     return (sniffer_t *) me;
 error:
-    free(me);
+    alc_free(alc, me);
     return NULL;
 }
 
@@ -1173,7 +1173,7 @@ sniffer_finish(sniffer_t * s, UNUSED alc_t *alc)
     struct sflow_me *me = (struct sflow_me *) s;
 
     capbuf_finish(&me->capbuf);
-    free(me);
+    alc_free(alc, me);
 }
 
 

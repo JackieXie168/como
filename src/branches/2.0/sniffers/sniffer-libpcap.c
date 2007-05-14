@@ -153,7 +153,7 @@ error:
     if (me->handle) {
 	dlclose(me->handle);
     }
-    free(me);
+    alc_free(alc, me);
     if (libpcap_name != NULL)
       free(libpcap_name);
     return NULL;
