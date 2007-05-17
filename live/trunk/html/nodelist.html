@@ -28,7 +28,7 @@
 	<input type=password name=password size=21 value="" onFocus=clearText(this);>
         <input type=hidden name=action value=add_group>
         &nbsp;
-	<input type=image src=../images/go.jpg>
+	<input type=image src=<?=$G['WEBROOT']?>/images/go.jpg>
       </form>
         <? } ?>
         </td></tr>
@@ -38,7 +38,7 @@
                     Locate from a filter expression:
                 <input type="text" name="filter" size="45" value="<?=urldecode($filter)?>"/>
                 &nbsp; &nbsp;
-                <input type=image src=../images/go.jpg>
+                <input type=image src=<?=$G['WEBROOT']?>/images/go.jpg>
             </form>
         </td></tr>
 
@@ -103,7 +103,7 @@
       <form align=middle action=dashboard.php method=get>
 	<input type=text name=comonode size=21 value="comonode:44444"
          onFocus=clearText(this);>
-	<input type=image src=../images/go.jpg>
+	<input type=image src=<?=$G['WEBROOT']?>/images/go.jpg>
       </form>
 
     <?php if ($isAdmin) { ?>
@@ -113,7 +113,7 @@
 	<input type=text name=node size=21 value="comonode:44444"
          onFocus=clearText(this);>
         <input type=hidden name=action value=add_node>
-	<input type=image src=../images/go.jpg >
+	<input type=image src=<?=$G['WEBROOT']?>/images/go.jpg >
       </form>
     <?php } ?>
     </td>
