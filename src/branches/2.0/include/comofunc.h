@@ -91,6 +91,7 @@ void define_sniffer(char *name, char *device, char *args, como_config_t *cfg);
 void initialize_module_def(mdl_def_t *mdl, alc_t *alc);
 void define_module(mdl_def_t *mdl, como_config_t *cfg);
 void set_filesize(int64_t size, como_config_t *cfg);
+void set_memsize(int64_t size, como_config_t *cfg);
 void set_queryport(int64_t port, como_config_t *cfg);
 
 como_config_t *configure(int argc, char **argv, alc_t *alc, como_config_t *cfg);

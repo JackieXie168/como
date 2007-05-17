@@ -107,7 +107,7 @@ keyword: /* a global keyword */
       TOK_DBPATH TOK_STRING { cfg->db_path = $2; }
     | TOK_LIBDIR TOK_STRING { cfg->libdir = $2; }
     | TOK_STORAGEPATH TOK_STRING { cfg->storage_path = $2; }
-    | TOK_MEMSIZE TOK_NUMBER { cfg->shmem_size = $2; }
+    | TOK_MEMSIZE TOK_NUMBER { set_memsize($2, cfg); }
     | TOK_ASNFILE TOK_STRING { cfg->asn_file = $2; }
 
     | TOK_NAME TOK_STRING { cfg->name = $2; }

@@ -85,19 +85,65 @@ define_module(mdl_def_t *mdl, como_config_t *cfg)
     array_add(cfg->mdl_defs, mdl);
 }
 
+static void
+convert(int64_t value, char *buffer, int conv)
+{
+    if (! conv || value < 1024)
+        sprintf(buffer, "%lld", value);
+    else if (value >= 1024 * 1024 * 1024)
+        sprintf(buffer, "%lldGB", value / (1024 * 1024 * 1024));
+    else if (value >= 1024 * 1024)
+        sprintf(buffer, "%lldMB", value / (1024 * 1024));
+    else
+        sprintf(buffer, "%lldKB", value / 1024);
+}
+
+static int64_t
+sanitize_value(char *what, int64_t value, int64_t min, int64_t max,
+        int conv, int isfatal)
+{
+    if (value < min || value > max) {
+        char bmin[64], bmax[64], bvalue[64];
+
+        convert(min, bmin, conv);
+        convert(max, bmax, conv);
+        convert(value, bvalue, conv);
+
+        if (isfatal)
+            error("%s invalid, value %s must be in range %s-%s.\n",
+                    what, bvalue, bmin, bmax);
+
+        warn("%s invalid, value %s must be in range %s-%s.\n",
+                what, bvalue, bmin, bmax);
+
+        if (value < min) {
+            warn("increasing to %s\n", bmin);
+            return min;
+        }
+        else {
+            warn("decreasing to %s\n", bmax);
+            return min;
+        }
+    }
+    return value;
+}
+
+#define B2MB(x) ((x) * 1024 * 1024)
+
+#define NOTFATAL 0
+#define FATAL 1
+
+#define DONTCONVERT 0
+#define CONVERT 1
+
 /*
  * -- set_filesize
  */
 void
 set_filesize(int64_t size, como_config_t *cfg)
 {
-    if (size < 0 || size >= 1 * 1024 * 1024 * 1024) {
-        warn("filesize %d invalid, must be in range 0-1GB\n", cfg);
-        warn("defaulting to 128MB\n");
-        size = 128 * 1024 * 1024;
-    }
-
-    cfg->filesize = size;
+    cfg->filesize = sanitize_value("filesize", size, B2MB(128), B2MB(1024),
+            CONVERT, NOTFATAL);
 }
 
 /*
@@ -106,13 +152,18 @@ set_filesize(int64_t size, como_config_t *cfg)
 void
 set_queryport(int64_t port, como_config_t *cfg)
 {
-    if (port < 0 || port >= 65536) {
-        warn("query port %d invalid, must be in range 0-65535\n", port);
-        warn("defaulting to 44444\n");
-        port = 44444;
-    }
+    cfg->query_port = sanitize_value("query port", port, 1, 65535, DONTCONVERT,
+            FATAL);
+}
 
-    cfg->query_port = port;
+/*
+ * -- set_memsize
+ */
+void
+set_memsize(int64_t size, como_config_t *cfg)
+{
+    cfg->shmem_size = sanitize_value("memsize", size, B2MB(16), B2MB(1024),
+            CONVERT, FATAL);
 }
 
 /*
@@ -137,7 +188,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
      */
     /* XXX conflict with como_env stuff in libcomo/como.c */
     cfg->query_port = 44444;
-    cfg->shmem_size = 64 * 1024 * 1024;
+    set_memsize(B2MB(64), cfg);
     cfg->db_path = "/tmp/como-data";
     cfg->filesize = 128 * 1024 * 1024;
     cfg->libdir = DEFAULT_LIBDIR;
@@ -187,7 +238,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         }
 
         case 'm':   /* capture/export memory usage */
-	    cfg->shmem_size = atoi(optarg);
+	    set_memsize(atoi(optarg), cfg);
 	    break;
 
 #if 0
