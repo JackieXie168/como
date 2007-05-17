@@ -202,8 +202,18 @@ service_status(int client_fd, como_node_t *node,
     /* send list of loaded modules */
     for (idx = 0; idx < node->mdls->len; idx++) {
 	timestamp_t ts;
+        mdl_iquery_t *iq;
+        mdl_t *tmp_mdl;
 	/*alias_t * alias;*/
+
         mdl = array_at(node->mdls, mdl_t *, idx);
+
+        /* copy the mdl into tmp_mdl to access its query side */
+        tmp_mdl = como_new0(mdl_t);
+        *tmp_mdl = *mdl;
+        tmp_mdl->priv = NULL;
+        mdl_load(tmp_mdl, PRIV_IQUERY);
+        iq = mdl_get_iquery(tmp_mdl);
 
 	/*if (mdl->status == MDL_UNUSED) 
 	    continue; */
@@ -221,11 +231,27 @@ service_status(int client_fd, como_node_t *node,
 	    ts = node_src_ts;
 	}
         #endif
+
+	len = sprintf(buf, "Module: %-15s | %s | %u |",
+		      mdl->name, mdl->filter, TS2SEC(ts));
+        ret = como_write(client_fd, buf, len);
+        if (ret < 0)
+	    err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 	    
-	len = sprintf(buf, "Module: %-15s | %s | %u | %s%s | %s\n",
-		      mdl->name, mdl->filter, TS2SEC(ts),
-		      /*mdl->callbacks.formats*/ "TODO_print_formats",
-		      /*mdl->callbacks.replay ? " como" : ""*/ "",
+        for (i = 0; iq->formats[i].id != -1; i++) {
+            warn("format %p\n", iq->formats[i].name);
+            len = sprintf(buf, " %s", iq->formats[i].name);
+            ret = como_write(client_fd, buf, len);
+            if (ret < 0)
+                err(EXIT_FAILURE, "sending status to the client [%d]",
+                    client_fd);
+        }
+
+                    /*if (strcmp(iq->formats[i].name, req->format) == 0)
+                    break;*/
+
+	len = sprintf(buf, "%s | %s\n",
+                        iq->replay ? " como" : "",
 		      (mdl->description? mdl->description : "--"));
 
 	ret = como_write(client_fd, buf, len);
