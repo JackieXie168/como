@@ -96,22 +96,27 @@ ppbuf_destroy(ppbuf_t * ppbuf)
  * dropped.
  */
 int
-ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt)
+ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt, sniffer_t * sniff)
 {
     if (pkt->ts == 0) {
 	warn("dropping pkt no. %d: invalid timestamp\n",
 	       ppbuf->woff);
 	return 0;
     }
-    if (pkt->ts < ppbuf->last_pkt_ts) {
-	notice("pkt no. %d: timestamps not increasing "
-			   "(%u.%06u --> %u.%06u)\n",
-			   ppbuf->woff,
-			   TS2SEC(ppbuf->last_pkt_ts),
-			   TS2USEC(ppbuf->last_pkt_ts),
-			   TS2SEC(pkt->ts),
-			   TS2USEC(pkt->ts));
+
+    if (pkt->ts < sniff->last_ts) {
+        timestamp_t skew = sniff->last_ts - pkt->ts;
+
+        if (skew > sniff->max_ts_skew) {
+            sniff->max_ts_skew = skew;
+            warn("sniffer %s (%s): timestamps not increasing!\n",
+                    sniff->cb->name, sniff->device);
+            warn("max skew so far is %u.%06u seconds\n",
+                    TS2SEC(skew), TS2USEC(skew));
+        }
     }
+    sniff->last_ts = pkt->ts;
+
     ppbuf->captured++;
     assert(ppbuf->captured <= ppbuf->size);
 

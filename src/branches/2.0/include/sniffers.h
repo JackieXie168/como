@@ -44,7 +44,7 @@ typedef struct sniffer_cb	sniffer_cb_t;
 
 typedef struct ppbuf ppbuf_t;
 
-int ppbuf_capture   (ppbuf_t * ppbuf, pkt_t * pkt);
+int ppbuf_capture   (ppbuf_t * ppbuf, pkt_t * pkt, sniffer_t *sniff);
 int ppbuf_get_count (ppbuf_t * ppbuf);
 
 /*
@@ -121,6 +121,13 @@ struct sniffer_t {
     sniffer_list_entry_t	entry;
     sniffer_priv_t *		priv;
     metadesc_t *		outmd;/* offered output metadesc list */
+
+    timestamp_t                 previous_ts; /* ts of packet before current */
+    timestamp_t                 max_ts_skew; /* in the event that the sniffer
+                                              * does not return monotonically
+                                              * increasing ts's, record the max
+                                              * skew here. (see ppbuf.c)
+                                              */
 };
 
 struct sniffer_stats {

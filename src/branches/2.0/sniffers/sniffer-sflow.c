@@ -1116,7 +1116,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 		*/
 		npkts++;
 		
-		ppbuf_capture(me->sniff.ppbuf, pkt);
+		ppbuf_capture(me->sniff.ppbuf, pkt, s);
 	    }
 	    /* unless every element was processed will add a positive number */
 	    *dropped_pkts += num_elements - eli;
