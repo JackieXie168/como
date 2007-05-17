@@ -104,8 +104,8 @@ ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt, sniffer_t * sniff)
 	return 0;
     }
 
-    if (pkt->ts < sniff->last_ts) {
-        timestamp_t skew = sniff->last_ts - pkt->ts;
+    if (pkt->ts < sniff->previous_ts) {
+        timestamp_t skew = sniff->previous_ts - pkt->ts;
 
         if (skew > sniff->max_ts_skew) {
             sniff->max_ts_skew = skew;
@@ -115,7 +115,7 @@ ppbuf_capture(ppbuf_t * ppbuf, pkt_t * pkt, sniffer_t * sniff)
                     TS2SEC(skew), TS2USEC(skew));
         }
     }
-    sniff->last_ts = pkt->ts;
+    sniff->previous_ts = pkt->ts;
 
     ppbuf->captured++;
     assert(ppbuf->captured <= ppbuf->size);
