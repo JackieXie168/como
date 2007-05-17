@@ -18,7 +18,7 @@ function ERROR_DIRNOTWRITABLE ($dir)
          "by the web server<br><br>" .
          "<pre>" .
          "mkdir $dir;<br>" .
-         "chown WEBUSER $dir; <br></pre>";
+         "chown ".rtrim(`id -nu`)." $dir; <br></pre>";
         $val = $m;
     return $val;
 

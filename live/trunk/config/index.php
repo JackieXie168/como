@@ -125,6 +125,13 @@ if ($action == "install") {
         generic_message(ERROR_DIRNOTWRITABLE($dir));
     }
 
+    /* Make sure at least htpasswd binary exists */
+    if (!(file_exists($G['HTPASSWD']))) {
+        generic_message("The specified htpasswd binary location ".
+            "'".$G['HTPASSWD']."' is incorrect. Please review your ".
+            "configuration settings.");
+    }
+
     /* create a config file for the user to copy to ABSROOT */
     $config_file = $absroot . "/" . $G['RESULTS'] . "/comolive.conf";
     write_config($G, $opts, $desc, $config_file);
