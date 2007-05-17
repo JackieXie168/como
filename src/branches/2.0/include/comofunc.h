@@ -108,6 +108,11 @@ int          parse_filter (char *, treenode_t **, char **);
 int          evaluate     (treenode_t *t, pkt_t *pkt);
 
 /*
+ * query-syntax.c
+ */
+query_ast_t * parse_query_str(char *q);
+
+/*
  * asn.c
  */
 void asn_readfile(const char * filename);

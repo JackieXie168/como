@@ -472,4 +472,23 @@ typedef struct tailq_t {
 	}						\
     } while (0);
 
+
+/*
+ * query abstract syntax tree for query parsing
+ */
+#define QUERY_AST_MAX_KEYVALS 1024
+typedef struct keyval keyval_t;
+typedef struct query_ast query_ast_t;
+struct keyval {
+    char *key;
+    char *val;
+};
+struct query_ast {
+    char *resource;
+    int  nkeyvals;
+    keyval_t keyvals[QUERY_AST_MAX_KEYVALS];
+};
+
+query_ast_t ast;
+
 #endif /* _COMOTYPES_H */

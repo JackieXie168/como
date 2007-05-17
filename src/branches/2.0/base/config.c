@@ -67,6 +67,7 @@ initialize_module_def(mdl_def_t *mdl, alc_t *alc)
     bzero(mdl, sizeof(mdl));
     mdl->args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     mdl->streamsize = 128 * 1024 * 1024;
+    mdl->filter = como_strdup("all");
 }
 
 /*

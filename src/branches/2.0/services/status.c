@@ -239,7 +239,6 @@ service_status(int client_fd, como_node_t *node,
 	    err(EXIT_FAILURE, "sending status to the client [%d]", client_fd);
 	    
         for (i = 0; iq->formats[i].id != -1; i++) {
-            warn("format %p\n", iq->formats[i].name);
             len = sprintf(buf, " %s", iq->formats[i].name);
             ret = como_write(client_fd, buf, len);
             if (ret < 0)
