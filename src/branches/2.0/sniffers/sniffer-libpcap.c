@@ -97,7 +97,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
 
     me = alc_new0(alc, struct libpcap_me);
     
-    me->sniff.max_pkts = 128;
+    me->sniff.max_pkts = 65536;
     me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
     me->promisc = LIBPCAP_DEFAULT_PROMISC;
     me->snaplen = LIBPCAP_DEFAULT_SNAPLEN;
@@ -302,7 +302,7 @@ processpkt(u_char * data, const struct pcap_pkthdr * h, const u_char * buf)
      */
     updateofs(pkt, L2, me->l2type);
 
-    ppbuf_capture(me->sniff.ppbuf, pkt);
+    ppbuf_capture(me->sniff.ppbuf, pkt, &me->sniff);
 }
 
 

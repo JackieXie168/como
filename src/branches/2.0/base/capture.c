@@ -1089,16 +1089,6 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
 
     ppbuf_next(ppbuf);
     
-    if (pkt->ts < batch->last_pkt_ts) {
-	notice("pkt no. %d: timestamps not increasing "
-	       "(%u.%06u --> %u.%06u)\n",
-	       batch->woff,
-	       TS2SEC(batch->last_pkt_ts),
-	       TS2USEC(batch->last_pkt_ts),
-	       TS2SEC(pkt->ts),
-	       TS2USEC(pkt->ts));
-    }
-
     batch->count++;
     assert(batch->count <= batch->reserved);
 

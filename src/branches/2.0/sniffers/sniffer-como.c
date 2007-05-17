@@ -275,7 +275,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	/* the payload is just after the packet */
 	COMO(payload) = base + sizeof(pkt_t);
 
-	ppbuf_capture(me->sniff.ppbuf, pkt);
+	ppbuf_capture(me->sniff.ppbuf, pkt, s);
 	
 	/* move forward */
 	sz = sizeof(pkt_t) + COMO(caplen) /* + TODO padding */;

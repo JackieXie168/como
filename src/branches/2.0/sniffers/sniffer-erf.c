@@ -405,7 +405,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	
         /* increment the number of processed packets */
 	npkts++;
-	ppbuf_capture(me->sniff.ppbuf, pkt);
+	ppbuf_capture(me->sniff.ppbuf, pkt, s);
 	
 	me->mmaps[me->cur].off += rs;
 	me->mmaps[me->cur].nread += rs;

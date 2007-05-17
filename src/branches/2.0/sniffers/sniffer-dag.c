@@ -70,7 +70,7 @@ sniffer_init(const char * device, const char * args, alc_t *alc)
     
     me = alc_new0(alc, struct dag_me);
 
-    me->sniff.max_pkts = 8192;
+    me->sniff.max_pkts = 65536;
     me->sniff.flags = SNIFF_POLL | SNIFF_SHBUF;
     me->sniff.polling = TIME2TS(0, 1000);
     me->device = device;
@@ -256,7 +256,7 @@ sniffer_next(sniffer_t * s, int max_pkts,
          */
 	updateofs(pkt, L2, l2type);
 	npkts++;
-	ppbuf_capture(me->sniff.ppbuf, pkt);
+	ppbuf_capture(me->sniff.ppbuf, pkt, s);
 
 	/* move to next packet in the buffer */
         base += len; 

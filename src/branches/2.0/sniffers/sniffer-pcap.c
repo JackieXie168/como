@@ -550,7 +550,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	    updateofs(pkt, L2, me->l2type);
 	    /* increment the number of processed packets */
 	    npkts++;
-	    ppbuf_capture(me->sniff.ppbuf, pkt);
+	    ppbuf_capture(me->sniff.ppbuf, pkt, s);
 	} else {
 	    (*dropped_pkts)++;
 	}
