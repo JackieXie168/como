@@ -45,94 +45,6 @@
 #include "hash.h"
 #include "comopriv.h"
 
-/*
- * Communication support for the query modules.
- * Essentially pack/unpack messages and make sure that we read them
- * atomically even if they are sent over a TCP socket.
- */
-
-#define CR	'\r'
-#define LF	'\n'
-#define CRLF	"\r\n"
-
-/*
- *
- * http_next_token, http_get_token, uri_unescape and uri_validate are taken
- * from Abyss http server which comes with the following license:
- *
- * This file is part of the ABYSS Web server project.
- *
- * Copyright (C) 2000 by Moez Mahfoudh <mmoez@bigfoot.com>.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. The name of the author may not be used to endorse or promote products
- *    derived from this software without specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- *
-*/
-
-
-static void
-http_next_token(char **p)
-{
-    for (;;) {
-	switch (**p) {
-	case '\t':
-	case ' ':
-	    (*p)++;
-	    break;
-	default:
-	    return;
-	}
-    }
-}
-
-static char *
-http_get_token(char **p)
-{
-    char *p0 = *p;
-
-    for (;;) {
-	switch (**p) {
-	case '\t':
-	case ' ':
-	case CR:
-	case LF:
-	case '\0':
-	    if (p0 == *p)
-		return NULL;
-
-	    if (**p) {
-		**p = '\0';
-		(*p)++;
-	    };
-	    return p0;
-
-	default:
-	    (*p)++;
-	}
-    }
-}
-
 /**
  * -- uri_unescape
  * 
@@ -183,37 +95,6 @@ uri_unescape(char *uri)
 	}
     }
 }
-
-
-/**
- * -- uri_validate
- * 
- * Validates the request URI.
- */
-int
-uri_validate(char **uri)
-{
-    char *x, *p;
-    
-    x = *uri;
-
-    if (x == NULL)
-	return -1;
-
-    if (*x != '/') {
-	if (strncmp(x, "http://", 7) != 0)
-	    return -1;
-
-	x += 7;
-	p = strchr(x, '/');
-	if (!p)
-	    return -1;
-	x = p;
-	*uri = x;
-    }
-    return 0;
-}
-
 
 /* 
  * parse_relativetime
@@ -389,7 +270,6 @@ static int
 query_parse(qreq_t * q, char * buf, timestamp_t now)
 {
     char *p, *t;
-    char *uri, *qs = NULL;
     query_ast_t * ast;
     int i;
 
@@ -438,8 +318,8 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
         char *value = ast->keyvals[i].val;
         int insert_arg = TRUE;
 
-        uri_unescape(name);
-        uri_unescape(value);
+        if (uri_unescape(name) == -1 || uri_unescape(value) == -1)
+            return -400;
 
         #define if_have_kw(k) if (strcmp(name, k) == 0)
 

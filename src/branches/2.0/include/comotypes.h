@@ -489,6 +489,4 @@ struct query_ast {
     keyval_t keyvals[QUERY_AST_MAX_KEYVALS];
 };
 
-query_ast_t ast;
-
 #endif /* _COMOTYPES_H */
