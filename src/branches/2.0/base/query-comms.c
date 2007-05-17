@@ -390,6 +390,8 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 {
     char *p, *t;
     char *uri, *qs = NULL;
+    query_ast_t * ast;
+    int i;
 
     p = strchr(buf, '\n');
     *p = '\0';
@@ -407,188 +409,103 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
     q->args = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
 
     /* 
-     * check if the request is valid. look for GET and HTTP/1 
-     * somewhere in the string. 
+     * parse the request, and if successful, get its AST.
      */
-
-    p = buf;
-    /* jump over spaces */
-    http_next_token(&p);
-    t = http_get_token(&p);
-    if (t == NULL) {
-	return -400; /* Bad Request */
-    }
+    ast = parse_query_str(buf);
+    if (ast == NULL)
+        return -400;
     
-    if (strcmp(t, "GET") != 0) {
-	return -405; /* Method Not Allowed */
-    }
-    
-    /* URI decoding */
-    http_next_token(&p);
-    t = http_get_token(&p);
-    if (t == NULL) {
-	return -400; /* Bad Request */
-    }
-
-    uri = t;
-    t = strchr(t, '?');
-    if (t != NULL) {
-	*t = '\0';
-	qs = t + 1; /* query string */
-    }
-    
-    /* HTTP version decoding */
-    http_next_token(&p);
-    t = http_get_token(&p);
-    if (t != NULL) {
-	int vmaj, vmin;
-	if (sscanf(t, "HTTP/%d.%d", &vmaj, &vmin) != 2) {
-	    return -400; /* Bad Request */
-	}
-    } else {
-	return -400; /* Bad Request */
-    }
-
-    /* Path decoding */
-    if (uri_validate(&uri) < 0 || uri_unescape(uri) < 0) {
-	return -400; /* Bad Request */
-    }
-    
-    if (strcmp(uri, "/status") == 0) {
+    if (strcmp(ast->resource, "/status") == 0) {
 	q->mode = QMODE_SERVICE;
 	q->service = "status";
-    } else if (strncmp(uri, "/services/", 10) == 0) {
+    } else if (strncmp(ast->resource, "/services/", 10) == 0) {
 	q->mode = QMODE_SERVICE;
-	q->service = uri + 10;
+	q->service = ast->resource + 10;
     } else {
-    	q->module = uri + 1;
-    }
-    
-    /* Query string decoding */
-    if (qs != NULL) {
-	char *cp, *name, *value;
-	int insert_arg; /* if TRUE insert argument into args hashtable */
-	cp = name = qs;
-	value = NULL;
-	for (;;) {
-	    if (*cp == '=' && value == NULL) {
-		/*
-		 * NOTE: value == NULL is need to be friendly with custom
-		 * arguments of type a=b=c. Even if not allowed they've been
-		 * introduced in live!
-		 */
-		*cp = '\0';
-		value = cp + 1;
-		uri_unescape(name);
-	    } else if (*cp == '&' || *cp == '\0') {
-		int done = (*cp == '\0');
-		/* insert the argument into query args by default */
-		insert_arg = TRUE;
-		*cp = '\0';
-		if (value == cp || value == NULL) {
-		    if (strcmp(name, "status") == 0) {
-			q->mode = QMODE_SERVICE;
-			q->service = "status";
-		    }
-		    if (done) {
-			break;
-		    }
-		    name = cp + 1;
-		    continue;
-		}
-		if (value != NULL) {
-		    uri_unescape(value);
-		}
-		switch (*name) {
-		case 'm':
-		    /* module */
-		    /* backward compatible => uri == "/" */
-		    if (strcmp(name + 1, "odule") == 0 &&
-			uri[1] == '\0') {
-                        if (q->module)
-                            free(q->module);
-			q->module = como_strdup(value);
-			insert_arg = FALSE;
-		    }
-		    break;
-		case 'f':
-		    /* filter */
-		    if (strcmp(name + 1, "ilter") == 0) {
-                        if (q->filter_str)
-                            free(q->filter_str);
-			q->filter_str = como_strdup(value);
-			parse_filter(value, NULL, &(q->filter_cmp));
-			insert_arg = FALSE;
-		    /* format */
-		    } else if (strcmp(name + 1, "ormat") == 0) {
-                        if (q->format)
-                            free(q->format);
-			q->format = como_strdup(value);
-			insert_arg = FALSE;
-		    }
-		    break;
-		case 's':
-		    /* start */
-		    if (strcmp(name + 1, "tart") == 0) {
-			q->start = atoi(value);
-			insert_arg = FALSE;
-		    /* source */
-		    } else if (strcmp(name + 1, "ource") == 0) {
-                        if (q->source)
-                            free(q->source);
-			q->source = como_strdup(value);
-			insert_arg = FALSE;
-		    /* status */
-		    } else if (strcmp(name + 1, "tatus") == 0) {
-			q->mode = QMODE_SERVICE;
-			q->service = "status";
-			insert_arg = FALSE;
-		    }
-		    break;
-		case 'e':
-		    /* end */
-		    if (strcmp(name + 1, "nd") == 0) {
-			q->end = atoi(value);
-			insert_arg = FALSE;
-		    }
-		    break;
-		case 'w':
-		    /* wait */
-		    if (strcmp(name + 1, "ait") == 0) {
-			if (strcmp(value, "no") == 0) {
-			    q->wait = FALSE;
-			}
-			insert_arg = FALSE;
-		    }
-		    break;
-		case 't':
-		    /* time */
-		    if (strcmp(name + 1, "ime") == 0) {
-			timestamp_t current;
-			current = now;
-			t = strchr(value, ':');
-			if (t != NULL) {
-			    *t = '\0';
-			    q->start = parse_timestr(value, &current);
-			    q->end = parse_timestr(t + 1, &current);
-			    insert_arg = FALSE;
-			}
-		    }
-		    break;
-		}
-		if (insert_arg == 1 && value != NULL) {
-		    hash_insert_string(q->args, name, value);
-		}
-		if (done) {
-		    break;
-		}
-		name = cp + 1;
-		value = NULL;
-	    }
-	    cp++;
-	}
+        q->mode = QMODE_MODULE;
+        q->module = ast->resource + 1;
     }
 
+    /*
+     * get the arguments.
+     *
+     * we may leak some mem but we do not care, as the
+     * maximum query string length is not large and
+     * this is done once during the process' lifetime.
+     */
+    for (i = 0; i < ast->nkeyvals; i++) {
+        char *name = ast->keyvals[i].key;
+        char *value = ast->keyvals[i].val;
+        int insert_arg = TRUE;
+
+        uri_unescape(name);
+        uri_unescape(value);
+
+        #define if_have_kw(k) if (strcmp(name, k) == 0)
+
+        switch (*name) {
+            case 'm':
+                if_have_kw("module") {
+                    q->module = como_strdup(value);
+                    insert_arg = FALSE;
+                }
+                break;
+            case 'f':
+                if_have_kw("filter") {
+                    q->filter_str = como_strdup(value);
+                    parse_filter(value, NULL, &(q->filter_cmp));
+                    insert_arg = FALSE;
+                }
+                else if_have_kw("format") {
+                    q->format = como_strdup(value);
+                    insert_arg = FALSE;
+                }
+                break;
+            case 's':
+                if_have_kw("start") {
+                    q->start = atoi(value);
+                    insert_arg = FALSE;
+                } else if_have_kw("source") {
+                    q->source = como_strdup(value);
+                    insert_arg = FALSE;
+                } else if_have_kw("status") {
+                    q->mode = QMODE_SERVICE;
+                    q->service = "status";
+                    insert_arg = FALSE;
+                }
+                break;
+            case 'e':
+                if_have_kw("end") {
+                    q->end = atoi(value);
+                    insert_arg = FALSE;
+                }
+                break;
+            case 'w':
+                if_have_kw("wait") {
+                    if (strcmp(value, "no") == 0)
+                        q->wait = FALSE;
+                    insert_arg = FALSE;
+                }
+                break;
+            case 't':
+                if_have_kw("time") {
+                    timestamp_t current;
+                    current = now;
+                    t = strchr(value, ':');
+                    if (t != NULL) {
+                        *t = '\0';
+                        q->start = parse_timestr(value, &current);
+                        q->end = parse_timestr(t + 1, &current);
+                        insert_arg = FALSE;
+                    }
+                }
+                break;
+        }
+
+        if (insert_arg == TRUE)
+            hash_insert_string(q->args, name, value);
+    }
+    
     return 0;
 }
 
