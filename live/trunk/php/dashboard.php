@@ -1,7 +1,7 @@
 <?php
     /*  $Id$  */
 
-	$ABSROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_FILENAME']);
+    $ABSROOT = preg_replace('/\/groups.*/', '', $_SERVER['SCRIPT_FILENAME']);
 
     if (!file_exists("$ABSROOT/comolive.conf")) {
         print "Please create a comolive.conf file";
@@ -25,7 +25,6 @@
 	print do_footer(); 
 	exit;
     }
-
 
     $comonode = $_GET['comonode'];
     $db = new NodeDB($G);

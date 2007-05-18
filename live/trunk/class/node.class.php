@@ -141,6 +141,8 @@ class Node {
 	$this->start -= $this->start % $G['TIMEBOUND'];
 	$this->end -= $this->end % $G['TIMEBOUND'];
 
+        if ($this->start == $this->end) /* don't allow start == end */
+            $this->end += $G['TIMEBOUND'];
     }
 
     /* 

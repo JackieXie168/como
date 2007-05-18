@@ -23,6 +23,7 @@ function init_env ($node) {
 	}
     } else
 	$input_vars['end'] = $node->end;
+
     if(isset($_GET['start']) && ($_GET['start'] != "")){
 	$input_vars['start'] = $_GET['start'];
 	if (isset($node)){
