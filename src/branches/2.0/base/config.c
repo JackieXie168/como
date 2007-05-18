@@ -86,11 +86,18 @@ define_module(mdl_def_t *mdl, como_config_t *cfg)
     array_add(cfg->mdl_defs, mdl);
 }
 
+/*
+ * -- convert
+ *
+ * print a value into a character string. If conv is not zero,
+ * the value is interpreted as an amount of bytes and converted to
+ * GB|MB|KB as necessary.
+ */
 static void
 convert(int64_t value, char *buffer, int conv)
 {
     if (! conv || value < 1024)
-        sprintf(buffer, "%lld", value);
+        sprintf(buffer, "%lld%s", value, conv ? "B" : "");
     else if (value >= 1024 * 1024 * 1024)
         sprintf(buffer, "%lldGB", value / (1024 * 1024 * 1024));
     else if (value >= 1024 * 1024)
@@ -99,6 +106,12 @@ convert(int64_t value, char *buffer, int conv)
         sprintf(buffer, "%lldKB", value / 1024);
 }
 
+/*
+ * -- sanitize_value
+ *
+ * Check that a value is within a range, either die with an error msg
+ * or adjust within the range depeding on the isfatal arg.
+ */
 static int64_t
 sanitize_value(char *what, int64_t value, int64_t min, int64_t max,
         int conv, int isfatal)

@@ -720,6 +720,7 @@ como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
 	mdl->name = alc_strdup(alc, def->name);
 	mdl->mdlname = alc_strdup(alc, def->mdlname);
 	mdl->streamsize = def->streamsize;
+        mdl->filter = alc_strdup(alc, def->filter);
 	
 	if (mdl_load(mdl, PRIV_ISUPERVISOR) < 0) {
 	    //mdl_destroy(mdl);

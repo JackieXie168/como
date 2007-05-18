@@ -35,18 +35,33 @@
  */
  
 %{
-#define YYDEBUG 1
-#define YYFPRINTF fwarn
-
 #include <strings.h> /* bzero */
 
 #define LOG_DOMAIN "QUERY"
 #include "como.h"
 #include "comopriv.h"
 
-#define fwarn(a, b...) warn(b)
+/* #define YYDEBUG 1 */
 
+#ifdef YYDEBUG
+#define YYFPRINTF parser_debug
+
+#define parser_debug(a, b...) do_parser_debug(b)
+
+static void
+do_parser_debug(char *fmt, ...)
+{ 
+    va_list ap;
+    char msg[2048];
+    
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+
+    warn("query parser dbg: %s\n", msg);
+}
 #define YYERROR_VERBOSE
+#endif
 
 int yqlex(void);
 void yqerror(char *fmt, ...);
@@ -84,7 +99,7 @@ query:
 blanks: blanks TOK_SPACE | TOK_SPACE;
 
 fullpath:
-    TOK_SLASH {
+    slashes {
             $$ = como_asprintf("/");
         }
     | fullpath particle {
@@ -97,7 +112,9 @@ fullpath:
         }
     ;
 
-particle: TOK_SLASH TOK_STRING {
+slashes: slashes TOK_SLASH | TOK_SLASH
+
+particle: slashes TOK_STRING {
             $$ = como_asprintf("/%s", $2);
             free($2);
         }
@@ -117,14 +134,21 @@ inside_arglist: keyvalue | keyvalue TOK_AMP inside_arglist;
    which are in the form ?key=value=that=may=include=TOK_EUALS&key2=...
  */
 
-keyvalue: TOK_STRING TOK_EQUALS value {
+keyvalue:
+    TOK_STRING TOK_EQUALS value {
             ast.keyvals[ast.nkeyvals].key = $1;
             ast.keyvals[ast.nkeyvals].val = $3;
             ast.nkeyvals++;
         }
+    | TOK_STRING {
+            ast.keyvals[ast.nkeyvals].key = $1;
+            ast.keyvals[ast.nkeyvals].val = como_strdup("");
+            ast.nkeyvals++;
+        }
     ;
 
-value: TOK_STRING {
+value:
+    TOK_STRING {
             $$ = $1;
         }
     | value TOK_EQUALS TOK_STRING {
@@ -155,6 +179,12 @@ parse_query_str(char *query_string)
 {
     char *str;
     int i, ret;
+
+    #ifdef YYDEBUG
+    #if YYDEBUG == 1
+    yydebug = 1;
+    #endif
+    #endif
 
     bzero(&ast, sizeof(ast));
 

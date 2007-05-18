@@ -204,9 +204,8 @@ batch_filter(batch_t * batch, como_ca_t * como_ca)
 	mdl_icapture_t *ic;
 	pkt_t *pkt, **pktptr;
 
-	if (mdl == NULL) {
+	if (mdl == NULL)
 	    continue;
-	}
 
 	ic = mdl_get_icapture(mdl);
 	

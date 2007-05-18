@@ -123,6 +123,12 @@ qu_init(mdl_t *self, int format_id, hash_t *args)
         while((n = strtok(NULL, ",")))
             if (st.num_proto < MAX_PROTO)
                 st.proto[st.num_proto++] = atoi(n);
+    } else { /* include all from config */
+        int i;
+
+        for (i = 0; i < config->num_proto; i++)
+            st.proto[i] = config->proto[i];
+        st.num_proto = config->num_proto;
     }
 
     /* aggregate multiple records to reduce communication messages. */
@@ -140,13 +146,13 @@ qu_init(mdl_t *self, int format_id, hash_t *args)
 
             mdl_printf(self, "plot \"-\" using 1:%d with filledcurve x1 "
                        "title \"Other\" lw 5",
-                       config->num_proto + 2); 
+                       st.num_proto + 2); 
 
-            for (n = config->num_proto - 1; n >= 0; n--) { 
+            for (n = st.num_proto - 1; n >= 0; n--) { 
                 mdl_printf(self, ",\"-\" using 1:%d with filledcurve x1 "
                            "title \"%s (%d)\" lw 5",
-                           n + 2, getprotoname(config->proto[n]), 
-                           config->proto[n]); 
+                           n + 2, getprotoname(st.proto[n]), 
+                           st.proto[n]); 
             } 
 
             mdl_print(self, ";\n"); 
