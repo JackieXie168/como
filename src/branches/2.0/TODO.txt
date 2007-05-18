@@ -52,9 +52,6 @@ multiple pattern search
 
 * Bugs
 
- - Query dies when /?module=mdl&args... query scheme is used by client.
-   A rewrite of the parser with flex and bison would also be nice.
-
  - deserialize_string should work when the target structure field
    is a character array. Right now only works when target is a char pointer.
 

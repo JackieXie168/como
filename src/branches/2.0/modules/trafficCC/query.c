@@ -111,10 +111,10 @@ qu_init(mdl_t * self, int format_id, hash_t * args)
     
     switch (format_id) {
     case FORMAT_GNUPLOT:
-	mdl_print(self, GNUPLOTHDR);
+	mdl_printf(self, GNUPLOTHDR);
 	break;
     case FORMAT_PRETTY:
-	mdl_print(self, PRETTYHDR);
+	mdl_printf(self, PRETTYHDR);
 	break;
     }
     

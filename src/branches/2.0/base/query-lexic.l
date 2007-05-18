@@ -39,31 +39,10 @@
 
 %}
 
-/* Tokens for the filter parser:
- * The tokens that can appear in a CoMo filter are not completely defined yet.
- * This section should be modified as they change
- */
-
-DIGIT           [0-9]
-NUMBER          {DIGIT}+
+URICHAR [-a-zA-Z0-9\.:_~%+]
 
 %option noyywrap
 %option nounput
-
-%s comment 
-
-/* Actions to be executed when a token is found:
- * 
- * Here we need to specify, for each possible token, what is the information
- * that we want to pass to the syntactic parser.
- *
- * Variables that are available in this section:
- *
- * - yytext is the string read from the input
- * - yyleng contains yytext length
- * - yflval is the value that will be passed to the syntactic parser.
- *   new data types can be added to it in base/filter-syntax.y (%union section)
- */
 
 %%
 
@@ -77,6 +56,9 @@ GET             { return TOK_GET; }
 =               { return TOK_EQUALS; }
 " "             { return TOK_SPACE; }
 
-[a-zA-Z0-9:%]+    { yqlval.string = como_strdup(yytext); return TOK_STRING; }
+{URICHAR}+      { yqlval.string = como_strdup(yytext); return TOK_STRING; }
+
+.|\n
 
 %%
+

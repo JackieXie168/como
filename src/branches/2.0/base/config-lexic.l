@@ -37,22 +37,10 @@
 
 /* C Declarations */
 #include <stdlib.h> /* atoll */
-#if 0
-"/*"         BEGIN(comment);
-<comment>[^*\n]*        /* eat anything that's not a '*' */
-<comment>"*"+[^*/\n]*   /* eat up '*'s not followed by '/'s */
-<comment>\n             /* and newlines */
-<comment>"*"+"/"        BEGIN(INITIAL);
-#endif
 
 int ycline = 1;
 
 %}
-
-/* Tokens for the filter parser:
- * The tokens that can appear in a CoMo filter are not completely defined yet.
- * This section should be modified as they change
- */
 
 DIGIT           [0-9]
 NUMBER          {DIGIT}+
@@ -61,19 +49,6 @@ NUMBER          {DIGIT}+
 %option nounput
 
 %s comment 
-
-/* Actions to be executed when a token is found:
- * 
- * Here we need to specify, for each possible token, what is the information
- * that we want to pass to the syntactic parser.
- *
- * Variables that are available in this section:
- *
- * - yytext is the string read from the input
- * - yyleng contains yytext length
- * - yflval is the value that will be passed to the syntactic parser.
- *   new data types can be added to it in base/filter-syntax.y (%union section)
- */
 
 %%
 

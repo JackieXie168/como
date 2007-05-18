@@ -199,6 +199,50 @@ module "traffic"
 # args		"interface=1"
 end
 
+module "flowcount"
+    source "flowcountCC"
+    description "Flow counter"
+    # aggregate flows using the 5-tuple
+    args "flowdef" = "src_ip|dst_ip|proto|src_port|dst_port"
+end
+
+module "protocol"
+    source "protocolCC"
+    description "Protocol breakdown"
+end
+
+module "topaddr"
+    source "topaddrCC"
+    description "Popular destination IP Addresses"
+    args "use-dst"
+end
+
+#module "tophwaddr"
+#    source "tophwaddrCC"
+#    description "Popular destination HW Addresses"
+#    args "use-dst"
+#end
+
+module "topports"
+    source      "topportsCC"
+    description "Top destination port numbers in bytes"
+    args        "interval" = "5", "topn" = "10"
+end
+
+module "trace"
+    source      "traceCC"
+    description "Packet trace"
+    streamsize  1GB
+end
+
+#module "trafficCCS"
+#    source "trafficCCS"
+#end
+
+module "tuple"
+    source "tupleCC"
+end
+
 
 # The ethtypes module computes the number of packets and bytes divided by
 # ethertype. Each individual ethertype has to be specified in the
