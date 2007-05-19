@@ -34,7 +34,7 @@ function readCookie(name)
     return null;
 }
 
-function initializeMenu(module) 
+function initializeMenu(module, webroot) 
 {
     var menuId = module + "Menu";
     var triggerId = module + "Trig";
@@ -45,16 +45,17 @@ function initializeMenu(module)
     var state = readCookie(module);
     menu.style.display = state; 
     var display = menu.style.display;
-    image.src = (display == "block")? "../images/minus.gif" : "../images/plus.gif";
+    image.src = webroot + (display == "block" ? "/images/minus.gif" :
+            "/images/plus.gif");
 
     trigger.onclick = function() {
         var display = menu.style.display;
 	if (display == "block") { 
-	    image.src = "../images/plus.gif"; 
+	    image.src = webroot + "/images/plus.gif"; 
 	    menu.style.display = "none"; 
 	    document.cookie = module + "=none"; 
         } else { 
-	    image.src = "../images/minus.gif"; 
+	    image.src = webroot + "/images/minus.gif"; 
 	    menu.style.display = "block"; 
 	    document.cookie = module + "=block"; 
         } 

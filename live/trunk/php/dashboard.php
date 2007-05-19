@@ -136,7 +136,7 @@
 
 	// prepare the javascript onload function 
 	$window_onload = $window_onload . 
-		"initializeMenu('{$module[$i]}');\n" . 
+		"initializeMenu('{$module[$i]}', '{$G['WEBROOT']}');\n" . 
                 "initializeConfigMenu('$module[$i]');\n"; 
     } 
 

@@ -57,17 +57,25 @@ class Query {
     }
 
     function get_query_string ($module, $format, $args) {
-       $query="";
+        $query="";
+
 	/* parse the args information */
         $a = explode("&", $args);
+
+        $bypass["start"] = 1; /* args specific to live! */
+        $bypass["end"] = 1;
+        $bypass["comonode"] = 1;
+        $bypass["module"] = 1;
+        $bypass["format"] = 1;
+
         for ($i=0; $i<count($a);$i++){
             $var = explode("=", $a[$i]);
-            if (!(("start" == $var[0]) || ("end" == $var[0]) || 
-		  ("comonode" == $var[0]) || ("module" == $var[0]) ||
-		  ("format" == $var[0]))) {
+            $key = $var[0];
+
+            if ($bypass[$key] != 1)
                 $query .= "&" . $a[$i];
-            }
         }
+
         if ($module != "netflow-anon") {
 	   $this->query_string  = "module=$module&start=$this->start&end=$this->end&wait=$this->wait&format=$format&granularity=$this->granularity" . $query;
         } else {
