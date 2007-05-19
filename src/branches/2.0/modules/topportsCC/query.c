@@ -116,6 +116,8 @@ QUERY_FORMATS_END
 
 DEFAULT_FORMAT = "pretty";
 
+static int result_count;
+
 void *
 qu_init(mdl_t *self, int format_id, hash_t *args)
 {
@@ -135,11 +137,11 @@ qu_init(mdl_t *self, int format_id, hash_t *args)
             break;
     }
 
-    return NULL;
+    return &result_count;
 }
 
 void
-qu_finish(mdl_t *self, int format_id, void *state)
+qu_finish(mdl_t *self, int format_id, int *state)
 {
     switch(format_id) {
         case FORMAT_HTML:
@@ -149,7 +151,7 @@ qu_finish(mdl_t *self, int format_id, void *state)
 }
 
 void
-print_rec(mdl_t *self, int format_id, record_t *rec, void *state)
+print_rec(mdl_t *self, int format_id, record_t *rec, int *state)
 {
     config_t *config = mdl_get_config(self, config_t);
     char *name;
@@ -170,7 +172,7 @@ print_rec(mdl_t *self, int format_id, record_t *rec, void *state)
             break;
         case FORMAT_HTML:
         case FORMAT_SIDEBOX:
-            mdl_printf(self, HTMLFMT, asctime(localtime(&ts)), rec->port,
+            mdl_printf(self, HTMLFMT, ++(*state), rec->proto,
                     getprotoname(rec->proto), name, rec->bytes, rec->pkts);
             break;
         case FORMAT_PLAIN:

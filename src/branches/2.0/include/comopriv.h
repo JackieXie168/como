@@ -395,4 +395,31 @@ void   mdl_deserialize (uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc,
 			mdl_priv_t priv);
 mdl_t *mdl_lookup(array_t *mdls, const char *name);
 
+/*
+ * supervisor.c
+ */
+typedef struct como_su como_su_t;
+struct como_su {
+    como_env_t *	env;
+    event_loop_t	el;
+    int			accept_fd;
+
+    array_t *		nodes;		/* node information */
+    
+    pool_t *		pool;		/* the pool used to allocate this
+					   structure */
+    alc_t *		alc;		/* the pool's allocator */
+
+    shmem_t *		shmem;		/* main shared memory used to store
+					   capture data structures, stats */
+    memmap_t *		memmap;
+    alc_t		shalc;
+
+    FILE *		logfile;	/* log file */
+    ipc_peer_t *	ca;		/* CAPTURE */
+    
+    pid_t		su_pid;
+};
+
+
 #endif /*COMOPRIV_H_*/

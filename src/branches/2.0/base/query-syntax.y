@@ -83,7 +83,7 @@ query_ast_t ast;
 %token <string> TOK_STRING
 
 %type <string> fullpath
-%type <string> particle
+%type <string> relpath
 %type <string> value
 
 %start query
@@ -99,26 +99,27 @@ query:
 blanks: blanks TOK_SPACE | TOK_SPACE;
 
 fullpath:
-    slashes {
-            $$ = como_asprintf("/");
-        }
-    | fullpath particle {
-            $$ = como_asprintf("%s%s", $1, $2);
-            free($1);
+    slashes relpath {
+            $$ = como_asprintf("/%s", $2);
             free($2);
         }
-    | particle {
+    | slashes {
+            $$ = como_asprintf("/");
+        }
+    ;
+
+relpath:
+    relpath slashes TOK_STRING {
+            $$ = como_asprintf("%s/%s", $1, $3);
+            free($1);
+            free($3);
+        }
+    | TOK_STRING {
             $$ = $1;
         }
     ;
 
 slashes: slashes TOK_SLASH | TOK_SLASH
-
-particle: slashes TOK_STRING {
-            $$ = como_asprintf("/%s", $2);
-            free($2);
-        }
-    ;
 
 /* if we have a question mark, we want arguments */
 arglist: TOK_QMARK inside_arglist |;
@@ -145,6 +146,7 @@ keyvalue:
             ast.keyvals[ast.nkeyvals].val = como_strdup("");
             ast.nkeyvals++;
         }
+    | { /* tolerate missing key=val */ }
     ;
 
 value:

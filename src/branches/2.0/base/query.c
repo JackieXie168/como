@@ -470,8 +470,6 @@ qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
  * 
  */
 
-#define query_ondemand(...)
-
 void
 query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	   UNUSED memmap_t * shmemmap, int client_fd, como_node_t * node)
@@ -600,7 +598,7 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
      * execute this query.
      */
     if (req.source) {
-        warn("TODO -- query_ondemand\n");
+        int node_id = 0;
 	query_ondemand(client_fd, &req, node_id); 
 	assert_not_reached();
     }

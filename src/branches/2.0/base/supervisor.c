@@ -46,29 +46,7 @@
 #include "query.h"	// XXX query();
 #include "ipc.h"
 
-typedef struct como_su {
-    como_env_t *	env;
-    event_loop_t	el;
-    int			accept_fd;
-
-    array_t *		nodes;		/* node information */
-    
-    pool_t *		pool;		/* the pool used to allocate this
-					   structure */
-    alc_t *		alc;		/* the pool's allocator */
-
-    shmem_t *		shmem;		/* main shared memory used to store
-					   capture data structures, stats */
-    memmap_t *		memmap;
-    alc_t		shalc;
-
-    FILE *		logfile;	/* log file */
-    ipc_peer_t *	ca;		/* CAPTURE */
-    
-    pid_t		su_pid;
-} como_su_t;
-
-como_su_t *s_como_su; /* used in cleanup only */
+como_su_t *s_como_su; /* used in cleanup and query-ondemand only */
 stats_t *como_stats;
 como_config_t *como_config;
 
@@ -721,6 +699,7 @@ como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
 	mdl->mdlname = alc_strdup(alc, def->mdlname);
 	mdl->streamsize = def->streamsize;
         mdl->filter = alc_strdup(alc, def->filter);
+        mdl->description = alc_strdup(alc, def->descr);
 	
 	if (mdl_load(mdl, PRIV_ISUPERVISOR) < 0) {
 	    //mdl_destroy(mdl);

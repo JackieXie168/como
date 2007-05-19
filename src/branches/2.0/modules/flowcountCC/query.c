@@ -110,7 +110,7 @@ print_rec(mdl_t *self, int format_id, record_t *r, qu_state_t *st)
     st->flow_count /= st->granularity; 
     switch(format_id) {
         case FORMAT_GNUPLOT:
-            mdl_printf(self, GNUPLOTFMT, r->ts, st->flow_count); 
+            mdl_printf(self, GNUPLOTFMT, TS2SEC(r->ts), st->flow_count); 
             break;
         case FORMAT_PRETTY: {
             time_t t = (time_t) TS2SEC(r->ts);

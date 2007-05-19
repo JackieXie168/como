@@ -16,6 +16,7 @@ SET(COMO_SRCS
   pktmeta.c
   query.c
   query-comms.c
+  query-ondemand.c
   radio.c
   services.c
   sniffers.c
