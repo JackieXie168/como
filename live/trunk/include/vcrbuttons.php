@@ -22,7 +22,7 @@ function zoom_in($start, $end, $node, $basequery, $timebound)
     $zstart = $start + floor($interval/4);
     $zend = $end - floor($interval/4);
     $button = "<a href=\"$basequery&start=$zstart&end=$zend\">";
-    $button = $button . "<img src=testin/$ABSROOT/images/zoom-in.png align=middle></a>";
+    $button = $button . "<img src=$WEBROOT/images/zoom-in.png align=middle></a>";
 
     return $button; 
 } 
