@@ -46,18 +46,9 @@
 #include "query.h"	// XXX query();
 #include "ipc.h"
 
-como_su_t *s_como_su; /* used in cleanup and query-ondemand only */
+como_su_t *s_como_su; /* used in cleanup, query and query-ondemand only */
 stats_t *como_stats;
 como_config_t *como_config;
-
-
-#define SIZEOF_LOGMSG_DOMAIN	8
-
-typedef struct logmsg {
-    char	domain[SIZEOF_LOGMSG_DOMAIN];
-    log_level_t	level;
-    char	message[0];
-} logmsg_t;
 
 /*
  * -- ipc_echo_handler()
@@ -69,12 +60,29 @@ typedef struct logmsg {
  *     files and better disk scheduling.
  * 
  */
+#if 0
 UNUSED static int 
 su_ipc_echo(UNUSED ipc_peer_t * sender, logmsg_t * m, UNUSED size_t len,
 	    UNUSED int swap, UNUSED void * user_data)
 {
     log_out(m->domain, m->level, m->message);
     return IPC_OK;
+}
+#endif
+
+static void
+launch_inline_query(void)
+{
+    ipc_peer_full_t *peer;
+    pid_t pid;
+    como_node_t *n = &array_at(s_como_su->nodes, como_node_t, 0);
+
+    /* the last loaded module is the one that needs to be queried */
+    s_como_su->query_module =
+        array_at(n->mdls, mdl_t *, n->mdls->len - 1)->name;
+    
+    peer = ipc_peer_child(COMO_QU, 0);
+    pid = start_child(peer, query_main_plain, s_como_su->memmap, 0, n);
 }
 
 /*
@@ -169,6 +177,15 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
              */
             debug("su_ipc_onconnect -- all procs ready, starting CA\n");
             ipc_send(como_su->ca, SU_CA_START, NULL, 0);
+
+            /*
+             * If we are running inline or on-demand, we can
+             * start querying the module
+             */
+            if (como_config->inline_mode)
+                launch_inline_query();
+            /*else if (como_config->ondemand_mode)
+                launch_ondemand_query();*/
         }
     }
 
@@ -287,7 +304,9 @@ cleanup()
  
     msg("--- about to exit... remove work directory %s\n",
         workdir);
-    asprintf(&cmd, "rm -rf %s\n", workdir);
+
+    asprintf(&cmd, "rm -rf %s %s\n", workdir,
+        como_config->inline_mode ? como_config->db_path : "");
     system(cmd);
     free(cmd);
     /* TODO wait for children processes */
@@ -486,7 +505,7 @@ como_node_handle_query(como_node_t * node)
      * start a query process. 
      */
     peer = ipc_peer_child(COMO_QU, cd);
-    pid = start_child(peer, query_main, s_como_su->memmap, cd, node);
+    pid = start_child(peer, query_main_http, s_como_su->memmap, cd, node);
     close(cd);
 }
 
@@ -500,6 +519,7 @@ como_node_listen(como_node_t * node)
     free(cp);
     return node->query_fd;
 }
+
 
 /*
  * -- como_su_run
@@ -558,7 +578,8 @@ como_su_run(como_su_t * como_su)
     for (i = 0; i < como_su->nodes->len; i++) {
 	como_node_t *node;
 	node = &array_at(como_su->nodes, como_node_t, i);
-	if (como_node_listen(node) != -1) {
+
+	if (!como_config->inline_mode && como_node_listen(node) != -1) {
 	    event_loop_add(&como_su->el, node->query_fd);
 	    FD_SET(node->query_fd, &nodes_fds);
 	}
@@ -627,7 +648,7 @@ como_su_run(como_su_t * como_su)
         mm = (secs % 3600) / 60;
         ss = secs % 60; 
 
-	if (runmode == RUNMODE_NORMAL) {
+	if (! como_config->silent_mode) {
 	    fprintf(stderr, 
 		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%uMB (%d); "
 		"pkts %llu drops %d; mdl %d/%d\r", 
@@ -783,93 +804,6 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 
 }
 
-#if 0
-static como_config_t *
-fake_config(alc_t *alc)
-{
-    static como_config_t config;
-    
-    array_t *sniffer_defs;
-    array_t *mdl_defs;
-    
-    sniffer_def_t s;
-    mdl_def_t m;
-    
-    
-    sniffer_defs = array_new(sizeof(sniffer_def_t));
-    mdl_defs = array_new(sizeof(mdl_def_t));
-
-    s.name = como_strdup("pcap");
-    s.device = como_strdup("../example-trace.pcap");
-    s.args = NULL;
-    array_add(sniffer_defs, &s);
-
-    m.name = como_strdup("ethtypes");
-    m.mdlname = como_strdup("ethtypesCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-    m.name = como_strdup("topaddr");
-    m.mdlname = como_strdup("topaddrCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-    m.name = como_strdup("tophwaddr");
-    m.mdlname = como_strdup("tophwaddrCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-    m.name = como_strdup("topports");
-    m.mdlname = como_strdup("topportsCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-#if MONO
-    m.name = como_strdup("traffic2");
-    m.mdlname = como_strdup("trafficCCS");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-#endif
-
-    m.name = como_strdup("traffic");
-    m.mdlname = como_strdup("trafficCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    hash_insert_string(m.args, "interval", "1");
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-    m.name = como_strdup("trace");
-    m.mdlname = como_strdup("traceCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-    m.name = como_strdup("protocol");
-    m.mdlname = como_strdup("protocolCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-    m.name = como_strdup("tuple");
-    m.mdlname = como_strdup("tupleCC");
-    m.args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    m.streamsize = 512*1024*1024; /* 512 MB */
-    array_add(mdl_defs, &m);
-
-    config.sniffer_defs = sniffer_defs;
-    config.mdl_defs = mdl_defs;
-    config.mono_path = "mono";
-    
-    return &config;    
-}
-#endif
-
-
 /*
  * -- main
  *
@@ -907,6 +841,21 @@ main(int argc, char ** argv)
     como_su->env->libdir = "./modules";
     como_su->env->dbdir = "/tmp/como-data";
 
+    /*
+     * parse command line and configuration files
+     */
+    como_config = configure(argc, argv, &alc, &cfg);
+    como_su->env->libdir = como_config->libdir;
+    como_su->env->dbdir = como_config->db_path;
+
+    if (como_config->silent_mode)
+        log_set_level(LOG_LEVEL_ERROR); /* disable most UI messages */
+
+    if (como_config->inline_mode) { /* use temporary storage */
+        char *template = como_asprintf("%sXXXXXX", como_config->db_path);
+        como_su->env->dbdir = como_config->db_path = mkdtemp(template);
+    }
+
     /* initialize node 0 */
     memset(&node, 0, sizeof(node));
     node.id = 0;
@@ -933,11 +882,6 @@ main(int argc, char ** argv)
     msg("  Copyright (c) 2004-2006, Intel Corporation\n"); 
     msg("  All rights reserved.\n"); 
     msg("----------------------------------------------------\n");
-
-    /*
-     * parse command line and configuration files
-     */
-    como_config = configure(argc, argv, &alc, &cfg);
 
     notice("... workdir %s\n", como_su->env->workdir);
     notice("log level: %s\n", log_level_name(log_get_level())); 
@@ -968,7 +912,7 @@ main(int argc, char ** argv)
 
     /* spawn STORAGE */
     spawn_child(COMO_ST, como_config->storage_path, como_su->env->workdir,
-            "134217728", NULL);
+            "134217728", como_config->silent_mode ? "1" : "0", NULL);
 
     /* read ASN file */
     asn_readfile(como_config->asn_file);
@@ -980,9 +924,8 @@ main(int argc, char ** argv)
         /* start the CAPTURE process */
 	ca = ipc_peer_child(COMO_CA, 0);
 	pid = start_child(ca, capture_main, como_su->memmap, -1, node0);
-	if (pid < 0) {
-	    warn("Can't start CAPTURE\n");
-	}
+	if (pid < 0)
+	    error("Can't start CAPTURE\n");
     }
 
     setproctitle("SUPERVISOR");

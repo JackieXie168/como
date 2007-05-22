@@ -269,7 +269,9 @@ void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
 void export_main  (ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 
-void query_main  (ipc_peer_full_t * child, ipc_peer_t * parent,
+void query_main_http(ipc_peer_full_t * child, ipc_peer_t * parent,
+		   memmap_t * shmemmap,int client_fd, como_node_t * node);
+void query_main_plain(ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 
 
@@ -419,6 +421,11 @@ struct como_su {
     ipc_peer_t *	ca;		/* CAPTURE */
     
     pid_t		su_pid;
+
+    char *              query_module;   /* when running in inline mode or on
+                                         * demand, indicates what module has
+                                         * to be queried for.
+                                         */
 };
 
 

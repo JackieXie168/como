@@ -101,60 +101,9 @@ print_rec(mdl_t *self, int format_id, record_t *r, void * state)
 }
 
 
-#if 0
-static int  
-replay(void * self, char *buf, char *out, size_t * len, 
-       int left)
+void
+replay(mdl_t * self, record_t *r, void *state)
 {
-    pkt_t * pkt; 
-    size_t need; 
-
-    if (buf == NULL) {
-	/* this module does not buffer any records */
-	*len = 0;
-	return 0;
-    }
-
-    pkt = (pkt_t *) buf; 
-    need = ntohl(COMO(caplen)) + sizeof(pkt_t);
-    if (*len < need) 
-	return -1; 
-
-    bcopy(buf, out, need); 
-    pkt = (pkt_t *) out;
-
-    /* Convert the header data into host byte order */
-#ifdef BUILD_FOR_ARM
-    COMOX(ts, NTOHLL(COMO(ts))); 
-    COMOX(len, ntohl(COMO(len))); 
-    COMOX(caplen, ntohl(COMO(caplen))); 
-    COMOX(type, ntohs(COMO(type)));
-    COMOX(dropped, ntohs(COMO(dropped)));
-    COMOX(l2type, ntohs(COMO(l2type))); 
-    COMOX(l3type, ntohs(COMO(l3type))); 
-    COMOX(l4type, ntohs(COMO(l4type))); 
-    COMOX(l2ofs, ntohs(COMO(l2ofs))); 
-    COMOX(l3ofs, ntohs(COMO(l3ofs))); 
-    COMOX(l4ofs, ntohs(COMO(l4ofs))); 
-    COMOX(l7ofs, ntohs(COMO(l7ofs))); 
-#else
-    COMO(ts) = NTOHLL(COMO(ts)); 
-    COMO(len) = ntohl(COMO(len)); 
-    COMO(caplen) = ntohl(COMO(caplen)); 
-    COMO(type) = ntohs(COMO(type));
-    COMO(dropped) = ntohs(COMO(dropped));
-    COMO(l2type) = ntohs(COMO(l2type)); 
-    COMO(l3type) = ntohs(COMO(l3type)); 
-    COMO(l4type) = ntohs(COMO(l4type)); 
-    COMO(l2ofs) = ntohs(COMO(l2ofs)); 
-    COMO(l3ofs) = ntohs(COMO(l3ofs)); 
-    COMO(l4ofs) = ntohs(COMO(l4ofs)); 
-    COMO(l7ofs) = ntohs(COMO(l7ofs)); 
-#endif
-
-    COMO(payload) = out + sizeof(pkt_t);
-    *len = need;
-    return 0;	
+    mdl_write(self, (char *)r->buf, r->len);
 }
-#endif
 

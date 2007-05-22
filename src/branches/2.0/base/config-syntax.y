@@ -48,14 +48,6 @@
 
 #define YYERROR_VERBOSE
 
-struct _listnode
-{
-    char *string;
-    struct _listnode *next;
-    struct _listnode *prev;
-};
-typedef struct _listnode listnode_t;
-
 int yclex(void);
 void ycerror(char *fmt, ...);
 

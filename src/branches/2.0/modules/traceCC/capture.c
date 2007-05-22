@@ -62,5 +62,6 @@ capture(mdl_t *self, pkt_t *pkt, void *state)
     ((pkt_t *) r->buf)->payload = NULL;
     ((pkt_t *) r->buf)->caplen = len;
     memcpy(r->buf + sizeof(pkt_t), COMO(payload), len);
+    r->len = len + sizeof(pkt_t);
 }
 

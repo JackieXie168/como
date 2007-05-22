@@ -308,6 +308,7 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	    ib->proc.qu->finish = shobj_symbol(ib->shobj, "qu_finish", FALSE);
 	    ib->proc.qu->print_rec = shobj_symbol(ib->shobj, "print_rec", TRUE);
 	    ib->proc.qu->formats = shobj_symbol(ib->shobj, "qu_formats", TRUE);
+	    ib->proc.qu->replay = shobj_symbol(ib->shobj, "replay", TRUE);
 
             strptr = shobj_symbol(ib->shobj, "qu_dflt_fmt", TRUE);
 	    ib->proc.qu->dflt_format = strptr ? *strptr : NULL;
