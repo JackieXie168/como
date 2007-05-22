@@ -351,7 +351,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         initialize_module_def(&mdl, alc);
         mdl.name = como_strdup(buf);
 
-        if (args != NULL) { /* parse the arguments */
+        while (args != NULL) { /* parse the arguments */
             char *s1, *s2;
 
             s1 = strchr(args, '=');
@@ -368,6 +368,11 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 
             hash_insert_string(mdl.args, como_strdup(args),
                                 como_strdup(s1 + 1));
+	
+	    if (s2)	
+	    	args = s2 + 1;
+	    else
+	        args = NULL;
         }
 
         define_module(&mdl, cfg);
