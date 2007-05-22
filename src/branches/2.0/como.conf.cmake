@@ -214,7 +214,7 @@ end
 module "topaddr"
     source "topaddrCC"
     description "Popular destination IP Addresses"
-    args "use-dst"
+    args "use-dst" = "1"
 end
 
 #module "tophwaddr"
