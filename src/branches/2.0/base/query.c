@@ -56,22 +56,6 @@
  * then terminates.
  */
 
-#define HTTP_RESPONSE_400 \
-"HTTP/1.0 400 Bad Request\r\n" \
-"Content-Type: text/plain\r\n\r\n"
-
-#define HTTP_RESPONSE_404 \
-"HTTP/1.0 404 Not Found\r\n" \
-"Content-Type: text/plain\r\n\r\n"
-
-#define HTTP_RESPONSE_405 \
-"HTTP/1.0 405 Method Not Allowed\r\n" \
-"Content-Type: text/plain\r\n\r\n"
-
-#define HTTP_RESPONSE_500 \
-"HTTP/1.0 500 Internal Server Error\r\n" \
-"Content-Type: text/plain\r\n\r\n"
-
 enum {
     FORMAT_COMO = -2,
     FORMAT_RAW = -3
@@ -97,9 +81,9 @@ extern como_config_t *como_config;
  *
  */
 static char * 
-query_validate(qreq_t * req, como_node_t * node)
+query_validate(qreq_t * req, como_node_t * node, int *errcode)
 {
-    static char httpstr[2048];
+    static char errorstr[2048];
     mdl_t *mdl;
     mdl_iquery_t *iq;
 
@@ -108,9 +92,9 @@ query_validate(qreq_t * req, como_node_t * node)
          * no module defined. return warning message and exit
          */
         warn("query module not defined\n");
-	sprintf(httpstr, HTTP_RESPONSE_400
-		"Module name is missing\n"); 
-        return httpstr;
+	sprintf(errorstr, "Module name is missing\n"); 
+        *errcode = 400;
+        return errorstr;
     }
 
     if (req->start > req->end) {
@@ -120,9 +104,9 @@ query_validate(qreq_t * req, como_node_t * node)
         warn("query start time (%d) after end time (%d)\n", 
                req->start, req->end);
          
-	sprintf(httpstr, HTTP_RESPONSE_400
-		"Query start time after end time\n");
-        return httpstr;
+	sprintf(errorstr, "Query start time after end time\n");
+        *errcode = 400;
+        return errorstr;
     }
 
     /* check if the module is present in the current configuration */
@@ -144,10 +128,11 @@ query_validate(qreq_t * req, como_node_t * node)
 	if (alias == NULL) {
 #endif
 	    warn("module %s not found\n", req->module);
-	    sprintf(httpstr, HTTP_RESPONSE_404
+	    sprintf(errorstr, 
 		    "Module `%s' not found in the current configuration\n",
 		    req->module);
-	    return httpstr;
+            *errcode = 404;
+	    return errorstr;
 #if 0
 	} 
 	req->mdl = module_lookup(alias->module, node_id); 
@@ -203,11 +188,11 @@ query_validate(qreq_t * req, como_node_t * node)
 	     * the module exists but doesn't support the given output format
 	     */
 	    warn("module `%s' does not support format `%s'\n",
-		 req->module, req->format);
-	    sprintf(httpstr, HTTP_RESPONSE_500
-		    "Module `%s' does not support format `%s'\n", 
+                    req->module, req->format);
+	    sprintf(errorstr, "Module `%s' does not support format `%s'\n",
 		    req->module, req->format);
-	    return httpstr;
+            *errcode = 500;
+	    return errorstr;
 	}
 	req->qu_format = &iq->formats[i];
     }
@@ -220,10 +205,10 @@ query_validate(qreq_t * req, como_node_t * node)
 	 * the module exists but does not support printing records. 
 	 */
 	warn("module `%s' does not have print()\n", req->module);
-	sprintf(httpstr, HTTP_RESPONSE_500
-                "Module `%s' does not have print() callback\n", 
+	sprintf(errorstr, "Module `%s' does not have print() callback\n",
 		req->module);
-	return httpstr;
+        *errcode = 500;
+	return errorstr;
     } 
 
     if (iq->replay == NULL && req->qu_format == &QU_FORMAT_COMO) {
@@ -231,10 +216,10 @@ query_validate(qreq_t * req, como_node_t * node)
 	 * the module does not have the replay() callback
 	 */
         warn("module `%s' does not have replay()\n", req->module);
-	sprintf(httpstr, HTTP_RESPONSE_500
-		"Module `%s' does not have replay() callback\n", 
+	sprintf(errorstr, "Module `%s' does not have replay() callback\n", 
 		req->module);
-	return httpstr;
+        *errcode = 500;
+	return errorstr;
     }
 
     /* validation of virtual nodes and ondemand queries */
@@ -446,6 +431,31 @@ qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
 }
 #endif
 
+
+static void
+query_initialize(ipc_peer_t *parent, int *supervisor_fd)
+{
+    void *como_qu;
+
+    log_set_program("QU");
+    *supervisor_fd = ipc_peer_get_fd(parent);
+    memset(&como_qu, 0, sizeof(como_qu));
+
+    /* 
+     * wait for the debugger to attach
+     */
+    DEBUGGER_WAIT_ATTACH("qu");
+
+    ipc_set_user_data(&como_qu);
+#ifdef MONO_SUPPORT
+    proxy_mono_init(como_config->mono_path);
+#endif
+
+    /* XXX needed? handle the message from SUPERVISOR */ 
+    /*while (s_wait_for_modules) 
+	ipc_handle(supervisor_fd); */
+}
+
 /*
  * -- query
  *
@@ -471,67 +481,25 @@ qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
  */
 
 void
-query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-	   UNUSED memmap_t * shmemmap, int client_fd, como_node_t * node)
+query_generic_main(int client_fd, como_node_t * node, qreq_t *qreq)
 {
-    qreq_t req;
     int storage_fd, file_fd, supervisor_fd;
     off_t ofs; 
     int mode, ret;
-    char *httpstr;
     timestamp_t ts, end_ts;
     char *dbname;
-    void *como_qu;
     int format_id;
     mdl_iquery_t *iq;
     alc_t *alc;
     uint8_t *sbuf;
     void *mdlrec;
-
-    log_set_program("QU");
-    supervisor_fd = ipc_peer_get_fd(parent);
-    memset(&como_qu, 0, sizeof(como_qu));
-
-    /* 
-     * wait for the debugger to attach
-     */
-    DEBUGGER_WAIT_ATTACH("qu");
-
-    ipc_set_user_data(&como_qu);
-#ifdef MONO_SUPPORT
-    proxy_mono_init(como_config->mono_path);
-#endif
-
-    /* XXX needed? handle the message from SUPERVISOR */ 
-    /*while (s_wait_for_modules) 
-	ipc_handle(supervisor_fd); */
- 
-    ret = query_recv(&req, client_fd, como_stats->ts); 
-
-    if (ret < 0) {
-    	if (ret != -1) {
-	    switch (ret) {
-	    case -400:
-		httpstr = HTTP_RESPONSE_400;
-		break;
-	    case -405:
-		httpstr = HTTP_RESPONSE_405;
-		break;
-	    }
-	    if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) {
-		error("sending data to the client [%d]", client_fd);
-	    }
-    	}
-	close(client_fd);
-	close(supervisor_fd);
-	return; 
-    } 
+    qreq_t req = *qreq;
 
     if (req.mode == QMODE_SERVICE) {
 	service_fn service = service_lookup(req.service);
-	if (service) {
+	if (service)
 	    service(client_fd, node, &req);
-	}
+
 	close(client_fd);
 	close(supervisor_fd);
 	return;
@@ -557,39 +525,6 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
                     hash_iter_get_value(&it));
     }
 #endif
-
-    /* 
-     * validate the query and find the relevant modules. 
-     *
-     * req.mdl will contain a pointer to the module that has to 
-     * run the print() callback. 
-     * 
-     * req.src will point to the module that has to run load() or 
-     * replay() callback. 
-     * 
-     * req.mdl and req.src are the same if load()/print() is all we 
-     * need to do. they will be different for the load()/replay()/... 
-     * cycle. 
-     * 
-     */
-    httpstr = query_validate(&req, node);
-    if (httpstr != NULL) { 
-	if (como_write(client_fd, httpstr, strlen(httpstr)) < 0) 
-	    error("sending data to the client [%d]", client_fd); 
-        close(client_fd);
-        close(supervisor_fd);
-	return;
-    }
-
-    /*
-     * produce a response header
-     */
-    httpstr = NULL;
-    httpstr = como_asprintf("HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n",
-			    req.qu_format->content_type);
-    if (como_write(client_fd, httpstr, strlen(httpstr)) < 0)
-	error("sending data to the client");
-    free(httpstr);
 
     /* 
      * if we have to retrieve the data using the replay callback of
@@ -627,9 +562,15 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     ts = TIME2TS(req.start, 0);
     end_ts = TIME2TS(req.end, 0);
 
-#define module_db_record_replay(...) NULL
 #define handle_replay_fail(...) error("TODO: handle_replay_fail\n")
     ofs = csseek_ts(file_fd, ts);
+    /*
+     * set up a FILE * to be able to fprintf() to the user.
+     */
+    iq->clientfile = fdopen(client_fd, "w");
+    if (iq->clientfile == NULL) 
+        error("cannot fdopen() on client_fd\n");
+
     if (ofs >= 0) {
 	/* at this point at least one record exists as we seek on it */
 	switch (format_id) {
@@ -640,17 +581,12 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	     */
 	    break;
 	default:
-            /*
-             * set up a FILE * to be able to fprintf() to the user.
-             */
-            iq->clientfile = fdopen(client_fd, "w");
-            if (iq->clientfile == NULL) 
-                error("cannot fdopen() on client_fd\n");
-
 	    /*
              * first print callback. we need to make sure that req.args != NULL. 
 	     * if this is not the case we just make something up
 	     */
+            if (req.args == NULL)
+                req.args = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
 	    iq->state = iq->init(req.mdl, format_id, req.args);
             debug("module `%s': qu_init() done\n", req.mdl->name);
 
@@ -680,10 +616,6 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    }
 	    
 	    switch (format_id) {
-	    case FORMAT_COMO: 	
-		if (module_db_record_replay(req.mdl, ptr, client_fd))
-		    handle_replay_fail(req.mdl);
-		break;
 
 	    case FORMAT_RAW: 
 		/* send the data to the query client */
@@ -692,13 +624,21 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		     err(EXIT_FAILURE, "sending data to the client"); 
 		break;
 
+	    case FORMAT_COMO: 	
 	    default:
                 sbuf = (uint8_t *) &rec->ts;
                 alc = como_alc();
                 debug("deserializing record\n", req.mdl->name);
                 req.mdl->priv->mdl_record.deserialize(&sbuf, &mdlrec, alc);
-                debug("calling print_rec\n", req.mdl->name);
-                iq->print_rec(req.mdl, format_id, mdlrec, iq->state);
+
+                if (format_id == FORMAT_COMO) {
+                    debug("calling %s's replay\n", req.mdl->name);
+                    iq->replay(req.mdl, mdlrec, iq->state);
+                }
+                else {
+                    debug("calling %s's print_rec\n", req.mdl->name);
+                    iq->print_rec(req.mdl, format_id, mdlrec, iq->state);
+                }
                 break;
 	    }
 	    
@@ -719,3 +659,145 @@ query_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     close(storage_fd);
     close(supervisor_fd);
 }
+
+#define HTTP_RESPONSE_400 \
+"HTTP/1.0 400 Bad Request\r\n" \
+"Content-Type: text/plain\r\n\r\n"
+
+#define HTTP_RESPONSE_404 \
+"HTTP/1.0 404 Not Found\r\n" \
+"Content-Type: text/plain\r\n\r\n"
+
+#define HTTP_RESPONSE_405 \
+"HTTP/1.0 405 Method Not Allowed\r\n" \
+"Content-Type: text/plain\r\n\r\n"
+
+#define HTTP_RESPONSE_500 \
+"HTTP/1.0 500 Internal Server Error\r\n" \
+"Content-Type: text/plain\r\n\r\n"
+
+
+static void
+write_http_errcode(int errcode, int fd)
+{
+    char *httpstr;
+
+    switch(errcode) {
+        case 400:
+            httpstr = HTTP_RESPONSE_400;
+            break;
+        case 405:
+            httpstr = HTTP_RESPONSE_405;
+            break;
+        case 404:
+            httpstr = HTTP_RESPONSE_404;
+            break;
+        case 500:
+            httpstr = HTTP_RESPONSE_500;
+            break;
+    }
+
+    if (como_write(fd, httpstr, strlen(httpstr)) < 0)
+        error("sending data to the client [%d]", fd);
+}
+
+
+void
+query_main_http(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
+	   UNUSED memmap_t * shmemmap, int client_fd, como_node_t * node)
+{
+    int supervisor_fd, ret, errcode;
+    qreq_t req;
+    char *errstr, *httpstr;
+    
+    query_initialize(parent, &supervisor_fd);
+    ret = query_recv(&req, client_fd, como_stats->ts); 
+
+    if (ret < 0) {
+    	if (ret != -1)
+            write_http_errcode(-ret, client_fd);
+	close(client_fd);
+	close(supervisor_fd);
+	return; 
+    } 
+
+    /* 
+     * validate the query and find the relevant modules. 
+     *
+     * req.mdl will contain a pointer to the module that has to 
+     * run the print() callback. 
+     * 
+     * req.src will point to the module that has to run load() or 
+     * replay() callback. 
+     * 
+     * req.mdl and req.src are the same if load()/print() is all we 
+     * need to do. they will be different for the load()/replay()/... 
+     * cycle. 
+     * 
+     */
+    errstr = query_validate(&req, node, &errcode);
+    if (errstr != NULL) { 
+        write_http_errcode(errcode, client_fd);
+	if (como_write(client_fd, errstr, strlen(errstr)) < 0) 
+	    error("sending data to the client [%d]", client_fd); 
+        close(client_fd);
+        close(supervisor_fd);
+	return;
+    }
+
+    /*
+     * produce a response header
+     */
+    httpstr = NULL;
+    httpstr = como_asprintf("HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n",
+			    req.qu_format->content_type);
+    if (como_write(client_fd, httpstr, strlen(httpstr)) < 0)
+	error("sending data to the client");
+    free(httpstr);
+
+    /*
+     * now do the generic query tasks
+     */
+    query_generic_main(client_fd, node, &req);
+}
+
+
+void
+query_main_plain(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
+	   UNUSED memmap_t * shmemmap, int client_fd, como_node_t * node)
+{
+    extern como_su_t *s_como_su;
+    int supervisor_fd, errcode;
+    char *errstr;
+    qreq_t req;
+
+    query_initialize(parent, &supervisor_fd);
+
+    /*
+     * this is an inline or ondemand query. we run the last module
+     * in the config.
+     */
+    bzero(&req, sizeof(req));
+    req.module = s_como_su->query_module;
+    req.start = 0;
+    req.end = -1;
+    req.wait = 1;
+
+    warn("validating query for module `%s'\n", req.module);
+    errstr = query_validate(&req, node, &errcode);
+    if (errstr != NULL) { 
+	if (como_write(client_fd, errstr, strlen(errstr)) < 0) 
+	    error("sending data to the client [%d]", client_fd); 
+        close(client_fd);
+        close(supervisor_fd);
+	return;
+    }
+
+    warn("it worked. now doing the query\n");
+
+    /*
+     * now do the generic query tasks
+     */
+    query_generic_main(client_fd, node, &req);
+}
+

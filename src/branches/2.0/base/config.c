@@ -39,8 +39,9 @@
 
 #define USAGE \
     "usage: %s [-c config-file] [-D db-path] [-L libdir] [-p query-port] " \
-    "[-m mem-size] [-v logflags] " \
-    "[-s sniffer[:device[:\"args\"]]] [module[:\"module args\"] " \
+    "[-m mem-size] [-v logflags] [-i] [-S] [-t path_to_storage] " \
+    "[-s sniffer[,device[,\"args\"]]] [module[:arg1=value1,arg2=value2..] " \
+    "[-q queryarg1=value1,arg2=value2..] "\
     "[filter]]\n"
 
 void
@@ -82,6 +83,8 @@ define_module(mdl_def_t *mdl, como_config_t *cfg)
         mdl->output = como_strdup(mdl->name);
     if (mdl->mdlname == NULL)
         mdl->mdlname = como_strdup(mdl->name);
+    if (mdl->descr == NULL)
+        mdl->descr = como_strdup("");
 
     array_add(cfg->mdl_defs, mdl);
 }
@@ -188,7 +191,7 @@ set_memsize(int64_t size, como_config_t *cfg)
 como_config_t *
 configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 {
-    static const char *opts = "hc:D:L:p:m:v:x:s:e";
+    static const char *opts = "hiSt:q:c:D:L:p:m:v:x:s:e";
     int i, c, cfg_file_count = 0;
     #define MAX_CFGFILES 1024
     char *cfg_files[MAX_CFGFILES];
@@ -206,6 +209,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     cfg->db_path = "/tmp/como-data";
     cfg->filesize = 128 * 1024 * 1024;
     cfg->libdir = DEFAULT_LIBDIR;
+    cfg->query_args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
 
     while ((c = getopt(argc, argv, opts)) != -1) {
         switch(c) {
@@ -224,11 +228,11 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 	    break;
 
 	case 'D':	/* db-path */
-	    cfg->db_path = optarg;
+	    cfg->db_path = como_strdup(optarg);
 	    break;
 
 	case 'L':	/* libdir */
-	    cfg->libdir = optarg;
+	    cfg->libdir = como_strdup(optarg);
 	    break;
 
 	case 'p':
@@ -239,8 +243,8 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         {
             char *name, *device, *args;
 
-            name = como_strdup(strtok(optarg, ":"));
-            device = como_strdup(strtok(NULL, ":"));
+            name = como_strdup(strtok(optarg, ","));
+            device = como_strdup(strtok(NULL, ","));
             args = como_strdup(strtok(NULL, ""));
 
             if (name && device)
@@ -262,6 +266,50 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
             m->logflags = set_flags(m->logflags, optarg);
             break;
 #endif
+        case 'i': /* run inline: also silent & exit when done */
+            cfg->inline_mode = 1;
+            cfg->silent_mode = 1;
+            cfg->exit_when_done = 1;
+            break;
+
+        case 'S': /* silent mode */
+            cfg->silent_mode = 1;
+            break;
+
+        case 'q': { /* query args for inline mode */
+            char *str, *strbak;
+            strbak = str = como_strdup(optarg);
+
+            while (str != NULL) {
+                char *k, *v;
+                char *s1 = strchr(str, '=');
+                char *s2 = strchr(str, ',');
+
+                if (s1 == NULL || (s2 && s2 < s1))
+                    error("Unable to parse query arguments `%s'\n", str);
+
+                k = str;
+                *s1 = '\0';
+                v = s1 + 1;
+
+                if (s2 == NULL)
+                    str = NULL;
+                else {
+                    *s2 = '\0';
+                    str = s2 + 1;
+                }
+
+                hash_insert_string(cfg->query_args, como_strdup(k),
+                    como_strdup(v));
+            }
+
+            free(strbak);
+            break;
+        }
+
+        case 't':   /* path to storage */
+            cfg->storage_path = como_strdup(optarg);
+            break;
 
         case '?':   /* unknown */
             error("unrecognized cmdline option (%s)\n\n" USAGE "\n",
@@ -279,13 +327,68 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     for (i = 0; i < cfg_file_count; i++) /* parse config files here */
         parse_config_file(cfg_files[i], alc, cfg);
 
-    if (cfg_file_count == 0) /* no cfg files given, try using the default */
+    /*
+     * no cfg files given. try using the default,
+     * except if running inline.
+     */
+    if (cfg_file_count == 0 && ! cfg->inline_mode)
         parse_config_file(DEFAULT_CFGFILE, alc, cfg);
 
     while (optind < argc) { /* module definitions follow */
-        warn("TODO: specify modules in cmdline (%s)\n", argv[optind]);
+        char *args = NULL, *buf, *s;
+        mdl_def_t mdl;
+
+        bzero(&mdl, sizeof(mdl));
+
+        buf = como_strdup(argv[optind]);
+
+        s = strchr(buf, ':');
+        if (s != NULL) {
+            *s = '\0';
+            args = s + 1;
+        }
+
+        initialize_module_def(&mdl, alc);
+        mdl.name = como_strdup(buf);
+
+        if (args != NULL) { /* parse the arguments */
+            char *s1, *s2;
+
+            s1 = strchr(args, '=');
+            s2 = strchr(args, ',');
+
+            /* no '=', or ',' before '=' */
+            if (s1 == NULL || (s2 != NULL && s2 < s1))
+                error("parse error in cmdline args for module `%s'. Expected "
+                    "key1=value1,key2=value2..\n", mdl.name);
+            
+            *s1 = '\0'; /* null-terminate key. value resides at s1 + 1 */
+            if (s2 != NULL)
+                *s2 = '\0'; /* null-terminate value */
+
+            hash_insert_string(mdl.args, como_strdup(args),
+                                como_strdup(s1 + 1));
+        }
+
+        define_module(&mdl, cfg);
+        free(buf);
         optind++;
     }
+
+    /*
+     * final configuration tweak: if we are running in inline mode,
+     * discard all module definitions but the last one. this way
+     * we avoid extra work that the user is not interested on.
+     */
+    if (cfg->inline_mode) {
+        array_t *a = array_new(sizeof(mdl_def_t));
+        mdl_def_t *d =
+            &array_at(cfg->mdl_defs, mdl_def_t, cfg->mdl_defs->len - 1); 
+        array_add(a, d);
+        cfg->mdl_defs = a;
+    }
+
+    /* TODO extensive checking to remove all small mem leaks */
 
     return cfg;
 }

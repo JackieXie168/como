@@ -119,8 +119,6 @@ default_handler(const char * program, const char * domain, log_level_t level,
 		tv.tv_sec % 86400, (long int) tv.tv_usec,
 		program, domain, pre, message);
     }
-
-
 }
 
 static log_handler_t s_initial_handler = {
@@ -159,7 +157,6 @@ log_set_level(log_level_t level)
 {
     s_log.level = level;
 }
-
 
 log_level_t
 log_get_level()
@@ -221,51 +218,6 @@ log_set_use_color(int use_color)
     s_use_color = use_color;
 }
 
-
-void
-log_out(const char *domain, log_level_t level,
-	const char *format, ...)
-{
-    va_list ap;
-    size_t len;
-    struct timeval tv;
-    log_handler_t *h;
-
-    if (!(s_log.level & level))
-        return;
-    
-    gettimeofday(&tv, NULL);
-    
-    va_start(ap, format);
-    
-    /* format the message */
-    len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
-    
-    /* manage the message buffer */
-    if (len > s_log.buf_len) {
-    	if (s_log.buf_len * 2 > len) {
-	    s_log.buf_len *= 2;
-    	} else {
-	    s_log.buf_len = len;
-	    if (s_log.buf_len % 4) {
-		s_log.buf_len += 4 - s_log.buf_len % 4;
-	    }
-    	}
-    	s_log.buf = como_realloc(s_log.buf, s_log.buf_len);
-	/* CHECKME: need va_end, va_start? */
-	len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
-    }
-    
-    h = log_handler_lookup(domain);
-    h->user_fn(s_log.program, domain, level, s_log.buf, tv, h->user_data);
-    
-    va_end(ap);
-    
-    if (level & LOG_LEVEL_ERROR)
-	abort();
-}
-
-
 void
 log_outv(const char *domain, log_level_t level, const char *format, va_list ap)
 {
@@ -301,6 +253,18 @@ log_outv(const char *domain, log_level_t level, const char *format, va_list ap)
     if (level & LOG_LEVEL_ERROR)
 	abort();
 }
+
+void
+log_out(const char *domain, log_level_t level,
+	const char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    log_outv(domain, level, format, ap);
+    va_end(ap);
+}
+
 
 /** 
  * -- log_level_name

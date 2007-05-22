@@ -1801,8 +1801,9 @@ main(int argc, char ** argv)
     char *location;
     uint64_t maxfilesize;
 
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s su_location maxfilesize\n", argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "usage: %s su_location maxfilesize running_inline\n",
+            argv[0]);
 	exit(EXIT_FAILURE);
     }
     if (argv[1][0] != '/') {
@@ -1818,6 +1819,10 @@ main(int argc, char ** argv)
 
     location = como_strdup(argv[1]);
     como_init("ST", argc, argv);
+
+    if (atoi(argv[3])) /* inline mode */
+        log_set_level(LOG_LEVEL_ERROR); /* be silent */
+
     setproctitle("STORAGE");
 
     /* init data structures */

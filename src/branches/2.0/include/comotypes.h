@@ -232,7 +232,7 @@ typedef void   (*qu_finish_fn) (mdl_t * self, int format_id, void * state);
  * TODO: qu_replay function
  *
  */
-typedef void   (*qu_replay_fn) (void);
+typedef void   (*qu_replay_fn) (mdl_t *self, void *record, void *state);
 
 struct mdl {
     /* public fields */
@@ -342,6 +342,9 @@ struct _como_config {
     size_t      shmem_size;
 
     int         exit_when_done;
+    int         inline_mode;
+    int         silent_mode;
+    hash_t *    query_args;
 };
 
 

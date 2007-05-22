@@ -93,18 +93,18 @@ FOREACH (MODULE ${MODULES})
   SET(MODULE_CFLAGS "-I${MODULE_SOURCE_DIR}")
 
   # macro to check a file exists & print a notice
-  MACRO(CHECK_EXISTANCE _file _what)
+  MACRO(CHECK_EXISTENCE _file _what)
     IF(NOT EXISTS ${_file})
       MESSAGE(FATAL_ERROR "module ${MODULE} is missing ${_file}")
     ENDIF(NOT EXISTS ${_file})
   MESSAGE("\t\t${_what}: file ${_file}")
-  ENDMACRO(CHECK_EXISTANCE)
+  ENDMACRO(CHECK_EXISTENCE)
 
   # check for required files
   MESSAGE("\t. ${MODULE}")
-  CHECK_EXISTANCE(${MODULE_DATADEF} "datadef")
-  CHECK_EXISTANCE(${MODULE_CAPTURE} "capture")
-  CHECK_EXISTANCE(${MODULE_INIT}    "init")
+  CHECK_EXISTENCE(${MODULE_DATADEF} "datadef")
+  CHECK_EXISTENCE(${MODULE_CAPTURE} "capture")
+  CHECK_EXISTENCE(${MODULE_INIT}    "init")
 
   MAKE_DIRECTORY(${MODULE_BINARY_DIR})
 
@@ -178,12 +178,12 @@ qu_impl_t qu_impl = ${QULANG};
 ")
 
   IF(EXPORT_IN_C)
-    CHECK_EXISTANCE(${MODULE_EXPORT_C} "export")
+    CHECK_EXISTENCE(${MODULE_EXPORT_C} "export")
     ADD_CFILE(${MODULE_EXPORT_C})
   ENDIF(EXPORT_IN_C)
 
   IF(QUERY_IN_C)
-    CHECK_EXISTANCE(${MODULE_QUERY_C} "query")
+    CHECK_EXISTENCE(${MODULE_QUERY_C} "query")
     ADD_CFILE(${MODULE_QUERY_C})
   ENDIF(QUERY_IN_C)
 
@@ -213,7 +213,7 @@ qu_impl_t qu_impl = ${QULANG};
 
   # Compile C# code
   IF(EXISTS ${MODULE_EXPORT_CSHARP})
-    CHECK_EXISTANCE(${MODULE_EXPORT_CSHARP} "export") # just for the output
+    CHECK_EXISTENCE(${MODULE_EXPORT_CSHARP} "export") # just for the output
 
     # Custom target that must be always built
     ADD_CUSTOM_TARGET("${MODULE}-Csharp" ALL DEPENDS ${MODULE_DLL})

@@ -124,9 +124,10 @@ sniffer_start(sniffer_t * s)
     int ret;
     char *http_res = NULL; /* HTTP response */
     char *res_end, *msg;
+    const char *path;
     size_t http_res_sz;
     size_t rdn, cpn;
-    
+
     me->sniff.fd = create_socket(me->device, 0);
     if (me->sniff.fd < 0) { 
 	warn("sniffer-como: cannot create socket: %s\n", strerror(errno)); 
@@ -134,7 +135,9 @@ sniffer_start(sniffer_t * s)
     } 
     
     /* build the HTTP request */
-    asprintf(&msg, "GET %s HTTP/1.0\r\n\r\n", me->device + strlen("http:/"));
+    path = me->device + strlen("http://");
+    path = strchr(path, '/');
+    asprintf(&msg, "GET %s HTTP/1.0\r\n\r\n", path);
     ret = como_write(me->sniff.fd, msg, strlen(msg));
     free(msg);
     if (ret < 0) {

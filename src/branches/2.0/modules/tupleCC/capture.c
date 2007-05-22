@@ -111,6 +111,7 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
         r->proto = proto;
 	r->bytes = 0;
 	r->pkts = 0;
+        flowtable_insert(st->table, hash, (void *) r);
     }
 
     /* update the record */
