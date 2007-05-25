@@ -49,6 +49,10 @@
 
 #include "ppbuf.c"
 
+#ifdef LOADSHED
+#include "lsfunc.h"
+#endif
+
 /* poll time (in usec) */
 #define POLL_WAIT   1000
 
@@ -87,24 +91,6 @@ static struct {
     cabuf_cl_t *clients[CA_MAXCLIENTS];
     fd_set clients_fds;
 } s_cabuf;
-
-typedef struct como_ca {
-    int			accept_fd;
-    array_t *		mdls;
-    sniffer_list_t *	sniffers;
-    int			sniffers_count;
-
-    // capbuf
-    event_loop_t	el;
-    int			ready;
-    timestamp_t		min_flush_ivl;
-    memmap_t *		shmemmap;
-    alc_t		shalc;
-
-    timestamp_t		live_th;
-
-    uint32_t            timebin;    /* capture timebin (in microseconds) */
-} como_ca_t;
 
 como_ca_t *s_como_ca;
 
@@ -392,9 +378,15 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
      */
     debug("calling batch_filter with pkts %p, count %d\n",
 	  *batch->pkts0, batch->count);
-    start_tsctimer(map.stats->ca_filter_timer);
+    start_tsctimer(como_stats->ca_filter_timer);
     which = batch_filter(batch, como_ca);
-    end_tsctimer(map.stats->ca_filter_timer);
+    end_tsctimer(como_stats->ca_filter_timer);
+
+#ifdef LOADSHED
+    /* apply load shedding to the batch
+     * before processing it with the modules */
+    batch_loadshed_pre(batch, como_ca, which);
+#endif
 
     /*
      * Now browse through the classifiers and perform the capture
@@ -416,9 +408,17 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
 	debug("sending %d packets to module %s for processing\n",
 	      batch->count, mdl->name);
 
-	start_tsctimer(map.stats->ca_module_timer);
+	start_tsctimer(como_stats->ca_module_timer);
+#ifdef LOADSHED
+        end_profiler(como_ca->ls.ca_oh_prof);
+        start_profiler(ic->ls.prof);
+#endif
         mdl_batch_process(mdl, batch, which);
-	end_tsctimer(map.stats->ca_module_timer);
+#ifdef LOADSHED
+        end_profiler(ic->ls.prof);
+        start_profiler(como_ca->ls.ca_oh_prof);
+#endif
+	end_tsctimer(como_stats->ca_module_timer);
 	which += batch->count;	/* next module, new list of packets */
     }
 
@@ -468,6 +468,12 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
 	if (ret != IPC_OK)
 	    panic("IPC_FLUSH failed!");
     }
+#endif
+
+#ifdef LOADSHED
+    /* get feedback for the load shedding scheme after having
+     * processed the batch with the modules */
+    batch_loadshed_post(como_ca);
 #endif
 
     /*  
@@ -522,6 +528,10 @@ handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 
     ic->ivl_mem = pool_create();
     pool_alc_init(ic->ivl_mem, &mdl->priv->alc);
+
+#ifdef LOADSHED
+    ls_init_mdl(mdl->name, &ic->ls);
+#endif
 
     /* TODO locate the first empty entry in the array */
     array_add(como_ca->mdls, &mdl);
@@ -694,7 +704,7 @@ ca_ipc_flush(procname_t sender, UNUSED int fd,
 	/* ok, move freed memory into the main memory */
 	memmap_destroy(em->shared_map);
 
-	map.stats->table_queue--;
+	como_stats->table_queue--;
 
 	/* NOTE: *em was allocated inside em->shared_map so memmap_destroy
 	 * will deallocate that too. That's why we use em_next.
@@ -1531,7 +1541,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
         }
 
 	msg("no sniffers left. waiting for queries\n");
-	print_timers();
+	ca_print_timers();
     }
 
     return active;
@@ -1652,7 +1662,12 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
     /* initialize the timers */
 
-    init_timers();
+    ca_init_timers();
+#ifdef LOADSHED
+    ca_init_profilers(&como_ca);
+    reset_profiler(como_ca.ls.ca_oh_prof);
+    start_profiler(como_ca.ls.ca_oh_prof);
+#endif
 
     /*
      * This is the actual main loop where we monitor the various
@@ -1671,7 +1686,7 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	int i;
 	int touched;
 
-	start_tsctimer(map.stats->ca_full_timer);
+	start_tsctimer(como_stats->ca_full_timer);
 
 	/* add sniffers to the select structure as is necessary */
 
@@ -1689,7 +1704,7 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
 	/* process any IPC messages that have turned up */
 
-	start_tsctimer(map.stats->ca_loop_timer);
+	start_tsctimer(como_stats->ca_loop_timer);
 
 	for (i = 0; n_ready > 0 && i < como_ca.el.max_fd; i++) {
 
@@ -1781,10 +1796,10 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
 	    /* capture more packets */
 
-	    start_tsctimer(map.stats->ca_sniff_timer);
+	    start_tsctimer(como_stats->ca_sniff_timer);
 	    res = sniff->cb->next(sniff, max_no, como_ca.min_flush_ivl,
 				  first_ref_pkt, &drops);
-	    end_tsctimer(map.stats->ca_sniff_timer);
+	    end_tsctimer(como_stats->ca_sniff_timer);
 
 	    /* tell the ppbuf we're done with capture */
 
@@ -1839,9 +1854,9 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		batch_export(batch, &como_ca);
 
 	    /* process the batch */
-	    start_tsctimer(como_ca.stats->ca_pkts_timer);
+	    start_tsctimer(como_stats->ca_pkts_timer);
 	    como_stats->ts = batch_process(batch, &como_ca);
-	    end_tsctimer(como_ca.stats->ca_pkts_timer);
+	    end_tsctimer(como_stats->ca_pkts_timer);
 
 	    /* update the stats */
 	    como_stats->pkts += batch->count;

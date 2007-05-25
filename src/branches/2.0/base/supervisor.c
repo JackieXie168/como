@@ -839,7 +839,7 @@ main(int argc, char ** argv)
     como_env_init();
     como_su->env = como_env();
     como_su->env->libdir = "./modules";
-    como_su->env->dbdir = "/tmp/como-data";
+    como_su->env->dbdir = "/tmp/como-2.0-data";
 
     /*
      * parse command line and configuration files

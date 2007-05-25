@@ -36,6 +36,10 @@
 #include "comotypes.h"
 #include <stdlib.h> /* PATH_MAX */
 
+#ifdef LOADSHED
+#include "loadshed.h"
+#endif
+
 /*
  * como.c
  */
@@ -263,6 +267,27 @@ typedef struct {
     char        mdl_name[MDLNAME_MAX];
 } msg_del_module_t;
 
+typedef struct como_ca {
+    int			accept_fd;
+    array_t *		mdls;
+    sniffer_list_t *	sniffers;
+    int			sniffers_count;
+
+    // capbuf
+    event_loop_t	el;
+    int			ready;
+    timestamp_t		min_flush_ivl;
+    memmap_t *		shmemmap;
+    alc_t		shalc;
+
+    timestamp_t		live_th;
+
+    uint32_t            timebin;    /* capture timebin (in microseconds) */
+#ifdef LOADSHED
+    ls_t                ls;         /* load shedding data structure */
+#endif
+} como_ca_t;
+
 void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
 		   memmap_t * shmemmap,int client_fd, como_node_t * node);
 
@@ -350,6 +375,9 @@ struct mdl_icapture {
     
     int			use_shmem;
     ipc_peer_t *	export;
+#ifdef LOADSHED
+    mdl_ls_t            ls;
+#endif
 };
 
 struct mdl_isupervisor {

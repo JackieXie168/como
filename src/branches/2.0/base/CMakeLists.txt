@@ -1,6 +1,10 @@
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/base)
 
+IF(ENABLE_LOADSHED)
+  INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/loadshed)
+ENDIF(ENABLE_LOADSHED)
+
 SET(STORAGE_SRCS
   storage.c
 )
@@ -24,7 +28,7 @@ SET(COMO_SRCS
   util-process.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
-#  ${COMO_SOURCE_DIR}/lib/bitmap.c
+  ${COMO_SOURCE_DIR}/lib/bitmap.c
 #  ${COMO_SOURCE_DIR}/lib/hash.c
 #  ${COMO_SOURCE_DIR}/lib/heap.c
 #  ${COMO_SOURCE_DIR}/lib/macutils.c
@@ -49,6 +53,16 @@ IF(MONO_FOUND)
   SET_SOURCE_FILES_PROPERTIES(${COMO_SOURCE_DIR}/mono/proxy-mono.c
       PROPERTIES COMPILE_FLAGS ${MONO_CFLAGS})
 ENDIF(MONO_FOUND)
+
+IF(ENABLE_LOADSHED)
+  SET(COMO_SRCS
+    ${COMO_SRCS}
+    ${COMO_SOURCE_DIR}/loadshed/loadshed.c
+    ${COMO_SOURCE_DIR}/loadshed/feats.c
+    ${COMO_SOURCE_DIR}/loadshed/prediction.c
+    ${COMO_SOURCE_DIR}/loadshed/ls-profiling.c
+  )
+ENDIF(ENABLE_LOADSHED)
 
 #
 # Create target for the filter parser

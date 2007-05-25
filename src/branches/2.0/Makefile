@@ -25,7 +25,7 @@ cmake:
 	    cmake .. -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(MAKEFLAGS)
 
 distclean:
-	rm -rf {release,debug,debugfull,custom}
+	rm -rf {release,debug,debugfull,custom,ls}
 
 # wrappers to the two most used build types
 release: BUILD_TYPE:=release
@@ -37,4 +37,10 @@ debug: BUILD_TYPE:=debug
 debug: all
 debug-install: BUILD_TYPE:=debug
 debug-install: install
+
+# wrappers for load shedding build type
+ls: BUILD_TYPE:=ls
+ls: all
+ls-install: BUILD_TYPE:=ls
+ls-install: install
 

@@ -45,10 +45,11 @@
 #include "como.h"
 #include "comotypes.h"
 
-extern struct _como map;		/* global state */
+/* stats 'inherited' from SU */
+extern stats_t *como_stats;
 
 
-static void
+void
 enable_profiling()
 {
     /* To get timing information after fork() the child has to call
@@ -74,32 +75,30 @@ enable_profiling()
  * -- init_timers
  * 
  * initialize timers for profiling CAPTURE and 
- * EXPORT perforamce 
+ * EXPORT performance 
  *
  */
 void
-init_timers() 
+ca_init_timers() 
 {
-    switch (getprocclass(map.whoami)) {
-    case CAPTURE: 
-	map.stats->ca_full_timer = new_tsctimer("full");
-	map.stats->ca_loop_timer = new_tsctimer("loop");
-	map.stats->ca_pkts_timer = new_tsctimer("pkts");
-	map.stats->ca_filter_timer = new_tsctimer("filter");
-	map.stats->ca_module_timer = new_tsctimer("modules");
-	map.stats->ca_updatecb_timer = new_tsctimer("update");
-	map.stats->ca_sniff_timer = new_tsctimer("sniffer");
-	break;
+    como_stats->ca_full_timer = new_timer("full");
+    como_stats->ca_loop_timer = new_timer("loop");
+    como_stats->ca_pkts_timer = new_timer("pkts");
+    como_stats->ca_filter_timer = new_timer("filter");
+    como_stats->ca_module_timer = new_timer("modules");
+    como_stats->ca_updatecb_timer = new_timer("update");
+    como_stats->ca_sniff_timer = new_timer("sniffer");
+}
 
-    case EXPORT:
-	map.stats->ex_full_timer = new_tsctimer("full");
-	map.stats->ex_loop_timer = new_tsctimer("loop");
-	map.stats->ex_table_timer = new_tsctimer("table");
-	map.stats->ex_export_timer = new_tsctimer("export");
-	map.stats->ex_store_timer = new_tsctimer("store");
-	map.stats->ex_mapping_timer = new_tsctimer("mapping");
-	break;
-    }
+void
+ex_init_timers()
+{
+    como_stats->ex_full_timer = new_timer("full");
+    como_stats->ex_loop_timer = new_timer("loop");
+    como_stats->ex_table_timer = new_timer("table");
+    como_stats->ex_export_timer = new_timer("export");
+    como_stats->ex_store_timer = new_timer("store");
+    como_stats->ex_mapping_timer = new_timer("mapping");
 }
 	
      
@@ -110,29 +109,27 @@ init_timers()
  *
  */
 void
-print_timers() 
+ca_print_timers() 
 {
-    switch (getprocclass(map.whoami)) {
-    case CAPTURE: 
-	logmsg(LOGTIMER, "timing after %llu packets\n", map.stats->pkts);
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_full_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_loop_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_sniff_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_pkts_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_filter_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_module_timer));
-	logmsg(0, "\t%s\n", print_tsctimer(map.stats->ca_updatecb_timer));
-	break; 
+    msg("timing after %llu packets\n", como_stats->pkts);
+    msg("\t%s\n", print_timer(como_stats->ca_full_timer));
+    msg("\t%s\n", print_timer(como_stats->ca_loop_timer));
+    msg("\t%s\n", print_timer(como_stats->ca_sniff_timer));
+    msg("\t%s\n", print_timer(como_stats->ca_pkts_timer));
+    msg("\t%s\n", print_timer(como_stats->ca_filter_timer));
+    msg("\t%s\n", print_timer(como_stats->ca_module_timer));
+    msg("\t%s\n", print_timer(como_stats->ca_updatecb_timer));
+}
 
-    case EXPORT:
-        logmsg(LOGTIMER, "\t%s\n", print_tsctimer(map.stats->ex_full_timer));
-        logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_loop_timer));
-        logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_table_timer));
-        logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_store_timer));
-        logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_mapping_timer));
-        logmsg(0, "\t%s\n", print_tsctimer(map.stats->ex_export_timer));
-	break;
-    }
+void
+ex_print_timers()
+{
+    msg("\t%s\n", print_timer(como_stats->ex_full_timer));
+    msg("\t%s\n", print_timer(como_stats->ex_loop_timer));
+    msg("\t%s\n", print_timer(como_stats->ex_table_timer));
+    msg("\t%s\n", print_timer(como_stats->ex_store_timer));
+    msg("\t%s\n", print_timer(como_stats->ex_mapping_timer));
+    msg("\t%s\n", print_timer(como_stats->ex_export_timer));
 }
 
 
@@ -143,29 +140,24 @@ print_timers()
  * 
  */
 void
-reset_timers() 
+ca_reset_timers() 
 {
-    switch (getprocclass(map.whoami)) {
-    case CAPTURE: 
-	reset_tsctimer(map.stats->ca_full_timer);
-	reset_tsctimer(map.stats->ca_loop_timer);
-	reset_tsctimer(map.stats->ca_sniff_timer);
-	reset_tsctimer(map.stats->ca_pkts_timer);
-	reset_tsctimer(map.stats->ca_filter_timer);
-	reset_tsctimer(map.stats->ca_module_timer);
-	reset_tsctimer(map.stats->ca_updatecb_timer);
-	break;
-
-    case EXPORT:
-        reset_tsctimer(map.stats->ex_full_timer);
-        reset_tsctimer(map.stats->ex_loop_timer);
-        reset_tsctimer(map.stats->ex_table_timer);
-        reset_tsctimer(map.stats->ex_store_timer);
-        reset_tsctimer(map.stats->ex_mapping_timer);
-        reset_tsctimer(map.stats->ex_export_timer);
-	break;
-    }
+    reset_timer(como_stats->ca_full_timer);
+    reset_timer(como_stats->ca_loop_timer);
+    reset_timer(como_stats->ca_sniff_timer);
+    reset_timer(como_stats->ca_pkts_timer);
+    reset_timer(como_stats->ca_filter_timer);
+    reset_timer(como_stats->ca_module_timer);
+    reset_timer(como_stats->ca_updatecb_timer);
 }
 
- 
-
+void
+ex_reset_timers()
+{
+    reset_timer(como_stats->ex_full_timer);
+    reset_timer(como_stats->ex_loop_timer);
+    reset_timer(como_stats->ex_table_timer);
+    reset_timer(como_stats->ex_store_timer);
+    reset_timer(como_stats->ex_mapping_timer);
+    reset_timer(como_stats->ex_export_timer);
+}

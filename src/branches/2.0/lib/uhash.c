@@ -59,7 +59,7 @@ uhash_initialize(uhash_t *h)
  *
  * Hash the given data. Always call uhash_restart before uhash.
  * Can be called several times to compute the hash key of a
- * a non-contiguous memory region (do not call uhash_restart
+ * non-contiguous memory region (do not call uhash_restart
  * between the calls to uhash). The hash value is the last return
  * value. Do never hash more than H3_KEYLEN bytes.
  */

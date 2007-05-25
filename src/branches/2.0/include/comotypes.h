@@ -68,7 +68,7 @@ typedef struct como_node como_node_t;
 typedef struct mdl		mdl_t;          /* module package */
 typedef struct mdl_ibase	mdl_ibase_t;
 
-typedef struct _tsc		tsc_t; 		/* timers (using TSC) */
+typedef struct _timer		ctimer_t; 	/* timers */
 typedef struct _statistics	stats_t; 	/* statistic counters */
 
 typedef struct metadesc	metadesc_t;
@@ -236,15 +236,15 @@ typedef void   (*qu_replay_fn) (mdl_t *self, void *record, void *state);
 
 struct mdl {
     /* public fields */
-    timestamp_t	flush_ivl;
-    char *	name;
-    char *	description;
-    char *	filter;
-    char *	mdlname;
-    uint64_t    streamsize;
-    void *	config;
+    timestamp_t	    flush_ivl;
+    char *	    name;
+    char *	    description;
+    char *	    filter;
+    char *	    mdlname;
+    uint64_t        streamsize;
+    void *	    config;
     /* private state */
-    mdl_ibase_t * priv;
+    mdl_ibase_t *   priv;
 };
 
 
@@ -349,9 +349,9 @@ struct _como_config {
 
 
 /* 
- * timers (using TSC) 
+ * timers
  */
-struct _tsc {
+struct _timer {
     char * name;                /* timer name */
     int n;                      /* number of samples */
     u_int64_t value;            /* latest value */
@@ -382,21 +382,21 @@ struct _statistics {
     uint64_t load_6h[360];	/* bytes load in last 6h */
     uint64_t load_1d[1440];	/* bytes load in last 1d */
 
-    /* we define here a set of timers that use TSC */
-    tsc_t * ca_full_timer; 	/* capture entire mainloop */
-    tsc_t * ca_loop_timer; 	/* capture mainloop */
-    tsc_t * ca_pkts_timer; 	/* capture process pkts */
-    tsc_t * ca_filter_timer;	/* capture filter */
-    tsc_t * ca_module_timer;	/* capture modules */
-    tsc_t * ca_updatecb_timer;	/* capture updatecb */
-    tsc_t * ca_sniff_timer;	/* capture sniffer */
+    /* we define here a set of timers */
+    ctimer_t * ca_full_timer; 	/* capture entire mainloop */
+    ctimer_t * ca_loop_timer; 	/* capture mainloop */
+    ctimer_t * ca_pkts_timer; 	/* capture process pkts */
+    ctimer_t * ca_filter_timer;	/* capture filter */
+    ctimer_t * ca_module_timer;	/* capture modules */
+    ctimer_t * ca_updatecb_timer;   /* capture updatecb */
+    ctimer_t * ca_sniff_timer;	/* capture sniffer */
 
-    tsc_t * ex_full_timer; 	/* export entire mainloop */
-    tsc_t * ex_loop_timer; 	/* export mainloop */
-    tsc_t * ex_table_timer; 	/* export process table */
-    tsc_t * ex_store_timer;	/* export store table */
-    tsc_t * ex_export_timer;	/* export export()/store() callbacks */
-    tsc_t * ex_mapping_timer;	/* export export()/store() callbacks */
+    ctimer_t * ex_full_timer; 	/* export entire mainloop */
+    ctimer_t * ex_loop_timer; 	/* export mainloop */
+    ctimer_t * ex_table_timer; 	/* export process table */
+    ctimer_t * ex_store_timer;	/* export store table */
+    ctimer_t * ex_export_timer;	/* export export()/store() callbacks */
+    ctimer_t * ex_mapping_timer;/* export export()/store() callbacks */
 };
 
 typedef enum meta_flags_t {
