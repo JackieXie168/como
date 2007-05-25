@@ -61,6 +61,8 @@ struct _como_ex {
 /* config 'inherited' from supervisor */
 extern como_config_t *como_config;
 
+/* stats 'inherited' from SU */
+extern stats_t *como_stats;
 
 /* 
  * -- handle_su_ex_add_module
@@ -331,17 +333,17 @@ ex_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
 
 	if (em->ct->records) {
 	    /* process capture table and update export table */
-	    start_tsctimer(map.stats->ex_table_timer);
+	    start_tsctimer(como_stats->ex_table_timer);
 	    process_table(em->ct, mdl);
-	    end_tsctimer(map.stats->ex_table_timer);
+	    end_tsctimer(como_stats->ex_table_timer);
 	} else {
 	    assert(em->ct->flexible);
 	}
 
 	/* process export table, storing/discarding records */
-	start_tsctimer(map.stats->ex_store_timer);
+	start_tsctimer(como_stats->ex_store_timer);
 	store_records(mdl, em->ct->ivl, em->ct->ts);
-	end_tsctimer(map.stats->ex_store_timer);
+	end_tsctimer(como_stats->ex_store_timer);
     }
 
     /*
@@ -366,7 +368,7 @@ ex_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void * buf,
 {
     /* only the parent process should send this message */
     assert(sender == map.parent);
-    map.stats = *((void **) buf);
+    como_stats = *((void **) buf);
     ipc_send(sibling(CAPTURE), IPC_MODULE_START, buf, len); 
 }
 
@@ -509,7 +511,7 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
  
     /* allocate the timers */
-    init_timers();
+    ex_init_timers();
 
     /*
      * The real main loop. First process the flow_table's we 
@@ -522,7 +524,7 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
         int i;
         int ipcr;
 
-	start_tsctimer(map.stats->ex_full_timer); 
+	start_tsctimer(como_stats->ex_full_timer); 
 
         n_ready = event_loop_select(&como_ex.el, &r);
 	if (n_ready < 0) {
@@ -532,7 +534,7 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    error("error in the select (%s)\n", strerror(errno));
 	}
 
-	start_tsctimer(map.stats->ex_loop_timer); 
+	start_tsctimer(como_stats->ex_loop_timer); 
 
     	for (i = 0; n_ready > 0 && i < como_ex.el.max_fd; i++) {
 	    if (!FD_ISSET(i, &r))
@@ -548,12 +550,12 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    n_ready--;
 	}
 
-	end_tsctimer(map.stats->ex_loop_timer); 
-	end_tsctimer(map.stats->ex_full_timer); 
+	end_tsctimer(como_stats->ex_loop_timer); 
+	end_tsctimer(como_stats->ex_full_timer); 
 
 	/* store profiling information */
-	print_timers();
-	reset_timers();
+	ex_print_timers();
+	ex_reset_timers();
     }
 
     exit(EXIT_FAILURE); /* never reached */

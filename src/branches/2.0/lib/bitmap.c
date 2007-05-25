@@ -221,19 +221,6 @@ estimate_unique_keys(bitmap_t *bm)
     return -((double) bm->nbits) * log(v);
 }
 
-#if 0
-void 
-dump_bitmap(bitmap_t *bm)
-{
-    size_t i;
-
-    for (i = 0; i < bm->nbits; i++) {
-        printf("%d", get_bit(bm, i));
-        if (i % 4 == 3)
-            printf(" ");
-    }
-    printf("\n");
-}
 
 static int zeros_in_char[256] = {
     8, 7, 7, 6, 7, 6, 6, 5, 7, 6, 6, 5, 6, 5, 5, 4,
@@ -254,6 +241,7 @@ static int zeros_in_char[256] = {
     4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0
 };
 
+
 void
 or_bitmaps(bitmap_t *dest, bitmap_t *src)
 {
@@ -268,5 +256,18 @@ or_bitmaps(bitmap_t *dest, bitmap_t *src)
 
     dest->zeros = zeros;
 }
-#endif
 
+#if 0
+void 
+dump_bitmap(bitmap_t *bm)
+{
+    size_t i;
+
+    for (i = 0; i < bm->nbits; i++) {
+        printf("%d", get_bit(bm, i));
+        if (i % 4 == 3)
+            printf(" ");
+    }
+    printf("\n");
+}
+#endif

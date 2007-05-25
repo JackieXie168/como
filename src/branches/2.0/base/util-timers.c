@@ -38,6 +38,7 @@
 #include <sys/types.h>
 
 #include "como.h"
+#include "comopriv.h"
 
 /* 
  * -- rdtsc()
@@ -59,42 +60,42 @@ rdtsc(void)
 
 
 /* 
- * -- new_tsctimer()
+ * -- new_timer()
  * 
  * allocate a new tsc_t data structure and initilize it
  */
-tsc_t *
-new_tsctimer(char * name)
+ctimer_t *
+new_timer(char * name)
 {
-    tsc_t * t; 
+    ctimer_t * t; 
 
-    t = safe_calloc(1, sizeof(tsc_t)); 
-    t->name = safe_strdup(name); 
+    t = como_new0(ctimer_t);
+    t->name = como_strdup(name); 
     t->min = ~0; 
     return t;
 }
 
 
 /* 
- * -- destroy_tsctimer()
+ * -- destroy_timer()
  * 
  * free the tsc_t data structure;
  */
 void 
-destroy_tsctimer(tsc_t * t)
+destroy_timer(ctimer_t * t)
 {
-    safe_free(t->name); 
-    safe_free(t); 
+    free(t->name); 
+    free(t); 
 }
 
 
 /* 
- * -- reset_tsctimer()
+ * -- reset_timer()
  * 
- * resets an existing tsc_t data structure 
+ * resets an existing ctimer_t data structure 
  */
 void 
-reset_tsctimer(tsc_t * t)
+reset_timer(ctimer_t * t)
 {
     assert(t != NULL); 
     t->n = 0; 
@@ -104,31 +105,29 @@ reset_tsctimer(tsc_t * t)
 }
 
 
-/* 
- * -- start_tsctimer
- * 
- * gather first TSC reading. 
- * this is going to be the reference for future readings. 
+/*
+ * -- start_timer
+ *
+ * given the initial counter reading, start a timer
+ *
  */
 __inline__ void
-start_tsctimer(tsc_t *t)
+start_timer(ctimer_t *t, uint64_t first_value)
 {
-    t->value = rdtsc(); 
+    t->value = first_value;
 }
 
 
-/* 
- * -- end_tsctimer
- * 
- * gather another TSC reading and compute the difference with 
- * previous reading. also update min, max and total.  
+/*
+ * -- end_timer
+ *
+ * given the final counter reading, compute the difference with
+ * previous reading. also update min, max and total.
  */
 __inline__ void
-end_tsctimer(tsc_t *t)
+end_timer(ctimer_t *t, uint64_t last_value)
 {
-    uint64_t x = rdtsc();
-
-    t->value = x - t->value; 
+    t->value = last_value - t->value;
     if (t->value < t->min)
 	t->min = t->value;
     if (t->value > t->max)
@@ -139,12 +138,50 @@ end_tsctimer(tsc_t *t)
 
 
 /* 
+ * -- start_tsctimer
+ * 
+ * gather first TSC reading. 
+ * this is going to be the reference for future readings. 
+ */
+__inline__ void
+start_tsctimer(ctimer_t *t)
+{
+    start_timer(t, rdtsc());
+}
+
+
+/* 
+ * -- end_tsctimer
+ * 
+ * gather another TSC reading and call end_timer to finish the job
+ *
+ */
+__inline__ void
+end_tsctimer(ctimer_t *t)
+{
+    end_timer(t, rdtsc());
+}
+
+
+/*
+ * -- get_cur_sample
+ *
+ * return the last sample taken
+ */
+__inline uint64_t
+get_last_sample(ctimer_t *t)
+{
+    return ((t->n)? t->value : 0);
+}
+
+
+/* 
  * -- get_avg_sample
  * 
  * return the average over all samples. 
  */
 __inline__ uint64_t
-get_avg_sample(tsc_t *t)
+get_avg_sample(ctimer_t *t)
 { 
     return ((t->n)? (t->total / t->n) : 0); 
 }
@@ -156,7 +193,7 @@ get_avg_sample(tsc_t *t)
  * return the minimum over all samples. 
  */
 __inline__ uint64_t
-get_min_sample(tsc_t *t)
+get_min_sample(ctimer_t *t)
 { 
     return ((t->n)? t->min : 0); 
 }
@@ -168,19 +205,19 @@ get_min_sample(tsc_t *t)
  * return the maximum over all samples. 
  */
 __inline__ uint64_t
-get_max_sample(tsc_t *t)
+get_max_sample(ctimer_t *t)
 { 
     return ((t->n)? t->max : 0); 
 }
 
 
 /* 
- * -- print_tsctimer 
+ * -- print_timer 
  *
  * returns a string for pretty-printing the samples
  */
 char * 
-print_tsctimer(tsc_t *t) 
+print_timer(ctimer_t *t) 
 { 
     static char str[1024]; 
 

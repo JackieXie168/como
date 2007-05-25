@@ -66,9 +66,10 @@ char get_bit(bitmap_t *bm, int bit);
 
 double estimate_unique_keys(bitmap_t *bm);
 
+void or_bitmaps(bitmap_t *dest, bitmap_t *src);
+
 #if 0
 void dump_bitmap(bitmap_t *bm);
-void or_bitmaps(bitmap_t *dest, bitmap_t *src);
 #endif
 
 #endif

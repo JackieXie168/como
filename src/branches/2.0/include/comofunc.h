@@ -142,27 +142,33 @@ char * strchomp     (char *str);
  */
 #ifdef ENABLE_PROFILING 
 
-tsc_t * new_tsctimer(char *);
-void destroy_tsctimer(tsc_t *);
-void reset_tsctimer(tsc_t *);
-void start_tsctimer(tsc_t *);
-void end_tsctimer(tsc_t *);
-char * print_tsctimer(tsc_t *);
-uint64_t get_avg_tscsample(tsc_t *);
-uint64_t get_max_tscsample(tsc_t *);
-uint64_t get_min_tscsample(tsc_t *);
+ctimer_t * new_timer(char *);
+void destroy_timer(ctimer_t *);
+void reset_timer(ctimer_t *);
+void start_tsctimer(ctimer_t *);
+void end_tsctimer(ctimer_t *);
+void start_timer(ctimer_t *, uint64_t);
+void end_timer(ctimer_t *, uint64_t);
+char * print_timer(ctimer_t *);
+uint64_t get_last_sample(ctimer_t *);
+uint64_t get_avg_sample(ctimer_t *);
+uint64_t get_max_sample(ctimer_t *);
+uint64_t get_min_sample(ctimer_t *);
 
 #else 
 
-#define new_tsctimer(x)
-#define destroy_tsctimer(x)
-#define reset_tsctimer(x)
+#define new_timer(x)
+#define destroy_timer(x)
+#define reset_timer(x)
 #define start_tsctimer(x)
 #define end_tsctimer(x);
-#define print_tsctimer(x)
-#define get_avg_tscsample(x)
-#define get_max_tscsample(x)
-#define get_min_tscsample(x)
+#define start_timer(x);
+#define end_timer(x);
+#define print_timer(x)
+#define get_last_sample(x)
+#define get_avg_sample(x)
+#define get_max_sample(x)
+#define get_min_sample(x)
 
 #endif
 
@@ -189,15 +195,23 @@ void schedule();
  */
 #ifdef ENABLE_PROFILING 
 
-void init_timers(void); 
-void print_timers(void); 
-void reset_timers(void); 
+void ca_init_timers(void); 
+void ex_init_timers(void); 
+void ca_print_timers(void); 
+void ex_print_timers(void); 
+void ca_reset_timers(void); 
+void ex_reset_timers(void); 
+void enable_profiling(void);
 
 #else
 
-#define init_timers()
-#define print_timers()
-#define reset_timers()
+#define ca_init_timers()
+#define ex_init_timers()
+#define ca_print_timers()
+#define ex_print_timers()
+#define ca_reset_timers()
+#define ex_reset_timers()
+#define enable_profiling();
 
 #endif
 
