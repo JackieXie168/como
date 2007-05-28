@@ -23,7 +23,7 @@ cmake:
 	    cmake .. -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(MAKEFLAGS)
 
 distclean:
-	rm -rf {release,debug,debugfull,custom}
+	rm -rf release debug debugfull custom
 
 # wrappers to the two most used build types
 release: BUILD_TYPE:=release

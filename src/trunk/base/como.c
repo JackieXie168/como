@@ -55,6 +55,59 @@
 struct _como map;
 
 
+/* 
+ * -- welcome_message 
+ * 
+ * print welcome message to stdout with version information, 
+ * copyright and information from the processing of the config 
+ * file (i.e., sniffers, modules, logflags, etc.). We use a 
+ * much simpler form when running in inline mode. 
+ * 
+ */
+void 
+welcome_message() 
+{ 
+    source_t * src; 
+    int idx;
+
+    switch (map.runmode) { 
+    case RUNMODE_NORMAL: 
+	logmsg(LOGUI, "----------------------------------------------------\n");
+	logmsg(LOGUI, "  CoMo v%s (built %s %s)\n",
+			    COMO_VERSION, __DATE__, __TIME__ ); 
+	logmsg(LOGUI, "  Copyright (c) 2004-2007, Intel Corporation\n"); 
+	logmsg(LOGUI, "  All rights reserved.\n"); 
+	logmsg(LOGUI, "----------------------------------------------------\n");
+	logmsg(V_LOGUI, "... workdir %s\n", map.workdir);
+	logmsg(LOGUI, "... log level: %s\n", loglevel_name(map.logflags)); 
+	
+	for (src = map.sources; src; src = src->next) 
+	    logmsg(LOGUI, "... sniffer [%s] %s\n", src->cb->name, src->device);
+
+	for (idx = 0; idx <= map.module_last; idx++) {
+	    module_t *mdl = &map.modules[idx];
+	    
+	    if (mdl->status != MDL_ACTIVE)
+		continue;
+
+            logmsg(LOGUI, "... module%s %s [%d][%d] ",
+                   (mdl->running == RUNNING_ON_DEMAND) ? " on-demand" : "",
+                   mdl->name, mdl->node, mdl->priority);
+            logmsg(LOGUI, " filter %s; out %s (%uMB)\n",
+                   mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
+	} 
+
+	break; 
+
+    case RUNMODE_INLINE: 
+	logmsg(LOGUI, "CoMo v%s (source %s %s; module %s)\n", 
+	       COMO_VERSION, map.sources->cb->name, map.sources->device, 
+	       map.modules[0].name); 
+	break;
+    } 
+}
+
+
 /*
  * -- main
  *
@@ -78,23 +131,13 @@ main(int argc, char *argv[])
     /* set default values */
     init_map(&map); 
 
-    /* write welcome message */ 
-    logmsg(LOGUI, "----------------------------------------------------\n");
-    logmsg(LOGUI, "  CoMo v%s (built %s %s)\n",
-			COMO_VERSION, __DATE__, __TIME__ ); 
-    logmsg(LOGUI, "  Copyright (c) 2004-2007, Intel Corporation\n"); 
-    logmsg(LOGUI, "  All rights reserved.\n"); 
-    logmsg(LOGUI, "----------------------------------------------------\n");
-    logmsg(V_LOGUI, "... workdir %s\n", map.workdir);
-
     /*
      * parse command line and configuration files
      */
     map.ac = argc;              /* save argc and argv for later */
     map.av = argv; 
     configure(&map, argc, argv);
-
-    logmsg(V_LOGUI, "log level: %s\n", loglevel_name(map.logflags)); 
+    welcome_message();
 
     /*
      * Initialize the shared memory region.
