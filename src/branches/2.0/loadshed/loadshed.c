@@ -177,7 +177,7 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
 
     /* For the modules that apply flow sampling, do not allow the
      * sampling rate to increase during a measurement interval */
-    if (mdl_ls->shed_method == LSMETHOD_FLOW) {
+    if (mdl_ls->shed_method == SHED_METHOD_FLOW) {
     
         mdl_ls->tmp_srate = mdl_ls->srate;
 
@@ -216,7 +216,7 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
                         uhash_initialize(mdl_ls->hash[hi]);
                     /* Clear the limit that avoids increasing the
                      * sampling rate while in the same interval */
-                    if (mdl_ls->shed_method == LSMETHOD_FLOW) {
+                    if (mdl_ls->shed_method == SHED_METHOD_FLOW) {
                         mdl_ls->max_srate = 0;
                         /* Uncap the sampling rate */
                         mdl_ls->srate = mdl_ls->tmp_srate;
@@ -224,7 +224,7 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
                 }
             }
 
-            if (mdl_ls->shed_method == LSMETHOD_PKT) {
+            if (mdl_ls->shed_method == SHED_METHOD_PKT) {
                 /* Random packet sampling */
                 double r = (double)rand() / (double)RAND_MAX;
 
@@ -232,7 +232,7 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
                     *which = 0;
                     nshed++;
                 }
-            } else if (mdl_ls->shed_method == LSMETHOD_FLOW) {
+            } else if (mdl_ls->shed_method == SHED_METHOD_FLOW) {
                 /* Flow sampling, using a hash table indexed
                  * by the packet's 5-tuple */
                 uint32_t hash, threshold, tmp;
@@ -393,7 +393,7 @@ static char * aggr_names[15] = {
  *
  */
 void
-ls_init_mdl(char *name, mdl_ls_t *mdl_ls)
+ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
 {
     int i;
     feat_t *feats = mdl_ls->fextr.feats;
@@ -402,8 +402,14 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls)
     /* initialize profilers */
     mdl_ls->prof = new_profiler(name);
 
-    /* XXX need to change this at configuration time */
-    mdl_ls->shed_method = LSMETHOD_PKT;
+    /* get shedding method (use packet sampling by default) */
+    mdl_ls->shed_method = SHED_METHOD_PKT;
+    if (!strcmp(shed_method, "pkt")) {
+        mdl_ls->shed_method = SHED_METHOD_PKT;
+    }
+    else if (!strcmp(shed_method, "flow")) {
+        mdl_ls->shed_method = SHED_METHOD_FLOW;
+    }
 
     /* initialize shedding hash functions */
     if (!mdl_ls->hash) {

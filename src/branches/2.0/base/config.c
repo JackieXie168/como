@@ -85,6 +85,10 @@ define_module(mdl_def_t *mdl, como_config_t *cfg)
         mdl->mdlname = como_strdup(mdl->name);
     if (mdl->descr == NULL)
         mdl->descr = como_strdup("");
+#ifdef LOADSHED
+    if (mdl->shed_method == NULL)
+        mdl->shed_method = como_strdup("");
+#endif
 
     array_add(cfg->mdl_defs, mdl);
 }

@@ -243,6 +243,9 @@ struct mdl {
     char *	    mdlname;
     uint64_t        streamsize;
     void *	    config;
+#ifdef LOADSHED
+    char *          shed_method;
+#endif
     /* private state */
     mdl_ibase_t *   priv;
 };
@@ -316,6 +319,9 @@ struct _mdl_def {
     char *      output;
     char *      filter;
     char *      descr;
+#ifdef LOADSHED
+    char *      shed_method;
+#endif
 
     hash_t *	args;
     uint64_t	streamsize;
