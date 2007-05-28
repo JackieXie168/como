@@ -366,8 +366,6 @@ add_sniffer(como_t * m, char *want, char *device, char *args)
     m->source_count++;
 
     m->sources = s;
-
-    logmsg(LOGUI, "... sniffer [%s] %s\n", cb->name, s->device);
 }
 
 
@@ -571,12 +569,6 @@ do_config(struct _como * m, int argc, char *argv[])
 
 	    if (m->runmode == RUNMODE_INLINE) 
 		m->inline_mdl = mdl;
-
-	    logmsg(LOGUI, "... module%s %s [%d][%d] ", 
-		   (mdl->running == RUNNING_ON_DEMAND) ? " on-demand" : "",
-		   mdl->name, mdl->node, mdl->priority); 
-	    logmsg(LOGUI, " filter %s; out %s (%uMB)\n", 
-		   mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
         } else if (scope == CTX_VIRTUAL) { 
 	    /* 
 	     * we are done with this virtual node. let's go back to 
@@ -1233,6 +1225,11 @@ init_map(struct _como * m)
  * before any other command line parameter. command line will
  * overwrite any other configuration, as well as the last config
  * file will overwrite previous config files.
+ * 
+ * we preserve the configuration options given via the command 
+ * line in the structure cli_args. this way if the config file
+ * changes while como is running we can easily recover the options 
+ * given thru command line. 
  *
  */
 void
@@ -1372,14 +1369,6 @@ configure(struct _como * m, int argc, char ** argv)
 			copy_args(mdl->args, &m->node[node_id].args[k], 1); 
 		}
 	    } 
-
-            logmsg(LOGUI, "... module%s %s [%d][%d] ",
-                   (mdl->running == RUNNING_ON_DEMAND) ? " on-demand" : "",
-                   mdl->name, mdl->node, mdl->priority);
-            logmsg(LOGUI, " filter %s; out %s (%uMB)\n",
-                   mdl->filter_str, mdl->output, mdl->streamsize/(1024*1024));
-            if (mdl->description != NULL)
-                logmsg(LOGUI, "    -- %s\n", mdl->description);
 	}
     }
 
