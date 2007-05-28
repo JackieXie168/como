@@ -129,18 +129,28 @@ static uint64_t
 get_avail_cycles(como_ca_t *como_ca)
 {
     int64_t avail_cycles;
+    int64_t ca_oh_cycles;
+    int i;
 
     end_profiler(como_ca->ls.ca_oh_prof);
 
+    ca_oh_cycles = como_ca->ls.ca_oh_prof->tsc_cycles->value;
+
+    for (i = 0; i < como_ca->mdls->len; i++) {
+        mdl_t *mdl = array_at(como_ca->mdls, mdl_t *, i);
+        mdl_icapture_t *ic = mdl_get_icapture(mdl);
+        ca_oh_cycles -= ic->ls.prof->tsc_cycles->value;
+    }
+
     avail_cycles = ((double)como_ca->timebin / (double)1000000 *
                    (double)get_cpufreq_cpuid()) -
-                   (double)como_ca->ls.ca_oh_prof->tsc_cycles->total;
+                   (double)ca_oh_cycles;
 
     if (avail_cycles < 0)
         avail_cycles = 0;
 
     debug("avail_cycles = %llu, ca_oh = %llu\n",
-          avail_cycles, como_ca->ls.ca_oh_prof->tsc_cycles->total);
+          avail_cycles, ca_oh_cycles);
 
     reset_profiler(como_ca->ls.ca_oh_prof);
     start_profiler(como_ca->ls.ca_oh_prof);

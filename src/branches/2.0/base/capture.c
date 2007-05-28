@@ -410,13 +410,11 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
 
 	start_tsctimer(como_stats->ca_module_timer);
 #ifdef LOADSHED
-        end_profiler(como_ca->ls.ca_oh_prof);
         start_profiler(ic->ls.prof);
 #endif
         mdl_batch_process(mdl, batch, which);
 #ifdef LOADSHED
         end_profiler(ic->ls.prof);
-        start_profiler(como_ca->ls.ca_oh_prof);
 #endif
 	end_tsctimer(como_stats->ca_module_timer);
 	which += batch->count;	/* next module, new list of packets */
