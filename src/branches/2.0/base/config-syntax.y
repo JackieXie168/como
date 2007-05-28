@@ -79,6 +79,7 @@ report_parse_error(void)
 %token TOK_SOURCE TOK_OUTPUT TOK_FILTER TOK_HASHSIZE TOK_STREAMSIZE TOK_ARGS
 %token TOK_ARGSFILE TOK_RUNNING TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
 %token TOK_STORAGEPATH TOK_ASNFILE
+%token TOK_SHEDMETHOD
 %token <string> TOK_STRING
 %token <number> TOK_NUMBER
 
@@ -149,6 +150,11 @@ module_keyword:
     | TOK_FILTER TOK_STRING TOK_NEWLINE      { mdl.filter = $2; }
     | TOK_HASHSIZE TOK_NUMBER TOK_NEWLINE    { mdl.hashsize = $2; }
     | TOK_STREAMSIZE TOK_NUMBER TOK_NEWLINE  { mdl.streamsize = $2; }
+    | TOK_SHEDMETHOD TOK_STRING TOK_NEWLINE    {
+                                                #ifdef LOADSHED
+                                                mdl.shed_method = $2;
+                                                #endif
+                                               }
     /*| TOK_ARGSFILE TOK_STRING (TODO) */
     /*| TOK_RUNNING TOK_STRING (TODO) */
     | error TOK_NEWLINE { report_parse_error(); }

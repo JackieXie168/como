@@ -530,7 +530,7 @@ handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     pool_alc_init(ic->ivl_mem, &mdl->priv->alc);
 
 #ifdef LOADSHED
-    ls_init_mdl(mdl->name, &ic->ls);
+    ls_init_mdl(mdl->name, &ic->ls, mdl->shed_method);
 #endif
 
     /* TODO locate the first empty entry in the array */

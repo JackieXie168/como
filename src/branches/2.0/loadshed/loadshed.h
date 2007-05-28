@@ -32,8 +32,8 @@
 #include "prediction.h"
 #include "ls-profiling.h"
 
-#define LSMETHOD_PKT    0
-#define LSMETHOD_FLOW   1
+#define SHED_METHOD_PKT    0
+#define SHED_METHOD_FLOW   1
 
 typedef struct ls ls_t;
 typedef struct mdl_ls mdl_ls_t;

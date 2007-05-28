@@ -85,6 +85,8 @@ end             { return TOK_END; }
 ,               { return TOK_COMMA; }
 asnfile         { return TOK_ASNFILE; }
 
+shed-method     { return TOK_SHEDMETHOD; }
+
 {NUMBER}GB      {
                     yclval.number = atoll(yytext) * 1024 * 1024 * 1024;
                     return TOK_NUMBER;

@@ -137,6 +137,8 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #   args	"name" = "value"# arguments to be passed to the module. 
 #   args-file	"path/to/file"	# specify a file from where to read arguments.
 #   running	"on-demand"	# specify running mode (default: normal)
+#   shed-method "pkt"           # specify the load shedding method
+#                               #   (default: pkt, options: pkt/flow)
 # end
 
 #

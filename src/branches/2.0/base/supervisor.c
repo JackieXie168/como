@@ -721,6 +721,9 @@ como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
 	mdl->streamsize = def->streamsize;
         mdl->filter = alc_strdup(alc, def->filter);
         mdl->description = alc_strdup(alc, def->descr);
+#ifdef LOADSHED
+        mdl->shed_method = alc_strdup(alc, def->shed_method);
+#endif
 	
 	if (mdl_load(mdl, PRIV_ISUPERVISOR) < 0) {
 	    //mdl_destroy(mdl);
