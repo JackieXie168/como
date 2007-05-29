@@ -1659,12 +1659,11 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     event_loop_add(&como_ca.el, como_ca.accept_fd);
 
     /* initialize the timers */
-
     ca_init_timers();
+
 #ifdef LOADSHED
-    ca_init_profilers(&como_ca);
-    reset_profiler(como_ca.ls.ca_oh_prof);
-    start_profiler(como_ca.ls.ca_oh_prof);
+    /* initialize load shedding data */
+    ls_init_ca(&como_ca);
 #endif
 
     /*

@@ -42,6 +42,7 @@ struct ls {
     uint64_t pcycles;       /* total predicted cycles */
     uint64_t rcycles;       /* total real cycles */
     profiler_t *ca_oh_prof; /* capture process overhead profiler */
+    unsigned int cpufreq;   /* CPU frequency */
 };
 
 struct mdl_ls {

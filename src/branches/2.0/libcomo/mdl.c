@@ -86,7 +86,9 @@ mdl_serialize(uint8_t ** sbuf, const mdl_t * mdl)
     serialize_timestamp_t(sbuf, mdl->flush_ivl);
     serialize_string(sbuf, mdl->name);
     serialize_string(sbuf, mdl->description);
+#ifdef LOADSHED
     serialize_string(sbuf, mdl->shed_method);
+#endif
     serialize_string(sbuf, mdl->filter);
     serialize_string(sbuf, mdl->mdlname);
     serialize_uint64_t(sbuf, mdl->streamsize);
@@ -104,7 +106,9 @@ mdl_sersize(const mdl_t * mdl)
     sz = sizeof(mdl->flush_ivl) +
 	 sersize_string(mdl->name) +
 	 sersize_string(mdl->description) +
+#ifdef LOADSHED
 	 sersize_string(mdl->shed_method) +
+#endif
 	 sersize_string(mdl->filter) +
 	 sersize_string(mdl->mdlname) +
          sersize_uint64_t(mdl->streamsize) +
@@ -125,7 +129,9 @@ mdl_deserialize(uint8_t ** sbuf, mdl_t ** mdl_out, alc_t * alc,
     deserialize_timestamp_t(sbuf, &mdl->flush_ivl);
     deserialize_string(sbuf, &mdl->name, alc);
     deserialize_string(sbuf, &mdl->description, alc);
+#ifdef LOADSHED
     deserialize_string(sbuf, &mdl->shed_method, alc);
+#endif
     deserialize_string(sbuf, &mdl->filter, alc);
     deserialize_string(sbuf, &mdl->mdlname, alc);
     deserialize_uint64_t(sbuf, &mdl->streamsize);
