@@ -43,11 +43,19 @@ multiple pattern search
     . port all modules
 
  - Load Shedding
-        . port basic functionality from CoMo 0.5.
+        . Pass the shedding rate to the modules so they can use
+          it when computing their results
+        . Add a new algorithm to assign the shedding rates to the modules
+          For now the same shedding rate is applied to all modules.
+        . Improve the profiling of the capture process by adding
+          a mechanism similar to the "buffer discovery algorithm"
+          explained in the Networking and USENIX papers.
+        . Improve the shedding rate calculation by adding an EWMA of the
+          prediction error and an EWMA of the cycles consumed by the
+          second feature extraction phase
         . take into account that CoMo may not always run at the highest
-          priority.
+          priority
         . manage context switches and CPU cycles of the export process.
-        . revise buffer discovery algorithm.
 
 
 * Bugs

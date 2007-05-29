@@ -143,8 +143,7 @@ get_avail_cycles(como_ca_t *como_ca)
     }
 
     avail_cycles = ((double)como_ca->timebin / (double)1000000 *
-                   (double)get_cpufreq_cpuid()) -
-                   (double)ca_oh_cycles;
+                   (double)como_ca->ls.cpufreq) - (double)ca_oh_cycles;
 
     if (avail_cycles < 0)
         avail_cycles = 0;
@@ -455,4 +454,23 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
 
     mdl_ls->fextr.bitmaps = NULL;
     mdl_ls->fextr.hash = NULL;
+}
+
+
+/*
+ * -- ls_init_ca
+ *
+ * Initialize the load shedding data of the capture process
+ *
+ */
+void
+ls_init_ca(como_ca_t *como_ca)
+{
+    /* Get the CPU frequency */
+    como_ca->ls.cpufreq = get_cpufreq_cpuid();
+
+    /* Initialize profilers */
+    ca_init_profilers(como_ca);
+    reset_profiler(como_ca->ls.ca_oh_prof);
+    start_profiler(como_ca->ls.ca_oh_prof);
 }
