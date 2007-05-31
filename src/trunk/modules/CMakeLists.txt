@@ -22,7 +22,6 @@ SET(MODULES
   hwtm
   tuple
   unknown-ports
-  highlight
 )
 
 IF(FTLIB_FOUND)
