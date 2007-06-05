@@ -57,10 +57,22 @@ destroy_profiler(profiler_t *profiler)
 }
 
 
+__inline__ void
+reset_profiler(profiler_t *profiler)
+{
+    reset_timer(profiler->ctx_switches);
+    reset_timer(profiler->tsc_cycles);
+}
+
+
 void
 ca_init_profilers(como_ca_t *como_ca)
 {
     como_ca->ls.ca_oh_prof = new_profiler("ca");
+    reset_profiler(como_ca->ls.ca_oh_prof);
+
+    como_ca->ls.shed_prof = new_profiler("fextr");
+    reset_profiler(como_ca->ls.shed_prof);
 }
 
 
@@ -138,12 +150,4 @@ end_profiler(profiler_t *profiler)
     serialize();
     end_tsctimer(profiler->tsc_cycles);
     end_ctxsw_counter(profiler->ctx_switches);
-}
-
-
-__inline__ void
-reset_profiler(profiler_t *profiler)
-{
-    reset_timer(profiler->ctx_switches);
-    reset_timer(profiler->tsc_cycles);
 }

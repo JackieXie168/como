@@ -34,6 +34,23 @@
 
 
 /*
+ * -- ewma
+ *
+ * Computes the EWMA (Exponentially Weigthed Moving Average) of the
+ * data in a time series
+ *
+ */
+static void
+ewma(double factor, double *last_value, double curr_value)
+{
+    if (*last_value == 0)
+        *last_value = curr_value;
+    else
+        *last_value = ((1.0 - factor) * (*last_value)) + (factor * curr_value);
+}
+
+
+/*
  * -- compute_srate
  *
  * Computes the shedding rate that needs to be applied to the modules in
@@ -41,12 +58,14 @@
  *
  */
 static double
-compute_srate(uint64_t avail_cycles, uint64_t pred_cycles)
+compute_srate(uint64_t avail_cycles, uint64_t pred_cycles,
+              double perror_ewma, double shed_ewma)
 {
     double srate;
 
     srate = (pred_cycles == 0) ?
-        1 : (double)avail_cycles / (double)pred_cycles;
+        1 : MAX(0, (double)avail_cycles - shed_ewma) /
+            ((double)pred_cycles * (1 + perror_ewma));
 
     if (srate > 1)
         srate = 1;
@@ -295,7 +314,6 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
     array_t *mdls;
     int idx;
     mdl_icapture_t *ic;
-    double srate;
     uint64_t avail_cycles;
     char *start_which = which;
 
@@ -323,8 +341,14 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
     }
 
     avail_cycles = get_avail_cycles(como_ca);
-    srate = compute_srate(avail_cycles, como_ca->ls.pcycles);
-    assign_srates(mdls, srate);
+
+    como_ca->ls.srate =
+        compute_srate(avail_cycles, como_ca->ls.pcycles,
+                      como_ca->ls.perror_ewma, como_ca->ls.shed_ewma);
+
+    start_profiler(como_ca->ls.shed_prof);
+
+    assign_srates(mdls, como_ca->ls.srate);
 
     which = start_which;
 
@@ -349,6 +373,11 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
 
         which += batch->count;  /* next module, new list of packets */
     }
+
+    end_profiler(como_ca->ls.shed_prof);
+
+    ewma(SHED_EWMA_WEIGHT, &como_ca->ls.shed_ewma,
+         como_ca->ls.shed_prof->tsc_cycles->value);
 }
 
 
@@ -364,6 +393,7 @@ batch_loadshed_post(como_ca_t *como_ca)
     array_t *mdls;
     int idx;
     mdl_icapture_t *ic;
+    double pred_error;
 
     mdls = como_ca->mdls;
 
@@ -381,10 +411,16 @@ batch_loadshed_post(como_ca_t *como_ca)
               ic->ls.batches);
     }
 
+    pred_error = fabs(1 - (double)como_ca->ls.pcycles * como_ca->ls.srate /
+                  (double)como_ca->ls.rcycles);
+
+    ewma(PERROR_EWMA_WEIGHT, &como_ca->ls.perror_ewma, pred_error);
+
     debug("predicted cycles = %llu\n", como_ca->ls.pcycles);
     debug("real cycles = %llu\n", como_ca->ls.rcycles);
-    debug("prediction error = %g\n",
-          fabs(1 - (double)como_ca->ls.pcycles / (double)como_ca->ls.rcycles));
+    debug("prediction error = %g\n", pred_error);
+    debug("prediction error ewma = %g\n", como_ca->ls.perror_ewma);
+    debug("shedding phase ewma = %g\n", como_ca->ls.shed_ewma);
 }
 
 
@@ -466,11 +502,15 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
 void
 ls_init_ca(como_ca_t *como_ca)
 {
+    /* Initialize some values */
+    como_ca->ls.perror_ewma = 0;
+    como_ca->ls.shed_ewma = 0;
+
     /* Get the CPU frequency */
     como_ca->ls.cpufreq = get_cpufreq_cpuid();
 
     /* Initialize profilers */
     ca_init_profilers(como_ca);
-    reset_profiler(como_ca->ls.ca_oh_prof);
+
     start_profiler(como_ca->ls.ca_oh_prof);
 }
