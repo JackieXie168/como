@@ -35,14 +35,21 @@
 #define SHED_METHOD_PKT    0
 #define SHED_METHOD_FLOW   1
 
+#define PERROR_EWMA_WEIGHT 0.9
+#define SHED_EWMA_WEIGHT   0.9
+
 typedef struct ls ls_t;
 typedef struct mdl_ls mdl_ls_t;
 
 struct ls {
     uint64_t pcycles;       /* total predicted cycles */
     uint64_t rcycles;       /* total real cycles */
+    double srate;           /* global shedding rate */
+    double perror_ewma;     /* EWMA of the prediction error */
     profiler_t *ca_oh_prof; /* capture process overhead profiler */
+    profiler_t *shed_prof;  /* shedding phase profiler */
     unsigned int cpufreq;   /* CPU frequency */
+    double shed_ewma;       /* EWMA of the shedding phase cycles */
 };
 
 struct mdl_ls {
