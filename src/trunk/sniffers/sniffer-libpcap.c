@@ -331,7 +331,7 @@ sniffer_next(sniffer_t * s, int max_pkts,
     capbuf_begin(&me->capbuf, first_ref_pkt);
     
     for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
-	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
+	x = me->sp_dispatch(me->pcap, max_pkts - count, processpkt,
 			   (u_char *) me);
     }
     
