@@ -55,6 +55,17 @@ struct _como_vlan {
     n16_t ethtype;
 };
 
+/* 
+ * LINUX_SLL (often used for PPP)
+ */
+struct _como_linux_sll {
+    n16_t sll_type;
+    n16_t arphdr;
+    n16_t len[2];
+    char hdr[8];
+    n16_t type;
+};
+
 
 /* 
  * Cisco HDLC framing (used for POS point-to-point links) 

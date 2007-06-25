@@ -90,6 +90,8 @@ linktype_lookup_len(int t)
 	return 0;
     case LINKTYPE_ETH:
 	return sizeof(struct _como_eth);
+    case LINKTYPE_LINUX_SLL:
+	return sizeof(struct _como_linux_sll);
     case LINKTYPE_VLAN:
 	return sizeof(struct _como_vlan);
     case LINKTYPE_ISL:
@@ -245,6 +247,11 @@ updateofs(pkt_t * pkt, layer_t l, int type)
 		COMO(l3ofs) += sizeof(struct _como_eth);
 	    }
 	    break;
+	case LINKTYPE_LINUX_SLL: 
+	    COMO(l2type) = LINKTYPE_LINUX_SLL;
+	    COMO(l3type) = H16(LINUX_SLL(type));
+	    COMO(l3ofs) += sizeof(struct _como_linux_sll);
+	    break; 
 	case LINKTYPE_HDLC:
 	    COMO(l2type) = LINKTYPE_HDLC;
 	    COMO(l3type) = H16(HDLC(type));
