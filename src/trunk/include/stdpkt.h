@@ -382,6 +382,10 @@ set_field(char *ptr, size_t size, uint64_t value)
 #define ETHP(pkt,field)							\
     (((struct _como_eth *) (pkt->payload + pkt->l2ofs))->field)
 
+#define LINUX_SLL(field)	LINUX_SLLP(pkt,field)
+#define LINUX_SLLP(pkt,field)						\
+    (((struct _como_linux_sll *) (pkt->payload + pkt->l2ofs))->field)
+
 #define VLAN(field)	VLANP(pkt,field)
 #define VLANP(pkt,field)						\
     (((struct _como_vlan *) (pkt->payload + pkt->l2ofs))->field)

@@ -231,6 +231,11 @@ sniffer_start(sniffer_t * s)
     case DLT_EN10MB: 
 	me->l2type = LINKTYPE_ETH; 
 	break; 
+
+    case DLT_LINUX_SLL: 
+	me->l2type = LINKTYPE_LINUX_SLL; 
+	break; 
+
     default: 
     /* we do not support DLT_ values different from EN10MB. for 802.11
      * frames one can use sniffer-radio instead. 
