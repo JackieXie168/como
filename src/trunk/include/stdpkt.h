@@ -119,6 +119,7 @@ enum LINKTYPE {
     LINKTYPE_HDLC =		0x0002,	/* Cisco HDLC */
     LINKTYPE_VLAN =		0x0003,	/* 802.1q packet */
     LINKTYPE_ISL =		0x0004,	/* Cisco ISL */
+    LINKTYPE_LINUX_SLL = 	0x0005, /* Linux fake packets (for PPP) */
     LINKTYPE_80211 =		0x0006,	/* IEEE 802.11 header */
     LINKTYPE_ANY =		0xffff
 };
