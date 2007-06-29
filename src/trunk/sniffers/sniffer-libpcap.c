@@ -232,9 +232,11 @@ sniffer_start(sniffer_t * s)
 	me->l2type = LINKTYPE_ETH; 
 	break; 
 
+#ifdef linux
     case DLT_LINUX_SLL: 
 	me->l2type = LINKTYPE_LINUX_SLL; 
 	break; 
+#endif
 
     default: 
     /* we do not support DLT_ values different from EN10MB. for 802.11
