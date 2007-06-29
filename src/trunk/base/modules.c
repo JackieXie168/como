@@ -754,6 +754,7 @@ module_db_seek_by_ts(module_t *mdl, int fd, timestamp_t start)
 	} else {
 	    /* found. go one file back; */
 	    ofs = csseek(fd, CS_SEEK_FILE_PREV);
+	    break; 
 	} 
 
 	/* 
