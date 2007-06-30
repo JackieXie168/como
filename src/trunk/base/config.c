@@ -1049,7 +1049,7 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
         "          [module[:\"module args\"] [filter]]\n";
 
     /* flag to be set if we parsed a configuration file */
-    static const char *opts = "hc:D:L:p:m:v:x:s:e";
+    static const char *opts = "qhc:D:L:p:m:v:x:s:e";
     
     memset(m, 0, sizeof(cli_args_t));
     
