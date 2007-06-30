@@ -459,11 +459,12 @@ supervisor_mainloop(int accept_fd)
 		    map.stats->pkts, map.stats->drops,
 		    map.stats->modules_active, map.module_used);
 	    }
+	} 
 
-	    n_ready = select(max_fd, &r, NULL, NULL, &to);
-	    if (map.runmode == RUNMODE_NORMAL) {
+	n_ready = select(max_fd, &r, NULL, NULL, &to);
+
+	if (!map.silent && map.runmode == RUNMODE_NORMAL) {
 		fprintf(stderr, "%78s\r", ""); /* clean the line */
-	    }
         } 
 
 	for (i = 0; n_ready > 0 && i < max_fd; i++) {
