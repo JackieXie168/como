@@ -1073,6 +1073,7 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 
 	case 'q': 
 	    m->silent = 1; 
+	    break;
 
         case 'x':
 	    /* pass debug options into a string */
