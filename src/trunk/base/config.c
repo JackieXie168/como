@@ -1016,6 +1016,7 @@ typedef struct cli_args_t {
     char	*module_args;
     char	*filter;
     int		exit_when_done;
+    char 	silent; 
 } cli_args_t;
 
 
