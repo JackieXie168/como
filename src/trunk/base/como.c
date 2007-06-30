@@ -70,6 +70,12 @@ welcome_message()
     source_t * src; 
     int idx;
 
+    if (map.silent) { 
+	logmsg(LOGUI, "  CoMo v%s (built %s %s)\n",
+	              COMO_VERSION, __DATE__, __TIME__ ); 
+	return; 
+    } 
+
     switch (map.runmode) { 
     case RUNMODE_NORMAL: 
 	logmsg(LOGUI, "----------------------------------------------------\n");

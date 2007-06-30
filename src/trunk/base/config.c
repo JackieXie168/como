@@ -1042,10 +1042,10 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
      * string as well...
      */
     static const char * usage =
-	"usage: %s [-c config-file] [-D db-path] [-L libdir] [-p query-port] "
-        "[-m mem-size] [-v logflags] "
-        "[-s sniffer[:device[:\"args\"]]] [module[:\"module args\"] "
-	"[filter]]\n";
+	"usage: %s [-q] [-c config-file] [-D db-path] [-L libdir] \n"
+        "          [-p query-port] [-m mem-size] [-v logflags] \n"
+        "          [-s sniffer[:device[:\"args\"]]] \n"
+        "          [module[:\"module args\"] [filter]]\n";
 
     /* flag to be set if we parsed a configuration file */
     static const char *opts = "hc:D:L:p:m:v:x:s:e";
@@ -1069,6 +1069,9 @@ parse_cmdline(cli_args_t * m, int argc, char ** argv)
 	case 'e':
 	    m->exit_when_done = 1;
 	    break;
+
+	case 'q': 
+	    m->silent = 1; 
 
         case 'x':
 	    /* pass debug options into a string */
@@ -1269,6 +1272,7 @@ configure(struct _como * m, int argc, char ** argv)
     m->runmode = cli_args.runmode;
     m->inline_fd = (m->runmode == RUNMODE_INLINE) ? 1 /* stdout */ : -1; 
     
+    m->silent = cli_args.silent; 
     m->debug = cli_args.debug;
 
     /*

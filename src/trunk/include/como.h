@@ -78,6 +78,8 @@ struct _como {
     procname_t	parent;		/* parent process */
     runmode_t	runmode;	/* mode of operation */
 
+    char	silent; 	/* verbosity of user interface */
+
     int		ac;		/* command line arguments */
     char **	av;		/* command line arguments */
 

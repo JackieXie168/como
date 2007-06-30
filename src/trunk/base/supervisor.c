@@ -439,30 +439,32 @@ supervisor_mainloop(int accept_fd)
 	/* 
          * user interface. just one line... 
          */
-	gettimeofday(&now, NULL);
-	secs = 1 + now.tv_sec - map.stats->start.tv_sec; 
- 	dd = secs / 86400; 
-        hh = (secs % 86400) / 3600; 
-        mm = (secs % 3600) / 60;
-        ss = secs % 60; 
+	if (!map.silent) { 
+	    gettimeofday(&now, NULL);
+	    secs = 1 + now.tv_sec - map.stats->start.tv_sec; 
+	    dd = secs / 86400; 
+	    hh = (secs % 86400) / 3600; 
+	    mm = (secs % 3600) / 60;
+	    ss = secs % 60; 
 
-	if (map.runmode == RUNMODE_NORMAL) {
-	    fprintf(stderr, 
-		"\r- up %dd%02dh%02dm%02ds; mem %u/%u/%u/%uMB (%d); "
-		"pkts %llu drops %d; mdl %d/%d\r", 
-		dd, hh, mm, ss,
-		    (unsigned int)map.stats->mem_usage_cur/(1024*1024), 
-		    (unsigned int)map.stats->mem_waste_cur/(1024*1024), 
-		    (unsigned int)map.stats->mem_usage_peak/(1024*1024), 
-		    (unsigned int)map.mem_size, map.stats->table_queue,
-		map.stats->pkts, map.stats->drops,
-		map.stats->modules_active, map.module_used);
-	}
+	    if (map.runmode == RUNMODE_NORMAL) {
+		fprintf(stderr, 
+		    "\r- up %dd%02dh%02dm%02ds; mem %u/%u/%u/%uMB (%d); "
+		    "pkts %llu drops %d; mdl %d/%d\r", 
+		    dd, hh, mm, ss,
+			(unsigned int)map.stats->mem_usage_cur/(1024*1024), 
+			(unsigned int)map.stats->mem_waste_cur/(1024*1024), 
+			(unsigned int)map.stats->mem_usage_peak/(1024*1024), 
+			(unsigned int)map.mem_size, map.stats->table_queue,
+		    map.stats->pkts, map.stats->drops,
+		    map.stats->modules_active, map.module_used);
+	    }
 
-	n_ready = select(max_fd, &r, NULL, NULL, &to);
-	if (map.runmode == RUNMODE_NORMAL) {
-	    fprintf(stderr, "%78s\r", ""); /* clean the line */
-	}
+	    n_ready = select(max_fd, &r, NULL, NULL, &to);
+	    if (map.runmode == RUNMODE_NORMAL) {
+		fprintf(stderr, "%78s\r", ""); /* clean the line */
+	    }
+        } 
 
 	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 	    int id;
