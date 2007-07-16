@@ -143,7 +143,7 @@ sanitize_value(char *what, int64_t value, int64_t min, int64_t max,
         }
         else {
             warn("decreasing to %s\n", bmax);
-            return min;
+            return max;
         }
     }
     return value;
