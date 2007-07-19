@@ -481,7 +481,7 @@ query_initialize(ipc_peer_t *parent, int *supervisor_fd)
  */
 
 void
-query_generic_main(int client_fd, como_node_t * node, qreq_t *qreq)
+query_generic_main(FILE * client_stream, como_node_t * node, qreq_t *qreq)
 {
     int storage_fd, file_fd, supervisor_fd;
     off_t ofs; 
@@ -494,13 +494,14 @@ query_generic_main(int client_fd, como_node_t * node, qreq_t *qreq)
     uint8_t *sbuf;
     void *mdlrec;
     qreq_t req = *qreq;
+    int client_fd = como_fileno(client_stream);
 
     if (req.mode == QMODE_SERVICE) {
 	service_fn service = service_lookup(req.service);
 	if (service)
 	    service(client_fd, node, &req);
 
-	close(client_fd);
+	fclose(client_stream);
 	close(supervisor_fd);
 	return;
     }
@@ -564,12 +565,11 @@ query_generic_main(int client_fd, como_node_t * node, qreq_t *qreq)
 
 #define handle_replay_fail(...) error("TODO: handle_replay_fail\n")
     ofs = csseek_ts(file_fd, ts);
+
     /*
      * set up a FILE * to be able to fprintf() to the user.
      */
-    iq->clientfile = fdopen(client_fd, "w");
-    if (iq->clientfile == NULL) 
-        error("cannot fdopen() on client_fd\n");
+    iq->clientfile = client_stream;
 
     if (ofs >= 0) {
 	/* at this point at least one record exists as we seek on it */
@@ -704,11 +704,12 @@ write_http_errcode(int errcode, int fd)
 
 void
 query_main_http(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-	   UNUSED memmap_t * shmemmap, int client_fd, como_node_t * node)
+	   UNUSED memmap_t * shmemmap, FILE* client_stream, como_node_t * node)
 {
     int supervisor_fd, ret, errcode;
     qreq_t req;
     char *errstr, *httpstr;
+    int client_fd = como_fileno(client_stream);
     
     query_initialize(parent, &supervisor_fd);
     ret = query_recv(&req, client_fd, como_stats->ts); 
@@ -758,18 +759,19 @@ query_main_http(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     /*
      * now do the generic query tasks
      */
-    query_generic_main(client_fd, node, &req);
+    query_generic_main(client_stream, node, &req);
 }
 
 
 void
 query_main_plain(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-	   UNUSED memmap_t * shmemmap, int client_fd, como_node_t * node)
+	   UNUSED memmap_t * shmemmap, FILE* client_stream, como_node_t * node)
 {
     extern como_su_t *s_como_su;
     int supervisor_fd, errcode;
     char *errstr;
     qreq_t req;
+    int client_fd = como_fileno(client_stream);
 
     query_initialize(parent, &supervisor_fd);
 
@@ -783,7 +785,7 @@ query_main_plain(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     req.end = -1;
     req.wait = 1;
 
-    warn("validating query for module `%s'\n", req.module);
+    debug("validating query for module `%s'\n", req.module);
     errstr = query_validate(&req, node, &errcode);
     if (errstr != NULL) { 
 	if (como_write(client_fd, errstr, strlen(errstr)) < 0) 
@@ -793,11 +795,9 @@ query_main_plain(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	return;
     }
 
-    warn("it worked. now doing the query\n");
-
     /*
      * now do the generic query tasks
      */
-    query_generic_main(client_fd, node, &req);
+    query_generic_main(client_stream, node, &req);
 }
 

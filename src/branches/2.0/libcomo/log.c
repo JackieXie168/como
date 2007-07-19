@@ -87,20 +87,19 @@ default_handler(const char * program, const char * domain, log_level_t level,
     if (s_use_color == TRUE)
 	color = get_color(level);
 
+    o = stderr;
+
     if (level & LOG_LEVEL_ERROR) {
-	o = stdout;
 	if (color)
 	    pre = "\033[31;1mFATAL ERROR\033[0m: ";
 	else
 	    pre = "FATAL ERROR: ";
     } else if (level & LOG_LEVEL_WARNING) {
-	o = stdout;
 	if (color)
 	    pre = "\033[33;1mWARNING\033[0m: ";
 	else
 	    pre = "WARNING: ";
     } else {
-	o = stdout;
 	pre = "";
     }
 

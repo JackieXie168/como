@@ -60,6 +60,9 @@ como__strdup(str, __FILE__, __LINE__)
 #define como_dup(dst,src) \
 como__dup(dst, src, __FILE__, __LINE__)
 
+#define como_fileno(stream) \
+como__fileno(stream, __FILE__, __LINE__)
+
 #define como_asprintf(fmt...) \
 como__asprintf(__FILE__, __LINE__, fmt)
 
@@ -128,6 +131,7 @@ void * como__realloc (void * ptr, size_t sz, const char * file,
 		      const int line);
 char * como__strdup (const char * str, const char * file, const int line);
 char * como__dup (char **dst, char *src, const char * file, const int line);
+int    como__fileno (FILE* stream, const char * file, const int line);
 char * como__asprintf (const char * file, const int line, char *fmt, ...);
 
 /*
@@ -186,14 +190,14 @@ pktmeta_type_t pktmeta_type_from_name(const char * name);
 typedef void (*mainloop_fn) (ipc_peer_full_t * child,
 			     ipc_peer_t * parent,
 			     memmap_t * shmemmap,
-			     int client_fd,
+			     FILE* client_stream,
 			     como_node_t * node);
 
 pid_t start_child (ipc_peer_full_t * child, mainloop_fn mainloop,
-		   memmap_t * shmemmap, int client_fd, como_node_t * node);
+		  memmap_t * shmemmap, FILE *client_stream, como_node_t * node);
 int handle_children ();
-pid_t spawn_child (ipc_peer_full_t * child, const char * path, ...);
-
+pid_t spawn_child (ipc_peer_full_t * child, const char *descr,
+                    const char * path, ...);
 
 
 #define	GR_LOSTSYNC	((void *) -1)
@@ -289,15 +293,16 @@ typedef struct como_ca {
 } como_ca_t;
 
 void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
-		   memmap_t * shmemmap,int client_fd, como_node_t * node);
+	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
 
 void export_main  (ipc_peer_full_t * child, ipc_peer_t * parent,
-		   memmap_t * shmemmap,int client_fd, como_node_t * node);
+	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
 
 void query_main_http(ipc_peer_full_t * child, ipc_peer_t * parent,
-		   memmap_t * shmemmap,int client_fd, como_node_t * node);
+	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
+
 void query_main_plain(ipc_peer_full_t * child, ipc_peer_t * parent,
-		   memmap_t * shmemmap,int client_fd, como_node_t * node);
+	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
 
 
 /* como.c */

@@ -63,7 +63,7 @@ static int s_children = 0;
  */
 pid_t
 start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
-	    memmap_t * shmemmap, int client_fd, como_node_t * node)
+	    memmap_t * shmemmap, FILE *client_stream, como_node_t * node)
 {
     pid_t pid;
     int i, p[2];
@@ -132,7 +132,7 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 	notice("starting process %s pid %d\n",
 	       ipc_peer_get_name(who), getpid());
 
-	mainloop(child, (ipc_peer_t *) COMO_SU, shmemmap, client_fd, node);
+	mainloop(child, (ipc_peer_t *) COMO_SU, shmemmap, client_stream, node);
 	exit(0);
     }
 
@@ -224,7 +224,7 @@ handle_children()
 
 
 pid_t
-spawn_child(ipc_peer_full_t * child, const char * path, ...)
+spawn_child(ipc_peer_full_t * child, const char * descr, const char * path, ...)
 {
     pid_t pid;
     va_list va;
@@ -278,8 +278,8 @@ spawn_child(ipc_peer_full_t * child, const char * path, ...)
 	
 	i = execv(path, argv);
 	assert(i == -1);
-	error("Can't execute %s: %s\n", path, strerror(errno));
-    } 
+	error("Can't execute %s at %s: %s\n", descr, path, strerror(errno));
+    }
 
     close(p[0]);
 

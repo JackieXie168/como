@@ -196,7 +196,7 @@ como_config_t *
 configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 {
     static const char *opts = "hiSt:q:c:D:L:p:m:v:x:s:e";
-    int i, c, cfg_file_count = 0;
+    int i, c, cfg_file_count = 0, have_cmdline_modules = 0;
     #define MAX_CFGFILES 1024
     char *cfg_files[MAX_CFGFILES];
 
@@ -380,16 +380,20 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         }
 
         define_module(&mdl, cfg);
+        have_cmdline_modules = 1;
         free(buf);
         optind++;
     }
+
+    if (cfg->inline_mode && ! have_cmdline_modules)
+        error("inline mode requires specifying a module in the cmdline\n");
 
     /*
      * final configuration tweak: if we are running in inline mode,
      * discard all module definitions but the last one. this way
      * we avoid extra work that the user is not interested on.
      */
-    if (cfg->inline_mode) {
+    if (cfg->inline_mode && cfg->mdl_defs->len > 0) {
         array_t *a = array_new(sizeof(mdl_def_t));
         mdl_def_t *d =
             &array_at(cfg->mdl_defs, mdl_def_t, cfg->mdl_defs->len - 1); 
