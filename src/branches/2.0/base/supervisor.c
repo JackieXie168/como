@@ -75,6 +75,7 @@ launch_inline_query(void)
 {
     ipc_peer_full_t *peer;
     pid_t pid;
+
     como_node_t *n = &array_at(s_como_su->nodes, como_node_t, 0);
 
     /* the last loaded module is the one that needs to be queried */
@@ -82,7 +83,7 @@ launch_inline_query(void)
         array_at(n->mdls, mdl_t *, n->mdls->len - 1)->name;
     
     peer = ipc_peer_child(COMO_QU, 0);
-    pid = start_child(peer, query_main_plain, s_como_su->memmap, 0, n);
+    pid = start_child(peer, query_main_plain, s_como_su->memmap, stdout, n);
 }
 
 /*
@@ -199,7 +200,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
     ((ipc_peer_t *)COMO_CA)->parent_class = COMO_SU_CLASS;
 */
 	ex = ipc_peer_child(COMO_EX, 0);
-	pid = start_child(ex, export_main, como_su->memmap, -1, node0);
+	pid = start_child(ex, export_main, como_su->memmap, NULL, node0);
 	if (pid < 0) {
 	    warn("Can't start EXPORT\n");
 	}
@@ -505,7 +506,7 @@ como_node_handle_query(como_node_t * node)
      * start a query process. 
      */
     peer = ipc_peer_child(COMO_QU, cd);
-    pid = start_child(peer, query_main_http, s_como_su->memmap, cd, node);
+    pid = start_child(peer, query_main_http, s_como_su->memmap, fdopen(cd, "a"), node);
     close(cd);
 }
 
@@ -852,7 +853,7 @@ main(int argc, char ** argv)
     como_su->env->dbdir = como_config->db_path;
 
     if (como_config->silent_mode)
-        log_set_level(LOG_LEVEL_ERROR); /* disable most UI messages */
+        log_set_level(LOG_LEVEL_WARNING); /* disable most UI messages */
 
     if (como_config->inline_mode) { /* use temporary storage */
         char *template = como_asprintf("%sXXXXXX", como_config->db_path);
@@ -913,9 +914,16 @@ main(int argc, char ** argv)
     como_node_init_sniffers(node0, como_config->sniffer_defs, &como_su->shalc);
     como_node_init_mdls(node0, como_config->mdl_defs, como_su->alc);
 
+    if (como_config->inline_mode && node0->mdls->len == 0) {
+        /* inline mode and could not load any module. nothing to do. */
+        debug("inline mode: no modules could be loaded, exiting.\n");
+        return EXIT_FAILURE;
+    }
+
     /* spawn STORAGE */
-    spawn_child(COMO_ST, como_config->storage_path, como_su->env->workdir,
-            "134217728", como_config->silent_mode ? "1" : "0", NULL);
+    spawn_child(COMO_ST, "storage", como_config->storage_path,
+                como_su->env->workdir, "134217728",
+                como_config->silent_mode ? "1" : "0", NULL);
 
     /* read ASN file */
     asn_readfile(como_config->asn_file);
@@ -926,7 +934,7 @@ main(int argc, char ** argv)
 	
         /* start the CAPTURE process */
 	ca = ipc_peer_child(COMO_CA, 0);
-	pid = start_child(ca, capture_main, como_su->memmap, -1, node0);
+	pid = start_child(ca, capture_main, como_su->memmap, NULL, node0);
 	if (pid < 0)
 	    error("Can't start CAPTURE\n");
     }

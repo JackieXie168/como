@@ -38,7 +38,12 @@
 /* C Declarations */
 #include <stdlib.h> /* atoll */
 
-int ycline = 1;
+int ycline;
+
+void config_lexic_init(void)
+{
+    ycline = 1;
+}
 
 %}
 

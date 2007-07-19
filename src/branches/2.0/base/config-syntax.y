@@ -51,6 +51,8 @@
 int yclex(void);
 void ycerror(char *fmt, ...);
 
+void config_lexic_init();
+
 /* global variables */
 alc_t *alc;
 static mdl_def_t mdl;
@@ -182,6 +184,8 @@ void ycerror(char *fmt, ...)
 como_config_t *
 parse_config_file(char *f, alc_t *my_alc, como_config_t *my_cfg)
 {
+    config_lexic_init();
+
     cfg = my_cfg;
     alc = my_alc;
 

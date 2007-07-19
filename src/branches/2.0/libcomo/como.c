@@ -62,7 +62,7 @@ void
 como_init(const char * program, int argc, char ** argv)
 {
     log_set_program(program);
-    if (!isatty(fileno(stdout))) {
+    if (!isatty(fileno(stderr))) {
 	log_set_use_color(FALSE);
     }
     
@@ -247,6 +247,20 @@ como__dup(char **dst, char *src, const char * file, const int line)
 }
 
 
+int
+como__fileno(FILE *stream, const char *file, const int line)
+{
+    int i = fileno(stream);
+    if (i < 1)
+        error("fileno failed (%s:%d): %s\n",
+            file, line, strerror(errno));
+    if (fflush(stream) < 0) /* user will be using the fd, so first flush */
+        error("fileno failed (%s:%d) - can't flush stream: %s\n",
+            file, line, strerror(errno));
+    return i;
+}
+
+
 char *
 como__asprintf(const char * file, const int line, char *fmt, ...)
 {
@@ -261,7 +275,6 @@ como__asprintf(const char * file, const int line, char *fmt, ...)
     va_end(ap);
     return str;
 }
-
 
 char *
 como_basename(const char * path)

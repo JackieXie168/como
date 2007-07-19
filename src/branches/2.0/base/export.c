@@ -446,7 +446,7 @@ ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
  */
 void
 export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-	    memmap_t * shmemmap, UNUSED int client_fd, como_node_t * node)
+	    memmap_t * shmemmap, UNUSED FILE * f, como_node_t * node)
 {
     int supervisor_fd, capture_fd, storage_fd;
     como_ex_t como_ex;
