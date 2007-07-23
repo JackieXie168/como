@@ -6,6 +6,7 @@ SET(MODULES
   dhcp
   ethtypes
   ewma
+  flow-reassembly
   flowcount
   frames
   ipssi
