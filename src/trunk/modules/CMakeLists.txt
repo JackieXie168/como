@@ -14,6 +14,7 @@ SET(MODULES
   nfexlist
   pattern-search
   protocol
+  scanner-detector
   ssid
   topaddr
   tophwaddr
