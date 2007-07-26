@@ -94,8 +94,6 @@ enum {
     SU_CA_START = 0x100,
 
     SU_ANY_EXIT,
-    
-    CA_SU_DONE,
 
 /*    SU_CA_INITIALIZE_SNIFFERS,
     CA_SU_SNIFFER_INITIALIZED,*/
@@ -105,18 +103,23 @@ enum {
     SU_CA_DEL_MODULE,
     CA_SU_MODULE_ADDED,
     CA_SU_MODULE_FAILED,
+    CA_SU_DONE,
 
     SU_EX_ADD_MODULE,
     SU_EX_DEL_MODULE,
     EX_SU_MODULE_ADDED,
     EX_SU_MODULE_FAILED,
+    EX_SU_DONE,
 
     EX_CA_ATTACH_MODULE,
     CA_EX_MODULE_ATTACHED,
+    CA_EX_DONE,
 
     CA_EX_PROCESS_SER_TUPLES,
     CA_EX_PROCESS_SHM_TUPLES,
     EX_CA_TUPLES_PROCESSED,
+
+    QU_SU_DONE,
     
     CCA_OPEN = 0x300,
     CCA_OPEN_RES,
@@ -187,8 +190,7 @@ pktmeta_type_t pktmeta_type_from_name(const char * name);
 /*
  * util-process.c
  */
-typedef void (*mainloop_fn) (ipc_peer_full_t * child,
-			     ipc_peer_t * parent,
+typedef void (*mainloop_fn) (ipc_peer_t * parent,
 			     memmap_t * shmemmap,
 			     FILE* client_stream,
 			     como_node_t * node);
@@ -292,17 +294,17 @@ typedef struct como_ca {
 #endif
 } como_ca_t;
 
-void capture_main (ipc_peer_full_t * child, ipc_peer_t * parent,
-	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
+void capture_main (ipc_peer_t * parent, memmap_t * shmemmap,
+        FILE* client_stream, como_node_t * node);
 
-void export_main  (ipc_peer_full_t * child, ipc_peer_t * parent,
-	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
+void export_main  (ipc_peer_t * parent, memmap_t * shmemmap,
+        FILE* client_stream, como_node_t * node);
 
-void query_main_http(ipc_peer_full_t * child, ipc_peer_t * parent,
-	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
+void query_main_http(ipc_peer_t * parent, memmap_t * shmemmap,
+        FILE* client_stream, como_node_t * node);
 
-void query_main_plain(ipc_peer_full_t * child, ipc_peer_t * parent,
-	   memmap_t * shmemmap, FILE* client_stream, como_node_t * node);
+void query_main_plain(ipc_peer_t * parent, memmap_t * shmemmap,
+        FILE* client_stream, como_node_t * node);
 
 
 /* como.c */
@@ -452,6 +454,8 @@ struct como_su {
 
     FILE *		logfile;	/* log file */
     ipc_peer_t *	ca;		/* CAPTURE */
+    ipc_peer_t *	ex;		/* EXPORT */
+    ipc_peer_t *	st;		/* STORAGE */
     
     pid_t		su_pid;
 

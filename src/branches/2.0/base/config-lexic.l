@@ -84,11 +84,12 @@ hashsize        { return TOK_HASHSIZE; }
 streamsize      { return TOK_STREAMSIZE; }
 args            { return TOK_ARGS; }
 args-file       { return TOK_ARGSFILE; }
-running         { return TOK_RUNNING; }
+on-demand       { return TOK_ONDEMAND; }
 end             { return TOK_END; }
 =               { return TOK_EQUALS; }
 ,               { return TOK_COMMA; }
 asnfile         { return TOK_ASNFILE; }
+alias           { return TOK_ALIAS; }
 
 shed-method     { return TOK_SHEDMETHOD; }
 

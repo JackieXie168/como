@@ -326,12 +326,14 @@ struct _mdl_def {
     hash_t *	args;
     uint64_t	streamsize;
     uint64_t	hashsize;
+    int         ondemand;
 };
 
 struct _como_config {
     array_t *	sniffer_defs;
     array_t *	mdl_defs;
 
+    char *      como_executable_full_path;
     char *      storage_path;
     char *      mono_path;
     char *      db_path;
@@ -349,8 +351,10 @@ struct _como_config {
 
     int         exit_when_done;
     int         inline_mode;
+    char *      inline_module;
     int         silent_mode;
     hash_t *    query_args;
+    hash_t *    query_alias;
 };
 
 

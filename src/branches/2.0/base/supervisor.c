@@ -47,6 +47,7 @@
 #include "ipc.h"
 
 como_su_t *s_como_su; /* used in cleanup, query and query-ondemand only */
+
 stats_t *como_stats;
 como_config_t *como_config;
 
@@ -84,6 +85,8 @@ launch_inline_query(void)
     
     peer = ipc_peer_child(COMO_QU, 0);
     pid = start_child(peer, query_main_plain, s_como_su->memmap, stdout, n);
+
+    /* warn("COMPLETED, pid = %d\n", pid); */
 }
 
 /*
@@ -145,12 +148,14 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
         }
         case COMO_ST_CLASS: { /* connect from ST */
             debug("su_ipc_onconnect -- STORAGE\n");
+            como_su->st = peer;
             st_done = 1;
             break;   
         }
         case COMO_EX_CLASS: { /* connect from EX */
             debug("su_ipc_onconnect -- EXPORT\n");
             assert(ca_done && st_done);
+            como_su->ex = peer;
 
             for (i = 0; i < mdls->len; i++) { /* send the mdls */
                 mdl_t *mdl;
@@ -194,11 +199,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
 	ipc_peer_full_t *ex;
 	pid_t pid;
         debug("CA and ST initialized, starting export\n");
-/*
-    COMO_CA = ipc_peer_at(COMO_CA, ca_location);
-    ((ipc_peer_t *)COMO_CA)->id = 0;
-    ((ipc_peer_t *)COMO_CA)->parent_class = COMO_SU_CLASS;
-*/
+
 	ex = ipc_peer_child(COMO_EX, 0);
 	pid = start_child(ex, export_main, como_su->memmap, NULL, node0);
 	if (pid < 0) {
@@ -263,25 +264,47 @@ su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
  * 
  * EXPORT should send this message to report that there are 
  * no more records to be processed. This messages happens only
- * in inine mode. As a result we exit (sending a SIGPIPE to all 
+ * in inline mode. As a result we exit (sending a SIGPIPE to all 
  * children as well).
  *
  */
+static void
+finalize_como(como_su_t *como_su)
+{
+    ipc_send(como_su->ca, SU_ANY_EXIT, NULL, 0);
+    ipc_send(como_su->ex, SU_ANY_EXIT, NULL, 0);
+    ipc_send(como_su->st, SU_ANY_EXIT, NULL, 0);
+    exit(EXIT_SUCCESS);
+}
+
 static int
-su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
+qu_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
 	    UNUSED int swap, UNUSED como_su_t * como_su)
 {
-/* TODO
-    ipc_send(CAPTURE, IPC_EXIT, NULL, 0); 
-    ipc_send(EXPORT, IPC_EXIT, NULL, 0); 
-    ipc_send(STORAGE, IPC_EXIT, NULL, 0); 
-*/
-    exit(EXIT_SUCCESS);
+    if (como_config->inline_mode) {
+        debug("exiting at QU request\n");
+        finalize_como(como_su);
+    }
     return IPC_OK;
 }
 
+static int
+ex_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
+	    UNUSED int swap, UNUSED como_su_t * como_su)
+{
+    if (como_config->inline_mode) {
+        debug("exiting at EX request\n");
+        finalize_como(como_su);
+    }
+    return IPC_OK;
+}
 
-
+static int
+ca_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
+	    UNUSED int swap, UNUSED como_su_t * como_su)
+{
+    return IPC_OK;
+}
 
 /*
  * -- cleanup
@@ -554,7 +577,9 @@ como_su_run(como_su_t * como_su)
 
     /* register handlers for IPC */
     //ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync);
-    ipc_register(CA_SU_DONE, (ipc_handler_fn) su_ipc_done);
+    ipc_register(CA_SU_DONE, (ipc_handler_fn) ca_su_ipc_done);
+    ipc_register(EX_SU_DONE, (ipc_handler_fn) ex_su_ipc_done);
+    ipc_register(QU_SU_DONE, (ipc_handler_fn) qu_su_ipc_done);
     /*ipc_register(CA_SNIFFERS_INITIALIZED,
 		 (ipc_handler_fn) su_ipc_ca_sniffers_initialized);*/
     
@@ -716,6 +741,9 @@ como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
         mdl_t *mdl = alc_new0(alc, mdl_t);
 	
 	def = &array_at(mdl_defs, mdl_def_t, i);
+
+        if (def->ondemand) /* skip on-demand modules */
+            continue;
 	
 	mdl->name = alc_strdup(alc, def->name);
 	mdl->mdlname = alc_strdup(alc, def->mdlname);

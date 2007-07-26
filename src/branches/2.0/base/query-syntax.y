@@ -141,6 +141,11 @@ keyvalue:
             ast.keyvals[ast.nkeyvals].val = $3;
             ast.nkeyvals++;
         }
+    | TOK_STRING TOK_EQUALS { /* value is not there */
+            ast.keyvals[ast.nkeyvals].key = $1;
+            ast.keyvals[ast.nkeyvals].val = como_strdup("");
+            ast.nkeyvals++;
+        }
     | TOK_STRING {
             ast.keyvals[ast.nkeyvals].key = $1;
             ast.keyvals[ast.nkeyvals].val = como_strdup("");

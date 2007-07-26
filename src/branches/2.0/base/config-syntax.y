@@ -79,9 +79,8 @@ report_parse_error(void)
 %token TOK_DBPATH TOK_LIBDIR TOK_MEMSIZE TOK_QUERY_PORT TOK_NAME TOK_LOCATION
 %token TOK_TYPE TOK_COMMENT TOK_SNIFFER TOK_FILESIZE TOK_MODULE TOK_DESCRIPTION
 %token TOK_SOURCE TOK_OUTPUT TOK_FILTER TOK_HASHSIZE TOK_STREAMSIZE TOK_ARGS
-%token TOK_ARGSFILE TOK_RUNNING TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
-%token TOK_STORAGEPATH TOK_ASNFILE
-%token TOK_SHEDMETHOD
+%token TOK_ARGSFILE TOK_ONDEMAND TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
+%token TOK_STORAGEPATH TOK_ASNFILE TOK_SHEDMETHOD TOK_ALIAS
 %token <string> TOK_STRING
 %token <number> TOK_NUMBER
 
@@ -89,10 +88,12 @@ report_parse_error(void)
 
 %%
 
-config: config item | item;
+config: config item | item
+;
+
 item:
       TOK_NEWLINE
-    | keyword TOK_NEWLINE
+    | keyword
     | sniffer_def
     | module_def
     | error TOK_NEWLINE { report_parse_error(); }
@@ -113,57 +114,59 @@ keyword: /* a global keyword */
     | TOK_FILESIZE TOK_NUMBER { set_filesize($2, cfg); }
 
     | TOK_QUERY_PORT TOK_NUMBER { set_queryport($2, cfg); }
+    | TOK_ALIAS TOK_STRING TOK_EQUALS TOK_STRING {
+        hash_insert_string(cfg->query_alias, $2, $4);
+    }
 ;
 
 sniffer_def: /* the definition of a sniffer */
-    TOK_SNIFFER TOK_STRING TOK_STRING TOK_NEWLINE {
+    TOK_SNIFFER TOK_STRING TOK_STRING {
         /* sniffer + type + iface/filename */
         define_sniffer($2, $3, NULL, cfg);
     }
-    | TOK_SNIFFER TOK_STRING TOK_STRING TOK_STRING TOK_NEWLINE {
+    | TOK_SNIFFER TOK_STRING TOK_STRING TOK_STRING {
         /* same plus options */
         define_sniffer($2, $3, $4, cfg);
     }
 ;
 
-module_def:
-    TOK_MODULE {
-        /* initialize the defn */
-        initialize_module_def(&mdl, alc);
-    }
-    TOK_STRING TOK_NEWLINE
+module_def: /* beware: actions in mid-rule */
+    TOK_MODULE { initialize_module_def(&mdl, alc); }
+    TOK_STRING { mdl.name = $3; }
     optional_module_keywords
-    TOK_END TOK_NEWLINE {
-        /* save the module defn */
-        mdl.name = $3;
-        define_module(&mdl, cfg);
-    }
+    TOK_END { define_module(&mdl, cfg); }
 ;
 
-optional_module_keywords: | module_keywords;
-module_keywords: module_keywords module_keyword | module_keyword;
+optional_module_keywords: | module_keywords
+;
+
+module_keywords: module_keywords module_keyword | module_keyword
+;
 
 module_keyword:
       TOK_NEWLINE
-    | TOK_ARGS args_list TOK_NEWLINE
-    | TOK_SOURCE TOK_STRING TOK_NEWLINE      { mdl.mdlname = $2; }
-    | TOK_OUTPUT TOK_STRING TOK_NEWLINE      { mdl.output = $2; }
-    | TOK_DESCRIPTION TOK_STRING TOK_NEWLINE { mdl.descr = $2; }
-    | TOK_FILTER TOK_STRING TOK_NEWLINE      { mdl.filter = $2; }
-    | TOK_HASHSIZE TOK_NUMBER TOK_NEWLINE    { mdl.hashsize = $2; }
-    | TOK_STREAMSIZE TOK_NUMBER TOK_NEWLINE  { mdl.streamsize = $2; }
-    | TOK_SHEDMETHOD TOK_STRING TOK_NEWLINE    {
-                                                #ifdef LOADSHED
-                                                mdl.shed_method = $2;
-                                                #endif
-                                               }
+    | TOK_ARGS args_list 
+    | TOK_SOURCE TOK_STRING { mdl.mdlname = $2; }
+    | TOK_OUTPUT TOK_STRING { mdl.output = $2; }
+    | TOK_DESCRIPTION TOK_STRING { mdl.descr = $2; }
+    | TOK_FILTER TOK_STRING { mdl.filter = $2; }
+    | TOK_HASHSIZE TOK_NUMBER { mdl.hashsize = $2; }
+    | TOK_STREAMSIZE TOK_NUMBER { mdl.streamsize = $2; }
+    | TOK_SHEDMETHOD TOK_STRING {
+                                    #ifdef LOADSHED
+                                    mdl.shed_method = $2;
+                                    #endif
+                                }
     /*| TOK_ARGSFILE TOK_STRING (TODO) */
-    /*| TOK_RUNNING TOK_STRING (TODO) */
+    | TOK_ONDEMAND { mdl.ondemand = 1; }
     | error TOK_NEWLINE { report_parse_error(); }
 ;
 
-args_list: args_list TOK_COMMA arg | arg;
+args_list: args_list TOK_COMMA arg | arg
+;
+
 arg: TOK_STRING TOK_EQUALS TOK_STRING { hash_insert_string(mdl.args, $1, $3); }
+;
 
 %%
 
@@ -190,10 +193,26 @@ parse_config_file(char *f, alc_t *my_alc, como_config_t *my_cfg)
     alc = my_alc;
 
     ycin = fopen(f, "r");
-    if (ycin == NULL) {
+    if (ycin == NULL)
         error("cannot open `%s' for reading\n", f);
-    }
 
     ycparse();
     return cfg;
 }
+
+como_config_t *
+parse_config_string(char *str, alc_t *my_alc, como_config_t *my_cfg)
+{
+    void *buffer;
+    config_lexic_init();
+
+    cfg = my_cfg;
+    alc = my_alc;
+
+    buffer = yc_scan_string(str);
+    ycparse();
+    yc_delete_buffer(buffer);
+
+    return cfg;
+}
+

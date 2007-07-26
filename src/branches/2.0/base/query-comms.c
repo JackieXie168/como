@@ -299,7 +299,7 @@ parse_timestr(char * str, timestamp_t * base)
  * value is otherwise returned representing the HTTP response status that
  * qualifies the error.
  */
-static int
+int
 query_parse(qreq_t * q, char * buf, timestamp_t now)
 {
     char *p, *t;

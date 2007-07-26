@@ -132,7 +132,7 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
 	notice("starting process %s pid %d\n",
 	       ipc_peer_get_name(who), getpid());
 
-	mainloop(child, (ipc_peer_t *) COMO_SU, shmemmap, client_stream, node);
+	mainloop((ipc_peer_t *) COMO_SU, shmemmap, client_stream, node);
 	exit(0);
     }
 

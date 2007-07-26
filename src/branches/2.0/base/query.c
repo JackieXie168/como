@@ -42,6 +42,7 @@
 #include <err.h>
 #include <errno.h>      /* errno */
 
+#define LOG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "storage.h"
@@ -58,18 +59,25 @@
 
 enum {
     FORMAT_COMO = -2,
-    FORMAT_RAW = -3
+    FORMAT_RAW = -3,
+    FORMAT_HTML = -4
 };
 
 const qu_format_t QU_FORMAT_COMO =
-{FORMAT_COMO, "como", "application/octet-stream"};
+    { FORMAT_COMO, "como", "application/octet-stream" };
 
 const qu_format_t QU_FORMAT_RAW =
-{FORMAT_RAW, "raw", "application/octet-stream"};
+    { FORMAT_RAW, "raw", "application/octet-stream" };
+
+const qu_format_t QU_FORMAT_HTML =
+    { FORMAT_HTML, "html", "text/html" };
 
 /* vars 'inherited' from SU */
 extern stats_t *como_stats;
 extern como_config_t *como_config;
+
+/* global vars */
+ipc_peer_t *supervisor;
 
 /* 
  * -- query_validate
@@ -86,6 +94,17 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
     static char errorstr[2048];
     mdl_t *mdl;
     mdl_iquery_t *iq;
+
+    if (req->mode != QMODE_MODULE)
+        return NULL; /* only validates queries for mdls */
+
+    if (req->mode == QMODE_MODULE && req->source != NULL) {
+        /* TODO: proper validation of on-demand queries,
+         *       check the qu_format according to module
+         */
+	req->qu_format = &QU_FORMAT_HTML;
+        return NULL;
+    }
 
     if (req->module == NULL) {
         /*
@@ -110,33 +129,16 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
     }
 
     /* check if the module is present in the current configuration */
-    mdl = mdl_lookup(node->mdls, req->module);
+    mdl = mdl_lookup(node->mdls, config_resolve_alias(como_config, req->module));
     if (mdl == NULL) {
-	/*
-	 * the module is not present in the configuration file.
-	 * check if we have an alias instead.  
-	 */
-#if 0
-	alias_t * alias; 
-	int nargs, i; 
+        warn("module %s not found\n", req->module);
+        sprintf(errorstr, 
+                "Module `%s' not found in the current configuration\n",
+                req->module);
+        *errcode = 404;
+        return errorstr;
 
-	for (alias = map.aliases; alias; alias = alias->next) {
-	    if (strcmp(alias->name, req->module) == 0) 
-		break;
-	} 
-
-	if (alias == NULL) {
-#endif
-	    warn("module %s not found\n", req->module);
-	    sprintf(errorstr, 
-		    "Module `%s' not found in the current configuration\n",
-		    req->module);
-            *errcode = 404;
-	    return errorstr;
-#if 0
-	} 
-	req->mdl = module_lookup(alias->module, node_id); 
-
+        #if 0
 	/* count the query arguments */
 	for (nargs = 0; req->args[nargs]; nargs++)
 	    ; 
@@ -148,7 +150,7 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
 	    req->args[i] = safe_strdup(alias->args[i - nargs]); 
 
 	req->args[nargs + alias->ac] = NULL;
-#endif
+        #endif
     }
 
     /*
@@ -439,6 +441,7 @@ query_initialize(ipc_peer_t *parent, int *supervisor_fd)
 
     log_set_program("QU");
     *supervisor_fd = ipc_peer_get_fd(parent);
+    supervisor = parent;
     memset(&como_qu, 0, sizeof(como_qu));
 
     /* 
@@ -654,10 +657,17 @@ query_generic_main(FILE * client_stream, como_node_t * node, qreq_t *qreq)
 
     /* close the file with STORAGE */
     csclose(file_fd, 0);
+
     /* close the socket and the file */
+    if (ipc_send(supervisor, QU_SU_DONE, NULL, 0) != IPC_OK)
+        warn("could not send message to su\n");
+
     close(client_fd);
     close(storage_fd);
     close(supervisor_fd);
+
+    /* exit */
+    exit(EXIT_SUCCESS);
 }
 
 #define HTTP_RESPONSE_400 \
@@ -703,7 +713,7 @@ write_http_errcode(int errcode, int fd)
 
 
 void
-query_main_http(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
+query_main_http(ipc_peer_t * parent,
 	   UNUSED memmap_t * shmemmap, FILE* client_stream, como_node_t * node)
 {
     int supervisor_fd, ret, errcode;
@@ -747,14 +757,16 @@ query_main_http(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     }
 
     /*
-     * produce a response header
+     * produce a response header, only required for modules
      */
-    httpstr = NULL;
-    httpstr = como_asprintf("HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n",
-			    req.qu_format->content_type);
-    if (como_write(client_fd, httpstr, strlen(httpstr)) < 0)
-	error("sending data to the client");
-    free(httpstr);
+    if (req.mode == QMODE_MODULE) {
+        httpstr = NULL;
+        httpstr = como_asprintf("HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n",
+                                req.qu_format->content_type);
+        if (como_write(client_fd, httpstr, strlen(httpstr)) < 0)
+            error("sending data to the client");
+        free(httpstr);
+    }
 
     /*
      * now do the generic query tasks
@@ -764,26 +776,28 @@ query_main_http(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
 
 void
-query_main_plain(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-	   UNUSED memmap_t * shmemmap, FILE* client_stream, como_node_t * node)
+query_main_plain(ipc_peer_t * parent, UNUSED memmap_t * shmemmap,
+                    FILE* client_stream, como_node_t * node)
 {
-    extern como_su_t *s_como_su;
+   // extern como_su_t *s_como_su;
     int supervisor_fd, errcode;
-    char *errstr;
+    char *errstr, *to_http;
     qreq_t req;
     int client_fd = como_fileno(client_stream);
 
     query_initialize(parent, &supervisor_fd);
+
+    to_http = como_asprintf("GET /%s HTTP/1.0\r\n\r\n",
+            como_config->inline_module);
 
     /*
      * this is an inline or ondemand query. we run the last module
      * in the config.
      */
     bzero(&req, sizeof(req));
-    req.module = s_como_su->query_module;
-    req.start = 0;
-    req.end = -1;
-    req.wait = 1;
+    int query_parse(qreq_t * q, char * buf, timestamp_t now);
+    query_parse(&req, to_http, 0);
+
 
     debug("validating query for module `%s'\n", req.module);
     errstr = query_validate(&req, node, &errcode);

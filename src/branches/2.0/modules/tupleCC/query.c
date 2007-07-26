@@ -194,47 +194,35 @@ print_rec(mdl_t *self, int format_id, record_t *rec, void *state)
     } 
 }
 
-#if 0
-static int
-replay(void * self, char *buf, char *out, size_t * len, int pleft)
+void
+replay(mdl_t *self, record_t *r, void *state)
 {
-    CONFIGDESC * config = CONFIG(self);
-    FLOWDESC * x;
+    unsigned int i;
     timestamp_t pkt_ts, inter_ts; 
     uint32_t pkt_duration;
-    size_t outlen;
     uint64_t nbytes, npkts; 
-    int pktsz, paysz;
+    int pktsz, paysz, pleft;
 
-    if (buf == NULL) {
-	*len = 0;
-	return 0; 		/* nothing to do */
-    } 
-
-    /* 
-     * generate packets as long as we have space in the output 
-     * buffer. the packets will all be equal with the same timestamps
-     * and a packet length equal to the average packet lengths. 
-     */
-    x = (FLOWDESC *) buf; 
-    nbytes = NTOHLL(x->bytes);
-    npkts = NTOHLL(x->pkts);
+    nbytes = r->bytes;
+    npkts = r->pkts;
 
     /* initialize packet left count */
-    if (pleft == 0) 
-	pleft = npkts;
+    pleft = npkts;
     
     /* fill the output buffer */
-    outlen = 0;
-    paysz = sizeof(struct _como_nf) + sizeof(struct _como_iphdr) +
-	    sizeof(struct _como_udphdr);
-    pktsz = sizeof(pkt_t) + paysz; 
-    while (outlen + pktsz < *len && pleft > 0) {
+    #define paysz \
+        (sizeof(struct _como_nf)        \
+         + sizeof(struct _como_iphdr)   \
+         + sizeof(struct _como_udphdr)  \
+         + sizeof(pkt_t))
+
+    while (pleft > 0) {
 	pkt_t * pkt;
 	uint32_t plen;
  	int pcount; 
+        char out[paysz];
 
-	pkt = (pkt_t *) (out + outlen); 
+	pkt = (pkt_t *) out;
 	pkt->payload = (char *) pkt + sizeof(pkt_t);
 
 #ifdef BUILD_FOR_ARM
@@ -258,26 +246,26 @@ replay(void * self, char *buf, char *out, size_t * len, int pleft)
         UDP(src_port, x->src_port);
         UDP(dst_port, x->dst_port);
 #else
-	COMO(caplen) = paysz;
+	COMO(len) = COMO(caplen) = paysz - sizeof(pkt_t);
 	COMO(type) = COMOTYPE_NF;
 	COMO(l2type) = LINKTYPE_NONE;
 	COMO(l3type) = ETHERTYPE_IP;
 	COMO(l3ofs) = sizeof(struct _como_nf); 
-	COMO(l4type) = x->proto; 
+	COMO(l4type) = r->proto; 
 	COMO(l4ofs) = COMO(l3ofs) + sizeof(struct _como_iphdr);
 	COMO(l7ofs) = COMO(l4ofs) + sizeof(struct _como_udphdr);
 
-	N16(NF(sampling)) = x->sampling;
+	N16(NF(sampling)) = htons(r->sampling);
 
 	IP(version) = 0x4;
 	IP(ihl) = 0x5;
-        IP(proto) = x->proto;
+        IP(proto) = r->proto;
 	N16(IP(len)) = htons((uint16_t) COMO(len)); 
-        IP(src_ip) = x->src_ip;
-        IP(dst_ip) = x->dst_ip;
+        N32(IP(src_ip)) = r->src_ip;
+        N32(IP(dst_ip)) = r->dst_ip;
 
-        UDP(src_port) = x->src_port;
-        UDP(dst_port) = x->dst_port;
+        N16(UDP(src_port)) = r->src_port;
+        N16(UDP(dst_port)) = r->dst_port;
 #endif
 
 	pcount = 1; 
@@ -285,6 +273,7 @@ replay(void * self, char *buf, char *out, size_t * len, int pleft)
 	if (pleft == 1) 
 	     plen += nbytes % npkts; 
 
+        #if 0 /* XXX what is compact mode? */
 	if (config->compact && pleft != 1) {
  	    /* 
 	     * in compact mode we need to make sure we generate a number 
@@ -299,10 +288,11 @@ replay(void * self, char *buf, char *out, size_t * len, int pleft)
 	    if (nbytes % npkts != 0) 
 		pcount--; 
 	}
+        #endif
 
-	inter_ts = NTOHLL(x->last_ts) - NTOHLL(x->start_ts); 
+	inter_ts = r->last_ts - r->start_ts; 
 	inter_ts /= (uint64_t) npkts;
-	pkt_ts = NTOHLL(x->start_ts) + (npkts - pleft) * inter_ts; 
+	pkt_ts = r->start_ts + (npkts - pleft) * inter_ts; 
 	pkt_duration = TS2SEC(inter_ts * (pcount - 1)) * 1000 + 
 		       TS2MSEC(inter_ts * (pcount - 1)); 
 
@@ -318,11 +308,10 @@ replay(void * self, char *buf, char *out, size_t * len, int pleft)
 	N32(NF(duration)) = htonl(pkt_duration);
 #endif
 
+        mdl_write(self, out, paysz);
 	pleft -= pcount;
-	outlen += pktsz; 
-    } 
+    }
 
-    *len = outlen;
-    return pleft; 
+    #undef paysz
 }
-#endif
+

@@ -115,9 +115,13 @@ export(mdl_t *self, tuple_t **tuples, size_t ntuples, timestamp_t ivl_start,
     entry_t *entries)
 {
     config_t *config = mdl_get_config(self, config_t);
-    tuple_t *t = tuples[0];
+    tuple_t *t;
     int n;
 
+    if (ntuples == 0)
+        return;
+
+    t = tuples[0];
     assert(ntuples == 1);
     store_entries(self, entries, t, IPPROTO_TCP, config->topn);
     store_entries(self, entries, t, IPPROTO_UDP, config->topn);
