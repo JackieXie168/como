@@ -38,8 +38,9 @@
 #include "comopriv.h"
 
 #define USAGE \
-    "usage: %s [-c config-file] [-D db-path] [-L libdir] [-p query-port] " \
-    "[-m mem-size] [-v logflags] [-i] [-S] [-t path_to_storage] " \
+    "usage: %s [-c config-file] [-c config-string] " \
+    "[-D db-path] [-L libdir] [-p query-port] " \
+    "[-m mem-size] [-v logflags] [-i inline-module] [-S] [-t path_to_storage] "\
     "[-s sniffer[,device[,\"args\"]]] [module[:arg1=value1,arg2=value2..] " \
     "[-q queryarg1=value1,arg2=value2..] "\
     "[filter]]\n"
@@ -65,7 +66,7 @@ define_sniffer(char *name, char *device, UNUSED char *args, como_config_t *cfg)
 void
 initialize_module_def(mdl_def_t *mdl, alc_t *alc)
 {
-    bzero(mdl, sizeof(mdl));
+    bzero(mdl, sizeof(mdl_def_t));
     mdl->args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     mdl->streamsize = 128 * 1024 * 1024;
     mdl->filter = como_strdup("all");
@@ -187,6 +188,17 @@ set_memsize(int64_t size, como_config_t *cfg)
             CONVERT, FATAL);
 }
 
+enum {
+    CFG_ITEM_STRING,
+    CFG_ITEM_FILE
+};
+
+typedef struct cfg_item cfg_item_t;
+struct cfg_item {
+    int type;
+    char *info;
+};
+
 /*
  * -- configure
  *
@@ -195,14 +207,16 @@ set_memsize(int64_t size, como_config_t *cfg)
 como_config_t *
 configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 {
-    static const char *opts = "hiSt:q:c:D:L:p:m:v:x:s:e";
-    int i, c, cfg_file_count = 0, have_cmdline_modules = 0;
-    #define MAX_CFGFILES 1024
-    char *cfg_files[MAX_CFGFILES];
+    static const char *opts = "hi:St:q:c:C:D:L:p:m:v:x:s:e";
+    int i, c, cfg_item_count = 0, cfg_file_count = 0;
+    #define MAX_CFGITEMS 1024
+    cfg_item_t cfg_items[MAX_CFGITEMS];
 
     bzero(cfg, sizeof(como_config_t));
     cfg->mdl_defs = array_new(sizeof(mdl_def_t));
     cfg->sniffer_defs = array_new(sizeof(sniffer_def_t));
+
+    cfg->como_executable_full_path = como_strdup(argv[0]);
 
     /*
      * set some defaults
@@ -214,11 +228,12 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     cfg->filesize = 128 * 1024 * 1024;
     cfg->libdir = DEFAULT_LIBDIR;
     cfg->query_args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    cfg->query_alias = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
 
     while ((c = getopt(argc, argv, opts)) != -1) {
         switch(c) {
         case 'h':
-            msg(USAGE, argv[0]);
+            printf(USAGE, argv[0]);
             exit(0);
 
 	case 'e':
@@ -226,10 +241,21 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 	    break;
 
         case 'c': /* parse a config file */
-            if (cfg_file_count >= MAX_CFGFILES)
-                error("too many config files\n");
-            cfg_files[cfg_file_count++] = optarg;
+            if (cfg_item_count >= MAX_CFGITEMS)
+                error("too many config files / strings\n");
+            cfg_items[cfg_item_count].type = CFG_ITEM_FILE;
+            cfg_items[cfg_item_count].info = optarg;
+            cfg_item_count++;
+            cfg_file_count++;
 	    break;
+
+        case 'C': /* string to be parsed as if it were in a cfgfile */
+            if (cfg_item_count >= MAX_CFGITEMS)
+                error("too many config files / strings\n");
+            cfg_items[cfg_item_count].type = CFG_ITEM_STRING;
+            cfg_items[cfg_item_count].info = optarg;
+            cfg_item_count++;
+            break; 
 
 	case 'D':	/* db-path */
 	    cfg->db_path = como_strdup(optarg);
@@ -272,6 +298,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 #endif
         case 'i': /* run inline: also silent & exit when done */
             cfg->inline_mode = 1;
+            cfg->inline_module = como_strdup(optarg);
             cfg->silent_mode = 1;
             cfg->exit_when_done = 1;
             break;
@@ -328,8 +355,16 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         }
     }
 
-    for (i = 0; i < cfg_file_count; i++) /* parse config files here */
-        parse_config_file(cfg_files[i], alc, cfg);
+    for (i = 0; i < cfg_item_count; i++) { /* parse config items here */
+        switch (cfg_items[i].type) {
+            case CFG_ITEM_FILE:
+                parse_config_file(cfg_items[i].info, alc, cfg);
+                break;
+            case CFG_ITEM_STRING:
+                parse_config_string(cfg_items[i].info, alc, cfg);
+                break;
+        }
+    }
 
     /*
      * no cfg files given. try using the default,
@@ -380,29 +415,93 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         }
 
         define_module(&mdl, cfg);
-        have_cmdline_modules = 1;
         free(buf);
         optind++;
     }
 
-    if (cfg->inline_mode && ! have_cmdline_modules)
-        error("inline mode requires specifying a module in the cmdline\n");
+    /*
+     * TODO
+     * - module names should be unique.
+     * - no alias should collide with a real module name.
+     */
 
     /*
      * final configuration tweak: if we are running in inline mode,
-     * discard all module definitions but the last one. this way
-     * we avoid extra work that the user is not interested on.
+     * discard all module definitions but the interesting one.
      */
-    if (cfg->inline_mode && cfg->mdl_defs->len > 0) {
-        array_t *a = array_new(sizeof(mdl_def_t));
-        mdl_def_t *d =
-            &array_at(cfg->mdl_defs, mdl_def_t, cfg->mdl_defs->len - 1); 
-        array_add(a, d);
-        cfg->mdl_defs = a;
+    if (cfg->inline_mode) {
+        array_t *new_mdl_defs = array_new(sizeof(mdl_def_t));
+        char *name, *realname, *tmp;
+    
+        name = strdup(cfg->inline_module);
+        tmp = strchr(name, '?');
+        if (tmp != NULL)
+            *tmp = '\0';
+
+        realname = config_resolve_alias(cfg, name);
+
+        for (i = 0; i < cfg->mdl_defs->len; i++) {
+            mdl_def_t *d = &array_at(cfg->mdl_defs, mdl_def_t, i);
+
+            if (strcmp(d->name, realname) == 0) {
+                array_add(new_mdl_defs, d);
+                break;
+            }
+        }
+
+        if (i == cfg->mdl_defs->len)
+            error("inline module `%s' not found in config\n",
+                    cfg->inline_module);
+
+        cfg->mdl_defs = new_mdl_defs;
+        free(name);
     }
 
     /* TODO extensive checking to remove all small mem leaks */
 
     return cfg;
+}
+
+/*
+ * -- config_resolve_alias
+ *
+ * Get the real name of a module according to a configuration,
+ * following aliases if any.
+ */
+char *
+config_resolve_alias(como_config_t *cfg, char *name)
+{
+    char *aliased = hash_lookup_string(cfg->query_alias, name);
+
+    if (aliased != NULL)
+        return aliased;
+
+    return name;
+}
+
+/*
+ * -- config_get_module_def_by_name
+ *
+ * Search the module definitions in a config_t by name.
+ */
+mdl_def_t *
+config_get_module_def_by_name(como_config_t *cfg, char *name)
+{
+    char *real_name;
+    int i;
+
+    real_name = config_resolve_alias(cfg, name);
+
+    /*
+     * search the on-demand module in the module definitions
+     */
+    for (i = 0; i < cfg->mdl_defs->len; i++) {
+        mdl_def_t *def = &array_at(cfg->mdl_defs, mdl_def_t, i);
+
+        if (! strcmp(def->name, real_name))
+            return def;
+    }
+
+    return NULL;
 }
 

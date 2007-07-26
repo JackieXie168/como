@@ -44,37 +44,92 @@
 #include "comopriv.h"
 #include "query.h"
 
+/* config 'inherited' from supervisor */
+extern como_config_t *como_config;
+
 void 
-query_ondemand(UNUSED int fd, UNUSED qreq_t * req, UNUSED int node_id) 
+query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id) 
 {
-    extern como_config_t *como_config;
-    pid_t pid, p;
-    int st;
+    char *my_argv[128], *mdl_code = NULL;
+    mdl_def_t *def;
+    int i;
+    char *buffer;
+    #ifdef DEBUG 
+    char debugbuf[1024 * 10];
+    #endif
+    hash_iter_t it;
 
-    switch ((pid = fork())) {
-        case -1:
-            warn("could not fork como inline to attend query!\n");
-            /* TODO return an error msg? */
+    /*
+     * search the on-demand module in the module definitions
+     */
+    def = config_get_module_def_by_name(como_config, req->module);
+    if (def == NULL)
+        error("module `%s' not found\n", req->module);
+    mdl_code = def->mdlname;
 
-        case 0:
-            error("this is the child process, should run "
-                    "como -i -D %s -L %s -t %s "
-                    "-s como,http://localhost:%d/%s?format=como"
-                    "%s \n",
-                    como_config->db_path, como_config->libdir,
-                    como_config->storage_path, como_config->query_port,
-                    req->mdl, req->source);
+    i = 0; /* prepare the arguments to re-exec as an inline query */
+    my_argv[i++] = como_config->como_executable_full_path;
+    my_argv[i++] = "-D";
+    my_argv[i++] = como_config->db_path;
+    my_argv[i++] = "-L";
+    my_argv[i++] = como_config->libdir;
+    my_argv[i++] = "-t";
+    my_argv[i++] = como_config->storage_path;
 
-        default:
-            warn("como inline launched\n");
-            break;
-    }
+    my_argv[i++] = "-C"; /* add the definition for the ondemand mdl */
     
-    warn("waiting for pid %d\n", pid);
-    do {
-        p = waitpid(pid, &st, 0);
-        warn("ret %d\n", p);
-    } while (p < 0);
+    buffer = como_malloc(8 * 1024);
+    sprintf(buffer, "module \"%s\" source \"%s\"", req->module, mdl_code);
 
-    sleep(5);
+    hash_iter_init(req->args, &it);
+    while (hash_iter_next(&it)) {
+        strcat(buffer, " args \"");
+        strcat(buffer, hash_iter_get_string_key(&it));
+        strcat(buffer, "\" = \"");
+        strcat(buffer, hash_iter_get_value(&it));
+        strcat(buffer, "\"");
+    }
+    strcat(buffer, " end");
+    my_argv[i++] = buffer;
+
+    my_argv[i++] = "-i"; /* do an inline execution of the mdl */
+
+    buffer = como_malloc(8 * 1024);
+    sprintf(buffer, "%s?format=%s", req->module, req->format);
+
+    hash_iter_init(req->args, &it);
+    while (hash_iter_next(&it)) {
+        strcat(buffer, "&");
+        strcat(buffer, hash_iter_get_string_key(&it));
+        strcat(buffer, "=");
+        strcat(buffer, hash_iter_get_value(&it));
+    }
+    my_argv[i++] = buffer;
+
+    my_argv[i++] = "-s"; /* with the appropriate input sniffer */
+    my_argv[i++] = como_asprintf("como,http://localhost:%d/%s"
+                                    "?format=como&start=%d&end=%d&wait=%s",
+                                    como_config->query_port,
+                                    req->source,
+                                    req->start,
+                                    req->end,
+                                    req->wait ? "yes" : "no");
+
+    my_argv[i++] = NULL; /* end of args */
+
+#if DEBUG
+    debug("running inline como to attend query:\n");
+    debugbuf[0] = '\0';
+    for (i = 0; my_argv[i] != NULL; i++) {
+        strcat(debugbuf, " ");
+        strcat(debugbuf, my_argv[i]);
+    }
+    debug("command = %s\n", debugbuf);
+#endif
+
+    dup2(fd, 1); /* attach stdout to socket */
+
+    i = execvp(my_argv[0], my_argv); /* run inline query */
+    error("execvp() error\n");
 }
+

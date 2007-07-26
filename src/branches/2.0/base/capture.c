@@ -41,7 +41,7 @@
 
 #define CAPTURE_SOURCE
 
-//#define LOG_DISABLE
+#define LOG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "sniffers.h"
@@ -378,6 +378,7 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
      */
     debug("calling batch_filter with pkts %p, count %d\n",
 	  *batch->pkts0, batch->count);
+
     start_tsctimer(como_stats->ca_filter_timer);
     which = batch_filter(batch, como_ca);
     end_tsctimer(como_stats->ca_filter_timer);
@@ -1436,6 +1437,8 @@ cabuf_cl_res_mgmt(int wait_for_clients, int avg_batch_len,
  *
  * Note that if no sniffer has been "TOUCHED" then we leave the
  * select structure AND the timeout alone.
+ *
+ * Returns -1 if all sniffers have finished.
  * 
  */
 static int
@@ -1539,7 +1542,11 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
         }
 
 	msg("no sniffers left. waiting for queries\n");
-	ca_print_timers();
+
+        return -1; /* signal that we are done. this will be returned 
+                    * once, because at this point all sniffers have
+                    * been removed from the list and from now on
+                    * this will return 0. */
     }
 
     return active;
@@ -1555,8 +1562,8 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
  *
  */
 void
-capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-	     memmap_t * shmemmap, UNUSED int client_fd, como_node_t * node)
+capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
+        como_node_t * node)
 {
     como_ca_t como_ca;
     struct timeval timeout = { 0, 0 };
@@ -1689,6 +1696,15 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
 	active_sniff = setup_sniffers(&timeout, sniffers, &como_ca);
 
+        if (active_sniff < 0) { /* all sniffers done */
+            int idx;
+
+            for (idx = 0; idx < como_ca.mdls->len; idx++) {
+                mdl_t *mdl = array_at(como_ca.mdls, mdl_t *, idx);
+                mdl_icapture_t *ic = mdl_get_icapture(mdl);
+                ipc_send(ic->export, CA_EX_DONE, NULL, 0);
+            }
+        }
 
 	/* wait for messages, sniffers or up to the polling interval */
 	if (active_sniff > 0)
@@ -1751,6 +1767,7 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    if (wait_for_clients)
 		continue; /* skip capturing more packets */
 	}
+
 	/*
 	 * check sniffers for packet reception (both the ones that use 
 	 * select() and the ones that don't)
@@ -1836,11 +1853,10 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		  sniff->cb->name);
 	}
 
-	/* try to create a new batch containing all captured packets */
-
-	batch = batch_create(force_batch, &como_ca);
-
-	if (batch) {
+	/*
+         * try to create batches using the captured packets
+         */
+        while ((batch = batch_create(force_batch, &como_ca))) {
 	    if (avg_batch_len == 0)
 		avg_batch_len = batch->count;
 	    else
@@ -1866,6 +1882,7 @@ capture_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 	    else
 		batch_free(batch);
 	}
+
 
 	/* 
          * Check shared mem usage. If above FREEZE_THRESHOLD, and export

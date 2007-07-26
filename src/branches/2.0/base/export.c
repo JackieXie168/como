@@ -56,6 +56,7 @@ struct _como_ex {
     char * st_dir;
     int use_shmem;
     hash_t *mdls; /* mdl name to mdl */
+    ipc_peer_t *supervisor;
 };
 
 /* config 'inherited' from supervisor */
@@ -197,7 +198,8 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
     struct tuple *t;
     mdl_t *mdl;
 
-    //debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n", msg->ntuples);
+    debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n",
+            msg->ntuples);
 
     /*
      * locate the module
@@ -206,7 +208,8 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
     if (mdl == NULL)
         error("capture sent tuples from an unknown module\n");
 
-    //debug("handle_ca_ex_process_shm_tuples -- tuples for mdl `%s'\n", mdl->name);
+    debug("handle_ca_ex_process_shm_tuples -- tuples for mdl `%s'\n",
+            mdl->name);
 
     ie = mdl_get_iexport(mdl);
     /*
@@ -218,7 +221,7 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 
 	tuples = como_calloc(msg->ntuples, sizeof(void *));
 
-	//debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
+	debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
 	i = 0;
 	tuples_foreach(t, &msg->tuples) {
 	    tuples[i++] = t->data;
@@ -232,17 +235,71 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 	 */
 	free(tuples);
     } else {
-        //debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
+        debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
         tuples_foreach(t, &msg->tuples) {
 	    mdl_store_rec(mdl, t->data);
         }
     }
 
-    //debug("handle_ca_ex_process_shm_tuples -- tuples processed, sending response\n");
+    debug("handle_ca_ex_process_shm_tuples -- done, sending reply\n");
     ipc_send(peer, EX_CA_TUPLES_PROCESSED, msg, sz);
 
     return IPC_OK;
 }
+
+/*
+ * -- handle_ca_ex_done
+ *
+ * handle CA_EX_DONE messages sent by CAPTURE (sibling). 
+ * if we are processing this it means we are done.
+ */
+static int
+handle_ca_ex_done(UNUSED ipc_peer_t * peer,
+                    UNUSED void * msg,
+                    UNUSED size_t sz, UNUSED int swap,
+                    UNUSED como_ex_t * como_ex)
+{
+    mdl_iexport_t *ie;
+    mdl_t *mdl;
+            hash_iter_t it;
+
+    debug("capture is done, flushing\n");
+
+    hash_iter_init(como_ex->mdls, &it);
+    while(hash_iter_next(&it)) {
+        mdl = hash_iter_get_value(&it);
+
+        ie = mdl_get_iexport(mdl);
+
+        debug("flushing tuples for mdl `%s'\n", mdl->name);
+
+        if (ie->export != NULL)
+            ie->export(mdl, NULL, 0, ~0, ie->state);
+
+        debug("closing output file\n");
+        csclose(ie->cs_writer, ie->woff);
+    }
+    
+    /*
+     * we are done
+     */
+    debug("handle_ca_ex_done -- modules flushed\n");
+
+    ipc_send(como_ex->supervisor, EX_SU_DONE, msg, sz);
+
+    return IPC_OK;
+}
+
+static int
+handle_su_any_exit(UNUSED ipc_peer_t * peer,
+                    UNUSED void * msg,
+                    UNUSED size_t sz, UNUSED int swap,
+                    UNUSED como_ex_t * como_ex)
+{
+    debug("exiting at supervisor's request\n");
+    exit(EXIT_SUCCESS);
+}
+
 
 #if 0
 /* 
@@ -297,137 +354,6 @@ ex_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
     remove_module(&map, mdl);
 }
 
-/* 
- * -- ex_ipc_flush
- * 
- * process the expired tables that have been received from CAPTURE.
- * 
- */ 
-static void
-ex_ipc_flush(procname_t sender, __attribute__((__unused__)) int fd,
-                void *buf, size_t len)
-{
-    expiredmap_t *em;
-    
-    assert(sender == sibling(CAPTURE));
-    assert(len == sizeof(expiredmap_t *));
-    
-    for (em = *((expiredmap_t **) buf); em; em = em->next) {
-	module_t * mdl; 
-
-	/*
-	 * use the correct module flush state & shared map
-	 */
-	mdl = em->mdl; 
-	mdl->fstate = em->fstate;
-	mdl->shared_map = em->shared_map;
-	
-	/* if in inline mode, make sure this is the inline module */
-	assert(map.runmode == RUNMODE_NORMAL || mdl == map.inline_mdl); 
-
-	/*
-	 * Process the table, if the module it belongs to is active.
-	 */
-	if (mdl->status != MDL_ACTIVE)
-	    continue;
-
-	if (em->ct->records) {
-	    /* process capture table and update export table */
-	    start_tsctimer(como_stats->ex_table_timer);
-	    process_table(em->ct, mdl);
-	    end_tsctimer(como_stats->ex_table_timer);
-	} else {
-	    assert(em->ct->flexible);
-	}
-
-	/* process export table, storing/discarding records */
-	start_tsctimer(como_stats->ex_store_timer);
-	store_records(mdl, em->ct->ivl, em->ct->ts);
-	end_tsctimer(como_stats->ex_store_timer);
-    }
-
-    /*
-     * The tables have been processed. Return them to capture
-     * so it can merge and reuse the memory.
-     */
-    ipc_send(sender, IPC_FLUSH, buf, len);
-}
-
-
-/*
- * -- ex_ipc_start 
- *
- * handle IPC_MODULE_START message sent by the parent process to 
- * indicate when it is possible to start processing traces and 
- * forward it to CAPTURE (sibling).
- *
- */
-static void
-ex_ipc_start(procname_t sender, __attribute__((__unused__)) int fd, void * buf,
-                size_t len)
-{
-    /* only the parent process should send this message */
-    assert(sender == map.parent);
-    como_stats = *((void **) buf);
-    ipc_send(sibling(CAPTURE), IPC_MODULE_START, buf, len); 
-}
-
-
-/*
- * -- ex_ipc_done
- *
- * handle IPC_DONE messages sent by CAPTURE (sibling). 
- * if we are processing this it means we are really done 
- * store this information in the map.
- *
- */
-static void
-ex_ipc_done(procname_t sender, __attribute__((__unused__)) int fd,
-            __attribute__((__unused__)) void * buf,
-	__attribute__((__unused__)) size_t len)
-{
-    int i;
-    
-    /* only CAPTURE should send this message */
-    assert(sender == sibling(CAPTURE)); 
-
-    for (i = 0; i <= map.module_last; i++) {
-	module_t * mdl = &map.modules[i];
-	
-	if (mdl->status != MDL_ACTIVE)
-	    continue;
-
-	/* 
-	 * we will not receive any more messages from CAPTURE. let's 
-	 * try to store all records we have before reporting to be 
-	 * done. 
-	 */
-	store_records(mdl, ~0, ~0);
-    }
-
-    if (map.runmode == RUNMODE_INLINE) {
-	/* print the footer since running inline  */
-	if (module_db_record_print(map.inline_mdl, NULL,
-				   NULL, map.inline_fd) < 0)
-	    handle_print_fail(map.inline_mdl);
-    }
-    
-    ipc_send(map.parent, IPC_DONE, NULL, 0); 
-}
-
-
-/*
- * -- ex_ipc_exit 
- *
- */
-static void
-ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
-             __attribute__((__unused__)) void * buf,
-             __attribute__((__unused__)) size_t len)
-{
-    assert(sender == map.parent);  
-    exit(EXIT_SUCCESS); 
-}
 #endif
 
 
@@ -445,8 +371,8 @@ ex_ipc_exit(procname_t sender, __attribute__((__unused__)) int fd,
  * the action() callback tells us to do (save, discard, etc.).
  */
 void
-export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
-	    memmap_t * shmemmap, UNUSED FILE * f, como_node_t * node)
+export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
+            como_node_t * node)
 {
     int supervisor_fd, capture_fd, storage_fd;
     como_ex_t como_ex;
@@ -474,21 +400,17 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 
     /* register handlers for IPC messages */ 
     /* todo deregister IPC handlers */
+    como_ex.supervisor = parent;
+
     ipc_set_user_data(&como_ex);
     ipc_register(SU_EX_ADD_MODULE, (ipc_handler_fn) handle_su_ex_add_module);
+    ipc_register(SU_ANY_EXIT, (ipc_handler_fn) handle_su_any_exit);
     ipc_register(CA_EX_PROCESS_SER_TUPLES, (ipc_handler_fn) handle_ca_ex_process_ser_tuples);
     ipc_register(CA_EX_PROCESS_SHM_TUPLES, (ipc_handler_fn) handle_ca_ex_process_shm_tuples);
-    /*ipc_register(IPC_MODULE_DEL, ex_ipc_module_del);
-    ipc_register(IPC_MODULE_START, ex_ipc_start);
-    ipc_register(IPC_FLUSH, (ipc_handler_fn) ex_ipc_flush);
-    ipc_register(IPC_DONE, ex_ipc_done);
-    ipc_register(IPC_EXIT, ex_ipc_exit);*/
+    ipc_register(CA_EX_DONE, (ipc_handler_fn) handle_ca_ex_done);
+    /* ipc_register(IPC_MODULE_DEL, ex_ipc_module_del); */
+    /* ipc_register(IPC_EXIT, ex_ipc_exit);*/
 
-/* In SU
-    COMO_CA = ipc_peer_at(COMO_CA, ca_location);
-    ((ipc_peer_t *)COMO_CA)->id = 0;
-    ((ipc_peer_t *)COMO_CA)->parent_class = COMO_SU_CLASS;
-    */
     /* listen to the parent */
     event_loop_init(&como_ex.el);
     
@@ -501,6 +423,7 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     DEBUGGER_WAIT_ATTACH("ex");
 
     storage_fd = ipc_connect(COMO_ST); 
+    debug("storage_fd = %d\n", storage_fd);
     event_loop_add(&como_ex.el, storage_fd);
 
     capture_fd = ipc_connect(COMO_CA);
@@ -541,7 +464,11 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
 		continue;
 	    
 	    ipcr = ipc_handle(i);
-	    if (ipcr != IPC_OK) {
+            if (ipcr == IPC_EOF) {
+                /* EOF reading from a socket. */
+                debug("EOF from fd %d\n", i);
+                event_loop_del(&como_ex.el, i);
+            } else if (ipcr != IPC_OK) {
 		/* an error. close the socket */
 		warn("error on IPC handle from %d (%d)\n", i, ipcr);
 		exit(EXIT_FAILURE);
@@ -561,42 +488,3 @@ export_main(UNUSED ipc_peer_full_t * child, ipc_peer_t * parent,
     exit(EXIT_FAILURE); /* never reached */
 }
 
-#if 0
-/*
- * -- main
- *
- * This is the EXPORT process main loop. It sits there
- * waiting for flow tables flushed by CAPTURE. It also 
- * communicates with STORAGE to save module data to disk.  
- *
- * On the receipt of a table, EXPORT will go through all the entries,
- * and process them (either accumulate info in the EXPORT flow tables
- * (etable_t), or save to the bytestream and drop them
- * The EXPORT flow tables are processed periodically according to what
- * the action() callback tells us to do (save, discard, etc.).
- */
-int
-main(int argc, char **argv)
-{
-    int supervisor_fd, capture_fd, storage_fd;
-    char *ipc_location, *ca_location;
-    como_ex_t como_ex;
-    como_env_t *env;
-
-    if (argc < 5)
-        error("usage: %s ipc_location ca_location st_dir lib_dir", argv[0]);
-
-    /* initialize como_ex */
-    bzero(&como_ex, sizeof(como_ex));
-    como_ex.mdls = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
-
-    ipc_location = como_strdup(argv[1]);
-    ca_location = como_strdup(argv[2]);
-    como_ex.st_dir = como_strdup(argv[3]);
-    env = como_env();
-    env->libdir = como_strdup(argv[4]);
-    
-    como_init("EX", argc, argv);
-}
-
-#endif
