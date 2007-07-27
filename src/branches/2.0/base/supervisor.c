@@ -941,6 +941,7 @@ main(int argc, char ** argv)
     node0 = &array_at(como_su->nodes, como_node_t, 0);
     como_node_init_sniffers(node0, como_config->sniffer_defs, &como_su->shalc);
     como_node_init_mdls(node0, como_config->mdl_defs, como_su->alc);
+    node0->query_port = como_config->query_port;
 
     if (como_config->inline_mode && node0->mdls->len == 0) {
         /* inline mode and could not load any module. nothing to do. */
