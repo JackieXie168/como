@@ -202,26 +202,24 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #   filter  "src asn 2529 or addr asn 65535" 
 #
 
-#
-# The traffic module computes the number of captured packets and bytes
-#
-# Arguments:
-# - interval:	the measurement interval (secs)
-#		syntax: interval=<value>
-#		<value> = integer
-#		default: 1
-#
-# - interface:	the NetFlow input/output interface of the monitored link
-#		syntax: interface=<index>
-#		<integer> = integer
-#		default: unused
-
-module "traffic"
-  description	"Packet/Bytes counter"
-  args		"interval=1"
-# args		"interface=1"
+module "apps"
+    description "Application breakdown (using port numbers)"
+    filter "ip"
+    #args "interval=1"
+    args "class=Web"	# user-defined application classes
+    args "80 tcp=Web"	# list of ports/class 
+    args "443 tcp=Web"	# (use args-file to import from a file)
 end
 
+#module "assoc"
+#    description "IEEE 802.11 associations between MAC addresses"
+#    #args "interval=1"
+#end
+
+#module "dhcp"
+#    description "DHCP associations between MAC and IP addresses"
+#    filter "udp"
+#end
 
 # The ethtypes module computes the number of packets and bytes divided by
 # ethertype. Each individual ethertype has to be specified in the
@@ -239,23 +237,180 @@ end
 #		<name> = any printable charactes
 #		<value> = integer in base 10 or 16 (0x prefix)
 #		default: IP,IPv6,ARP
+
 /*
 module "ethtypes"
-  description	"Ethertypes breakdown"
-  args		"interval=60"
-  args		"ethtype IP=0x0800"
-  args		"ethtype IPv6=0x86DD"
-  args		"ethtype ARP=0x0806"
-  args		"ethtype RARP=0x8035"
-  args		"ethtype AppleTalk=0x809b"
-  args		"ethtype AppleTalk ARP=0x80f3"
-  args		"ethtype Novell IPX=0x8137"
-  args		"ethtype Novell=0x8138"
-  args		"ethtype MPLS unicast=0x8847"
-  args		"ethtype MPLS multicast=0x8848"
-  args		"ethtype PPPoE Discovery Stage=0x8863"
-  args		"ethtype PPPoE Session Stage=0x8864"
-  args		"ethtype ATA over Ethernet=0x88A2"
-  args		"ethtype EAP over LAN (IEEE 802.1X)=0x888E"
-end  
+    description "Ethertypes breakdown"
+    #args "interval=1"
+    args "ethtype IP=0x0800"
+    args "ethtype IPv6=0x86DD"
+    args "ethtype ARP=0x0806"
+    args "ethtype RARP=0x8035"
+    args "ethtype AppleTalk=0x809b"
+    args "ethtype AppleTalk ARP=0x80f3"
+    args "ethtype Novell IPX=0x8137"
+    args "ethtype Novell=0x8138"
+    args "ethtype MPLS unicast=0x8847"
+    args "ethtype MPLS multicast=0x8848"
+    args "ethtype PPPoE Discovery Stage=0x8863"
+    args "ethtype PPPoE Session Stage=0x8864"
+    args "ethtype ATA over Ethernet=0x88A2"
+    args "ethtype EAP over LAN (IEEE 802.1X)=0x888E"
+end
 */
+
+#module "ewma"
+#    description "EWMA anomaly detection filter"
+#    #args "interval=1"
+#    #args "weight=0.9"		# EWMA weight
+#    #args "change_thresh=3.0"	# threshold for raising an alert
+#    #args "max_connx=2000000"	# max connections (determines bitmap size)
+#end
+
+#module "flow-reassembly"
+#    description "TCP flow reassembly"
+#    filter "tcp"
+#    hashsize 100000
+#    streamsize 1GB
+#    #args "wait_fin=10"	# timeout after receiving the FIN
+#    #args "flow_timeout=60"	# idle flow expiration timeout
+#end
+
+#module "flowcount"
+#    description "Approximate active flow counter"
+#    #args "interval=1"
+#    #args "flowdef=src_ip,dst_ip,src_port,dst_port,proto" #flow key
+#    #args "maxflows=2000000"	# max flows (determines bitmap size)
+#end
+
+#module "frames"
+#    description "IEEE 802.11 frame statistics report"
+#end
+
+#module "hwtm"
+#    description "MAC traffic matrix"
+#    hashsize 100000
+#    #args "interval=60"
+#    #args "map= 00:00:00:00:00:00 name" # List of MACs to show in the matrix
+#end
+
+#module "ipssi"
+#    description "IEEE signal strength per IP address"
+#    hashsize 100000
+#end
+
+#module "macssi"
+#    description "IEEE signal strength per MAC address"
+#    hashsize 100000
+#end
+
+#module "netflow-anon"
+#    description "Anonymized NetFlow v5 records"
+#    hashsize 100000
+#end
+
+#module "nfexlist"
+#    description "List of seen NetFlow exporters"
+#    hashsize 100000
+#end
+
+#module "pattern-search"
+#    description "Packet-level trace of packets containing a given pattern"
+#    args "pattern=GET"		# pattern to match against
+#    #args "snaplen=1514"	# max bytes to be stored per packet
+#end
+
+module "protocol"
+    description "Protocol breakdown"
+    filter "ip"
+    #args "interval=1"
+end
+
+#module "scanner-detector"
+#    description "Port-scanner detector"
+#    hashsize 100000
+#    streamsize 1GB
+#    #args "sstresh=3"			# failed connections to unique dest.
+#    #args "syn_timeout=300"		# failed connection SYN-ACK timeout
+#    #args "ip_timeout=86400"		# scanner expiration timeout
+#    #args "network=0.0.0.0"		# home network address
+#    #args "netmask=0.0.0.0"		# home network mask
+#    #args "discard_incomplete_pkt=0"	# set to discard incomplete packets
+#    #args "unidirectional=0"		# set if traffic is unidirectional
+#end
+
+#module "ssid"
+#    description "IEEE 802.11 SSID list"
+#    #args "interval=1"
+#end
+
+module "topaddr"
+    description "Top IP addresses (source or destination) in bytes"
+    filter "ip"
+    hashsize 100000
+    #args "interval=5"
+    #args "topn=20"	# number of top addresses
+    #args "mask=-1"	# privacy mask to be applied to the address
+    #args "use-dst"	# use source or destination addresses
+    #args "align-to=0"
+end
+
+#module "tophwaddr"
+#    description "Top MAC addresses (source or destination) in bytes"
+#    hashsize 100000
+#    #args "interval=5"
+#    #args "topn=20"	# number of top addresses
+#    #args "use-dst"	# use source or destination addresses
+#    #args "align-to=0"
+#end
+
+module "topports"
+    description "Top ports"
+    filter "tcp or udp"
+    #args "interval=1"
+    #args "topn=20"	# number of top ports
+    #args "80=tcp,Web"	# application names
+    #args "align-to=0"
+end
+
+#module "trace"
+#    description "Packet-level trace"
+#    streamsize 1GB
+#    #args "snaplen=1514"	# max bytes to be stored per packet
+#end
+
+#
+# The traffic module computes the number of captured packets and bytes
+#
+# Arguments:
+# - interval:	the measurement interval (secs)
+#		syntax: interval=<value>
+#		<value> = integer
+#		default: 1
+#
+# - interface:	the NetFlow input/output interface of the monitored link
+#		syntax: interface=<index>
+#		<integer> = integer
+#		default: unused
+
+module "traffic"
+    description "Packet/bytes counter"
+    #args "interval=1"
+    #args "interface=1"
+end
+
+module "tuple"
+    description "Active flows (5 tuple)"
+    filter "ip"
+    hashsize 100000
+    #args "interval=1"
+    #args "mask=0"	# privacy mask to be applied to the addresses
+    #args "compact=0"	# compact mode
+end
+
+#module "unknown-ports"
+#    description "Unknown ports packets/bytes counters"
+#    #args "interval=1"
+#    #args "80 tcp"	#list of user-defined known ports
+#end
+
