@@ -206,10 +206,14 @@ static int
 is_suspicious (uint32_t ip, timestamp_t now, void * self)
 {
     struct in_addr addr;
-    
     CONFIGDESC *config = CONFIG(self);
-    
     suspicious_ip *elem;
+    
+    if (config->suspicious_ip_list == NULL) {
+        config->suspicious_ip_list = hash_new(&((module_t *)self)->alc,
+                HASHKEYS_ULONG, hash_function, key_cmp_function);
+    }
+
     elem = get_suspicious(ip, config);
     
     if (elem == NULL || (elem->num < config->s_thresh)) {
@@ -319,9 +323,7 @@ init(void *self, char *args[])
     config->network = 0;
     config->netmask = 0;
     config->unidirectional = 0;
-    
-    config->suspicious_ip_list = hash_new(&(mdl->alc), HASHKEYS_ULONG,
-                                hash_function, key_cmp_function);
+    config->suspicious_ip_list = NULL;
     
     for (i = 0; args && args[i]; i++) {
         if (strstr(args[i], "s_thresh=")) {
