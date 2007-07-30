@@ -207,7 +207,7 @@ struct cfg_item {
 como_config_t *
 configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 {
-    static const char *opts = "hi:St:q:c:C:D:L:p:m:v:x:s:e";
+    static const char *opts = "hi:St:q:c:C:D:L:p:m:vx:s:e";
     int i, c, cfg_item_count = 0, cfg_file_count = 0;
     #define MAX_CFGITEMS 1024
     cfg_item_t cfg_items[MAX_CFGITEMS];
@@ -289,13 +289,15 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 	    set_memsize(atoi(optarg), cfg);
 	    break;
 
-#if 0
         case 'v':   /* verbose */
+        #if 0
 	    if (m->logflags == -1)
 		m->logflags = 0;
             m->logflags = set_flags(m->logflags, optarg);
+        #endif
+            cfg->silent_mode = 0;
             break;
-#endif
+
         case 'i': /* run inline: also silent & exit when done */
             cfg->inline_mode = 1;
             cfg->inline_module = como_strdup(optarg);

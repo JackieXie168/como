@@ -320,6 +320,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
     q->format = NULL;
     q->wait = TRUE;
     q->args = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
+    q->filter_str = "all";
 
     /* 
      * parse the request, and if successful, get its AST.
@@ -365,8 +366,9 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
                 break;
             case 'f':
                 if_have_kw("filter") {
-                    q->filter_str = como_strdup(value);
-                    parse_filter(value, NULL, &(q->filter_cmp));
+                    char *v = value[0] != '\0' ? value : "all";
+                    q->filter_str = como_strdup(v);
+                    parse_filter(v, NULL, &(q->filter_cmp));
                     insert_arg = FALSE;
                 }
                 else if_have_kw("format") {
