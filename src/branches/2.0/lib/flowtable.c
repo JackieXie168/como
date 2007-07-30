@@ -92,6 +92,9 @@
 #include "comopriv.h"
 #include "flowtable.h"
 
+#define max2(a, b) ((a)>(b)?(a):(b))
+#define min2(a, b) ((a)>(b)?(b):(a))
+
 /*
  * When there are this many entries per bucket, on average, rebuild
  * the hash table to make it larger.
@@ -458,20 +461,20 @@ flowtable_destroy(flowtable_t * ftable)
  * @param iter the iterator to initialize.
  */
 void
-flowtable_iter_init(flowtable_t * table, flowtable_iter_t * iter)
+flowtable_iter_init(flowtable_t * table, flowtable_iter_t * _iter)
 {
-    flowtable_real_iter_t *real;
+    flowtable_real_iter_t *iter;
 
     assert(sizeof(flowtable_iter_t) == sizeof(flowtable_real_iter_t));
 
-    real = (flowtable_real_iter_t *) iter;
+    iter = (flowtable_real_iter_t *) _iter;
 
-    real->table = table;
-    real->bucket = NULL;
-    real->entry = NULL;
-    real->next_entry = NULL;
-    real->next_bucket = table->firstBucket;
-    real->n_entries_on_init = table->numEntries;
+    iter->table = table;
+    iter->bucket = NULL;
+    iter->entry = NULL;
+    iter->next_entry = NULL;
+    iter->next_bucket = table->firstBucket;
+    iter->n_entries_on_init = table->numEntries;
 }
 
 /**
@@ -483,40 +486,38 @@ flowtable_iter_init(flowtable_t * table, flowtable_iter_t * iter)
  * @returns 0 if there are no more entries to move to.
  */
 int
-flowtable_iter_next(flowtable_iter_t * iter)
+flowtable_iter_next(flowtable_iter_t * _iter)
 {
-    flowtable_real_iter_t *real;
+    flowtable_real_iter_t *iter;
 
-    assert(sizeof(flowtable_iter_t) == sizeof(flowtable_real_iter_t));
-
-    real = (flowtable_real_iter_t *) iter;
+    iter = (flowtable_real_iter_t *) _iter;
 
     /* if this assertion failed someone probably added hash entries
      * during iteration, which is bad.
      */
-    assert(real->n_entries_on_init >= real->table->numEntries);
+    assert(iter->n_entries_on_init >= iter->table->numEntries);
 
-    /* Remember that real->entry may have been deleted */
+    /* Remember that iter->entry may have been deleted */
 
-    while (real->next_entry == NULL) {
-	if (real->next_bucket > real->table->lastBucket) {
+    while (iter->next_entry == NULL) {
+	if (iter->next_bucket > iter->table->lastBucket) {
 	    /* invalidate iter and return false */
-	    real->entry = NULL;
-	    real->table = NULL;
-	    real->bucket = NULL;
+	    iter->entry = NULL;
+	    iter->table = NULL;
+	    iter->bucket = NULL;
 	    return 0;
 	}
 
-	real->bucket = &(real->table->buckets[real->next_bucket]);
-	real->next_entry = *(real->bucket);
-	real->next_bucket += 1;
+	iter->bucket = &(iter->table->buckets[iter->next_bucket]);
+	iter->next_entry = *(iter->bucket);
+	iter->next_bucket += 1;
     }
 
-    assert(real->next_entry != NULL);
-    assert(real->bucket != NULL);
+    assert(iter->next_entry != NULL);
+    assert(iter->bucket != NULL);
 
-    real->entry = real->next_entry;
-    real->next_entry = real->entry->nextPtr;
+    iter->entry = iter->next_entry;
+    iter->next_entry = iter->entry->nextPtr;
 
     return 1;
 }
@@ -530,19 +531,19 @@ flowtable_iter_next(flowtable_iter_t * iter)
  * @param iter the hash table iterator.
  */
 void
-flowtable_iter_remove(flowtable_iter_t * iter)
+flowtable_iter_remove(flowtable_iter_t * _iter)
 {
-    flowtable_real_iter_t *real;
+    flowtable_real_iter_t *iter;
 
-    real = (flowtable_real_iter_t *) iter;
+    iter = (flowtable_real_iter_t *) _iter;
 
-    assert(real->table != NULL);
-    assert(real->entry != NULL);
-    assert(real->bucket != NULL);
+    assert(iter->table != NULL);
+    assert(iter->entry != NULL);
+    assert(iter->bucket != NULL);
 
-    flowtable_remove_entry_internal(real->table, real->bucket, real->entry);
+    flowtable_remove_entry_internal(iter->table, iter->bucket, iter->entry);
 
-    real->entry = NULL;		/* make it crash if you try to use this entry */
+    iter->entry = NULL;		/* make it crash if you try to use this entry */
 }
 
 /**
@@ -551,16 +552,16 @@ flowtable_iter_remove(flowtable_iter_t * iter)
  * @param iter the hash table iterator.
  */
 flow_t *
-flowtable_iter_get(flowtable_iter_t * iter)
+flowtable_iter_get(flowtable_iter_t * _iter)
 {
-    flowtable_real_iter_t *real;
+    flowtable_real_iter_t *iter;
 
-    real = (flowtable_real_iter_t *) iter;
+    iter = (flowtable_real_iter_t *) _iter;
 
-    assert(real->table != NULL);
-    assert(real->entry != NULL);
+    assert(iter->table != NULL);
+    assert(iter->entry != NULL);
 
-    return real->entry->flow;
+    return iter->entry->flow;
 }
 
 #ifdef DEBUG
@@ -657,6 +658,8 @@ rebuild_table(flowtable_t * ftable)
      */
 
     ftable->numBuckets *= 4;
+    ftable->firstBucket = ftable->numBuckets;
+    ftable->lastBucket = -1;
     ftable->buckets = alc_calloc(ftable->alc, ftable->numBuckets,
 				 sizeof(flowtable_entry_t *));
 
@@ -670,7 +673,6 @@ rebuild_table(flowtable_t * ftable)
     /*
      * Rehash all of the existing entries into the new bucket array.
      */
-
     for (oldChainPtr = oldBuckets; oldSize > 0; oldSize--, oldChainPtr++) {
 	for (hPtr = *oldChainPtr; hPtr != NULL; hPtr = *oldChainPtr) {
 	    *oldChainPtr = hPtr->nextPtr;
@@ -678,6 +680,8 @@ rebuild_table(flowtable_t * ftable)
 	    i = hPtr->hash & ftable->mask;
 	    hPtr->nextPtr = ftable->buckets[i];
 	    ftable->buckets[i] = hPtr;
+            ftable->firstBucket = min2(ftable->firstBucket, i);
+            ftable->lastBucket = max2(ftable->lastBucket, i);
 	}
     }
 
