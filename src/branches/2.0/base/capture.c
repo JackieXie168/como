@@ -747,7 +747,8 @@ handle_su_any_exit(UNUSED ipc_peer_t * peer, UNUSED void * m, UNUSED size_t sz,
 		  UNUSED int swap, UNUSED como_ca_t * como_ca)
 {
     exit(EXIT_SUCCESS);
-    return IPC_OK;
+
+    return IPC_OK; /* not reached */
 }
 
 
@@ -1214,7 +1215,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
      * to the last packet that sniffer provided to us
      */
 
-    if ((one_full_flag == 0) && !force_batch) {
+    if (!one_full_flag && !force_batch) {
 
 	ppbuf_list_foreach (ppbuf, &ppblist) {
 	    if (ppbuf->count == 0)
@@ -1278,10 +1279,12 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
 	assert(ppbuf);
 
+#ifdef LOADSHED
         /* if we already have a complete timebin, break out of the loop */
         next_pkt = ppbuf_get(ppbuf);
         if (cmp_ts(next_pkt->ts - prev_last_pkt_ts, como_ca->timebin) >= 0)
             break;
+#endif
 
 	/* update batch */
 	batch_append(batch, ppbuf);

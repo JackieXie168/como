@@ -456,6 +456,7 @@ struct como_su {
     ipc_peer_t *	ca;		/* CAPTURE */
     ipc_peer_t *	ex;		/* EXPORT */
     ipc_peer_t *	st;		/* STORAGE */
+    ipc_peer_t *	qu;		/* QUERY, for use only in inline mode */
     
     pid_t		su_pid;
 

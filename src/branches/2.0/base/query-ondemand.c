@@ -47,6 +47,42 @@
 /* config 'inherited' from supervisor */
 extern como_config_t *como_config;
 
+#if DEBUG
+/*
+ * -- escape_quotes
+ *
+ * escape quotes of input string. returns
+ * a dynamically allocated output string.
+ * the func is sub-optimal but we don't care
+ * as this is just for debugging.
+ */
+char *
+escape_quotes(char *input)
+{
+    size_t s, i, j, final_len;
+    char *output;
+
+    s = strlen(input);
+    final_len = s;
+
+    for (i = 0; i < s; i++)
+        if (input[i] == '\\' || input[i] == '"')
+            final_len++;
+
+    output = como_malloc(final_len + 1);
+
+    for (i = j = 0; i < s; i++) {
+        if (input[i] == '\\' || input[i] == '"')
+            output[j++] = '\\';
+        output[j++] = input[i];
+    }
+    output[j++] = '\0';
+
+    return output;
+}
+
+#endif
+
 void 
 query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id) 
 {
@@ -121,8 +157,14 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
     debug("running inline como to attend query:\n");
     debugbuf[0] = '\0';
     for (i = 0; my_argv[i] != NULL; i++) {
+        char *tmp = escape_quotes(my_argv[i]);
         strcat(debugbuf, " ");
-        strcat(debugbuf, my_argv[i]);
+        if (strpbrk(tmp, " &"))
+            strcat(debugbuf, "\"");
+        strcat(debugbuf, tmp);
+        if (strpbrk(tmp, " &"))
+            strcat(debugbuf, "\"");
+        free(tmp);
     }
     debug("command = %s\n", debugbuf);
 #endif

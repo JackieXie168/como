@@ -292,10 +292,6 @@ static int
 ex_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
 	    UNUSED int swap, UNUSED como_su_t * como_su)
 {
-    if (como_config->inline_mode) {
-        debug("exiting at EX request\n");
-        finalize_como(como_su);
-    }
     return IPC_OK;
 }
 
@@ -506,7 +502,6 @@ como_node_lookup_by_fd(array_t * nodes, int fd)
     return NULL;
 }
 
-
 static void
 como_node_handle_query(como_node_t * node)
 {
@@ -530,6 +525,7 @@ como_node_handle_query(como_node_t * node)
      */
     peer = ipc_peer_child(COMO_QU, cd);
     pid = start_child(peer, query_main_http, s_como_su->memmap, fdopen(cd, "a"), node);
+    s_como_su->qu = (ipc_peer_t *)peer;
     close(cd);
 }
 
