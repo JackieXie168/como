@@ -195,7 +195,8 @@ memmap_insert(memmap_t * m, memblock_t * x)
  * 
  */
 static void *
-memmap_malloc(size_t size, const char * file, int line, memmap_t * m)
+memmap_malloc(size_t size, UNUSED const char * file, UNUSED int line,
+        memmap_t * m)
 {
     uint32_t i, cand;
     memblock_t *x;
