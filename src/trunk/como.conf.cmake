@@ -414,3 +414,17 @@ end
 #    #args "80 tcp"	#list of user-defined known ports
 #end
 
+#module "worm-signature"
+#    description "Worm signature generator"
+#    hashsize 100000
+#    #args "gen-interval=600"   # interval between generation attempts (in sec)
+#    #args "gen-threshold=10"   # min suspicious flows to allow generation
+#    #args "flow-timeout=86400" # suspicious flow pool timeout (in sec)
+#    #args "min-prevalence=5"   # min prevalence to use a block as a signature
+#    #args "percentage=0.5"     # % of flows to be represented in signatures
+#    #args "avg_cb_size=64"     # average content block size
+#    #args "min_cb_size=32"     # minimum content block size
+#    #args "max_cb_size=1024"   # maximum content block size
+#    #args "blacklist=GET /index.html HTTP/1.0"  #signature blacklist
+#end
+
