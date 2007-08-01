@@ -80,8 +80,6 @@ IF(BUILD_FOR_ARM)
   COMO_BUILD_FOR_ARM()
 ENDIF(BUILD_FOR_ARM)
 
-
-
 #
 # Set installation directories. Note: all are relative to ${CMAKE_INSTALL_PREFIX}
 #
@@ -135,6 +133,11 @@ FIND_PACKAGE(FLEX REQUIRED)
 # Search for libpcap library
 #
 FIND_PACKAGE(PCAP)
+
+#
+# Search for ssl library
+#
+FIND_PACKAGE(SSL)
 
 #
 # Search for flow-tools library

@@ -33,6 +33,13 @@ IF(FTLIB_FOUND)
   )
 ENDIF(FTLIB_FOUND)
 
+IF(SSLLIB_FOUND)
+    SET(MODULES
+    ${MODULES}
+    worm-signature
+    )
+ENDIF(SSLLIB_FOUND)
+
 #
 # Unused variables in modules are ok. If we are doing a debug
 # build, we have -Wall -Werror, so we add -Wno-unused.
