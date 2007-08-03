@@ -85,7 +85,7 @@ init(void * self, char *args[])
 	} else if (!strncmp(args[i], "topn", 4)) {
 	    config->topn = atoi(wh);
 	} else if (!strncmp(args[i], "mask", 4)) {
-	    config->mask = atoi(wh); 
+	    config->mask = (uint32_t) strtoll(wh, NULL, 0);
 	} else if (!strncmp(args[i], "align-to", 8)) {
 	    config->last_export = atoi(wh); 
 	} else if (!strncmp(args[i], "use-dst", 7)) {
