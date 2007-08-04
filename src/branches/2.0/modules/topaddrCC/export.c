@@ -78,7 +78,6 @@ ex_state_t *
 ex_init(mdl_t *self)
 {
     alc_t *alc = mdl_alc(self);
-    topaddr_config_t *cfg = mdl_get_config(self, topaddr_config_t);
     ex_state_t *st = mdl_malloc(self, sizeof(ex_state_t));
     st->current_ivl = 0;
     reinitialize_state(self, st);
@@ -123,8 +122,8 @@ dump_state(mdl_t *self, ex_state_t *st)
 }
 
 void
-export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples, timestamp_t ivl_start, 
-        ex_state_t *st)
+export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples,
+        timestamp_t ivl_start, ex_state_t *st)
 {
     topaddr_record_t *rec;
     topaddr_tuple_t *t;
