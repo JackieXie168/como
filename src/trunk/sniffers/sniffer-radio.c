@@ -41,6 +41,9 @@
 #include <sys/ioctl.h>		/* ioctl for monitor mode */
 #include <sys/socket.h>		/* socket for monitor mode */
 
+#include <linux/types.h>
+#include <linux/socket.h>
+#include <linux/if.h>
 #include <linux/wireless.h>
 
 #include <math.h>
