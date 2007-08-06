@@ -502,10 +502,10 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		
 		if (value == NULL) {
 		    value = cp;
-		    copy_value = 0;
+		    copy_value = -1;	/* copy argument without value */
 		} else {
 		    uri_unescape(value);
-		    copy_value = 1;
+		    copy_value = 1; 	/* copy argument and value */
 		}
 
 		switch (*name) {
@@ -584,16 +584,14 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 			}
 		    }
 		    break;
-		default:
-		    /* unrecognized keyword without value */
-		    if (copy_value == 0) {
-			asprintf(&q->args[nargs], "%s", name);
-			nargs++;
-			assert(nargs < max_args);
-		    }
 		}
-		if (copy_value == 1) {
-		    asprintf(&q->args[nargs], "%s=%s", name, value);
+		if (copy_value != 0) {
+		    if (copy_value == 1) {
+			asprintf(&q->args[nargs], "%s=%s", name, value);
+		    } else {
+			/* unrecognized keyword without value */
+			asprintf(&q->args[nargs], "%s", name);
+		    }
 		    nargs++;
 		    assert(nargs < max_args);
 		}
