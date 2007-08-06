@@ -489,7 +489,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 	for (;;) {
 	    if (*cp == '=' && value == NULL) {
 		/*
-		 * NOTE: value == NULL is need to be friendly with custom
+		 * NOTE: value == NULL is needed to be friendly with custom
 		 * arguments of type a=b=c. Even if not allowed they've been
 		 * introduced in live!
 		 */
@@ -498,23 +498,16 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 		uri_unescape(name);
 	    } else if (*cp == '&' || *cp == '\0') {
 		int done = (*cp == '\0');
-		/* copy the argument into query args by default */
-		copy_value = 1;
 		*cp = '\0';
-		if (value == cp || value == NULL) {
-		    if (strcmp(name, "status") == 0) {
-			q->mode = QMODE_SERVICE;
-			q->service = "status";
-		    }
-		    if (done) {
-			break;
-		    }
-		    name = cp + 1;
-		    continue;
-		}
-		if (value != NULL) {
+		
+		if (value == NULL) {
+		    value = cp;
+		    copy_value = 0;
+		} else {
 		    uri_unescape(value);
+		    copy_value = 1;
 		}
+
 		switch (*name) {
 		case 'm':
 		    /* module */
@@ -591,8 +584,15 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
 			}
 		    }
 		    break;
+		default:
+		    /* unrecognized keyword without value */
+		    if (copy_value == 0) {
+			asprintf(&q->args[nargs], "%s", name);
+			nargs++;
+			assert(nargs < max_args);
+		    }
 		}
-		if (copy_value == 1 && value != NULL) {
+		if (copy_value == 1) {
 		    asprintf(&q->args[nargs], "%s=%s", name, value);
 		    nargs++;
 		    assert(nargs < max_args);
