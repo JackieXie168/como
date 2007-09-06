@@ -92,6 +92,17 @@ mdl_mono_print(mdl_t *mdl, MonoString *string)
     mdl_printf(mdl, "%s", str);
 }
 
+MonoString *
+mono_inet_ntoa(int addr)
+{
+    char buffer[128];
+
+    struct in_addr in;
+    in.s_addr = addr;
+    sprintf(buffer, "%s", inet_ntoa(in));
+
+    return mono_string_new(mono_domain_get(), buffer);
+}
 
 static to_mono_fn
 get_to_mono(shobj_t * shobj, const char * type)
@@ -160,6 +171,7 @@ proxy_mono_load(mdl_t * mdl, char *class_name)
     
     mono_add_internal_call("CoMo.Mdl::mdl_store_rec", mdl_store_mono_rec);
     mono_add_internal_call("CoMo.Mdl::mdl_print", mdl_mono_print);
+    mono_add_internal_call("CoMo.IP::to_string", mono_inet_ntoa);
     
     libdir = como_env_libdir();
     filename = como_asprintf("%s/%s.dll", libdir, mdl->mdlname);

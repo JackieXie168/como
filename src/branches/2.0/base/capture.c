@@ -1164,7 +1164,9 @@ batch_create(int force_batch, como_ca_t * como_ca)
     int one_full_flag = 0;
     sniffer_list_t * sniffers;
     timestamp_t live_th;
+    #ifdef LOADSHED
     pkt_t *next_pkt;
+    #endif
     
     sniffers = como_ca->sniffers;
     live_th = como_ca->live_th;
@@ -1326,7 +1328,11 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
     batch->ref_mask = 1LL;
     
+#ifdef LOADSHED
     prev_last_pkt_ts = align_ts(next_pkt->ts, como_ca->timebin);
+#else
+    prev_last_pkt_ts = align_ts(batch->last_pkt_ts, como_ca->timebin);
+#endif
 
     return batch;
 }

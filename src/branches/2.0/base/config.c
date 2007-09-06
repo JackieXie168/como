@@ -46,13 +46,13 @@
     "[filter]]\n"
 
 void
-define_sniffer(char *name, char *device, UNUSED char *args, como_config_t *cfg)
+define_sniffer(char *name, char *device, char *args, como_config_t *cfg)
 {
     sniffer_def_t sniff;
 
     sniff.name = name;
     sniff.device = device;
-    sniff.args = NULL;
+    sniff.args = args;
 
     array_add(cfg->sniffer_defs, &sniff);
 }
@@ -70,6 +70,44 @@ initialize_module_def(mdl_def_t *mdl, alc_t *alc)
     mdl->args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     mdl->streamsize = 128 * 1024 * 1024;
     mdl->filter = como_strdup("all");
+}
+
+static void
+destroy_sniffer_def(sniffer_def_t *d, alc_t *alc)
+{
+    alc_free(alc, d->name);
+    alc_free(alc, d->device);
+    if (d->args)
+        alc_free(alc, d->args);
+}
+
+static void
+free_hash_entries(hash_t *h, alc_t *alc)
+{
+    hash_iter_t it;
+
+    hash_iter_init(h, &it); /* destroy the args */
+    while(hash_iter_next(&it)) {
+        alc_free(alc, (void *)hash_iter_get_string_key(&it));
+        alc_free(alc, (void *)hash_iter_get_value(&it));
+        hash_iter_remove_entry(&it);
+    }
+}
+
+static void
+destroy_module_def(mdl_def_t *d, alc_t *alc)
+{
+    free_hash_entries(d->args, alc);
+    hash_destroy(d->args);
+    
+    alc_free(alc, d->name);
+    alc_free(alc, d->mdlname);
+    alc_free(alc, d->output);
+    alc_free(alc, d->filter);
+    alc_free(alc, d->descr);
+    #ifdef LOADSHED
+    alc_free(alc, d->shed_method);
+    #endif
 }
 
 /*
@@ -229,6 +267,8 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     cfg->libdir = DEFAULT_LIBDIR;
     cfg->query_args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     cfg->query_alias = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+
+    optind = 1; /* force getopt to start from 1st arg */
 
     while ((c = getopt(argc, argv, opts)) != -1) {
         switch(c) {
@@ -505,5 +545,48 @@ config_get_module_def_by_name(como_config_t *cfg, char *name)
     }
 
     return NULL;
+}
+
+/*
+ * -- destroy_config
+ *
+ * Free a configuration.
+ */
+void
+destroy_config(como_config_t *cfg, alc_t *alc)
+{
+    int i;
+
+    for (i = 0; i < cfg->sniffer_defs->len; i++) { /* free sniff defs */
+        sniffer_def_t *def = &array_at(cfg->sniffer_defs, sniffer_def_t, i);
+        destroy_sniffer_def(def, alc);
+    }
+
+    for (i = 0; i < cfg->mdl_defs->len; i++) { /* free mdl defs */
+        mdl_def_t *def = &array_at(cfg->mdl_defs, mdl_def_t, i);
+        destroy_module_def(def, alc);
+    }
+
+    array_free(cfg->sniffer_defs, 1); /* free the arrays themselves */
+    array_free(cfg->mdl_defs, 1);
+
+
+    free(cfg->como_executable_full_path);
+    free(cfg->storage_path);
+    free(cfg->mono_path);
+    free(cfg->db_path);
+    free(cfg->libdir);
+    free(cfg->asn_file);
+    free(cfg->name);
+    free(cfg->location);
+    free(cfg->type);
+    free(cfg->comment);
+
+    free(cfg->inline_module);
+
+    free_hash_entries(cfg->query_args, alc);
+    hash_destroy(cfg->query_args);
+    free_hash_entries(cfg->query_alias, alc);
+    hash_destroy(cfg->query_alias);
 }
 

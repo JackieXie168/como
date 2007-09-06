@@ -27,38 +27,62 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id: init.c 1119 2007-04-06 15:56:59Z jsanjuas $
  */
 
 /*
  * This module ranks addresses in terms of bytes.
  * The IP addresses can be destination or sources. 
  */
+
 #include "como.h"
+#include "data.h"
 
-typedef struct topaddr_tuple topaddr_tuple_t;
-typedef struct topaddr_record topaddr_record_t;
-typedef struct topaddr_config topaddr_config_t;
+topaddr_config_t *
+init(mdl_t * self, hash_t * args)
+{
+    topaddr_config_t *config;
+    int i;
+    pkt_t *pkt;
+    metadesc_t *inmd;
+    char *val;
+    
+    config = mdl_alloc_config(self, topaddr_config_t);
+    config->use_dst = 1; 
+    config->meas_ivl = 5;
+    config->topn = 20;
+    config->mask = ~0;
+    /* config->last_export = 0;  */
+    
+    /* 
+     * process input arguments 
+     */
+    if ((val = hash_lookup_string(args, "interval")))
+        config->meas_ivl = atoi(val);
+    if ((val = hash_lookup_string(args, "topn")))
+        config->topn = atoi(val);
+    if ((val = hash_lookup_string(args, "mask")))
+        config->mask = atoi(val);
+    /*if ((val = hash_lookup_string(args, "align-to")))
+        config->last_export = atoi(val);*/
+    if ((val = hash_lookup_string(args, "use-dst")))
+        config->use_dst = 1;
+    if ((val = hash_lookup_string(args, "use-src")))
+        config->use_dst = 0;
 
-como_tuple struct topaddr_tuple {
-    timestamp_t ts;     /* timestamp */
-    uint32_t addr;  	/* src/dst address */ 
-    uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
-    uint32_t hash;      /* hash of the addr */
-};
+    /* setup indesc */
+    inmd = metadesc_define_in(self, 0);
+    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
+    
+    pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
+    IP(proto) = 0xff;
+    N16(IP(len)) = 0xffff;
+    if (config->use_dst) 
+	N32(IP(dst_ip)) = 0xffffffff;
+    else 
+	N32(IP(src_ip)) = 0xffffffff;
 
-como_record struct topaddr_record {
-    timestamp_t ts;     /* timestamp */
-    uint32_t addr;  	/* src/dst address */ 
-    uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
-};
-
-como_config struct topaddr_config {
-    int use_dst; 		/* set if we should use destination address */ 
-    int topn;			/* number of top destinations */
-    uint32_t meas_ivl;		/* interval (secs) */
-    uint32_t mask; 		/* privacy mask */
-};
+    self->flush_ivl = TIME2TS(config->meas_ivl, 0);
+    return config;
+}
 

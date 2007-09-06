@@ -330,8 +330,14 @@ struct _mdl_def {
 };
 
 struct _como_config {
+    array_t *	mdl_defs; /* available module definitions may
+                           * change over time as the user loads
+                           * or removes modules. the rest of the
+                           * fields of this structure will not
+                           * change over time.
+                           */
+
     array_t *	sniffer_defs;
-    array_t *	mdl_defs;
 
     char *      como_executable_full_path;
     char *      storage_path;

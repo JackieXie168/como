@@ -27,7 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id: data.h 1102 2006-11-30 00:38:05Z jsanjuas $
  */
 
 /*
@@ -60,5 +60,6 @@ como_config struct topaddr_config {
     int topn;			/* number of top destinations */
     uint32_t meas_ivl;		/* interval (secs) */
     uint32_t mask; 		/* privacy mask */
+    //uint32_t last_export;	/* last export time */
 };
 

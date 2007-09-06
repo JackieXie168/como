@@ -57,7 +57,6 @@ plot ""-"" using 1:2 axis x1y1 with lines lt 3,
         {
             if (format == "gnuplot")
                 print(GNUPLOTFOOTER);
-            Console.WriteLine("finish");
         }
 
         public void print_rec(string format, Record _r)

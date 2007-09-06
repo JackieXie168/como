@@ -52,7 +52,6 @@ init(mdl_t * self, hash_t * args)
     config->meas_ivl = 5;
     config->topn = 20;
     config->mask = ~0;
-    config->last_export = 0; 
     
     /* 
      * process input arguments 
@@ -63,8 +62,6 @@ init(mdl_t * self, hash_t * args)
         config->topn = atoi(val);
     if ((val = hash_lookup_string(args, "mask")))
         config->mask = atoi(val);
-    if ((val = hash_lookup_string(args, "align-to")))
-        config->last_export = atoi(val);
     if ((val = hash_lookup_string(args, "use-dst")))
         config->use_dst = 1;
     if ((val = hash_lookup_string(args, "use-src")))

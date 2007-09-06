@@ -46,10 +46,13 @@
 #include "query.h"	// XXX query();
 #include "ipc.h"
 
-como_su_t *s_como_su; /* used in cleanup, query and query-ondemand only */
+como_su_t *s_como_su;
 
 stats_t *como_stats;
 como_config_t *como_config;
+
+int s_saved_argc;
+char **s_saved_argv;
 
 /*
  * -- ipc_echo_handler()
@@ -89,14 +92,26 @@ launch_inline_query(void)
     /* warn("COMPLETED, pid = %d\n", pid); */
 }
 
+static void
+send_module(ipc_peer_t * peer, int msg_id, mdl_t *mdl)
+{
+    uint8_t *buf, *sbuf;
+    size_t sz;
+
+    sz = mdl_sersize(mdl);
+    buf = sbuf = como_malloc(sz);
+
+    mdl_serialize(&sbuf, mdl);
+
+    ipc_send(peer, msg_id, buf, sz);
+    free(buf);
+}
+
 /*
- * -- ipc_sync_handler()
+ * -- su_ipc_onconnect()
  * 
- * on receipt of an IPC_SYNC, send an IPC_MODULE_ADD for all 
- * active modules in the map. this is used to synchronize the 
- * SUPERVISOR with another process that has just started on 
- * which modules should be running. 
- * 
+ * Triggers when any process connects to SU. It is in charge
+ * of initializing the system.
  */
 static int
 su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
@@ -123,20 +138,9 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             /* TODO: metadesc comparison here */
             
             for (i = 0; i < mdls->len; i++) { /* send the mdls */
-                mdl_t *mdl;
-                uint8_t *buf, *sbuf;
-                size_t sz;
-
                 /* TODO only send compatible modules */
-
-                mdl = array_at(mdls, mdl_t *, i);
-                sz = mdl_sersize(mdl);
-                buf = sbuf = como_malloc(sz);
-
-                mdl_serialize(&sbuf, mdl);
-
-                ipc_send(peer, SU_CA_ADD_MODULE, buf, sz);
-                free(buf);
+                mdl_t *mdl = array_at(mdls, mdl_t *, i);
+                send_module(peer, SU_CA_ADD_MODULE, mdl);
             }
             for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
                 ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
@@ -158,19 +162,9 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             como_su->ex = peer;
 
             for (i = 0; i < mdls->len; i++) { /* send the mdls */
-                mdl_t *mdl;
-                uint8_t *buf, *sbuf;
-                size_t sz;
-
                 /* TODO only send compatible modules */
-
-                mdl = array_at(mdls, mdl_t *, i);
-                sz = mdl_sersize(mdl);
-                buf = sbuf = como_malloc(sz);
-
-                mdl_serialize(&sbuf, mdl);
-                ipc_send(peer, SU_EX_ADD_MODULE, buf, sz);
-                free(buf);
+                mdl_t *mdl = array_at(mdls, mdl_t *, i);
+                send_module(peer, SU_EX_ADD_MODULE, mdl);
             }
             for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
                 ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
@@ -333,149 +327,6 @@ cleanup()
     msg("--- done, thank you for using CoMo\n");
 }
   
-
-/*
- * -- apply_map_changes
- *
- * compare two map data structures (struct _como) to verify
- * if anything relevant has changed. any change that we can
- * accomodate will be applied immediately.
- *
- * XXX right now we only allow to add or remove modules.
- *     it should be possible to modify more configuration
- *     parameters on-the-fly.
- * 
- * XXX this function doesn't handle multiple virtual nodes. 
- *
- */
-#if 0
-/* TODO */
-static void
-apply_map_changes(struct _como * x)
-{
-    int i, j;
-
-    /*
-     * browse thru the list of modules to find if all
-     * modules in the running config are also present
-     * in the new one. if not, remove them.
-     */
-    for (i = 0; i <= map.module_last; i++) {
-	int found = 0; 
-
-	if (map.modules[i].status == MDL_UNUSED) 
-	    continue; 
-
-        for (j = 0; j <= x->module_last; j++) {
-            if (match_module(&x->modules[j], &map.modules[i])) { 
-		/* don't need to look at this again */
-		x->modules[j].status = MDL_UNUSED; 
-		found = 1;
-                break;
-	    } 
-        }
-    
-        if (!found) {
-            remove_module(&map, &map.modules[i]);
-            
-            if (map.modules[i].running != RUNNING_ON_DEMAND) {
-		/* inform the other processes */
-		ipc_send(CAPTURE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
-		ipc_send(EXPORT, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
-		ipc_send(STORAGE, IPC_MODULE_DEL, (char *) &i, sizeof(int)); 
-            }
-
-	    if (map.modules[i].status == MDL_ACTIVE && 
-		map.modules[i].running != RUNNING_ON_DEMAND) { 
-		map.stats->modules_active--; 
-	    }
-	    
-	    if (map.modules[i].indesc || map.modules[i].outdesc) {
-		/* free metadesc information. to do this 
-		 * we need to freeze CAPTURE for a while 
-		 */ 
-		/* CHECKME: shouldn't this code be executed in any case? */
-		ipc_send(COMO_CA, CA_FREEZE, NULL, 0);
-		ipc_receive(COMO_CA, &res, NULL, NULL);
-		
-	        metadesc_list_free(map.modules[i].indesc);
-		metadesc_list_free(map.modules[i].outdesc);
-		
-		ipc_send(COMO_CA, CA_RESUME, NULL, 0); 
-	    } 
-
-	}
-    }
-
-    /*
-     * now add any modules in the new map that do
-     * not exist in the old map
-     */
-    for (j = 0; j <= x->module_last; j++) {
-        module_t * mdl;
-	int sz; 
-
-        if (x->modules[j].status == MDL_UNUSED)
-            continue;
-
-	/* add this module to the main map */
-        mdl = copy_module(&map, &x->modules[j], x->modules[j].node, -1, NULL);
-	if (activate_module(mdl, map.libdir)) {
-	    remove_module(&map, mdl);
-	    continue;
-	} 
-
-	/* if this module is not running on demand, initialize it. 
-	 * however, before doing so freeze CAPTURE to avoid conflicts 
-         * in the shared memory
-	 */
-	if (mdl->running != RUNNING_ON_DEMAND) {
-	    char * pack;
-
-	    ipc_send_blocking(CAPTURE, IPC_FREEZE, NULL, 0);
-	    if (init_module(mdl)) { 
-		/* let CAPTURE resume */
-		ipc_send(CAPTURE, IPC_ACK, NULL, 0); 
-		remove_module(&map, mdl);
-		continue;
-	    } 
-	
-	    /* prepare the module for transmission */
-	    pack = pack_module(mdl, &sz);
-
-	    /* inform the other processes */
-	    ipc_send(CAPTURE, IPC_MODULE_ADD, pack, sz); 
-	    ipc_send(EXPORT, IPC_MODULE_ADD, pack, sz); 
-	    ipc_send(STORAGE, IPC_MODULE_ADD, pack, sz); 
-	    map.stats->modules_active++; 
-
-	    free(pack);
-	}
-
-    }
-}
-
-
-/*
- * -- reconfigure
- * 
- * this is called when a SIGHUP is received to cause
- * como process again the config files and command line
- * parameters.
- *
- */
-static void
-reconfigure(UNUSED int si_code)
-{
-    struct _como tmp_map;
-
-    init_map(&tmp_map);
-    tmp_map.cli_args = map.cli_args;
-    configure(&tmp_map, map.ac, map.av);
-    apply_map_changes(&tmp_map);
-}
-#endif
-
 /*
  * -- defchld
  * 
@@ -487,6 +338,21 @@ defchld(UNUSED int si_code)
 {
     handle_children();
 }
+
+/*
+ * -- set_reconfigure_flag
+ * 
+ * this is called when a SIGHUP is received to cause
+ * como process again the config files and command line
+ * parameters.
+ *
+ */
+static void
+set_reconfigure_flag(UNUSED int si_code)
+{
+    s_como_su->reconfigure = 1;
+}
+
 
 static como_node_t *
 como_node_lookup_by_fd(array_t * nodes, int fd)
@@ -540,6 +406,147 @@ como_node_listen(como_node_t * node)
     return node->query_fd;
 }
 
+static mdl_t *
+como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
+{
+    mdl_isupervisor_t *is;
+    mdl_t *mdl = alc_new0(alc, mdl_t);
+
+    if (def->ondemand) /* skip on-demand modules */
+        return NULL;
+
+    mdl->name = alc_strdup(alc, def->name);
+    mdl->mdlname = alc_strdup(alc, def->mdlname);
+    mdl->streamsize = def->streamsize;
+    mdl->filter = alc_strdup(alc, def->filter);
+    mdl->description = alc_strdup(alc, def->descr);
+#ifdef LOADSHED
+    mdl->shed_method = alc_strdup(alc, def->shed_method);
+#endif
+
+    if (mdl_load(mdl, PRIV_ISUPERVISOR) < 0) {
+        //mdl_destroy(mdl);
+        return NULL;
+    }
+
+    is = mdl_get_isupervisor(mdl);
+    mdl->config = is->init(mdl, def->args);
+    if (mdl->config == NULL) {
+        warn("Initialization of module `%s' failed.\n", mdl->name);
+        //mdl_destroy(mdl);
+        return NULL;
+    }
+
+    array_add(node->mdls, &mdl);
+    mdl = array_at(node->mdls, mdl_t *, node->mdls->len - 1);
+
+    return mdl;
+}
+
+static void
+como_node_init_mdls(como_node_t * node, array_t * mdl_defs, alc_t * alc)
+{
+    int i;
+    for (i = 0; i < mdl_defs->len; i++) {
+	mdl_def_t *def = &array_at(mdl_defs, mdl_def_t, i);
+        como_node_init_mdl(node, def, alc);
+    }
+}
+
+
+/*
+ * -- reconfigure
+ *
+ * reconfigures CoMo. Called by the mainloop whenever it sees
+ * the reconfiguration flag raised.
+ */
+static void
+reconfigure(como_su_t *como_su)
+{
+    hash_t *current_modules, *new_modules;
+    como_config_t new_cfg;
+    alc_t *alc = como_su->alc;
+    como_node_t *node;
+    hash_iter_t it;
+    ipc_type t;
+    int i;
+
+    node = &array_at(como_su->nodes, como_node_t, 0);
+
+    /* re-run the config routines */
+    configure(s_saved_argc, s_saved_argv, s_como_su->alc, &new_cfg);
+
+    /* load module names into a hash */
+    current_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+
+    for (i = 0; i < como_config->mdl_defs->len; i++) {
+        mdl_def_t *def = &array_at(como_config->mdl_defs, mdl_def_t, i);
+        hash_insert_string(current_modules, def->name, (void *)1);
+        msg("current module: %s\n", def->name);
+    }
+
+    new_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+
+    for (i = 0; i < new_cfg.mdl_defs->len; i++) { /* search for new modules */
+        mdl_def_t *def = &array_at(new_cfg.mdl_defs, mdl_def_t, i);
+        char *name = def->name;
+
+        if (hash_lookup_string(current_modules, name) == NULL) {
+            mdl_t *mdl;
+
+            msg("loading new module: `%s'\n", name);
+            mdl = como_node_init_mdl(node, def, alc);
+            if (mdl == NULL)
+                continue;
+
+            /* add new modules to the new_modules hash table */
+            msg("insert %s as new module\n", mdl->name);
+            hash_insert_string(new_modules, mdl->name, mdl);
+        }
+        else
+            msg("module %s ain't new\n", name);
+    }
+    hash_destroy(current_modules);
+
+    /*
+     * XXX this piece of code assumes that CA and EX don't send
+     *     messages to SU by themselves, but only as a response
+     *     to messages from SU. If this changed then this code
+     *     needs to be rewritten. Making this assumption greatly
+     *     simplifies the code, as it can be assumed that the
+     *     next message to a new module load request is either
+     *     MODULE_ADDED or MODULE_FAILED.
+     */
+    hash_iter_init(new_modules, &it);
+    while(hash_iter_next(&it)) { /* send new modules to CA */
+        mdl_t *mdl = hash_iter_get_value(&it);
+        send_module(como_su->ca, SU_CA_ADD_MODULE, mdl);
+    }
+
+    for (i = 0; i < hash_size(new_modules); i++) { /* wait for acks from CA */
+        ipc_receive(como_su->ca, &t, NULL, NULL, NULL, NULL);
+        if (t != CA_SU_MODULE_ADDED && t != CA_SU_MODULE_FAILED)
+            error("communication protocol violation from CA\n");
+    }
+
+    hash_iter_init(new_modules, &it);
+    while(hash_iter_next(&it)) { /* send new modules to EX */
+        mdl_t *mdl = hash_iter_get_value(&it);
+        send_module(como_su->ex, SU_EX_ADD_MODULE, mdl);
+    }
+
+    for (i = 0; i < hash_size(new_modules); i++) { /* wait for acks from EX */
+        ipc_receive(como_su->ex, &t, NULL, NULL, NULL, NULL);
+        if (t != EX_SU_MODULE_ADDED && t != EX_SU_MODULE_FAILED)
+            error("communication protocol violation from EX\n");
+    }
+
+    /* free unnecessary data */
+    hash_destroy(new_modules);
+    destroy_config(&new_cfg, alc);
+}
+
+
 
 /*
  * -- como_su_run
@@ -561,12 +568,7 @@ como_su_run(como_su_t * como_su)
     signal(SIGINT, exit);               /* catch SIGINT to clean up */
     signal(SIGTERM, exit);              /* catch SIGTERM to clean up */
     signal(SIGCHLD, defchld);		/* catch SIGCHLD (defunct children) */
-
-#if 0
-    /* TODO */
-    if (como_su->env.runmode == RUNMODE_NORMAL)
-	signal(SIGHUP, reconfigure);    /* catch SIGHUP to update config */
-#endif
+    signal(SIGHUP, set_reconfigure_flag); /* catch SIGHUP to update cfg */
 
     /* register a handler for exit */
     atexit(cleanup);
@@ -638,7 +640,7 @@ como_su_run(como_su_t * como_su)
     
     runmode = como_env_runmode();
 
-    for (;;) { 
+    for (;;) {
 #ifdef RESOURCE_MANAGEMENT
 	/* 
 	 * to do resource management we need the select timeout to 
@@ -723,50 +725,13 @@ como_su_run(como_su_t * como_su)
 	    n_ready--;
 	}
 	schedule(); /* resource management */
+
+        if (como_su->reconfigure) { /* reconfiguration flag is raised */
+            como_su->reconfigure = 0;
+            reconfigure(como_su);
+        }
     }
 }
-
-void
-como_node_init_mdls(como_node_t * node, array_t * mdl_defs,
-		    alc_t * alc)
-{
-    int i;
-    for (i = 0; i < mdl_defs->len; i++) {
-	mdl_def_t *def;
-	mdl_isupervisor_t *is;
-        mdl_t *mdl = alc_new0(alc, mdl_t);
-	
-	def = &array_at(mdl_defs, mdl_def_t, i);
-
-        if (def->ondemand) /* skip on-demand modules */
-            continue;
-	
-	mdl->name = alc_strdup(alc, def->name);
-	mdl->mdlname = alc_strdup(alc, def->mdlname);
-	mdl->streamsize = def->streamsize;
-        mdl->filter = alc_strdup(alc, def->filter);
-        mdl->description = alc_strdup(alc, def->descr);
-#ifdef LOADSHED
-        mdl->shed_method = alc_strdup(alc, def->shed_method);
-#endif
-	
-	if (mdl_load(mdl, PRIV_ISUPERVISOR) < 0) {
-	    //mdl_destroy(mdl);
-	    continue;
-	}
-	
-	is = mdl_get_isupervisor(mdl);
-	mdl->config = is->init(mdl, def->args);
-	if (mdl->config == NULL) {
-	    warn("Initialization of module `%s' failed.\n", mdl->name);
-	    continue;
-	}
-
-	array_add(node->mdls, &mdl);
-        mdl = array_at(node->mdls, mdl_t *, 0);
-    }
-}
-
 
 void
 como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
@@ -833,6 +798,25 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 }
 
 /*
+ * -- copy_argv
+ *
+ * Copies given argc & argv into out_argc and out_argv.
+ */
+static void
+copy_args(int argc, char **argv, int *out_argc, char ***out_argv)
+{
+    char **argv2;
+    int i;
+
+    argv2 = como_calloc(argc + 1, sizeof(char *));
+    for (i = 0; i <= argc; i++) /* <= is correct, must copy final NULL */
+        argv2[i] = como_strdup(argv[i]);
+
+    *out_argc = argc;
+    *out_argv = argv2;
+}
+
+/*
  * -- main
  *
  * set up the data structures. basically open the config file,
@@ -872,7 +856,8 @@ main(int argc, char ** argv)
     /*
      * parse command line and configuration files
      */
-    como_config = configure(argc, argv, &alc, &cfg);
+    copy_args(argc, argv, &s_saved_argc, &s_saved_argv);
+    como_config = configure(s_saved_argc, s_saved_argv, &alc, &cfg);
     como_su->env->libdir = como_config->libdir;
     como_su->env->dbdir = como_config->db_path;
 
