@@ -7,20 +7,13 @@ namespace CoMo.Modules.trafficCCS
 
         public void init()
         {
-            Console.WriteLine("ex_init");
-            Console.WriteLine("name: " + name);
-            Console.WriteLine("flush_ivl: " + flush_ivl);
-            Console.WriteLine(config.ToString());
+
         }
         
         public void export(object[] tuples, ulong ivl_start)
         {
-            foreach(TrafficTuple t in tuples) {
-                Console.WriteLine("RECORD:");
-                Console.WriteLine("ts = " + t.ts.ToString());
-                Console.WriteLine("bytes = " + t.bytes[0].ToString());
+            foreach(TrafficTuple t in tuples)
                 store_rec(t);
-            }
         }
     }
 } // namespace

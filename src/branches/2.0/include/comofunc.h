@@ -98,6 +98,8 @@ como_config_t *configure(int argc, char **argv, alc_t *alc, como_config_t *cfg);
 mdl_def_t * config_get_module_def_by_name(como_config_t *cfg, char *name);
 char *config_resolve_alias(como_config_t *cfg, char *name);
 
+void destroy_config(como_config_t *cfg, alc_t *alc);
+
 /*
  * config-syntax.y
  */

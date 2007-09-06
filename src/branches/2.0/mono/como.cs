@@ -180,5 +180,10 @@ public sealed class TS
     }
 }
 
+public sealed class IP
+{
+    [MethodImplAttribute(MethodImplOptions.InternalCall)]
+    extern static public string to_string(uint addr);
+}
 
 }

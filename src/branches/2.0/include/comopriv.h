@@ -464,6 +464,8 @@ struct como_su {
                                          * demand, indicates what module has
                                          * to be queried for.
                                          */
+
+    int                 reconfigure;    /* reconfiguration pending flag */
 };
 
 
