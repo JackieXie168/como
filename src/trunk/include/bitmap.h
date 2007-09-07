@@ -61,8 +61,11 @@ void reset_bitmap(bitmap_t *bm);
 void set_bit(bitmap_t *bm, uint32_t key);
 char get_bit(bitmap_t *bm, int bit);
 
+int test_and_set_bit(bitmap_t *bm, uint32_t key);
+
 #define count_ones(bm) ((bm)->nbits - (bm)->zeros)
 #define count_zeros(bm) ((bm)->zeros)
+#define get_nbits(bm) ((bm)->nbits)
 
 double estimate_unique_keys(bitmap_t *bm);
 
