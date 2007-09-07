@@ -187,6 +187,30 @@ char
 get_bit(bitmap_t *bm, int bit)
 {
     return (0 != (bm->map[which_byte(bit)] & bit_mask(bit)));
+
+}
+
+
+int
+test_and_set_bit(bitmap_t *bm, uint32_t key)
+{
+    int bit = key & (bm->nbits - 1);
+    int where, what, old;
+
+    where = which_byte(bit);
+    what = which_bit(bit);
+    
+    /*
+     * asm test and set operation
+     */
+    asm volatile("btsl %2, %1\n\tsbbl %0, %0\n\t"
+            : "=r" (old), "=m" (bm->map[where])
+            : "r" (what));
+
+    if (old == 0)
+        bm->zeros--;
+
+    return old;
 }
 
 /*
