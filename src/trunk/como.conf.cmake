@@ -344,6 +344,15 @@ end
 #    #args "interval=1"
 #end
 
+#module "superaddr"
+#    description "Super sources and Destinations detection module"
+#    filter "ip"
+#    hashsize 100000
+#    #args "interval=5"
+#    #args "use_src"         # detect super sources or destinations
+#    #args "threshold=15"    # detection threshold     
+#end
+
 module "topaddr"
     description "Top IP addresses (source or destination) in bytes"
     filter "ip"
