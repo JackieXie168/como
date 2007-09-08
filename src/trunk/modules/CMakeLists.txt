@@ -16,6 +16,7 @@ SET(MODULES
   protocol
   scanner-detector
   ssid
+  superaddr
   topaddr
   tophwaddr
   topports
