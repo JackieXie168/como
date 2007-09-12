@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -55,25 +55,12 @@ int s_saved_argc;
 char **s_saved_argv;
 
 /*
- * -- ipc_echo_handler()
+ * -- launch_inline_query
  *
- * processes IPC_ECHO messages by printing their content to screen 
- * and to file if required.  
- * 
- * XXX the logfile should go thru STORAGE to allow for circular 
- *     files and better disk scheduling.
- * 
+ * If the system is running in inline mode, Supervisor automatically
+ * starts a query to present the data to the user. The output of the
+ * query is then redirected to stdout.
  */
-#if 0
-UNUSED static int 
-su_ipc_echo(UNUSED ipc_peer_t * sender, logmsg_t * m, UNUSED size_t len,
-	    UNUSED int swap, UNUSED void * user_data)
-{
-    log_out(m->domain, m->level, m->message);
-    return IPC_OK;
-}
-#endif
-
 static void
 launch_inline_query(void)
 {
@@ -92,6 +79,12 @@ launch_inline_query(void)
     /* warn("COMPLETED, pid = %d\n", pid); */
 }
 
+/*
+ * -- send_module
+ *
+ * Serialize and send a module to a peer using the
+ * given msg_id. free's the temporary buffer afterwards.
+ */
 static void
 send_module(ipc_peer_t * peer, int msg_id, mdl_t *mdl)
 {
@@ -111,7 +104,9 @@ send_module(ipc_peer_t * peer, int msg_id, mdl_t *mdl)
  * -- su_ipc_onconnect()
  * 
  * Triggers when any process connects to SU. It is in charge
- * of initializing the system.
+ * of initializing the system. When CA and EX connect, send
+ * them the list of modules. When both CA and EX have connected,
+ * signal CA to start receiving pkts.
  */
 static int
 su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
@@ -204,55 +199,6 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
     return IPC_OK;
 }
 
-#if 0
-static int
-su_ipc_ca_sniffers_initialized(ipc_peer_t * peer,
-			       UNUSED void * buf,
-			       UNUSED size_t len,
-			       UNUSED int swap,
-			       como_su_t * como_su)
-{
-    como_node_t *node0;
-    sniffer_list_t *sniffers;
-    sniffer_t *sniff;
-    int i;
-    array_t *mdls;
-    
-    node0 = &array_at(como_su->nodes, como_node_t, 0);
-    
-    sniffers = &node0->sniffers;
-    
-    sniffer_list_foreach(sniff, sniffers) {
-	/* setup the sniffer metadesc */
-	sniff->outmd = sniff->cb->setup_metadesc(sniff, como_alc());
-    }
-    
-    mdls = node0->mdls;
-    /* TODO: metadesc comparison here */
-	
-    for (i = 0; i < mdls->len; i++) {
-	mdl_t *mdl;
-	uint8_t *sermdl, *sbuf;
-	size_t sz;
-
-	mdl = array_at(mdls, mdl_t *, i);
-	sz = mdl_sersize(mdl);
-	sermdl = sbuf = como_malloc(sz);
-
-	mdl_serialize(&sbuf, mdl);
-
-	ipc_send(peer, SU_CA_ADD_MODULE, sermdl, sz);
-	free(sermdl);
-    }
-    
-    /* start export */
-	
-    ipc_send(peer, SU_CA_START, NULL, 0);
-    
-    return IPC_OK;
-}
-#endif
-
 /*  
  * -- su_ipc_done 
  * 
@@ -271,6 +217,13 @@ finalize_como(como_su_t *como_su)
     exit(EXIT_SUCCESS);
 }
 
+/*
+ * -- qu_su_ipc_done
+ *
+ * Query informs that it is done with its job. If we are
+ * in inline mode, this means that CoMo has finished its
+ * task.
+ */
 static int
 qu_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
 	    UNUSED int swap, UNUSED como_su_t * como_su)
@@ -282,26 +235,11 @@ qu_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
     return IPC_OK;
 }
 
-static int
-ex_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
-	    UNUSED int swap, UNUSED como_su_t * como_su)
-{
-    return IPC_OK;
-}
-
-static int
-ca_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
-	    UNUSED int swap, UNUSED como_su_t * como_su)
-{
-    return IPC_OK;
-}
-
 /*
  * -- cleanup
  * 
- * cleanup() called at termination time to
- * remove the byproducts of the compilation.
- * The function is registered with atexit(), which does not provide  
+ * cleanup() called at termination time to remove temporary files.
+ * The function is registered with atexit(), which does not provide
  * a way to unregister the function itself. So we have to check which
  * process died (through map.procname) and determine what to do accordingly.
  */
@@ -344,7 +282,8 @@ defchld(UNUSED int si_code)
  * 
  * this is called when a SIGHUP is received to cause
  * como process again the config files and command line
- * parameters.
+ * parameters. The mainloop will perform the actual
+ * reconfiguration.
  *
  */
 static void
@@ -353,7 +292,11 @@ set_reconfigure_flag(UNUSED int si_code)
     s_como_su->reconfigure = 1;
 }
 
-
+/*
+ * -- como_node_lookup_by_fd
+ *
+ * Locate the como_node_t from its filedes.
+ */
 static como_node_t *
 como_node_lookup_by_fd(array_t * nodes, int fd)
 {
@@ -368,6 +311,11 @@ como_node_lookup_by_fd(array_t * nodes, int fd)
     return NULL;
 }
 
+/*
+ * -- como_node_handle_query
+ *
+ * Forks to Query to process an incoming user connection.
+ */
 static void
 como_node_handle_query(como_node_t * node)
 {
@@ -395,7 +343,12 @@ como_node_handle_query(como_node_t * node)
     close(cd);
 }
 
-
+/*
+ * -- como_node_listen
+ *
+ * Opens the TCP query port of the node in order for users
+ * to connect and send queries.
+ */
 static int
 como_node_listen(como_node_t * node)
 {
@@ -406,6 +359,13 @@ como_node_listen(como_node_t * node)
     return node->query_fd;
 }
 
+/*
+ * -- como_node_init_mdl
+ *
+ * Load a module and configure it from its definition
+ * in the config file. If everything is ok, add it to
+ * the array of working modules.
+ */
 static mdl_t *
 como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
 {
@@ -443,6 +403,12 @@ como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
     return mdl;
 }
 
+/*
+ * -- como_node_init_mdls
+ *
+ * Call como_node_init_mdl for each module definition in an
+ * array of definitions.
+ */
 static void
 como_node_init_mdls(como_node_t * node, array_t * mdl_defs, alc_t * alc)
 {
@@ -457,8 +423,13 @@ como_node_init_mdls(como_node_t * node, array_t * mdl_defs, alc_t * alc)
 /*
  * -- reconfigure
  *
- * reconfigures CoMo. Called by the mainloop whenever it sees
- * the reconfiguration flag raised.
+ * Reconfigures CoMo. Called by the mainloop whenever it sees
+ * the reconfiguration flag raised. It calls configure() to fill
+ * a new como_config_t and compares the running config with the
+ * new como_config_t. Implements whatever changes can be implemented.
+ *
+ * As of now, the only action that reconfigure() can perform is to
+ * load additional modules.
  */
 static void
 reconfigure(como_su_t *como_su)
@@ -551,8 +522,10 @@ reconfigure(como_su_t *como_su)
 /*
  * -- como_su_run
  * 
- * Basically mux incoming messages and show them to the console.
- * Also take care of processes dying. XXX update this comment
+ * Supervisor's mainloop. Basically initialize the IPC, load the
+ * modules, send them to other processes, receive incoming queries,
+ * and reconfigure the system if necessary.
+ *
  */
 void
 como_su_run(como_su_t * como_su)
@@ -574,21 +547,13 @@ como_su_run(como_su_t * como_su)
     atexit(cleanup);
 
     /* register handlers for IPC */
-    //ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync);
-    ipc_register(CA_SU_DONE, (ipc_handler_fn) ca_su_ipc_done);
-    ipc_register(EX_SU_DONE, (ipc_handler_fn) ex_su_ipc_done);
+    /* ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync); */
+    /* ipc_register(CA_SU_DONE, (ipc_handler_fn) ca_su_ipc_done); */
+    /* ipc_register(EX_SU_DONE, (ipc_handler_fn) ex_su_ipc_done); */
     ipc_register(QU_SU_DONE, (ipc_handler_fn) qu_su_ipc_done);
     /*ipc_register(CA_SNIFFERS_INITIALIZED,
 		 (ipc_handler_fn) su_ipc_ca_sniffers_initialized);*/
     
-#if 0
-    /* TODO */
-    if (como_su->env.runmode == RUNMODE_INLINE) {
-        inline_mainloop(accept_fd); 
-	return; 
-    } 
-#endif
-
     event_loop_init(&como_su->el);
 
     /* accept connections from other processes */
@@ -641,19 +606,7 @@ como_su_run(como_su_t * como_su)
     runmode = como_env_runmode();
 
     for (;;) {
-#ifdef RESOURCE_MANAGEMENT
-	/* 
-	 * to do resource management we need the select timeout to 
-	 * be shorter so that supervisor can be more reactive to 
-	 * sudden changes in the resource usage. 
-	 * 
-	 * XXX shouldn't the other processes be more reactive and 
-	 *     supervisor just wait for an "heads up" from them? 
-	 */
-	struct timeval to = {0, 50000};
-#else
 	struct timeval to = {1, 0};
-#endif
         int secs, dd, hh, mm, ss;
 	struct timeval now;
 	int n_ready;
