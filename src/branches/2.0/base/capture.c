@@ -1,5 +1,5 @@
 /* 
- * Copyright (c) 2004-2006, Intel Corporation 
+ * Copyright (c) 2004-2007, Intel Corporation 
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or 
@@ -57,7 +57,6 @@
 #define POLL_WAIT   1000
 
 /* flush and freeze/unfreeze thresholds */
-#define MB(m)				((m)*1024*1024)
 #define FREEZE_THRESHOLD(mem)		(mem*3/4)
 #define THAW_THRESHOLD(mem)		(mem*1/8)
 
@@ -238,14 +237,13 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
 {
     mdl_icapture_t *ic = mdl_get_icapture(mdl);
 
-    /* TODO: free all mem allocated my mdl (now only done for records) */
-
     /*
      * Change of interval management
      */
     if (ic->ivl_start != 0) {
         debug("module `%s': flushing %u tuples at interval %lu\n", mdl->name,
 	      ic->tuple_count, TS2SEC(ic->ivl_start));
+
         if (ic->flush != NULL) /* call flush callback, if defined */
             ic->flush(mdl, ic->ivl_state);
 
@@ -261,7 +259,6 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
 
             como_stats->table_queue++;
             ipc_send(ic->export, CA_EX_PROCESS_SHM_TUPLES, &msg, sizeof(msg));
-            //debug("module `%s': flushing - sent shmem tuples msg to CA\n", mdl->name);
 
             /* prepare a new empty tuple list */
             tuples_init(&ic->tuples);
@@ -310,17 +307,14 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
 
     /* update ivl_start and ivl_end */
     if (next_ts != 0) {
-        //debug("module `%s': next IVL\n", mdl->name);
         ic->ivl_start = next_ts - (next_ts % mdl->flush_ivl);
         ic->ivl_end = ic->ivl_start + mdl->flush_ivl;
     }
 
     /* initialize new state */
     pool_clear(ic->ivl_mem);
-    if (ic->init) {
-        //debug("module `%s': calling init()\n", mdl->name);
+    if (ic->init)
         ic->ivl_state = ic->init(mdl, ic->ivl_start);
-    }
 }
 
 static timestamp_t
@@ -582,6 +576,7 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
 
     return IPC_OK;
 }
+
 #if 0
 /* 
  * -- ca_ipc_module_del 
@@ -617,7 +612,6 @@ ca_ipc_module_del(UNUSED ipc_peer_t * peer, delmsg_t *msg,
     mdl->status = MDL_UNUSED;
 }
 #endif
-
 
 static int
 handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer,
@@ -1149,6 +1143,7 @@ align_ts(timestamp_t ts, uint32_t tb)
  * 
  * creates a new batch by merging and sorting the captured packets
  *
+ * XXX should be revised
  */
 static batch_t *
 batch_create(int force_batch, como_ca_t * como_ca)
@@ -1613,16 +1608,15 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     
     /* register handlers for IPC messages */
     ipc_register(SU_CA_ADD_MODULE, (ipc_handler_fn) handle_su_ca_add_module);
-//    ipc_register(CA_DEL_MODULE, ca_ipc_module_del);
+    /* ipc_register(CA_DEL_MODULE, ca_ipc_module_del); */
     ipc_register(SU_CA_START, (ipc_handler_fn) handle_su_ca_start);
     ipc_register(SU_ANY_EXIT, (ipc_handler_fn) handle_su_any_exit);
     ipc_register(CCA_OPEN, (ipc_handler_fn) ca_ipc_cca_open);
     ipc_register(CCA_ACK_BATCH, (ipc_handler_fn) ca_ipc_cca_ack_batch);
     ipc_register(EX_CA_ATTACH_MODULE, (ipc_handler_fn) handle_ex_ca_attach_module);
     ipc_register(EX_CA_TUPLES_PROCESSED, (ipc_handler_fn) handle_ex_ca_tuples_processed);
-/*    ipc_register(IPC_FLUSH, (ipc_handler_fn) ca_ipc_flush);
-    ipc_register(IPC_FREEZE, ca_ipc_freeze);
-    */
+    /* ipc_register(IPC_FLUSH, (ipc_handler_fn) ca_ipc_flush); */
+    /* ipc_register(IPC_FREEZE, ca_ipc_freeze); */
 
     /* alias to the sniffer list */
     sniffers = como_ca.sniffers = &node->sniffers;
@@ -1720,9 +1714,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	    event_loop_set_timeout(&como_ca.el, &timeout);
 
 	n_ready = event_loop_select(&como_ca.el, &r);
-	if (n_ready < 0) {
+	if (n_ready < 0)
 	    continue;
-	}
 
 	/* process any IPC messages that have turned up */
 
@@ -1892,12 +1885,11 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		batch_free(batch);
 	}
 
-
 	/* 
          * Check shared mem usage. If above FREEZE_THRESHOLD, and export
          * has work to do, freeze sniffers that read from files. If below
          * THAW_THRESHOLD, or export has no work left (therefore it cannot
-         * free any memory) then thaw any sniffer.
+         * free any memory) then thaw any frozen sniffer.
 	 */
 	if (como_stats->table_queue == 0 || memmap_usage(shmemmap) <
                 THAW_THRESHOLD(como_config->shmem_size)) {
