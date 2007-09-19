@@ -423,7 +423,7 @@ proxy_mono_get_formats(mdl_t *mdl, char **dflt_format)
                 mdl->name);
         debug("formats array len is %d\n", l);
 
-        formats = como_calloc(l, sizeof(qu_format_t));
+        formats = como_calloc(l + 1, sizeof(qu_format_t));
         for (i = 0; i < l; i++) {
             MonoObject *o;
             MonoClass *c;
@@ -445,6 +445,10 @@ proxy_mono_get_formats(mdl_t *mdl, char **dflt_format)
             formats[i].name = name;
             formats[i].content_type = ct_type;
         }
+
+        formats[l].id = -1;
+        formats[l].name = NULL;
+        formats[l].content_type = NULL;
     }
 
     field = mono_class_get_field_from_name(s->klass, "default_format");
