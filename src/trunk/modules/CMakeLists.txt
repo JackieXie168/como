@@ -3,6 +3,7 @@ INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 SET(MODULES
   apps
   assoc
+  autofocus
   dhcp
   ethtypes
   ewma
