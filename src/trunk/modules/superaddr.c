@@ -73,9 +73,10 @@ CONFIGDESC{
     uint32_t meas_ivl;          /* measurement interval (secs) */
     uint32_t last_export;       /* last export time */
     int use_dst;                /* reporting sources or destinations */
-    uhash_t hfunc;              /* uni_ersal hash function */
+    uhash_t hfunc;              /* universal hash function */
     uint32_t threshold;         /* minimum number of src's/dst's to consider
                                    an ip address as a supersrc/superdst */
+    uint32_t mask;              /* privacy mask */
 };
 
 #define STATE struct _state
@@ -105,6 +106,7 @@ init(void *self, char *args[])
     config->last_export = 0;
     config->use_dst = 0;
     config->threshold = 15;
+    config->mask = ~0;
 
     /*
      * process input arguments
@@ -112,17 +114,18 @@ init(void *self, char *args[])
     for (i = 0; args && args[i]; i++) {  
         char *x;
 
+        x = index(args[i], '=') + 1; 
+        
         if (strstr(args[i], "use_dst"))
             config->use_dst = 1;
         else if (strstr(args[i], "use_src"))
             config->use_dst = 0;
-        else if (strstr(args[i], "interval")) {
-            x = index(args[i], '=') + 1; 
+        else if (strstr(args[i], "interval"))
             config->meas_ivl = atoi(x);
-        } else if (strstr(args[i], "threshold")) {
-            x = index(args[i], '=') + 1; 
+        else if (strstr(args[i], "threshold"))
             config->threshold = atoi(x);
-        }
+        else if (strstr(args[i], "mask"))
+            config->mask = (uint32_t) strtoll(x, NULL, 0);
     }
 
     /* setup indesc */
@@ -530,7 +533,8 @@ print(void *self, char *buf, size_t *len, char * const args[])
     ts = (time_t) stamp;
     t = asctime(localtime(&ts));
     meter = ntohl(dr->meter);
-    addr.s_addr = dr->ip_addr;
+    /* apply the privacy mask */
+    addr.s_addr = dr->ip_addr & htonl(config->mask);
 
     if (ts != last_ts) {
         count = 0; /* reset count */

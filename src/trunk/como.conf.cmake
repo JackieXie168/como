@@ -349,8 +349,9 @@ end
 #    filter "ip"
 #    hashsize 100000
 #    #args "interval=5"
-#    #args "use_src"         # detect super sources or destinations
-#    #args "threshold=15"    # detection threshold     
+#    #args "use_src" 		# detect super sources or destinations
+#    #args "threshold=15" 	# detection threshold
+#    #args "mask=0xffff0000"	# privacy mask
 #end
 
 module "topaddr"
@@ -358,9 +359,9 @@ module "topaddr"
     filter "ip"
     hashsize 100000
     #args "interval=5"
-    #args "topn=20"	# number of top addresses
-    #args "mask=-1"	# privacy mask to be applied to the address
-    #args "use-dst"	# use source or destination addresses
+    #args "topn=20"		# number of top addresses
+    #args "mask=0xffff0000"	# privacy mask to be applied to the address
+    #args "use-dst"		# use source or destination addresses
     #args "align-to=0"
 end
 
