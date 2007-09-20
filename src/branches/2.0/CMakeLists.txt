@@ -6,7 +6,7 @@ PROJECT(COMO C)
 #
 # Software version
 #
-SET(COMOVER 1.0)
+SET(COMOVER 2.0)
 
 #
 # Where to look first for cmake modules, before ${CMAKE_ROOT}/Modules is checked

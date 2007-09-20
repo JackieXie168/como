@@ -534,9 +534,8 @@ csclose(int fd, off_t ofs)
     m.id = cf->id; 
     m.ofs = ofs;
     
-    if (ipc_send(cf->storage, S_CLOSE, &m, sizeof(m)) != IPC_OK) {
+    if (ipc_send(cf->storage, S_CLOSE, &m, sizeof(m)) != IPC_OK)
 	error("sending message to storage: %s\n", strerror(errno));
-    }
     
     free(cf);
 }
