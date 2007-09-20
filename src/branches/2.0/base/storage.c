@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -948,7 +948,7 @@ handle_close(UNUSED ipc_peer_t * sender, csmsg_t * in,
 	bs->wfd = -1;
 	bs->the_writer = NULL;
 	free(cl);
-	return IPC_CLOSE; /* done! */
+        return IPC_OK; /* done! */
     } 
 
     /* 
@@ -957,7 +957,7 @@ handle_close(UNUSED ipc_peer_t * sender, csmsg_t * in,
      */ 
     client_unlink(cl);
     free(cl);
-    return IPC_CLOSE;
+    return IPC_OK; /* done! */
 }
     
 
