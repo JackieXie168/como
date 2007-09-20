@@ -67,8 +67,9 @@ start_timestamp(module_t * mdl)
 	    /* we got something, give the record to load() */
 	    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
 	}
+
+        csclose(file_fd, 0);
     }
-    csclose(file_fd, 0);
     
     return ts;
 }
