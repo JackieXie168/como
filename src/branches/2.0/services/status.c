@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, Intel Corporation
+ * Copyright (c) 2006-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -42,39 +42,49 @@
 #include "ipc.h"
 #include "query.h"
 
-extern stats_t *como_stats;
-
 /* global state */
-//extern struct _como map;
+extern stats_t *como_stats;
+extern como_su_t *s_como_su;
 
-#if 0
+/*
+ * -- start_timestamp
+ *
+ * Discover the start timestamp of a given module.
+ */
 static timestamp_t
-start_timestamp(mdl_t * mdl, int storage_fd)
+get_start_timestamp(mdl_t * mdl)
 {
-    int file_fd = -1;
     off_t ofs;
-    size_t rlen, sz;
+    size_t rlen;
     timestamp_t ts = 0;
     char *ptr;
+    como_env_t *env;
+    char *str;
+    int reader;
     
-    file_fd = csopen(mdl->output, CS_READER_NOBLOCK, 0, storage_fd);
-    if (file_fd >= 0) {
-	/* get start offset */
-	ofs = csgetofs(file_fd);
+    como_node_t *n = &array_at(s_como_su->nodes, como_node_t, 0);
+    env = como_env();
+
+    str = como_asprintf("%s/%s/%s", env->dbdir, n->name, mdl->name);
+    reader = csopen(str, CS_READER_NOBLOCK, (off_t) mdl->streamsize,
+            (ipc_peer_t *) COMO_ST);
+    
+    if (reader >= 0) {
+	ofs = csgetofs(reader); /* get start offset */
 	
-	/* read first record */
-	rlen = mdl->callbacks.st_recordsize;
-	ptr = csmap(file_fd, ofs, (ssize_t *) &rlen);
-	if (ptr && rlen > 0) {
-	    /* we got something, give the record to load() */
-	    sz = mdl->callbacks.load(mdl, ptr, rlen, &ts);
-	}
+        /* read at least an int (size of the record) plus the record's TS */
+	rlen = sizeof(int) + sizeof(timestamp_t);
+	ptr = csmap(reader, ofs, (ssize_t *) &rlen);
+	if (ptr && rlen > 0)
+            ts = *((timestamp_t *) (ptr + sizeof(int)));
+        else
+            debug("csmap fails, will return timestamp 0\n");
+        csclose(reader, 0);
     }
-    csclose(file_fd, 0);
-    
+
+    free(str);
     return ts;
 }
-#endif
 
 
 /* 
@@ -223,14 +233,13 @@ service_status(int client_fd, como_node_t *node,
 	    /* we now look at the very first record for this module 
     	     * to get an idea on how far in the past a query could go. 
  	     */
-            #endif
-            #define start_timestamp(...) 0
- 	    ts = start_timestamp(mdl, storage_fd);
-            #if 0
+ 	    ts = get_start_timestamp(mdl);
 	} else {
 	    ts = node_src_ts;
 	}
         #endif
+
+        ts = get_start_timestamp(mdl);
 
 	len = sprintf(buf, "Module: %-15s | %s | %u |",
 		      mdl->name, mdl->filter, TS2SEC(ts));
