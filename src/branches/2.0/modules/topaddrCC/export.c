@@ -38,12 +38,14 @@
 #include "como.h"
 #include "flowtable.h"
 #include "data.h"
+#include "uhash.h"
 
 typedef struct ex_state ex_state_t;
 struct ex_state {
     flowtable_t *table;
     size_t      nrec;
     timestamp_t current_ivl;
+    uhash_t     hfunc;
 };
 
 /*
@@ -80,6 +82,7 @@ ex_init(mdl_t *self)
     alc_t *alc = mdl_alc(self);
     ex_state_t *st = mdl_malloc(self, sizeof(ex_state_t));
     st->current_ivl = 0;
+    uhash_initialize(&st->hfunc);
     reinitialize_state(self, st);
     return st;
 }
@@ -126,7 +129,10 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples,
         timestamp_t ivl_start, ex_state_t *st)
 {
     topaddr_record_t *rec;
+    topaddr_config_t *cfg;
     topaddr_tuple_t *t;
+    int eof, single_ivl, change_ivl;
+    uint32_t hash;
     size_t i;
 
     if (ntuples == 0 && st->nrec == 0) /* nothing to do */
@@ -135,20 +141,28 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples,
     if (st->current_ivl == 0) /* first tuples to arrive */
         st->current_ivl = ivl_start;
 
-    if (ivl_start != st->current_ivl) { /* need to store */
+    cfg = mdl_get_config(self, topaddr_config_t);
+    single_ivl = cfg->single_ivl;
+    eof = ivl_start == ~0LLU;
+    change_ivl = ivl_start != st->current_ivl;
+
+    if (!single_ivl && change_ivl) { /* need store */
         dump_state(self, st);
         st->current_ivl = ivl_start;
     }
 
+    hash = uhash(&st->hfunc, (uint8_t *) &t->addr, sizeof(uint32_t),
+            UHASH_NEW);
+
     for (i = 0; i < ntuples; i++) { /* update our state */
         t = tuples[i];
-        rec = (topaddr_record_t *) flowtable_lookup(st->table, t->hash,
+        rec = (topaddr_record_t *) flowtable_lookup(st->table, hash,
                 (pkt_t *)t);
 
         if (rec == NULL) {
             st->nrec++;
             rec = mdl_malloc(self, sizeof(topaddr_record_t));
-            flowtable_insert(st->table, t->hash, (void *)rec);
+            flowtable_insert(st->table, hash, (void *)rec);
             rec->addr = t->addr;
             rec->bytes = 0;
             rec->pkts = 0;
@@ -157,5 +171,8 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples,
         rec->bytes += t->bytes;
         rec->pkts += t->pkts;
     }
+
+    if (single_ivl && eof) /* single ivl mode, flush all output */
+        dump_state(self, st);
 }
 

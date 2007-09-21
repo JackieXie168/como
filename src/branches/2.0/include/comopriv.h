@@ -390,6 +390,7 @@ struct mdl_icapture {
 struct mdl_isupervisor {
     mdl_priv_t	type;
     su_init_fn	init;
+    int ondemand;
 };
 
 struct mdl_iexport {
