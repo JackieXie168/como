@@ -99,7 +99,6 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
         t->addr = key;
         t->bytes = 0;
         t->pkts = 0;
-        t->hash = hash;
         flowtable_insert(st->table, hash, (void *) t);
     }
 

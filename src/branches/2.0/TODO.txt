@@ -31,14 +31,12 @@ multiple pattern search
  - Do more error checking.
  - Fix example.conf
  - argsfile keyword
- - get modules from cmdline
+ - specify that a module has to run ondemand
 
 * Features
 
  - Modules:
-    . replay()
     . in and outdescs
-    . documentation
     . optional: add some type checking for callbacks
     . port all modules
 

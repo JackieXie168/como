@@ -124,6 +124,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
 
     switch (peer->class) {
         case COMO_CA_CLASS: { /* connect from CA */
+            int nsent;
             debug("su_ipc_onconnect -- CAPTURE\n");
             como_su->ca = peer;
 
@@ -132,12 +133,17 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             
             /* TODO: metadesc comparison here */
             
+            nsent = 0;
             for (i = 0; i < mdls->len; i++) { /* send the mdls */
                 /* TODO only send compatible modules */
                 mdl_t *mdl = array_at(mdls, mdl_t *, i);
+                mdl_isupervisor_t *is = mdl_get_isupervisor(mdl);
+                if (is->ondemand)
+                    continue;
                 send_module(peer, SU_CA_ADD_MODULE, mdl);
+                nsent++;
             }
-            for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
+            for (i = 0; i < nsent; i++) { /* wait for acks */
                 ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
                 assert(t == CA_SU_MODULE_ADDED || t == CA_SU_MODULE_FAILED);
             }
@@ -152,16 +158,22 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             break;   
         }
         case COMO_EX_CLASS: { /* connect from EX */
+            int nsent;
             debug("su_ipc_onconnect -- EXPORT\n");
             assert(ca_done && st_done);
             como_su->ex = peer;
 
+            nsent = 0;
             for (i = 0; i < mdls->len; i++) { /* send the mdls */
                 /* TODO only send compatible modules */
                 mdl_t *mdl = array_at(mdls, mdl_t *, i);
+                mdl_isupervisor_t *is = mdl_get_isupervisor(mdl);
+                if (is->ondemand)
+                    continue;
+                    nsent++;
                 send_module(peer, SU_EX_ADD_MODULE, mdl);
             }
-            for (i = 0; i < mdls->len /* ncompat */; i++) { /* wait for acks */
+            for (i = 0; i < nsent; i++) { /* wait for acks */
                 ipc_receive(peer, &t, NULL, NULL, NULL, NULL);
                 assert(t == EX_SU_MODULE_ADDED || t == EX_SU_MODULE_FAILED);
             }
@@ -174,13 +186,10 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             ipc_send(como_su->ca, SU_CA_START, NULL, 0);
 
             /*
-             * If we are running inline or on-demand, we can
-             * start querying the module
+             * If we are running inline we can start querying the module
              */
             if (como_config->inline_mode)
                 launch_inline_query();
-            /*else if (como_config->ondemand_mode)
-                launch_ondemand_query();*/
         }
     }
 
@@ -372,9 +381,6 @@ como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
     mdl_isupervisor_t *is;
     mdl_t *mdl = alc_new0(alc, mdl_t);
 
-    if (def->ondemand) /* skip on-demand modules */
-        return NULL;
-
     mdl->name = alc_strdup(alc, def->name);
     mdl->mdlname = alc_strdup(alc, def->mdlname);
     mdl->streamsize = def->streamsize;
@@ -390,6 +396,7 @@ como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
     }
 
     is = mdl_get_isupervisor(mdl);
+    is->ondemand = def->ondemand;
     mdl->config = is->init(mdl, def->args);
     if (mdl->config == NULL) {
         warn("Initialization of module `%s' failed.\n", mdl->name);

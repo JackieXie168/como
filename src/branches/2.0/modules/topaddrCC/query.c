@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -101,12 +101,14 @@ enum {
     FORMAT_PRETTY,
     FORMAT_PLAIN,
     FORMAT_HTML,
+    FORMAT_SIDEBOX,
 };
 
 QUERY_FORMATS_BEGIN
     {FORMAT_PRETTY, "pretty", "text/plain"},
     {FORMAT_PLAIN, "plain", "text/plain"},
-    {FORMAT_HTML, "html", "text/plain"},
+    {FORMAT_HTML, "html", "text/html"},
+    {FORMAT_SIDEBOX, "sidebox", "text/html"},
 QUERY_FORMATS_END
 
 DEFAULT_FORMAT = "pretty";
@@ -117,12 +119,14 @@ typedef struct qstate qstate_t;
 struct qstate {
     time_t current;
     int count;
+    uint32_t query_ivl;
 };
 
 qstate_t *
 qu_init(mdl_t * self, int format_id, hash_t * args)
 {
     static qstate_t qs;
+    char *val;
     qs.current = 0;
 
     topaddr_config_t * config = mdl_get_config(self, topaddr_config_t);
@@ -131,10 +135,18 @@ qu_init(mdl_t * self, int format_id, hash_t * args)
     case FORMAT_PRETTY:
         mdl_printf(self, PRETTYHDR, what[config->use_dst]); 
         break;
+    case FORMAT_SIDEBOX:
     case FORMAT_HTML:
         mdl_print(self, HTMLHDR);
         mdl_printf(self, HTMLTITLE, config->topn, what[config->use_dst]);
     }
+
+    /*
+     * in single_ivl mode, we need the query ivl in order to
+     * know how to scale to bps / pps
+     */
+    if ((val = hash_lookup_string(args, "query_ivl")))
+        qs.query_ivl = atoi(val);
 
     return &qs;
 }
@@ -142,7 +154,7 @@ qu_init(mdl_t * self, int format_id, hash_t * args)
 void
 qu_finish(mdl_t * self, int format_id, void * state)
 {
-    if (format_id == FORMAT_HTML)
+    if (format_id == FORMAT_HTML || format_id == FORMAT_SIDEBOX)
 	mdl_print(self, HTMLFOOTER);  
 }
 
@@ -156,7 +168,7 @@ print_rec(mdl_t * self, int format_id, topaddr_record_t *r, qstate_t *state)
     time_t ts;
 
     ts = (time_t) (r->ts >> 32);
-    if (state->current != ts) {
+    if (state->current != ts && ! config->single_ivl) {
         state->current = ts;
         state->count = 0;
     }
@@ -169,13 +181,15 @@ print_rec(mdl_t * self, int format_id, topaddr_record_t *r, qstate_t *state)
 	mdl_printf(self, PRETTYFMT, asctime(localtime(&ts)), state->count, 
                     inet_ntoa(addr), r->bytes, r->pkts);
         break;
+    case FORMAT_SIDEBOX:
     case FORMAT_HTML: {
         float bps, pps; 
         char bunit = ' ';
         char punit = ' ';
 	char tmp[2048] = "#";
-	
-        bps = (float) (r->bytes * 8) / (float) config->meas_ivl;
+        float ivl = config->single_ivl ? state->query_ivl : config->meas_ivl;
+
+        bps = (float) (r->bytes * 8) / ivl;
 	if (bps > 1000000) {
 	    bunit = 'M';
 	    bps /= 1000000;
@@ -184,7 +198,7 @@ print_rec(mdl_t * self, int format_id, topaddr_record_t *r, qstate_t *state)
 	    bps /= 1000;
 	}
 
-        pps = (float) r->pkts / (float) config->meas_ivl;
+        pps = (float) r->pkts / ivl;
 	if (pps > 1000000) {
 	    punit = 'M';
 	    pps /= 1000000;

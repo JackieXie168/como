@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -45,7 +45,6 @@ como_tuple struct topaddr_tuple {
     uint32_t addr;  	/* src/dst address */ 
     uint64_t bytes;	/* number of bytes */
     uint32_t pkts;	/* number of packets */
-    uint32_t hash;      /* hash of the addr */
 };
 
 como_record struct topaddr_record {
@@ -60,5 +59,7 @@ como_config struct topaddr_config {
     int topn;			/* number of top destinations */
     uint32_t meas_ivl;		/* interval (secs) */
     uint32_t mask; 		/* privacy mask */
+    uint32_t single_ivl;        /* should the mdl aggregate all
+                                 * data in 1 record? */
 };
 

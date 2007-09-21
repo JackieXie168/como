@@ -106,7 +106,7 @@ enum {
 QUERY_FORMATS_BEGIN
     {FORMAT_PRETTY, "pretty", "text/plain"},
     {FORMAT_PLAIN, "plain", "text/plain"},
-    {FORMAT_HTML, "html", "text/plain"},
+    {FORMAT_HTML, "html", "text/html"},
 QUERY_FORMATS_END
 
 DEFAULT_FORMAT = "pretty";

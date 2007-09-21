@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -66,6 +66,8 @@ init(mdl_t * self, hash_t * args)
         config->use_dst = 1;
     if ((val = hash_lookup_string(args, "use-src")))
         config->use_dst = 0;
+    if ((val = hash_lookup_string(args, "single-ivl")))
+        config->single_ivl = 1;
 
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
