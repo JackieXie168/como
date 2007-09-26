@@ -4,6 +4,8 @@
 #  PCAP_INCLUDE_DIR - where to find pcap.h, etc.
 #  PCAP_LIBRARIES   - List of libraries when using PCAP.
 #  PCAP_FOUND       - True if PCAP found.
+#
+# $Id$
 
 
 IF (PCAP_INCLUDE_DIR)

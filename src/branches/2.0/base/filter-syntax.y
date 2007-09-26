@@ -110,6 +110,7 @@
 #define Ttods     11
 #define Tasn      12
 #define Tether    13
+#define Tall      14
 
 struct _listnode
 {
@@ -295,6 +296,9 @@ tree_make(uint8_t type, uint8_t pred_type, treenode_t *left,
             t->data = NULL;
         case Ttods:
             asprintf(&(t->string), "to_ds");
+            t->data = NULL;
+        case Tall:
+            asprintf(&(t->string), "all");
             t->data = NULL;
         }
     }
@@ -810,6 +814,9 @@ int evaluate_pred(treenode_t *t, pkt_t *pkt)
                     z = 1;
             }
             break;
+        case Tall:
+            z = 1;
+            break;
         }
     }
 
@@ -959,6 +966,10 @@ expr: expr AND expr
     | TODS
       {
         $$ = tree_make(Tpred, Ttods, NULL, NULL, NULL);
+      }
+    | ALL
+      {
+        $$ = tree_make(Tpred, Tall, NULL, NULL, NULL);
       }
 ;
 ip: DIR IPADDR

@@ -5,6 +5,7 @@
 #  PKGCONFIG_EXECUTABLE = the full path to pkg-config.
 #  PKGCONFIG_FOUND      = true if pkg-config found.
 #
+# $Id$
 
 IF (PKGCONFIG_EXECUTABLE)
   # Already in cache, be silent

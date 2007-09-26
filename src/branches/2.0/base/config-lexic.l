@@ -31,7 +31,7 @@
  */
 
 /*
- * Config parsing for CoMo - lexic file
+ * Config parsing for CoMo - lexical analyzer
  */
 %{
 
@@ -90,6 +90,8 @@ end             { return TOK_END; }
 ,               { return TOK_COMMA; }
 asnfile         { return TOK_ASNFILE; }
 alias           { return TOK_ALIAS; }
+virtual-node    { return TOK_VIRTUAL_NODE; }
+source-module   { return TOK_SOURCE_MODULE; }
 
 shed-method     { return TOK_SHEDMETHOD; }
 

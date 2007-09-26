@@ -31,7 +31,7 @@
  */
 
 /*
- * Query parsing for CoMo - lexic file
+ * Query parsing for CoMo - lexical analyzer
  */
 %{
 

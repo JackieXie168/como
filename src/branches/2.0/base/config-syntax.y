@@ -27,7 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: filter-syntax.y 1096 2006-11-27 16:42:10Z rnc1 $
+ * $Id$
  */
 
 /*
@@ -56,6 +56,7 @@ void config_lexic_init();
 /* global variables */
 alc_t *alc;
 static mdl_def_t mdl;
+static virtual_node_def_t vnode;
 static como_config_t *cfg; /* result */
 
 void
@@ -80,7 +81,8 @@ report_parse_error(void)
 %token TOK_TYPE TOK_COMMENT TOK_SNIFFER TOK_FILESIZE TOK_MODULE TOK_DESCRIPTION
 %token TOK_SOURCE TOK_OUTPUT TOK_FILTER TOK_HASHSIZE TOK_STREAMSIZE TOK_ARGS
 %token TOK_ARGSFILE TOK_ONDEMAND TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
-%token TOK_STORAGEPATH TOK_ASNFILE TOK_SHEDMETHOD TOK_ALIAS
+%token TOK_STORAGEPATH TOK_ASNFILE TOK_SHEDMETHOD TOK_ALIAS TOK_VIRTUAL_NODE
+%token TOK_SOURCE_MODULE
 %token <string> TOK_STRING
 %token <number> TOK_NUMBER
 
@@ -96,6 +98,7 @@ item:
     | keyword
     | sniffer_def
     | module_def
+    | virtual_node_def
     | error TOK_NEWLINE { report_parse_error(); }
 ;
 
@@ -117,6 +120,29 @@ keyword: /* a global keyword */
     | TOK_ALIAS TOK_STRING TOK_EQUALS TOK_STRING {
         hash_insert_string(cfg->query_alias, $2, $4);
     }
+;
+
+virtual_node_def:
+    TOK_VIRTUAL_NODE TOK_STRING
+            {
+                initialize_virtual_node_def(&vnode, alc);
+                vnode.name = $2;
+            }
+    virtual_node_keywords
+    TOK_END { define_virtual_node(&vnode, cfg, alc); }
+;
+
+virtual_node_keywords:
+    virtual_node_keywords virtual_node_keyword | virtual_node_keyword
+;
+
+virtual_node_keyword:
+      TOK_NEWLINE
+    | TOK_LOCATION TOK_STRING   { vnode.location = $2; }
+    | TOK_TYPE TOK_STRING       { vnode.type = $2; }
+    | TOK_QUERY_PORT TOK_NUMBER { vnode.query_port = $2; }
+    | TOK_FILTER TOK_STRING     { vnode.filter = $2; }
+    | TOK_SOURCE_MODULE TOK_STRING { vnode.source = $2; }
 ;
 
 sniffer_def: /* the definition of a sniffer */

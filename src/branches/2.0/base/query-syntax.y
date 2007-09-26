@@ -27,11 +27,11 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: filter-syntax.y 1096 2006-11-27 16:42:10Z rnc1 $
+ * $Id$
  */
 
 /*
- * Config parsing for CoMo
+ * Query parsing for CoMo
  */
  
 %{

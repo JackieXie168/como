@@ -1,4 +1,5 @@
 #!/bin/sh
+# $Id$
 
 usage () {
     echo "usage: $0 <tpl> <name> <type> <field>";

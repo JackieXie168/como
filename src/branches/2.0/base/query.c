@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -75,6 +75,7 @@ const qu_format_t QU_FORMAT_HTML =
 /* vars 'inherited' from SU */
 extern stats_t *como_stats;
 extern como_config_t *como_config;
+extern como_su_t *s_como_su;
 
 /* global vars */
 ipc_peer_t *supervisor;
@@ -95,16 +96,10 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
     mdl_t *mdl;
     mdl_iquery_t *iq;
 
+    debug("validating query\n");
+    
     if (req->mode != QMODE_MODULE)
         return NULL; /* only validates queries for mdls */
-
-    if (req->mode == QMODE_MODULE && req->source != NULL) {
-        /* TODO: proper validation of on-demand queries,
-         *       check the qu_format according to module
-         */
-	req->qu_format = &QU_FORMAT_HTML;
-        return NULL;
-    }
 
     if (req->module == NULL) {
         /*
@@ -128,29 +123,72 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
         return errorstr;
     }
 
-    /* check if the module is present in the current configuration */
-    mdl = mdl_lookup(node->mdls, config_resolve_alias(como_config, req->module));
-    if (mdl == NULL) {
-        warn("module %s not found\n", req->module);
-        sprintf(errorstr, 
-                "Module `%s' not found in the current configuration\n",
-                req->module);
-        *errcode = 404;
+    if (node->kind == COMO_NODE_REAL) {
+        /*
+         * this is a real node (not a virtual one).
+         * check if the module is present in the current configuration.
+         */
+        mdl = mdl_lookup(node->mdls, config_resolve_alias(como_config, req->module));
+        if (mdl == NULL) {
+            warn("module %s not found\n", req->module);
+            sprintf(errorstr, 
+                    "Module `%s' not found in the current configuration\n",
+                    req->module);
+            *errcode = 404;
+            return errorstr;
+        }
+    }
+    else {
+        /*
+         * check if querying for a virtual node. If so, we must
+         * alter the query args to match the virtual node's cfg.
+         */
+        como_node_t *real_node = &array_at(s_como_su->nodes,
+                como_node_t, node->real_node_id);
+
+        mdl = mdl_lookup(real_node->mdls, config_resolve_alias(como_config,
+                    req->module));
+        if (mdl == NULL) {
+            warn("module %s not found\n", req->module);
+            sprintf(errorstr, 
+                    "Module `%s' not found in the current configuration\n",
+                    req->module);
+            *errcode = 404;
+            return errorstr;
+        }
+
+        /*
+         * the module has been found. alter its information to
+         * transform this query on a virtual node into an ondemand
+         * query on the real node.
+         */
+        mdl->priv->ondemand = 1;    /* now this one runs on-demand */
+        req->source = node->source; /* from the virtual node's source */
+
+        if (req->filter_str)
+            req->filter_str = como_asprintf("(%s) and (%s)", req->filter_str,
+                node->filter);
+        else
+            req->filter_str = node->filter;
+    }
+
+    /*
+     * check that the query has a source if and only if
+     * the module runs on-demand or querying a virtual node.
+     */
+    if (mdl->priv->ondemand && req->source == NULL) {
+        sprintf(errorstr, "Module `%s' running ondemand but no source "
+            "was specified\n", req->module);
+        *errcode = 500;
+        return errorstr;
+    }
+
+    if (mdl->priv->ondemand == 0 && req->source != NULL) {
+        sprintf(errorstr, "Module `%s' is not running ondemand but a source "
+            "was specified\n", req->module);
+        *errcode = 500;
         return errorstr;
 
-        #if 0
-	/* count the query arguments */
-	for (nargs = 0; req->args[nargs]; nargs++)
-	    ; 
-
-	/* add the alias arguments to the query */
-	req->args = safe_realloc(req->args,
-				 (1 + nargs + alias->ac)*sizeof(char *));
-	for (i = nargs; i < nargs + alias->ac; i++) 
-	    req->args[i] = safe_strdup(alias->args[i - nargs]); 
-
-	req->args[nargs + alias->ac] = NULL;
-        #endif
     }
 
     /*
@@ -356,9 +394,8 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
 
     return NULL;		/* everything OK, nothing to say */
 }
+
 #if 0
-
-
 inline static void
 handle_print_fail(module_t *mdl)
 {
@@ -378,58 +415,6 @@ handle_replay_fail(module_t *mdl)
     } else {
 	err(EXIT_FAILURE, "sending data to the client");
     }
-}
-
-
-/*
- * -- qu_ipc_module_add
- *
- * handle IPC_MODULE_ADD messages by unpacking the module
- * and activating it.
- *
- */
-static void
-qu_ipc_module_add(procname_t src, __attribute__((__unused__)) int fd,
-                  void * pack, size_t sz)
-{
-    module_t tmp;
-    module_t * mdl;
-
-    /* only the parent process should send this message */
-    assert(src == map.parent);
-
-    /* unpack the received module info */
-    if (unpack_module(pack, sz, &tmp)) {
-        logmsg(LOGWARN, "error when unpack module in IPC_MODULE_ADD\n");
-        return;
-    }
-
-    /* find an empty slot in the modules array */
-    mdl = copy_module(&map, &tmp, tmp.node, tmp.index, NULL);
-
-    /* free memory from the tmp module */
-    clean_module(&tmp);
-
-    if (activate_module(mdl, map.libdir)) 
-        logmsg(LOGWARN, "error when activating module %s\n", mdl->name);
-}
-
-
-/* 
- * -- qu_ipc_start 
- * 
- * once we get the IPC_START message from SUPERVISOR we can start
- * looking into the query itself... 
- *
- */
-static void
-qu_ipc_start(procname_t sender, __attribute__((__unused__)) int fd,
-             __attribute__((__unused__)) void * buf,
-             __attribute__((__unused__)) size_t len)
-{
-    /* only SUPERVISOR should send this message */
-    assert(sender == map.parent);
-    s_wait_for_modules = 0;
 }
 #endif
 
@@ -453,10 +438,6 @@ query_initialize(ipc_peer_t *parent, int *supervisor_fd)
 #ifdef MONO_SUPPORT
     proxy_mono_init(como_config->mono_path);
 #endif
-
-    /* XXX needed? handle the message from SUPERVISOR */ 
-    /*while (s_wait_for_modules) 
-	ipc_handle(supervisor_fd); */
 }
 
 /*
@@ -779,7 +760,6 @@ void
 query_main_plain(ipc_peer_t * parent, UNUSED memmap_t * shmemmap,
                     FILE* client_stream, como_node_t * node)
 {
-   // extern como_su_t *s_como_su;
     int supervisor_fd, errcode;
     char *errstr, *to_http;
     qreq_t req;

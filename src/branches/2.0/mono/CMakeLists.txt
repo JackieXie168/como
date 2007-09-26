@@ -1,3 +1,5 @@
+# $Id$
+
 INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/include)
 
 # Compile C# code

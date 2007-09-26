@@ -6,6 +6,7 @@
 #  MONO_CFLAGS = c flags to build objects that use mono.
 #  MONO_LIBS   = libraries to link to mono.
 #
+# $Id$
 
 IF (MONO_CFLAGS) # already found, be quiet
     SET(MONO_FIND_QUIETLY TRUE)

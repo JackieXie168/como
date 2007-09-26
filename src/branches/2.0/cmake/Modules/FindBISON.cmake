@@ -5,6 +5,7 @@
 #  BISON_EXECUTABLE      = the full path to BISON
 #  BISON_FOUND           = true if BISON found.
 #
+# $Id$
 
 IF (BISON_EXECUTABLE)
   # Already in cache, be silent
