@@ -5,6 +5,7 @@
 #  FLEX_EXECUTABLE      = the full path to FLEX
 #  FLEX_FOUND           = true if FLEX found.
 #
+# $Id$
 
 IF (FLEX_EXECUTABLE)
   # Already in cache, be silent

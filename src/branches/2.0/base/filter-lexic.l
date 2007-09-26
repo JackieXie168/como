@@ -43,6 +43,14 @@
 
 /* C Declarations */
 
+#define DEBUG_A_LOT
+
+#ifdef DEBUG_A_LOT
+#define dbg_return(x) do { debug(#x "\n"); return x; } while(0)
+#else
+#define dbg_return(x) return x
+#endif
+
 %}
 
 /* Tokens for the filter parser:
@@ -86,7 +94,7 @@ IFACE		input|output
                     yflval.byte = 0;
                 else /* output */
                     yflval.byte = 1;
-                return(IFACE);
+                dbg_return(IFACE);
                 }
 {DIR}           {
                 if (!strcmp(yytext, "src"))
@@ -95,39 +103,39 @@ IFACE		input|output
                     yflval.byte = 1;
                 else 		/* host or addr */
                     yflval.byte = -1;
-                return(DIR);
+                dbg_return(DIR);
                 }
 {PORTDIR}       {
                 if (!strcmp(yytext, "sport"))
                     yflval.byte = 0;
                 else /* dport */
                     yflval.byte = 1;
-                return(PORTDIR);
+                dbg_return(PORTDIR);
                 }
 {IPADDR}        { 
                 /* Copy the dots and numbers notation string */
                 yflval.string = como_strdup(yytext);
-                return(IPADDR); 
+                dbg_return(IPADDR); 
                 }
 {MACADDR}       { 
                 /* Copy the dots and numbers notation string */
                 yflval.string = como_strdup(yytext);
-                return(MACADDR); 
+                dbg_return(MACADDR); 
                 }
 {NETMASK}       { 
                 /* Copy the netmask number, get rid of the slash */ 
                 yflval.dword = atoi(yytext + 1);
-                return(NETMASK); 
+                dbg_return(NETMASK); 
                 }
 {NUMBER}        {
                 /* Copy the number */
                 yflval.word = atoi(yytext);
-                return(NUMBER); 
+                dbg_return(NUMBER); 
                 }
 {LEVEL3}        {
                 /* For now there is only the IP protocol */
                 yflval.word = ETHERTYPE_IP;
-                return(LEVEL3);
+                dbg_return(LEVEL3);
                 }
 {LEVEL4}        {
                 if (!strcmp(yytext, "tcp"))
@@ -136,20 +144,20 @@ IFACE		input|output
                     yflval.word = IPPROTO_UDP;
                 else /* icmp */
                     yflval.word = IPPROTO_ICMP;
-                return(LEVEL4);
+                dbg_return(LEVEL4);
                 }
-and             { return(AND); }
-or              { return(OR); }
-not             { return(NOT); }
-\(              { return(OPENBR); }
-\)              { return(CLOSEBR); }
-":"             { return(COLON); }
-all             { return(ALL); }
-exporter        { return(EXPORTER); }	
-to_ds           { return(TODS); }
-from_ds         { return(FROMDS); }
-asn		{ return(ASN); }
-ether		{ return(ETHER); }
+and             { dbg_return(AND); }
+or              { dbg_return(OR); }
+not             { dbg_return(NOT); }
+\(              { dbg_return(OPENBR); }
+\)              { dbg_return(CLOSEBR); }
+":"             { dbg_return(COLON); }
+all             { dbg_return(ALL); }
+exporter        { dbg_return(EXPORTER); }	
+to_ds           { dbg_return(TODS); }
+from_ds         { dbg_return(FROMDS); }
+asn		{ dbg_return(ASN); }
+ether		{ dbg_return(ETHER); }
 
 [ \t\n]+
 

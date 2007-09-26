@@ -4,6 +4,8 @@
 #  FTLIB_INCLUDE_DIR - where to find ftlib.h, etc.
 #  FTLIB_LIBRARIES   - List of libraries when using FTLIB.
 #  FTLIB_FOUND       - True if FTLIB found.
+#
+# $Id$
 
 IF (FTLIB_INCLUDE_DIR)
   # Already in cache, be silent

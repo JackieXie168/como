@@ -345,6 +345,8 @@ struct mdl_ibase {
     serializable_t	mdl_tuple;
     serializable_t	mdl_record;
 
+    int ondemand;
+
     alc_t		alc;
 
     metadesc_t *        indesc;
@@ -390,7 +392,6 @@ struct mdl_icapture {
 struct mdl_isupervisor {
     mdl_priv_t	type;
     su_init_fn	init;
-    int ondemand;
 };
 
 struct mdl_iexport {

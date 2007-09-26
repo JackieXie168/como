@@ -282,13 +282,17 @@ typedef struct capabilities_t {
  * all packets before the module process them. 
  */
 
+enum {
+    COMO_NODE_REAL,
+    COMO_NODE_VIRTUAL,
+} como_node_kinds;
+
 struct como_node { 
     int		id;
     char *	name;
     char *	location;
     char *	type;
     char *	comment;
-    char *	source;		/* source module for all virtual modules */
     char *	filter;		/* filter expression */
     char **	args;		/* parameters for the modules */
     uint16_t	query_port;	/* port for incoming queries */
@@ -297,6 +301,10 @@ struct como_node {
     sniffer_list_t	sniffers;
     int			sniffers_count;
     timestamp_t		live_thresh;
+
+    int kind;         /* either COMO_NODE_REAL or COMO_NODE_VIRTUAL */
+    int real_node_id; /* id of the parent node, if the node is virtual */
+    char *source;     /* source module, if the node is virtual */
 };
 
 /*
@@ -305,6 +313,7 @@ struct como_node {
 
 typedef struct _sniffer_def sniffer_def_t;
 typedef struct _mdl_def mdl_def_t;
+typedef struct _virtual_node_def virtual_node_def_t;
 typedef struct _como_config como_config_t;
 
 struct _sniffer_def {
@@ -329,6 +338,15 @@ struct _mdl_def {
     int         ondemand;
 };
 
+struct _virtual_node_def {
+    char *      name;
+    char *      location;
+    char *      type;
+    uint16_t    query_port;
+    char *      filter;
+    char *      source;
+};
+
 struct _como_config {
     array_t *	mdl_defs; /* available module definitions may
                            * change over time as the user loads
@@ -338,6 +356,7 @@ struct _como_config {
                            */
 
     array_t *	sniffer_defs;
+    array_t *   vnode_defs;
 
     char *      como_executable_full_path;
     char *      storage_path;

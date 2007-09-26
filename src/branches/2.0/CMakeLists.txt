@@ -1,4 +1,4 @@
-#
+# $Id$
 # This is CoMo, and is written in C :-)
 #
 PROJECT(COMO C)

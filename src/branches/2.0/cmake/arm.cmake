@@ -1,3 +1,5 @@
+# $Id$
+
 #
 # Enable cross compilation for ARM architecture
 #

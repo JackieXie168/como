@@ -4,6 +4,8 @@
 #  ZLIB_INCLUDE_DIR - where to find zlib.h, etc.
 #  ZLIB_LIBRARIES   - List of libraries when using zlib.
 #  ZLIB_FOUND       - True if zlib found.
+#
+# $Id$
 
 
 IF (ZLIB_INCLUDE_DIR)

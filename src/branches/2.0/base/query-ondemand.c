@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2007, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -51,12 +51,11 @@ extern como_config_t *como_config;
 /*
  * -- escape_quotes
  *
- * escape quotes of input string. returns
- * a dynamically allocated output string.
- * the func is sub-optimal but we don't care
- * as this is just for debugging.
+ * escape quotes of input string. returns a dynamically allocated
+ * output string. The func is sub-optimal but we don't care as
+ * this is just for debugging.
  */
-char *
+static char *
 escape_quotes(char *input)
 {
     size_t s, i, j, final_len;
@@ -83,6 +82,15 @@ escape_quotes(char *input)
 
 #endif
 
+/*
+ * -- query_ondemand
+ *
+ * Serve an ondemand query. An ondemand query uses the data from
+ * a running module to run the ondemand module. To accomplish this,
+ * we spawn a new CoMo instance configured with the source query
+ * as the sniffer, and the ondemand module. The rest of the configuration
+ * parameters are grabbed from the running config.
+ */
 void 
 query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id) 
 {
@@ -114,8 +122,12 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
 
     my_argv[i++] = "-C"; /* add the definition for the ondemand mdl */
     
-    buffer = como_malloc(8 * 1024);
-    sprintf(buffer, "module \"%s\" source \"%s\"", req->module, mdl_code);
+    if (req->filter_str == NULL)
+        req->filter_str = "all";
+
+    buffer = como_malloc(10 * 1024);
+    sprintf(buffer, "module \"%s\" source \"%s\" filter \"%s\"",
+            req->module, mdl_code, req->filter_str);
 
     hash_iter_init(req->args, &it);
     while (hash_iter_next(&it)) {

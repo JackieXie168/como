@@ -1,3 +1,4 @@
+# $Id$
 # This is a sample configuration file for CoMo.
 # Blank lines are ignored.
 # Syntax for comments allows both single line comment
@@ -58,12 +59,15 @@ storage-path "@CMAKE_INSTALL_PREFIX@@INST_BINDIR@/como-storage"
 # to queries on a dedicated port number. For the syntax
 # of the filter expression see the description of the
 # module filter below.
+# Modules on virtual nodes always run on-demand, so a
+# source module must be specified.
 
 #virtual-node	"Virtual Node"
 #  location	"Unknown"
 #  type		"Unknown"
 #  query-port	55555
-#  filter	"udp and port 53"
+#  filter	"port 80"
+#  source-module "trace"
 #end
 
 # Sniffer(s) to be used
@@ -217,6 +221,7 @@ module "topaddr"
     source "topaddrCC"
     description "Popular destination IP Addresses"
     args "use-dst" = "1"
+    on-demand
 end
 
 #module "tophwaddr"

@@ -4,6 +4,8 @@
 #  DAG_INCLUDE_DIR - where to find dagapi.h, etc.
 #  DAG_LIBRARIES   - List of libraries when using DAG.
 #  DAG_FOUND       - True if DAG found.
+#
+# $Id$
 
 
 IF (DAG_INCLUDE_DIR)

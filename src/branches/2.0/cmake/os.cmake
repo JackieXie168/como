@@ -1,3 +1,5 @@
+# $Id$
+
 #
 # Define LINUX if running on Linux
 #

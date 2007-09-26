@@ -28,7 +28,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: config.c 1138 2007-05-03 14:15:53Z jsanjuas $
+ * $Id$
  */
 
 #include <unistd.h> /* getopt */
@@ -79,6 +79,65 @@ destroy_sniffer_def(sniffer_def_t *d, alc_t *alc)
     alc_free(alc, d->device);
     if (d->args)
         alc_free(alc, d->args);
+}
+
+void
+initialize_virtual_node_def(virtual_node_def_t *vnode, UNUSED alc_t *alc)
+{
+    bzero(vnode, sizeof(virtual_node_def_t));
+}
+
+void
+define_virtual_node(virtual_node_def_t *vnode, UNUSED como_config_t *cfg,
+                    alc_t *alc)
+{
+    int ok = 1;
+
+    #define complain(x) warn("virtual node `%s': " x "\n", vnode->name, x)
+
+    /* check that mandatory fields are there */
+    if (vnode->location == NULL) {
+        complain("location not defined");
+        ok = 0;
+    }
+    if (vnode->type == NULL) {
+        complain("type not defined");
+        ok = 0;
+    }
+    if (vnode->filter == NULL) {
+        complain("filter not defined");
+        ok = 0;
+    }
+    if (vnode->query_port == 0) {
+        complain("query port not defined");
+        ok = 0;
+    }
+    if (vnode->source == NULL) {
+        complain("source not defined");
+        ok = 0;
+    }
+
+    #undef complain
+    
+    /* if not ok, output error notice and return */
+    if (ok == 0) {
+        warn("(ignoring virtual node definition)\n");
+        destroy_virtual_node_def(vnode, alc);
+        return;
+    }
+
+    /* everything ok, add virtual node definition */
+    array_add(cfg->vnode_defs, vnode);
+}
+
+void
+destroy_virtual_node_def(virtual_node_def_t *vnode, alc_t *alc)
+{
+    alc_free(alc, vnode->name);
+    alc_free(alc, vnode->location);
+    alc_free(alc, vnode->type);
+    alc_free(alc, vnode->filter);
+    alc_free(alc, vnode->source);
 }
 
 static void
@@ -155,12 +214,14 @@ convert(int64_t value, char *buffer, int conv)
 /*
  * -- sanitize_value
  *
- * Check that a value is within a range, either die with an error msg
- * or adjust within the range depeding on the isfatal arg.
+ * Check that a value is within a range. If it is, just return the value.
+ * Otherwise, show an error notice and either die or warn depending on
+ * the isfatal flag. If issued a warning, depending on the autoadjust
+ * flag either return the closest between min and max, or return zero.
  */
 static int64_t
 sanitize_value(char *what, int64_t value, int64_t min, int64_t max,
-        int conv, int isfatal)
+        int conv, int isfatal, int autoadjust)
 {
     if (value < min || value > max) {
         char bmin[64], bmax[64], bvalue[64];
@@ -176,14 +237,16 @@ sanitize_value(char *what, int64_t value, int64_t min, int64_t max,
         warn("%s invalid, value %s must be in range %s-%s.\n",
                 what, bvalue, bmin, bmax);
 
-        if (value < min) {
+        if (value < min && autoadjust) {
             warn("increasing to %s\n", bmin);
             return min;
         }
-        else {
+        else if (value > max && autoadjust) {
             warn("decreasing to %s\n", bmax);
             return max;
         }
+        else
+            return 0;
     }
     return value;
 }
@@ -196,6 +259,9 @@ sanitize_value(char *what, int64_t value, int64_t min, int64_t max,
 #define DONTCONVERT 0
 #define CONVERT 1
 
+#define DONTAUTOADJUST 0
+#define AUTOADJUST 1
+
 /*
  * -- set_filesize
  */
@@ -203,8 +269,11 @@ void
 set_filesize(int64_t size, como_config_t *cfg)
 {
     cfg->filesize = sanitize_value("filesize", size, B2MB(128), B2MB(1024),
-            CONVERT, NOTFATAL);
+            CONVERT, NOTFATAL, AUTOADJUST);
 }
+
+#define sanitize_query_port(fatal, adjust)  \
+    sanitize_value("query port", port, 1, 65535, DONTCONVERT, fatal, adjust)
 
 /*
  * -- set_queryport
@@ -212,8 +281,16 @@ set_filesize(int64_t size, como_config_t *cfg)
 void
 set_queryport(int64_t port, como_config_t *cfg)
 {
-    cfg->query_port = sanitize_value("query port", port, 1, 65535, DONTCONVERT,
-            FATAL);
+    cfg->query_port = sanitize_query_port(FATAL, DONTAUTOADJUST);
+}
+
+/*
+ * -- set_vnode_queryport
+ */
+void
+set_vnode_queryport(int64_t port, virtual_node_def_t *vnode)
+{
+    vnode->query_port = sanitize_query_port(NOTFATAL, DONTAUTOADJUST);
 }
 
 /*
@@ -223,7 +300,7 @@ void
 set_memsize(int64_t size, como_config_t *cfg)
 {
     cfg->shmem_size = sanitize_value("memsize", size, B2MB(16), B2MB(1024),
-            CONVERT, FATAL);
+            CONVERT, FATAL, AUTOADJUST);
 }
 
 enum {
@@ -253,6 +330,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     bzero(cfg, sizeof(como_config_t));
     cfg->mdl_defs = array_new(sizeof(mdl_def_t));
     cfg->sniffer_defs = array_new(sizeof(sniffer_def_t));
+    cfg->vnode_defs = array_new(sizeof(virtual_node_def_t));
 
     cfg->como_executable_full_path = como_strdup(argv[0]);
 
@@ -567,11 +645,17 @@ destroy_config(como_config_t *cfg, alc_t *alc)
         destroy_module_def(def, alc);
     }
 
+    for (i = 0; i < cfg->vnode_defs->len; i++) { /* free vnode defs */
+        virtual_node_def_t *def = &array_at(cfg->vnode_defs,
+                virtual_node_def_t, i);
+        destroy_virtual_node_def(def, alc);
+    }
+
     array_free(cfg->sniffer_defs, 1); /* free the arrays themselves */
     array_free(cfg->mdl_defs, 1);
+    array_free(cfg->vnode_defs, 1);
 
-
-    free(cfg->como_executable_full_path);
+    free(cfg->como_executable_full_path); /* free strings */
     free(cfg->storage_path);
     free(cfg->mono_path);
     free(cfg->db_path);

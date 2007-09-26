@@ -137,8 +137,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             for (i = 0; i < mdls->len; i++) { /* send the mdls */
                 /* TODO only send compatible modules */
                 mdl_t *mdl = array_at(mdls, mdl_t *, i);
-                mdl_isupervisor_t *is = mdl_get_isupervisor(mdl);
-                if (is->ondemand)
+                if (mdl->priv->ondemand)
                     continue;
                 send_module(peer, SU_CA_ADD_MODULE, mdl);
                 nsent++;
@@ -167,8 +166,7 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
             for (i = 0; i < mdls->len; i++) { /* send the mdls */
                 /* TODO only send compatible modules */
                 mdl_t *mdl = array_at(mdls, mdl_t *, i);
-                mdl_isupervisor_t *is = mdl_get_isupervisor(mdl);
-                if (is->ondemand)
+                if (mdl->priv->ondemand)
                     continue;
                     nsent++;
                 send_module(peer, SU_EX_ADD_MODULE, mdl);
@@ -395,8 +393,9 @@ como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
         return NULL;
     }
 
+    mdl->priv->ondemand = def->ondemand;
+
     is = mdl_get_isupervisor(mdl);
-    is->ondemand = def->ondemand;
     mdl->config = is->init(mdl, def->args);
     if (mdl->config == NULL) {
         warn("Initialization of module `%s' failed.\n", mdl->name);
@@ -539,8 +538,7 @@ como_su_run(como_su_t * como_su)
 {
     fd_set nodes_fds;
     int i;
-    como_node_t *node0;
-    array_t *mdls;
+    como_node_t *real_node;
     runmode_t runmode;
     memmap_stats_t *mem_stats;
     
@@ -554,19 +552,15 @@ como_su_run(como_su_t * como_su)
     atexit(cleanup);
 
     /* register handlers for IPC */
-    /* ipc_register(SU_CONNECT, (ipc_handler_fn) su_ipc_sync); */
-    /* ipc_register(CA_SU_DONE, (ipc_handler_fn) ca_su_ipc_done); */
-    /* ipc_register(EX_SU_DONE, (ipc_handler_fn) ex_su_ipc_done); */
     ipc_register(QU_SU_DONE, (ipc_handler_fn) qu_su_ipc_done);
-    /*ipc_register(CA_SNIFFERS_INITIALIZED,
-		 (ipc_handler_fn) su_ipc_ca_sniffers_initialized);*/
-    
+
     event_loop_init(&como_su->el);
 
     /* accept connections from other processes */
     event_loop_add(&como_su->el, como_su->accept_fd);
 
     FD_ZERO(&nodes_fds);
+
     /* 
      * create sockets and accept connections from the outside world. 
      * they are queries that can be destined to any of the virtual nodes. 
@@ -582,28 +576,7 @@ como_su_run(como_su_t * como_su)
     }
 
     /* initialize all modules */ 
-    node0 = &array_at(como_su->nodes, como_node_t, 0);
-    mdls = node0->mdls;
-    for (i = 0; i < mdls->len; i++) {
-/*
-	mdl_t *mdl = array_at(mdls, mdl_t *, i);
-	if (mdl_init(mdl)) {
-	    remove_module(&map, mdl);
-	    continue; 
-  	} 
-
-
-	if (mdl->running != RUNNING_ON_DEMAND) {
-	    if (init_module(mdl)) { 
-		logmsg(LOGWARN, "cannot initialize module %s\n", mdl->name); 
-		remove_module(&map, mdl);
-		continue; 
-	    } 
-
-	    map.stats->modules_active++;
-	}
-*/
-    } 
+    real_node = &array_at(como_su->nodes, como_node_t, 0);
 
     mem_stats = memmap_stats_location(como_su->memmap);
 
@@ -644,7 +617,7 @@ como_su_run(como_su_t * como_su)
 		    como_stats->pkts,
 		    como_stats->drops,
 		    como_stats->modules_active,
-		    mdls->len);
+		    real_node->mdls->len);
 	}
 
 	n_ready = event_loop_select(&como_su->el, &r);
@@ -777,6 +750,71 @@ copy_args(int argc, char **argv, int *out_argc, char ***out_argv)
 }
 
 /*
+ * -- como_init_nodes
+ *
+ * Build the array of nodes according to the user configuration.
+ *
+ */
+static void
+como_init_nodes(UNUSED como_su_t *como_su, como_config_t *cfg)
+{
+    como_node_t node;
+    char *str;
+    int i;
+
+    como_su->nodes = array_new(sizeof(como_node_t));
+
+    /* node #0 is the main node */
+    memset(&node, 0, sizeof(node));
+    node.kind = COMO_NODE_REAL;
+    node.id = 0;
+
+    node.name = como_strdup("CoMo Node");
+    node.location = como_strdup(cfg->location);
+    node.type = como_strdup(cfg->type);
+    node.query_port = cfg->query_port;
+    node.mdls = array_new(sizeof(mdl_t *));
+
+    if (node.location == NULL)
+        node.location = como_strdup("Unknown");
+    if (node.type == NULL)
+        node.type = como_strdup("Unknown");
+
+    str = como_asprintf("%s/%s", como_su->env->dbdir, node.name);
+    if (mkdir(str, 0700) == -1 && errno != EEXIST)
+        error("cannot create db dir `%s'\n", str);
+    free(str);
+
+    array_add(como_su->nodes, &node);
+
+    /* virtual nodes follow */
+    for (i = 0; i < cfg->vnode_defs->len; i++) {
+        virtual_node_def_t *def = &array_at(cfg->vnode_defs,
+                virtual_node_def_t, 0);
+
+        bzero(&node, sizeof(node));
+
+        node.kind = COMO_NODE_VIRTUAL;
+        node.real_node_id = 0;
+        node.id = i + 1;
+
+        node.name = como_strdup(def->name);
+        node.location = como_strdup(def->location);
+        node.type = como_strdup(def->type);
+        node.query_port = def->query_port;
+        node.source = como_strdup(def->source);
+        node.filter = como_strdup(def->filter);
+
+        if (node.location == NULL)
+            node.location = como_strdup("Unknown");
+        if (node.type == NULL)
+            node.type = como_strdup("Unknown");
+
+        array_add(como_su->nodes, &node);
+    }
+}
+
+/*
  * -- main
  *
  * set up the data structures. basically open the config file,
@@ -790,10 +828,9 @@ main(int argc, char ** argv)
 {
     static como_config_t cfg;
     como_su_t *como_su;
-    como_node_t *node0;
-    como_node_t node;
-    char *str;
     alc_t alc;
+    como_node_t *main_node;
+    int i;
     
     /* create a global pool */
     pool_t *pool = pool_create();
@@ -829,24 +866,14 @@ main(int argc, char ** argv)
         como_su->env->dbdir = como_config->db_path = mkdtemp(template);
     }
 
-    /* initialize node 0 */
-    memset(&node, 0, sizeof(node));
-    node.id = 0;
-    node.name = como_strdup("CoMo Node");
-    node.location = como_strdup("Unknown");
-    node.type = como_strdup("Unknown");
-    node.query_port = DEFAULT_QUERY_PORT;
-    node.mdls = array_new(sizeof(mdl_t *));
+    /* initialize nodes */
+    como_init_nodes(como_su, como_config);
+    main_node = &array_at(como_su->nodes, como_node_t, 0);
+    assert(main_node->kind == COMO_NODE_REAL);
+
+    /* create database dir */
     if (mkdir(como_su->env->dbdir, 0700) == -1 && errno != EEXIST)
         error("cannot create db dir `%s'\n", como_su->env->dbdir);
-
-    str = como_asprintf("%s/%s", como_su->env->dbdir, node.name);
-    if (mkdir(str, 0700) == -1 && errno != EEXIST)
-        error("cannot create db dir `%s'\n", str);
-    free(str);
-
-    como_su->nodes = array_new(sizeof(como_node_t));
-    array_add(como_su->nodes, &node);
 
     /* write welcome message */ 
     msg("----------------------------------------------------\n");
@@ -879,12 +906,16 @@ main(int argc, char ** argv)
     /* prepare the SUPERVISOR socket */
     como_su->accept_fd = ipc_listen();
     
-    node0 = &array_at(como_su->nodes, como_node_t, 0);
-    como_node_init_sniffers(node0, como_config->sniffer_defs, &como_su->shalc);
-    como_node_init_mdls(node0, como_config->mdl_defs, como_su->alc);
-    node0->query_port = como_config->query_port;
+    /* init the sniffers and modules of nodes */
+    for (i = 0; i < como_su->nodes->len; i++) {
+        como_node_t *n = &array_at(como_su->nodes, como_node_t, i);
+        if (n->kind != COMO_NODE_REAL)
+            continue;
+        como_node_init_sniffers(n, como_config->sniffer_defs, &como_su->shalc);
+        como_node_init_mdls(n, como_config->mdl_defs, como_su->alc);
+    }
 
-    if (como_config->inline_mode && node0->mdls->len == 0) {
+    if (como_config->inline_mode && main_node->mdls->len == 0) {
         /* inline mode and could not load any module. nothing to do. */
         debug("inline mode: no modules could be loaded, exiting.\n");
         return EXIT_FAILURE;
@@ -898,13 +929,13 @@ main(int argc, char ** argv)
     /* read ASN file */
     asn_readfile(como_config->asn_file);
 
-    if (node0->sniffers_count > 0) {
+    if (main_node->sniffers_count > 0) {
 	ipc_peer_full_t *ca;
 	pid_t pid;
 	
         /* start the CAPTURE process */
 	ca = ipc_peer_child(COMO_CA, 0);
-	pid = start_child(ca, capture_main, como_su->memmap, NULL, node0);
+	pid = start_child(ca, capture_main, como_su->memmap, NULL, main_node);
 	if (pid < 0)
 	    error("Can't start CAPTURE\n");
     }
