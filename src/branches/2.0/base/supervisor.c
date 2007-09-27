@@ -207,12 +207,9 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
 }
 
 /*  
- * -- su_ipc_done 
+ * -- finalize_como
  * 
- * EXPORT should send this message to report that there are 
- * no more records to be processed. This messages happens only
- * in inline mode. As a result we exit (sending a SIGPIPE to all 
- * children as well).
+ * Request that all processes exit and quit.
  *
  */
 static void
@@ -221,6 +218,7 @@ finalize_como(como_su_t *como_su)
     ipc_send(como_su->ca, SU_ANY_EXIT, NULL, 0);
     ipc_send(como_su->ex, SU_ANY_EXIT, NULL, 0);
     ipc_send(como_su->st, SU_ANY_EXIT, NULL, 0);
+
     exit(EXIT_SUCCESS);
 }
 
@@ -233,7 +231,7 @@ finalize_como(como_su_t *como_su)
  */
 static int
 qu_su_ipc_done(UNUSED ipc_peer_t * sender, UNUSED void * b, UNUSED size_t l,
-	    UNUSED int swap, UNUSED como_su_t * como_su)
+	    UNUSED int swap, como_su_t * como_su)
 {
     if (como_config->inline_mode) {
         debug("exiting at QU request\n");
@@ -258,6 +256,8 @@ cleanup()
     
     if (s_como_su->su_pid != getpid())
 	return;
+
+    signal(SIGCHLD, SIG_DFL); /* don't handle children anymore */
     
     workdir = como_env_workdir();
  
@@ -862,7 +862,7 @@ main(int argc, char ** argv)
         log_set_level(LOG_LEVEL_WARNING); /* disable most UI messages */
 
     if (como_config->inline_mode) { /* use temporary storage */
-        char *template = como_asprintf("%sXXXXXX", como_config->db_path);
+        char *template = como_asprintf("%s/XXXXXX", como_su->env->workdir);
         como_su->env->dbdir = como_config->db_path = mkdtemp(template);
     }
 

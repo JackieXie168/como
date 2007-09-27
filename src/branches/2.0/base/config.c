@@ -340,7 +340,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     /* XXX conflict with como_env stuff in libcomo/como.c */
     cfg->query_port = 44444;
     set_memsize(B2MB(64), cfg);
-    cfg->db_path = "/tmp/como-data";
+    cfg->db_path = DEFAULT_DBDIR;
     cfg->filesize = 128 * 1024 * 1024;
     cfg->libdir = DEFAULT_LIBDIR;
     cfg->query_args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
@@ -487,10 +487,10 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     }
 
     /*
-     * no cfg files given. try using the default,
-     * except if running inline.
+     * no cfg given, neither cfg files or strings.
+     * try using the default cfg file.
      */
-    if (cfg_file_count == 0 && ! cfg->inline_mode)
+    if (cfg_file_count == 0)
         parse_config_file(DEFAULT_CFGFILE, alc, cfg);
 
     while (optind < argc) { /* module definitions follow */

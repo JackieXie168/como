@@ -95,8 +95,6 @@ enum {
 
     SU_ANY_EXIT,
 
-/*    SU_CA_INITIALIZE_SNIFFERS,
-    CA_SU_SNIFFER_INITIALIZED,*/
     CA_SU_SNIFFERS_INITIALIZED,
 
     SU_CA_ADD_MODULE,
@@ -405,6 +403,8 @@ struct mdl_iexport {
     shmem_t *		shmem;
 
     void *              state;
+
+    int                 running_state;
 };
 
 struct mdl_iquery {

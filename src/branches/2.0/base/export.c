@@ -59,6 +59,11 @@ struct _como_ex {
     ipc_peer_t *supervisor;
 };
 
+enum {
+    EX_MDL_STATE_RUNNING,
+    EX_MDL_STATE_FLUSHED,
+} EX_MDL_STATES;
+
 /* config 'inherited' from supervisor */
 extern como_config_t *como_config;
 
@@ -83,6 +88,7 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     alc_t *alc;
     char *str;
     ipc_type t;
+
     alc = como_alc();
     mdl_deserialize(&sbuf, &mdl, alc, PRIV_IEXPORT);
     if (mdl == NULL) { /* failure */
@@ -93,6 +99,7 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     debug("handle_su_ex_add_module -- recv'd & loaded module `%s'\n", mdl->name);
 
     ie = mdl_get_iexport(mdl);
+    ie->running_state = EX_MDL_STATE_RUNNING;
 
     /*
      * open output file
@@ -261,15 +268,17 @@ handle_ca_ex_done(UNUSED ipc_peer_t * peer,
 {
     mdl_iexport_t *ie;
     mdl_t *mdl;
-            hash_iter_t it;
+    hash_iter_t it;
 
     debug("capture is done, flushing\n");
 
     hash_iter_init(como_ex->mdls, &it);
     while(hash_iter_next(&it)) {
         mdl = hash_iter_get_value(&it);
-
         ie = mdl_get_iexport(mdl);
+
+        if (ie->running_state == EX_MDL_STATE_FLUSHED)
+            continue; /* already flushed */
 
         debug("flushing tuples for mdl `%s'\n", mdl->name);
 
@@ -278,6 +287,8 @@ handle_ca_ex_done(UNUSED ipc_peer_t * peer,
 
         debug("closing output file\n");
         csclose(ie->cs_writer, ie->woff);
+
+        ie->running_state = EX_MDL_STATE_FLUSHED;
     }
     
     /*
@@ -285,7 +296,7 @@ handle_ca_ex_done(UNUSED ipc_peer_t * peer,
      */
     debug("handle_ca_ex_done -- modules flushed\n");
 
-    ipc_send(como_ex->supervisor, EX_SU_DONE, msg, sz);
+    /* ipc_send(como_ex->supervisor, EX_SU_DONE, msg, sz); */
 
     return IPC_OK;
 }
