@@ -35,10 +35,10 @@ SET(MODULES
 )
 
 IF(MONO_FOUND)
-SET(MODULES ${MODULES}
-  trafficCCS
-  topaddrCCS
-)
+  SET(MODULES ${MODULES}
+    trafficCCS
+    topaddrCCS
+  )
 ENDIF(MONO_FOUND)
 
 #IF(FTLIB_FOUND)
@@ -59,7 +59,7 @@ ENDIF(ENABLE_DEBUG)
 #
 # If we have mono, add the appropirate CFLAGS.
 #
-IF (MONO_FOUND)
+IF(MONO_FOUND)
   ADD_DEFINITIONS(${MONO_CFLAGS})
 ENDIF(MONO_FOUND)
 
@@ -72,7 +72,7 @@ ADD_DEFINITIONS("-Dcomo_config=\"\" -Dcomo_tuple=\"\" -Dcomo_record=\"\"")
 # Create appropriate targets for each module
 #
 MESSAGE(STATUS "Inferring module dependencies")
-FOREACH (MODULE ${MODULES})
+FOREACH(MODULE ${MODULES})
   # source files
   SET(MODULE_SOURCE_DIR     ${COMO_SOURCE_DIR}/modules/${MODULE})
   SET(MODULE_DATADEF        ${MODULE_SOURCE_DIR}/data.h)
@@ -233,60 +233,9 @@ qu_impl_t qu_impl = ${QULANG};
         DEPENDS ${MODULE_QUERY_CSHARP}
         DEPENDS ${MODULE_CSCLASS} ${COMO_BINARY_DIR}/mono/como.dll
     )
-    INSTALL_TARGETS(${INST_LIBDIR} "${MODULE}-Csharp")
+
+    INSTALL(FILES ${MODULE_DLL} DESTINATION ${CMAKE_INSTALL_PREFIX}${INST_LIBDIR})
+
   ENDIF(EXISTS ${MODULE_EXPORT_CSHARP})
 ENDFOREACH (MODULE)
 
-#IF(ENABLE_SHARED_MODULES)
-#  FOREACH(module ${MODULES})
-#    ADD_LIBRARY(${module} SHARED ${module}.c)
-#    # Get rid of the 'lib' prefix for modules
-#    SET_TARGET_PROPERTIES(${module}
-#      PROPERTIES
-#      PREFIX ""
-#    )
-#    IF(APPLE)
-#	SET_TARGET_PROPERTIES(${module}
-#	PROPERTIES
-#	LINK_FLAGS "-undefined dynamic_lookup")
-#    ENDIF(APPLE)
-#    INSTALL_TARGETS(${INST_LIBDIR} ${module})
-#  ENDFOREACH(module)
-#ELSE(ENABLE_SHARED_MODULES)
-#  #
-#  # Write modules-list.h
-#  #
-#  SET(MODULES_LIST ${COMO_BINARY_DIR}/include/modules-list.h)
-#  WRITE_FILE(${MODULES_LIST}
-#"/* generated file, do not edit */
-#
-#typedef struct builtin_module {
-#    const char *	name;
-#    module_cb_t *	cb;
-#} builtin_module_t;
-#
-#")
-#
-#  FOREACH(module ${MODULES})
-#    # Replace - with _ in the C module name
-#    STRING(REPLACE "-" "_" _cmodule ${module})
-#    WRITE_FILE(${MODULES_LIST}
-#"extern module_cb_t g_${_cmodule}_module;" APPEND)
-#  ENDFOREACH(module)
-#
-#  WRITE_FILE(${MODULES_LIST}
-#"builtin_module_t g_como_builtin_modules[] = {" APPEND)
-#
-#  FOREACH(module ${MODULES})
-#    # Replace - with _ in the C module name
-#    STRING(REPLACE "-" "_" _cmodule ${module})
-#    WRITE_FILE(${MODULES_LIST}
-#"    { \"${module}\", &g_${_cmodule}_module }," APPEND)
-#  ENDFOREACH(module)
-#
-#  WRITE_FILE(${MODULES_LIST}
-#"    { NULL, NULL } };" APPEND)
-#
-#  ADD_LIBRARY(modules STATIC ${MODULES})
-#
-#ENDIF(ENABLE_SHARED_MODULES)

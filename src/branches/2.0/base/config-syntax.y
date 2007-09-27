@@ -51,6 +51,13 @@
 int yclex(void);
 void ycerror(char *fmt, ...);
 
+enum {
+    PARSING_FILE,
+    PARSING_STR
+};
+int mode;
+char *what;
+
 void config_lexic_init();
 
 /* global variables */
@@ -206,13 +213,17 @@ void ycerror(char *fmt, ...)
     
     va_start(ap, fmt);
     vsnprintf(error, sizeof(error), fmt, ap);
-    warn("Config parser error: %s, at line %d\n", error, ycline);
+    warn("Config parser error: %s, at line %d (parsing %s `%s')\n", error,
+            ycline, mode == PARSING_FILE ? "file" : "string", what);
     va_end(ap);
 }
 
 como_config_t *
 parse_config_file(char *f, alc_t *my_alc, como_config_t *my_cfg)
 {
+    mode = PARSING_FILE;
+    what = f;
+
     config_lexic_init();
 
     cfg = my_cfg;
@@ -230,6 +241,10 @@ como_config_t *
 parse_config_string(char *str, alc_t *my_alc, como_config_t *my_cfg)
 {
     void *buffer;
+
+    mode = PARSING_STR;
+    what = str;
+
     config_lexic_init();
 
     cfg = my_cfg;
