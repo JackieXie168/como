@@ -43,7 +43,7 @@
 
 /* C Declarations */
 
-#define DEBUG_A_LOT
+/* #define DEBUG_A_LOT */
 
 #ifdef DEBUG_A_LOT
 #define dbg_return(x) do { debug(#x "\n"); return x; } while(0)
