@@ -1026,6 +1026,7 @@ cabuf_complete(batch_t * batch)
 }
 
 
+#if 0
 /*
  * -- batch_export
  * 
@@ -1081,9 +1082,10 @@ batch_export(batch_t * batch, como_ca_t * como_ca)
 	TQ_APPEND(&s_cabuf.batches, batch, next);
     }
 }
+#endif
 
 
-static void
+static pkt_t *
 batch_append(batch_t * batch, ppbuf_t * ppbuf)
 {
     pkt_t *pkt;
@@ -1099,44 +1101,24 @@ batch_append(batch_t * batch, ppbuf_t * ppbuf)
     batch->woff = (batch->woff + 1) % s_cabuf.size;
     
     batch->last_pkt_ts = pkt->ts;
+
+    return pkt;
 }
 
-
-/*
- * -- cmp_ts
- *
- * compares a timestamp with a timebin.
- * returns -1, 0, or 1 if the timestamp is smaller, equal to, or greater
- * than the timebin, respectively.
- *
- */
-static int
-cmp_ts(timestamp_t ts, uint32_t tb)
-{
-    if (TS2SEC(ts) > 0 || TS2USEC(ts) > tb)
-        return 1;
-    else if (TS2USEC(ts) == tb)
-        return 0;
-    else
-        return -1;
-}
-
-/*
- * -- align_ts
- *
- * aligns a timestamp to a timebin
- *
- */
-static timestamp_t
-align_ts(timestamp_t ts, uint32_t tb)
+static timestamp_t UNUSED
+timebin_end(timestamp_t ts, uint32_t tb)
 {
     timestamp_t t;
     
-    t = TIME2TS(TS2SEC(ts), (TS2USEC(ts) - TS2USEC(ts) % tb));
+    t = TIME2TS(TS2SEC(ts), TS2USEC(ts) - TS2USEC(ts) % tb + tb);
 
+    if (ts == t) /* avoid rounding error */
+        t = TIME2TS(TS2SEC(ts + 1),
+                TS2USEC(ts + 1) - TS2USEC(ts + 1) % tb + tb);
+
+    assert(ts != t);
     return t;
 }
-
 
 /*
  * -- batch_create
@@ -1155,17 +1137,14 @@ batch_create(int force_batch, como_ca_t * como_ca)
     timestamp_t max_last_pkt_ts = 0;
     timestamp_t min_first_pkt_ts = ~0;
     int pc = 0;
-    static timestamp_t prev_last_pkt_ts;
     int one_full_flag = 0;
     sniffer_list_t * sniffers;
     timestamp_t live_th;
-    #ifdef LOADSHED
-    pkt_t *next_pkt;
-    #endif
+    timestamp_t bin_end;
     
     sniffers = como_ca->sniffers;
     live_th = como_ca->live_th;
-    
+
     ppbuf_list_init(&ppblist);
 
     /*
@@ -1174,6 +1153,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
      * determine if any sniffer has filled its buffer
      */
     sniffer_list_foreach(sniff, sniffers) {
+
 	if (sniff->priv->state == SNIFFER_INACTIVE)
 	    continue;
 
@@ -1186,8 +1166,11 @@ batch_create(int force_batch, como_ca_t * como_ca)
 	if (ppbuf->last_pkt_ts > max_last_pkt_ts)
 	    max_last_pkt_ts = ppbuf->last_pkt_ts;
 
-        if (ppbuf->first_pkt_ts < min_first_pkt_ts)
-            min_first_pkt_ts = ppbuf->first_pkt_ts;
+        if (ppbuf->count > 0) {
+            pkt_t *pkt = ppbuf_get(ppbuf);
+            if (pkt->ts < min_first_pkt_ts)
+                min_first_pkt_ts = pkt->ts;
+        }
 
 	if (ppbuf->count == ppbuf->size)
 	    one_full_flag = 1;
@@ -1213,26 +1196,28 @@ batch_create(int force_batch, como_ca_t * como_ca)
      */
 
     if (!one_full_flag && !force_batch) {
-
 	ppbuf_list_foreach (ppbuf, &ppblist) {
-	    if (ppbuf->count == 0)
-		if ((max_last_pkt_ts - ppbuf->last_pkt_ts) <= live_th)
+	    if (ppbuf->count == 0) {
+		if ((max_last_pkt_ts - ppbuf->last_pkt_ts) <= live_th) {
+                    debug("live threshold prevents batch creation\n");
 		    return NULL;
+                }
+            }
 	}
     }
 
     /* if we do not have a complete timebin, wait until we receive more
      * packets from the sniffers */
-    if (prev_last_pkt_ts == 0)
-        prev_last_pkt_ts = align_ts(min_first_pkt_ts, como_ca->timebin);
-    if (cmp_ts(max_last_pkt_ts - prev_last_pkt_ts, como_ca->timebin) < 0)
+    bin_end = timebin_end(min_first_pkt_ts, como_ca->timebin);
+
+    if (max_last_pkt_ts <= bin_end)
         return NULL;
 
     /* create the batch structure */
 
     batch = alc_new0(&como_ca->shalc, batch_t);
-    batch->last_pkt_ts = prev_last_pkt_ts;
     cabuf_reserve(batch, pc);
+
     if (s_cabuf.clients_count > 0) {
 	batch->first_ref_pkts = alc_calloc(&como_ca->shalc,
 					   como_ca->sniffers_count,
@@ -1255,6 +1240,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
     while (pc) {
 	ppbuf_t *this_ppbuf;
+        pkt_t *pkt;
 	/* find minimum ts */
 
 	timestamp_t min_ts = ~0;
@@ -1276,17 +1262,14 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
 	assert(ppbuf);
 
-#ifdef LOADSHED
-        /* if we already have a complete timebin, break out of the loop */
-        next_pkt = ppbuf_get(ppbuf);
-        if (cmp_ts(next_pkt->ts - prev_last_pkt_ts, como_ca->timebin) >= 0)
+        pkt = ppbuf_get(ppbuf);
+        if (pkt->ts >= bin_end)
             break;
-#endif
 
 	/* update batch */
-	batch_append(batch, ppbuf);
+	pkt = batch_append(batch, ppbuf);
+        como_ca->first_ref_pkts[ppbuf->id] = pkt;
 	pc--;
-
 
 	/* 
 	 * if there are no more packets from this sniffer and we are
@@ -1323,12 +1306,6 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
     batch->ref_mask = 1LL;
     
-#ifdef LOADSHED
-    prev_last_pkt_ts = align_ts(next_pkt->ts, como_ca->timebin);
-#else
-    prev_last_pkt_ts = align_ts(batch->last_pkt_ts, como_ca->timebin);
-#endif
-
     return batch;
 }
 
@@ -1577,6 +1554,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     int avg_batch_len = 0;
     int wait_for_clients = 0;
     int supervisor_fd;
+    int max_sniffer_id;
     sniffer_t *sniff;
     sniffer_list_t *sniffers;
 
@@ -1622,6 +1600,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     sniffers = como_ca.sniffers = &node->sniffers;
 
     /* start all the sniffers */
+    max_sniffer_id = 0;
     sniffer_list_foreach(sniff, sniffers) {
 	/* initialize private state */
 	sniff->priv = como_new0(sniffer_priv_t);
@@ -1643,7 +1622,11 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
         msg("sniffer %s (%s) started\n", sniff->cb->name, sniff->device);
 
 	sum_max_pkts += sniff->max_pkts;
+        max_sniffer_id = MAX(max_sniffer_id, sniff->priv->id);
     }
+
+    como_ca.first_ref_pkts = como_calloc(sizeof(void *),
+            (max_sniffer_id + 1));
 
     /* initialize the capture buffer */
     cabuf_init(&como_ca, sum_max_pkts);
@@ -1670,6 +1653,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
     /* initialize the timers */
     ca_init_timers();
+
 
 #ifdef LOADSHED
     /* initialize load shedding data */
@@ -1793,6 +1777,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	    if (sniff->ppbuf->count == sniff->ppbuf->size)
 		continue;	/* the ppbuf is full */
 
+            #if 0
 	    if (s_cabuf.clients_count > 0) {
 		batch_t *b;
 		b = TQ_HEAD(&s_cabuf.batches);
@@ -1804,6 +1789,9 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		    b = b->next;
 		}
 	    }
+            #endif
+
+            first_ref_pkt = como_ca.first_ref_pkts[sniff->priv->id];
 
 	    /* initialize the ppbuf for capture mode */
 
@@ -1864,9 +1852,11 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	    else
 		avg_batch_len = (batch->count / 8) + (avg_batch_len * 7 / 8);
 
+#if 0
 	    /* export the batch to clients */
 	    if (s_cabuf.clients_count > 0)
 		batch_export(batch, &como_ca);
+#endif
 
 	    /* process the batch */
 	    start_tsctimer(como_stats->ca_pkts_timer);

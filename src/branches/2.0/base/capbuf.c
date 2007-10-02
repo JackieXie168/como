@@ -35,17 +35,17 @@
 
 /* a simple ring buffer to be used by sniffers to capture packets */
 typedef struct capbuf {
-    void *	base;
-    void *	end;
-    void *	tail;
-    size_t	size;
+    void *	base;       /* addr where mem region starts */
+    void *	end;        /* addr where mem region ends */
+    void *	tail;       /* fisrt unused byte in the buffer */
+    size_t	size;       /* total size, = end - base */
     size_t	ofcheck;
 } capbuf_t;
 
 /*
  * -- capbuf_init
  * 
- * Initializes a capbuf. The buffer memory is allocalted as an anonymous
+ * Initializes a capbuf. The buffer memory is allocated as an anonymous
  * shared memory map.
  * 
  */
@@ -113,7 +113,13 @@ capbuf_region_size(struct capbuf * capbuf, void * x, void * y)
     return capbuf->size - (x - y);
 }
 
-
+/*
+ * -- capbuf_begin
+ *
+ * Prepares the capbuf for the sniffer to store data. The caller
+ * tells this function what is its current read position (head).
+ * The first time the function is used, a NULL head must be passed.
+ */
 static void
 capbuf_begin(struct capbuf * capbuf, void * head)
 {
@@ -136,22 +142,24 @@ static inline void *
 capbuf_reserve_space(struct capbuf * capbuf, size_t s)
 {
     void *end;
-    
+
     //s = ROUND_32(s);
     assert(s > 0);
+
+    end = capbuf->tail + s;
+    if (end > capbuf->end) { /* wrapping buffer */
+	end = capbuf->base + s;
+        capbuf->ofcheck += capbuf->end - capbuf->tail; /* wasted some space */
+    }
+
     capbuf->ofcheck += s;
+    capbuf->tail = end;
+
     if (capbuf->ofcheck > capbuf->size)
 	error("capbuf overflow");
-    
-    end = capbuf->tail + s;
-    if (end > capbuf->end) {
-	end = capbuf->base + s;
-    }
-    capbuf->tail = end;
 
     return capbuf->tail - s;
 }
-
 
 /*
  * -- capbuf_truncate
@@ -167,3 +175,4 @@ capbuf_truncate(struct capbuf * capbuf, void * x)
     capbuf->ofcheck -= capbuf->tail - x;
     capbuf->tail = x;
 }
+
