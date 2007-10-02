@@ -52,7 +52,7 @@
 #define LIBPCAP_DEFAULT_PROMISC	1		/* promiscous mode */
 #define LIBPCAP_DEFAULT_SNAPLEN	96		/* packet capture */
 #define LIBPCAP_DEFAULT_TIMEOUT	0		/* timeout to serve packets */
-#define LIBPCAP_MIN_BUFSIZE	(1024 * 1024)
+#define LIBPCAP_MIN_BUFSIZE	(2 * 1024 * 1024)
 #define LIBPCAP_MAX_BUFSIZE	(LIBPCAP_MIN_BUFSIZE * 2)
 
 /* 

@@ -290,6 +290,10 @@ typedef struct como_ca {
 #ifdef LOADSHED
     ls_t                ls;         /* load shedding data structure */
 #endif
+
+    void **             first_ref_pkts; /* array with a pointer to the first
+                                         * referenced packet in each sniffer
+                                         */
 } como_ca_t;
 
 void capture_main (ipc_peer_t * parent, memmap_t * shmemmap,
