@@ -26,7 +26,17 @@
  * $Id$
  */
 
+#include <assert.h>
 #include <math.h>
+#include <ctype.h>      /* isspace */
+#include <unistd.h>     /* sleep */
+
+#ifndef linux
+#error "Load shedding subsystem only runs on linux"
+#endif
+#include <sched.h>
+
+#define LOG_DOMAIN "LS"
 #include "como.h"
 #include "comopriv.h"
 #include "loadshed.h"
@@ -492,6 +502,92 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
     mdl_ls->fextr.hash = NULL;
 }
 
+#define CPUINFO_FILE "/proc/cpuinfo"
+#define MAX_CPUS 128
+
+typedef struct _cpuinfo cpuinfo_t;
+struct _cpuinfo {
+    int id;
+    int physical_id;
+    int core_id;
+};
+
+static int num_cpus;
+static int have_ht_info;
+static cpuinfo_t cpuinfo[MAX_CPUS];
+
+/*
+ * -- load_cpuinfo
+ *
+ * Retrieve info from the available processors. In linux everything
+ * necessary is available in /proc/cpuinfo.
+ *
+ */
+void
+load_cpuinfo(void)
+{
+    FILE *f = fopen(CPUINFO_FILE, "r");
+    #define MAX_LINE_LEN 1024
+    char line[MAX_LINE_LEN];
+    int cpu_idx;
+
+    if (f == NULL)
+        error("Cannot open " CPUINFO_FILE ", required for load shedding.\n");
+
+    cpu_idx = -1;
+    have_ht_info = 0;
+
+    while (fgets(line, MAX_LINE_LEN, f)) {
+        size_t len;
+        char *tok, *value;
+
+        if (line[0] == '\0')
+            break; /* EOF */
+        if (line[0] == '\n')
+            continue; /* empty line */
+
+        len = strlen(line);
+        assert(line[len - 1] == '\n');
+        line[len - 1] = '\0'; /* remove trailing \n */
+
+        tok = strtok(line, ":");
+        value = strtok(NULL, "");
+
+        while (isspace(tok[strlen(tok) - 1])) /* remove trailing spaces */
+            tok[strlen(tok) - 1] = '\0';
+
+        while (isspace(value[0])) /* remove leading spaces */
+            value++;
+
+        if (! strcmp(tok, "processor")) {
+            cpu_idx++;
+            cpuinfo[cpu_idx].id = atoi(value);
+            /* for now assume that we have no additional info */
+            cpuinfo[cpu_idx].physical_id = atoi(value);
+            cpuinfo[cpu_idx].core_id = atoi(value);
+        }
+        else if (! strcmp(tok, "physical id")) {
+            cpuinfo[cpu_idx].physical_id = atoi(value);
+            have_ht_info = 1;
+        }
+        else if (! strcmp(tok, "core id")) {
+            cpuinfo[cpu_idx].core_id = atoi(value);
+            have_ht_info = 1;
+        }
+    }
+
+    num_cpus = cpu_idx + 1;
+
+    debug("num_cpus = %d\n", num_cpus);
+    for (cpu_idx = 0; cpu_idx < num_cpus; cpu_idx++)
+        debug("CPU #%d phys_id = %d core_id = %d\n",
+                cpuinfo[cpu_idx].id,
+                cpuinfo[cpu_idx].physical_id,
+                cpuinfo[cpu_idx].core_id);
+
+    if (num_cpus < 2)
+        error("Load shedding requires at least two cpus\n");
+}
 
 /*
  * -- ls_init_ca
@@ -502,6 +598,15 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
 void
 ls_init_ca(como_ca_t *como_ca)
 {
+    cpu_set_t cs;
+
+    /* bind capture to the first processor */
+    load_cpuinfo();
+
+    CPU_ZERO(&cs);
+    CPU_SET(0, &cs);
+    sched_setaffinity(0, sizeof(cpu_set_t), &cs);
+
     /* Initialize some values */
     como_ca->ls.perror_ewma = 0;
     como_ca->ls.shed_ewma = 0;
@@ -514,3 +619,59 @@ ls_init_ca(como_ca_t *como_ca)
 
     start_profiler(como_ca->ls.ca_oh_prof);
 }
+
+/*
+ * -- ls_init
+ *
+ * Initialize the load shedding subsystem for all the other
+ * processes
+ */
+void
+ls_init(void)
+{
+    int i, avail_cpus;
+    cpu_set_t cs;
+
+    /*
+     * capture is bound to the first processor. bind to all other
+     * processes except the first. if the machine has hyperthreading,
+     * avoid binding to threads that share the same processor with CA.
+     */
+    load_cpuinfo();
+    CPU_ZERO(&cs);
+
+    /*
+     * try to bind to processors on a different core than capture.
+     */
+    avail_cpus = 0;
+    debug("capture will bind to cpu #0: physical_id = %d, core_id = %d\n",
+        cpuinfo[0].physical_id, cpuinfo[0].core_id);
+
+    for (i = 1; i < num_cpus; i++) {
+        if (cpuinfo[i].physical_id == cpuinfo[0].physical_id &&
+                cpuinfo[i].core_id == cpuinfo[0].core_id) {
+            debug("discard cpu #%d: same core & physical id than #0\n", i);
+            continue;
+        }
+        CPU_SET(i, &cs);
+        debug("use cpu #%d\n", i);
+        avail_cpus++;
+    }
+
+    /*
+     * if no other cores available, relax the restriction
+     */
+    if (avail_cpus == 0) {
+        warn("Load shedding subsystem impaired: no independent "
+                "processors available\n");
+        sleep(5);
+        for (i = 1; i < num_cpus; i++)
+            CPU_SET(i, &cs);
+    }
+
+    /*
+     * bind to the selected CPUs
+     */
+    sched_setaffinity(0, sizeof(cpu_set_t), &cs);
+}
+
