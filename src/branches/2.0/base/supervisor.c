@@ -46,6 +46,10 @@
 #include "query.h"	// XXX query();
 #include "ipc.h"
 
+#ifdef LOADSHED
+#include "lsfunc.h"
+#endif
+
 como_su_t *s_como_su;
 
 stats_t *como_stats;
@@ -541,7 +545,7 @@ como_su_run(como_su_t * como_su)
     como_node_t *real_node;
     runmode_t runmode;
     memmap_stats_t *mem_stats;
-    
+
     /* catch some signals */
     signal(SIGINT, exit);               /* catch SIGINT to clean up */
     signal(SIGTERM, exit);              /* catch SIGTERM to clean up */
@@ -920,6 +924,10 @@ main(int argc, char ** argv)
         debug("inline mode: no modules could be loaded, exiting.\n");
         return EXIT_FAILURE;
     }
+
+#ifdef LOADSHED
+    ls_init();
+#endif
 
     /* spawn STORAGE */
     spawn_child(COMO_ST, "storage", como_config->storage_path,

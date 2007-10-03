@@ -757,7 +757,7 @@ cabuf_cl_destroy(int id, cabuf_cl_t * cl, como_ca_t * como_ca)
     batch_t *bi, *bn;
     int fd;
 
-    /* update s_capbuf */
+    /* update s_cabuf */
     s_cabuf.clients[id] = NULL;
     s_cabuf.clients_count--;
     fd = ipc_peer_get_fd(cl->peer);

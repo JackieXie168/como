@@ -37,6 +37,7 @@ void batch_loadshed_pre(batch_t *, como_ca_t *, char *);
 void batch_loadshed_post(como_ca_t *);
 void ls_init_mdl(char *, mdl_ls_t *, char *);
 void ls_init_ca(como_ca_t *);
+void ls_init(void);
 
 
 /* prediction.c */

@@ -492,7 +492,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 	end_tsctimer(como_stats->ex_full_timer); 
 
 	/* store profiling information */
-	ex_print_timers();
+	/* ex_print_timers(); */
 	ex_reset_timers();
     }
 
