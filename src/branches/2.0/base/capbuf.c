@@ -142,21 +142,25 @@ static inline void *
 capbuf_reserve_space(struct capbuf * capbuf, size_t s)
 {
     void *end;
+    size_t new_ofcheck;
 
-    //s = ROUND_32(s);
     assert(s > 0);
+
+    new_ofcheck = capbuf->ofcheck;
 
     end = capbuf->tail + s;
     if (end > capbuf->end) { /* wrapping buffer */
 	end = capbuf->base + s;
-        capbuf->ofcheck += capbuf->end - capbuf->tail; /* wasted some space */
+        new_ofcheck += capbuf->end - capbuf->tail; /* wasted some space */
     }
 
-    capbuf->ofcheck += s;
-    capbuf->tail = end;
+    new_ofcheck += s;
 
-    if (capbuf->ofcheck > capbuf->size)
-	error("capbuf overflow");
+    if (new_ofcheck > capbuf->size)
+	return NULL;
+
+    capbuf->ofcheck = new_ofcheck;
+    capbuf->tail = end;
 
     return capbuf->tail - s;
 }
