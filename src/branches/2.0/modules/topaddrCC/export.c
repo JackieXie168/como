@@ -151,11 +151,12 @@ export(mdl_t * self, topaddr_tuple_t **tuples, size_t ntuples,
         st->current_ivl = ivl_start;
     }
 
-    hash = uhash(&st->hfunc, (uint8_t *) &t->addr, sizeof(uint32_t),
-            UHASH_NEW);
-
     for (i = 0; i < ntuples; i++) { /* update our state */
         t = tuples[i];
+
+        hash = uhash(&st->hfunc, (uint8_t *) &t->addr, sizeof(uint32_t),
+                UHASH_NEW);
+
         rec = (topaddr_record_t *) flowtable_lookup(st->table, hash,
                 (pkt_t *)t);
 

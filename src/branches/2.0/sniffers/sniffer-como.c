@@ -92,7 +92,7 @@ sniffer_init(const char * device, const char * args, alc_t *alc)
 		    COMO_MAX_BUFSIZE) < 0)
 	goto error;
 
-    me->read_size = me->capbuf.size / 2;
+    me->read_size = me->capbuf.size / 8;
     me->min_proc_size = COMO_DEFAULT_MIN_PROC_SIZE;
     me->cur = me->capbuf.base;
     
@@ -229,6 +229,11 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	ssize_t rdn;
 	size_t rd_sz = me->read_size;
 	base = capbuf_reserve_space(&me->capbuf, rd_sz);
+        if (base == NULL) { /* buffer is full */
+            s->priv->full = 1;
+            return 0;
+        }
+
 	if (base == me->capbuf.base) {
 	    /* handle the wrapping: me->cur points to avn previously read
 	     * bytes, move them to base and decrement rd_sz */

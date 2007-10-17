@@ -38,6 +38,14 @@
 /* C Declarations */
 #include <stdlib.h> /* atoll */
 
+/* #define DEBUG_A_LOT */
+
+#ifdef DEBUG_A_LOT
+#define dbg_return(x) do { debug(#x "\n"); return x; } while(0)
+#else
+#define dbg_return(x) return x
+#endif
+
 int ycline;
 
 void config_lexic_init(void)
@@ -63,70 +71,70 @@ NUMBER          {DIGIT}+
 <comment>\n             ycline++; /* and newlines */
 <comment>"*"+"/"        BEGIN(INITIAL);
 
-db-path         { return TOK_DBPATH; }
-librarydir      { return TOK_LIBDIR; }
-storage-path	{ return TOK_STORAGEPATH; }
-memsize         { return TOK_MEMSIZE; }
-query-port      { return TOK_QUERY_PORT; }
+db-path         { dbg_return(TOK_DBPATH); }
+librarydir      { dbg_return(TOK_LIBDIR); }
+storage-path	{ dbg_return(TOK_STORAGEPATH); }
+memsize         { dbg_return(TOK_MEMSIZE); }
+query-port      { dbg_return(TOK_QUERY_PORT); }
 
-name            { return TOK_NAME; }
-location        { return TOK_LOCATION; }
-type            { return TOK_TYPE; }
-comment         { return TOK_COMMENT; }
-sniffer         { return TOK_SNIFFER; }
-filesize        { return TOK_FILESIZE; }
-module          { return TOK_MODULE; }
-description     { return TOK_DESCRIPTION; }
-source          { return TOK_SOURCE; }
-output          { return TOK_OUTPUT; }
-filter          { return TOK_FILTER; }
-hashsize        { return TOK_HASHSIZE; }
-streamsize      { return TOK_STREAMSIZE; }
-args            { return TOK_ARGS; }
-args-file       { return TOK_ARGSFILE; }
-on-demand       { return TOK_ONDEMAND; }
-end             { return TOK_END; }
-=               { return TOK_EQUALS; }
-,               { return TOK_COMMA; }
-asnfile         { return TOK_ASNFILE; }
-alias           { return TOK_ALIAS; }
-virtual-node    { return TOK_VIRTUAL_NODE; }
-source-module   { return TOK_SOURCE_MODULE; }
+name            { dbg_return(TOK_NAME); }
+location        { dbg_return(TOK_LOCATION); }
+type            { dbg_return(TOK_TYPE); }
+comment         { dbg_return(TOK_COMMENT); }
+sniffer         { dbg_return(TOK_SNIFFER); }
+filesize        { dbg_return(TOK_FILESIZE); }
+module          { dbg_return(TOK_MODULE); }
+description     { dbg_return(TOK_DESCRIPTION); }
+source          { dbg_return(TOK_SOURCE); }
+output          { dbg_return(TOK_OUTPUT); }
+filter          { dbg_return(TOK_FILTER); }
+hashsize        { dbg_return(TOK_HASHSIZE); }
+streamsize      { dbg_return(TOK_STREAMSIZE); }
+args            { dbg_return(TOK_ARGS); }
+args-file       { dbg_return(TOK_ARGSFILE); }
+on-demand       { dbg_return(TOK_ONDEMAND); }
+end             { dbg_return(TOK_END); }
+=               { dbg_return(TOK_EQUALS); }
+,               { dbg_return(TOK_COMMA); }
+asnfile         { dbg_return(TOK_ASNFILE); }
+alias           { dbg_return(TOK_ALIAS); }
+virtual-node    { dbg_return(TOK_VIRTUAL_NODE); }
+source-module   { dbg_return(TOK_SOURCE_MODULE); }
 
-shed-method     { return TOK_SHEDMETHOD; }
+shed-method     { dbg_return(TOK_SHEDMETHOD); }
 
 {NUMBER}GB      {
                     yclval.number = atoll(yytext) * 1024 * 1024 * 1024;
-                    return TOK_NUMBER;
+                    dbg_return(TOK_NUMBER);
                 }
 {NUMBER}MB      {
                     yclval.number = atoll(yytext) * 1024 * 1024;
-                    return TOK_NUMBER;
+                    dbg_return(TOK_NUMBER);
                 }
 {NUMBER}KB      {
                     yclval.number = atoll(yytext) * 1024;
-                    return TOK_NUMBER;
+                    dbg_return(TOK_NUMBER);
                 }
 {NUMBER}B       {
                     yclval.number = atoll(yytext);
-                    return TOK_NUMBER;
+                    dbg_return(TOK_NUMBER);
                 }
 
 {NUMBER}        {
                     yclval.number = atoll(yytext);
-                    return TOK_NUMBER;
+                    dbg_return(TOK_NUMBER);
                 }
 
 \"[^"]*\"       {   /* string literal */
                     yclval.string = como_strdup(yytext + 1);
                     yclval.string[strlen(yclval.string) - 1] = '\0';
-                    return TOK_STRING;
+                    dbg_return(TOK_STRING);
                 }
 " "
 
 #.*             /* comment til end of line */
 \t
-\n              {   ycline++; return TOK_NEWLINE; }
+\n              {   ycline++; dbg_return(TOK_NEWLINE); }
 
 [a-zA-Z0-9-]+   {
                     warn("line %d: ignoring unknown keyword: `%s'\n", ycline,

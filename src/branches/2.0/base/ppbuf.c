@@ -48,6 +48,7 @@ struct ppbuf {
     timestamp_t	last_pkt_ts;
     timestamp_t	first_pkt_ts;
     int		id;		/* sniffer id */
+    sniffer_t * sniffer;        /* ptr to sniffer */
     ppbuf_list_entry_t	next;
 };
 
@@ -58,14 +59,15 @@ struct ppbuf {
  * Allocates a new ppbuf with size many packet pointers.
  */
 static ppbuf_t *
-ppbuf_new(int size, int id)
+ppbuf_new(int size, sniffer_t *sniff)
 {
     ppbuf_t *ppbuf;
     
     ppbuf = como_new0(ppbuf_t);
     ppbuf->size = size;
     ppbuf->pp = como_calloc(size, sizeof(pkt_t *));
-    ppbuf->id = id;
+    ppbuf->id = sniff->priv->id;
+    ppbuf->sniffer = sniff;
     
     return ppbuf;
 }

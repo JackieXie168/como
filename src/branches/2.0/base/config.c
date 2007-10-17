@@ -323,7 +323,7 @@ como_config_t *
 configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 {
     static const char *opts = "hi:St:q:c:C:D:L:p:m:vx:s:e";
-    int i, c, cfg_item_count = 0, cfg_file_count = 0;
+    int i, c, cfg_item_count = 0;
     #define MAX_CFGITEMS 1024
     cfg_item_t cfg_items[MAX_CFGITEMS];
 
@@ -364,7 +364,6 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
             cfg_items[cfg_item_count].type = CFG_ITEM_FILE;
             cfg_items[cfg_item_count].info = optarg;
             cfg_item_count++;
-            cfg_file_count++;
 	    break;
 
         case 'C': /* string to be parsed as if it were in a cfgfile */
@@ -475,6 +474,16 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         }
     }
 
+    /*
+     * no cfg given, neither cfg files or strings.
+     * try using the default cfg file.
+     */
+    if (cfg_item_count == 0) {
+        cfg_items[cfg_item_count].type = CFG_ITEM_FILE;
+        cfg_items[cfg_item_count].info = DEFAULT_CFGFILE;
+        cfg_item_count++;
+    }
+
     for (i = 0; i < cfg_item_count; i++) { /* parse config items here */
         switch (cfg_items[i].type) {
             case CFG_ITEM_FILE:
@@ -485,13 +494,6 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
                 break;
         }
     }
-
-    /*
-     * no cfg given, neither cfg files or strings.
-     * try using the default cfg file.
-     */
-    if (cfg_file_count == 0)
-        parse_config_file(DEFAULT_CFGFILE, alc, cfg);
 
     while (optind < argc) { /* module definitions follow */
         char *args = NULL, *buf, *s;

@@ -52,7 +52,7 @@
 #define LIBPCAP_DEFAULT_PROMISC	1		/* promiscous mode */
 #define LIBPCAP_DEFAULT_SNAPLEN	96		/* packet capture */
 #define LIBPCAP_DEFAULT_TIMEOUT	0		/* timeout to serve packets */
-#define LIBPCAP_MIN_BUFSIZE	(2 * 1024 * 1024)
+#define LIBPCAP_MIN_BUFSIZE	(4 * 1024 * 1024)
 #define LIBPCAP_MAX_BUFSIZE	(LIBPCAP_MIN_BUFSIZE * 2)
 
 /* 
@@ -82,6 +82,7 @@ struct libpcap_me {
     int			snaplen; 	/* capture length */
     int			timeout;	/* capture timeout */
     char		errbuf[PCAP_ERRBUF_SIZE + 1]; /* error buffer */
+    int *               dropped_pkts;   /* ptr to pkt drop counter */
     capbuf_t		capbuf;
 };
 
@@ -274,6 +275,11 @@ processpkt(u_char * data, const struct pcap_pkthdr * h, const u_char * buf)
 
     /* reserve the space in the buffer for the packet */
     pkt = (pkt_t *) capbuf_reserve_space(&me->capbuf, sz);
+    if (pkt == NULL) {
+        (*(me->dropped_pkts))++;
+        me->sniff.priv->full = 1;
+        return;
+    }
 
     /* the payload points to the end of the pkt_t structure */
     COMO(payload) = (char *) (pkt + 1);
@@ -329,6 +335,7 @@ sniffer_next(sniffer_t * s, int max_pkts,
     int count, x;
     
     *dropped_pkts = 0;
+    me->dropped_pkts = dropped_pkts;
     
     capbuf_begin(&me->capbuf, first_ref_pkt);
     

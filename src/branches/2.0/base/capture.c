@@ -1130,6 +1130,7 @@ timebin_end(timestamp_t ts, uint32_t tb)
 static batch_t *
 batch_create(int force_batch, como_ca_t * como_ca)
 {
+    static timestamp_t last_bin_end = 0;
     batch_t *batch;
     sniffer_t *sniff;
     ppbuf_t *ppbuf;
@@ -1172,7 +1173,8 @@ batch_create(int force_batch, como_ca_t * como_ca)
                 min_first_pkt_ts = pkt->ts;
         }
 
-	if (ppbuf->count == ppbuf->size)
+	if (ppbuf->count == ppbuf->size || sniff->priv->full ||
+                sniff->priv->closing)
 	    one_full_flag = 1;
 
 #ifdef DEBUG_PPBUF
@@ -1206,17 +1208,29 @@ batch_create(int force_batch, como_ca_t * como_ca)
 	}
     }
 
-    /* if we do not have a complete timebin, wait until we receive more
-     * packets from the sniffers */
+    /*
+     * calculate the end of the current time bin. make sure that
+     * the time bin advances, even if there are packets that
+     * belong to previous timebins. this helps overcome non-increasing
+     * timestamps in the packet stream.
+     */
     bin_end = timebin_end(min_first_pkt_ts, como_ca->timebin);
+    
+    if (last_bin_end != 0 && bin_end <= last_bin_end)
+        bin_end = timebin_end(last_bin_end + 1, como_ca->timebin);
 
-    if (max_last_pkt_ts <= bin_end)
+    /*
+     * if we do not have a complete timebin, wait until we receive more
+     * packets from the sniffers
+     */
+    if (max_last_pkt_ts <= bin_end && !force_batch && !one_full_flag)
         return NULL;
 
     /* create the batch structure */
 
     batch = alc_new0(&como_ca->shalc, batch_t);
     cabuf_reserve(batch, pc);
+    last_bin_end = bin_end;
 
     if (s_cabuf.clients_count > 0) {
 	batch->first_ref_pkts = alc_calloc(&como_ca->shalc,
@@ -1262,6 +1276,7 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
 	assert(ppbuf);
 
+        ppbuf->sniffer->priv->full = 0;
         pkt = ppbuf_get(ppbuf);
         if (pkt->ts >= bin_end)
             break;
@@ -1608,7 +1623,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     	sniff->priv->fd = -1;
 
 	/* create the ppbuf */
-	sniff->ppbuf = ppbuf_new(sniff->max_pkts, sniff->priv->id);
+	sniff->ppbuf = ppbuf_new(sniff->max_pkts, sniff);
 
 	if (sniff->cb->start(sniff) < 0) {
 	    sniff->priv->state = SNIFFER_INACTIVE;
@@ -1809,23 +1824,10 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
 	    ppbuf_end(sniff->ppbuf);
 
-	    /* TODO set force_batch if sniffer needs RAM ?? RNC1 21SEP06 */
-
 	    /* disable the sniffer if a problem occurs */
 
-	    if (res < 0) {
-		sniff->cb->stop(sniff);
-		/* NB: freeing ppbuf here discards some previously
-		 *     OK packets. Fixing this needs a new "dying"
-		 *     state to be added.  so TODO!   RNC1 21SEP06
-		 */
-                debug("stopping sniffer `%s': res < 0\n", sniff->cb->name);
-		ppbuf_free(sniff);
-		/* disable the sniffer */
-		sniff->priv->state = SNIFFER_INACTIVE;
-		sniff->priv->touched = TRUE;
-		continue;
-	    }
+            if (res < 0) /* something went wrong, sniffer is to be closed */
+                sniff->priv->closing = 1;
 	    
 	    /* monitor the current sniffer fd */
 	    if (sniff->priv->fd != sniff->fd) {
@@ -1844,9 +1846,9 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	}
 
 	/*
-         * try to create batches using the captured packets
+         * try to create a batch using the captured packets
          */
-        while ((batch = batch_create(force_batch, &como_ca))) {
+        if ((batch = batch_create(force_batch, &como_ca))) {
 	    if (avg_batch_len == 0)
 		avg_batch_len = batch->count;
 	    else
@@ -1874,6 +1876,19 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	    else
 		batch_free(batch);
 	}
+
+	sniffer_list_foreach(sniff, sniffers) {
+            if (! sniff->priv->closing)
+                continue;
+
+            sniff->cb->stop(sniff);
+            debug("stopping sniffer `%s': res < 0\n", sniff->cb->name);
+            ppbuf_free(sniff);
+            /* disable the sniffer */
+            sniff->priv->state = SNIFFER_INACTIVE;
+            sniff->priv->touched = TRUE;
+            sniff->priv->closing = 0;
+        }
 
 	/* 
          * Check shared mem usage. If above FREEZE_THRESHOLD, and export

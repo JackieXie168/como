@@ -145,6 +145,8 @@ struct sniffer_priv {
     int			id;	/* id of the sniffer */
     int			fd;	/* descriptor used in the select by capture */
     int			touched;
+    int                 full;   /* the sniffer's buffers are full */
+    int                 closing;/* the sniffer is to be closed soon */
     enum {
 	SNIFFER_UNINITIALIZED = 0,
 	SNIFFER_INITIALIZED,
