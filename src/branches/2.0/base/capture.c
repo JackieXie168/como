@@ -466,7 +466,7 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
 #ifdef LOADSHED
     /* get feedback for the load shedding scheme after having
      * processed the batch with the modules */
-    batch_loadshed_post(como_ca);
+    batch_loadshed_post(batch, como_ca);
 #endif
 
     /*  
@@ -1327,10 +1327,12 @@ batch_create(int force_batch, como_ca_t * como_ca)
 
 static int
 cabuf_cl_res_mgmt(int wait_for_clients, int avg_batch_len,
-		  sniffer_list_t * sniffers, int sniffers_count)
+		  UNUSED sniffer_list_t * sniffers, int sniffers_count)
 {
     int id;
+#ifdef DEBUG
     int new_wait_for_clients = 0;
+#endif
 
     wait_for_clients = 0;
 

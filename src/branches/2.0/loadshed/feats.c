@@ -31,6 +31,8 @@
 #include "comotypes.h"
 #include "feats.h"
 
+#include "ls-logging.c"
+
 /*
  * -- feat_extr
  *
@@ -119,6 +121,8 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
 
             mdl_ls->fextr.feats[0].value++;
             mdl_ls->fextr.feats[1].value += pkt->caplen;
+            if (pkt->ts >= ic->ivl_end)
+                mdl_ls->fextr.feats[2].value = 1;
 
             if (!isIP)
                 continue; /* no need to calculate the remaining features */
@@ -194,4 +198,6 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
             batch->count -
             mdl_ls->fextr.feats[NO_BM_FEATS + j + NUM_BITMAPS].value;
     }
+
+    log_feats(mdl, mdl_ls->fextr.feats);
 }

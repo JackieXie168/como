@@ -28,8 +28,12 @@
 
 #include <assert.h>
 #include <math.h>
-#include <ctype.h>      /* isspace */
-#include <unistd.h>     /* sleep */
+#include <ctype.h>      /* isspace, isdigit */
+#include <unistd.h>     /* sleep, read */
+#include <sys/types.h>  /* opendir, open */
+#include <dirent.h>     /* opendir */
+#include <sys/stat.h>   /* read */
+#include <fcntl.h>      /* read */
 
 #ifndef linux
 #error "Load shedding subsystem only runs on linux"
@@ -42,6 +46,7 @@
 #include "loadshed.h"
 #include "lsfunc.h"
 
+#include "ls-logging.c"
 
 /*
  * -- ewma
@@ -177,8 +182,7 @@ get_avail_cycles(como_ca_t *como_ca)
     if (avail_cycles < 0)
         avail_cycles = 0;
 
-    debug("avail_cycles = %llu, ca_oh = %llu\n",
-          avail_cycles, ca_oh_cycles);
+    debug("avail_cycles = %llu, ca_oh = %llu\n", avail_cycles, ca_oh_cycles);
 
     reset_profiler(como_ca->ls.ca_oh_prof);
     start_profiler(como_ca->ls.ca_oh_prof);
@@ -213,8 +217,10 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
     if (mdl_ls->srate == 1)
         return 0;
 
-    /* For the modules that apply flow sampling, do not allow the
-     * sampling rate to increase during a measurement interval */
+    /*
+     * For the modules that apply flow sampling, do not allow the
+     * sampling rate to increase during a measurement interval
+     */
     if (mdl_ls->shed_method == SHED_METHOD_FLOW) {
     
         mdl_ls->tmp_srate = mdl_ls->srate;
@@ -229,8 +235,10 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
         }
     }
 
-    /* Sampling is done by modifying the filter matrix,
-     * zeroing out the discarded packets */
+    /*
+     * Sampling is done by modifying the filter matrix,
+     * zeroing out the discarded packets
+     */
     for (c = 0, pktptr = batch->pkts0, l = MIN(batch->pkts0_len, batch->count);
 	 c < batch->count;
 	 pktptr = batch->pkts1, l = batch->pkts1_len)
@@ -252,8 +260,10 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
                     initialized = 1;
                     for (hi = 0; hi < NUM_HASH; hi++)
                         uhash_initialize(mdl_ls->hash[hi]);
-                    /* Clear the limit that avoids increasing the
-                     * sampling rate while in the same interval */
+                    /*
+                     * Clear the limit that avoids increasing the
+                     * sampling rate while in the same interval
+                     */
                     if (mdl_ls->shed_method == SHED_METHOD_FLOW) {
                         mdl_ls->max_srate = 0;
                         /* Uncap the sampling rate */
@@ -271,8 +281,10 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
                     nshed++;
                 }
             } else if (mdl_ls->shed_method == SHED_METHOD_FLOW) {
-                /* Flow sampling, using a hash table indexed
-                 * by the packet's 5-tuple */
+                /*
+                 * Flow sampling, using a hash table indexed
+                 * by the packet's 5-tuple
+                 */
                 uint32_t hash, threshold, tmp;
                 uint16_t sport, dport;
 
@@ -326,6 +338,13 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
     mdl_icapture_t *ic;
     uint64_t avail_cycles;
     char *start_which = which;
+#ifdef DEBUG
+    profiler_t *fextr_prof;
+
+    fextr_prof = new_profiler("fextr");
+    reset_profiler(fextr_prof);
+    start_profiler(fextr_prof);
+#endif
 
     como_ca->ls.pcycles = 0;
     mdls = como_ca->mdls;
@@ -333,6 +352,7 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
     for (idx = 0; idx < mdls->len; idx++) {
 	mdl_t *mdl = array_at(mdls, mdl_t *, idx);
         ic = mdl_get_icapture(mdl);
+        double pred;
 
         feat_extr(batch, which, mdl);
 
@@ -345,10 +365,17 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
 
         pred_sel(&ic->ls);
 
-        como_ca->ls.pcycles += predict(&ic->ls);
+        pred = predict(&ic->ls);
+        como_ca->ls.pcycles += pred;
+        ic->ls.last_pred = pred;
 
 	which += batch->count;  /* next module, new list of packets */
     }
+
+#ifdef DEBUG
+    end_profiler(fextr_prof);
+    debug("feature extraction takes %llu cycles\n", fextr_prof->tsc_cycles->value);
+#endif
 
     avail_cycles = get_avail_cycles(como_ca);
 
@@ -398,7 +425,7 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
  *
  */
 void
-batch_loadshed_post(como_ca_t *como_ca)
+batch_loadshed_post(UNUSED batch_t *batch, como_ca_t *como_ca)
 {
     array_t *mdls;
     int idx;
@@ -406,6 +433,8 @@ batch_loadshed_post(como_ca_t *como_ca)
     double pred_error;
 
     mdls = como_ca->mdls;
+
+    log_prederr_start(mdls);
 
     como_ca->ls.rcycles = 0;
 
@@ -419,12 +448,16 @@ batch_loadshed_post(como_ca_t *como_ca)
         ic->ls.batches++;
         debug("module %s, %llu batches processed\n", mdl->name,
               ic->ls.batches);
+
+        log_prederr_line(batch, ic, idx);
     }
 
     pred_error = fabs(1 - (double)como_ca->ls.pcycles * como_ca->ls.srate /
                   (double)como_ca->ls.rcycles);
 
     ewma(PERROR_EWMA_WEIGHT, &como_ca->ls.perror_ewma, pred_error);
+
+    log_prederr_end();
 
     debug("predicted cycles = %llu\n", como_ca->ls.pcycles);
     debug("real cycles = %llu\n", como_ca->ls.rcycles);
@@ -434,10 +467,10 @@ batch_loadshed_post(como_ca_t *como_ca)
 }
 
 
-static char * aggr_names[15] = {
-    "pkts", "bytes", "sip", "dip", "sip_dip", "snet", "dnet", "snet_dnet",
-    "proto_sport", "proto_dport", "proto_sport_sip", "proto_dport_dip",
-    "proto_sport_dport", "5tuple", "proto"
+static char * aggr_names[16] = {
+    "pkts", "bytes", "newivl", "sip", "dip", "sip_dip", "snet", "dnet",
+    "snet_dnet", "proto_sport", "proto_dport", "proto_sport_sip",
+    "proto_dport_dip", "proto_sport_dport", "5tuple", "proto"
 };
 
 
@@ -453,6 +486,9 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
     int i;
     feat_t *feats = mdl_ls->fextr.feats;
     pred_t *preds = mdl_ls->pred.hist;
+
+    /* initialize all to zero */
+    bzero(mdl_ls, sizeof(mdl_ls_t));
 
     /* initialize profilers */
     mdl_ls->prof = new_profiler(name);
@@ -590,6 +626,17 @@ load_cpuinfo(void)
 }
 
 /*
+ * -- choose_capture_cpu
+ *
+ * We assign capture to the last cpu.
+ */
+static int
+choose_capture_cpu(void)
+{
+    return num_cpus - 1;
+}
+
+/*
  * -- ls_init_ca
  *
  * Initialize the load shedding data of the capture process
@@ -599,17 +646,23 @@ void
 ls_init_ca(como_ca_t *como_ca)
 {
     cpu_set_t cs;
+    int ca_cpu_id;
 
     /* bind capture to the first processor */
     load_cpuinfo();
+    ca_cpu_id = cpuinfo[choose_capture_cpu()].id;
 
     CPU_ZERO(&cs);
-    CPU_SET(0, &cs);
+    CPU_SET(ca_cpu_id, &cs);
+    warn("binding capture to CPU #%d\n", ca_cpu_id);
     sched_setaffinity(0, sizeof(cpu_set_t), &cs);
 
     /* Initialize some values */
     como_ca->ls.perror_ewma = 0;
     como_ca->ls.shed_ewma = 0;
+
+    /* Increase priority of capture */
+    nice(-20);
 
     /* Get the CPU frequency */
     como_ca->ls.cpufreq = get_cpufreq_cpuid();
@@ -621,6 +674,134 @@ ls_init_ca(como_ca_t *como_ca)
 }
 
 /*
+ * -- choose_noncapture_cpu
+ *
+ * Initializes the cpu set that all processes in the system
+ * except capture should set their affinity to.
+ */
+static void
+choose_noncapture_cpu(cpu_set_t *outcs)
+{
+    int i, avail_cpus;
+    cpuinfo_t *ca_cpu;
+
+    /*
+     * capture is bound to the first processor. bind to all other
+     * processes except the first. if the machine has hyperthreading,
+     * avoid binding to threads that share the same processor with CA.
+     */
+    ca_cpu = &cpuinfo[choose_capture_cpu()];
+    CPU_ZERO(outcs);
+
+    /*
+     * try to bind to processors on a different core than capture.
+     */
+    avail_cpus = 0;
+    debug("capture will bind to cpu #%d: physical_id = %d, core_id = %d\n",
+        ca_cpu->id, ca_cpu->physical_id, ca_cpu->core_id);
+
+    for (i = 0; i < num_cpus; i++) {
+        cpuinfo_t *cpu = &cpuinfo[i];
+        if (cpu->id == ca_cpu->id)
+            continue;
+        if (cpu->physical_id == ca_cpu->physical_id &&
+                cpu->core_id == ca_cpu->core_id) {
+            debug("discard cpu #%d: same core & physical id than #%d\n",
+                    cpu->id, ca_cpu->id);
+            continue;
+        }
+        CPU_SET(cpu->id, outcs);
+        debug("use cpu #%d: physical_id = %d, core_id = %d\n", cpu->id,
+                cpu->physical_id, cpu->core_id);
+        avail_cpus++;
+    }
+
+    /*
+     * if no other cores available, relax the restriction
+     */
+    if (avail_cpus == 0) {
+        warn("Load shedding subsystem impaired: no two independent "
+                "processors available\n");
+        sleep(1);
+        for (i = 0; i < num_cpus; i++)
+            CPU_SET(i, outcs);
+    }
+}
+
+/*
+ * -- can_set_affinity
+ *
+ * Checks if a pid's affinity can be set. Some pids should be left
+ * unchanged because they may not survive a migration. See discussion
+ * on thread "[PATCH] protect migration/%d etc from sched_setaffinity"
+ * at the linux-kernel mailing list.
+ * (http://marc.info/?t=105969185500001&r=1&w=2)
+ */
+static int
+can_set_affinity(pid_t p)
+{
+    char file[1024], buffer[4];
+    int fd, ret;
+
+    sprintf(file, "/proc/%d/maps", p);
+    fd = open(file, O_RDONLY);
+    if (fd < 0) {
+        warn("could not open file `%s' for reading\n", file);
+        return 0;
+    }
+
+    ret = read(fd, buffer, sizeof(buffer));
+    if (ret < 0) {
+        warn("could not read from file `%s'\n", file);
+        close(fd);
+        return 0;
+    }
+
+    close(fd);
+    return ret == 0 ? 0 : 1; /* if file is empty, don't set affinity */
+}
+
+static int
+is_a_number(char *str)
+{
+    for(;; str++)
+        if (! isdigit(*str))
+            break;
+
+    if (*str == '\0') /* all chars are digits, this is a number */
+        return 1;
+    
+    return 0;
+}
+
+
+/*
+ * -- set_irq_affinity
+ *
+ * Sets the affinity of an irq to the given affinity mask.
+ *
+ */
+static void
+set_irq_affinity(int irq, int aff_mask)
+{
+    char file[1024], buffer[64];
+    int fd, ret;
+
+    sprintf(buffer, "%02x\n", aff_mask);
+    sprintf(file, "/proc/irq/%d/smp_affinity", irq);
+    fd = open(file, O_WRONLY);
+    if (fd < 0)
+        error("could not open `%s' for writing\n", file);
+
+    ret = write(fd, buffer, strlen(buffer));
+    if (ret < 0)
+        error("could not write to `%s'\n", file);
+
+    close(fd);
+    debug("affinity for irq %d set to %s", irq, buffer);
+}
+
+/*
  * -- ls_init
  *
  * Initialize the load shedding subsystem for all the other
@@ -629,49 +810,68 @@ ls_init_ca(como_ca_t *como_ca)
 void
 ls_init(void)
 {
-    int i, avail_cpus;
+    struct dirent *e;
     cpu_set_t cs;
+    int i, mask;
+    DIR *d;
 
-    /*
-     * capture is bound to the first processor. bind to all other
-     * processes except the first. if the machine has hyperthreading,
-     * avoid binding to threads that share the same processor with CA.
-     */
     load_cpuinfo();
-    CPU_ZERO(&cs);
-
-    /*
-     * try to bind to processors on a different core than capture.
-     */
-    avail_cpus = 0;
-    debug("capture will bind to cpu #0: physical_id = %d, core_id = %d\n",
-        cpuinfo[0].physical_id, cpuinfo[0].core_id);
-
-    for (i = 1; i < num_cpus; i++) {
-        if (cpuinfo[i].physical_id == cpuinfo[0].physical_id &&
-                cpuinfo[i].core_id == cpuinfo[0].core_id) {
-            debug("discard cpu #%d: same core & physical id than #0\n", i);
-            continue;
-        }
-        CPU_SET(i, &cs);
-        debug("use cpu #%d\n", i);
-        avail_cpus++;
-    }
-
-    /*
-     * if no other cores available, relax the restriction
-     */
-    if (avail_cpus == 0) {
-        warn("Load shedding subsystem impaired: no independent "
-                "processors available\n");
-        sleep(5);
-        for (i = 1; i < num_cpus; i++)
-            CPU_SET(i, &cs);
-    }
+    choose_noncapture_cpu(&cs);
 
     /*
      * bind to the selected CPUs
      */
+    for (i = 0; i < num_cpus; i++)
+        if (CPU_ISSET(i, &cs))
+            warn("Binding supervisor/export/storage to cpu #%d\n", i);
+
     sched_setaffinity(0, sizeof(cpu_set_t), &cs);
+
+    /*
+     * bind the rest of the processes in this system to the selected CPUs
+     */
+    d = opendir("/proc");
+    if (d == NULL)
+        error("Cannot open dir /proc\n");
+    while((e = readdir(d)) != NULL) {
+        pid_t p;
+
+        if (! (e->d_type & DT_DIR)) /* look for dirs only */
+            continue;
+        if (! is_a_number(e->d_name)) /* numbers only */
+            continue;
+
+        p = atoi(e->d_name);
+        if (! can_set_affinity(p)) /* affinity unsettable */
+            continue;
+
+        /* and its affinity can be safely set */
+        sched_setaffinity(p, sizeof(cpu_set_t), &cs);
+        debug("affinity set for pid %d\n", p);
+    }
+    closedir(d);
+
+    /*
+     * now try to bind irqs to these same processors
+     */
+    mask = 0;
+    for (i = 0; i < num_cpus; i++)
+        if (CPU_ISSET(i, &cs))
+            mask |= 1 << i;
+
+    d = opendir("/proc/irq");
+    if (d == NULL)
+        error("Cannot open dir /proc/irq for reading\n");
+    while ((e = readdir(d)) != NULL) {
+        if (! (e->d_type & DT_DIR)) /* look for dirs only */
+            continue;
+        if (! is_a_number(e->d_name)) /* numbers only */
+            continue;
+
+        set_irq_affinity(atoi(e->d_name), mask);
+    }
+    closedir(d);
+
+    debug("affinities set!\n");
 }
 
