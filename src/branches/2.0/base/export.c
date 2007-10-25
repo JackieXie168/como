@@ -43,6 +43,7 @@
 #include <assert.h>
 #include <signal.h>
 
+/* #define DISABLE_EXPORT */
 #define LOG_DISABLE
 #include "como.h"
 #include "comopriv.h"
@@ -202,7 +203,6 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 				UNUSED como_ex_t * como_ex)
 {
     mdl_iexport_t *ie;
-    struct tuple *t;
     mdl_t *mdl;
 
     debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n",
@@ -222,8 +222,10 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
     /*
      * let the module process 'em
      */
+    #ifndef DISABLE_EXPORT
     if (ie->export) {
-	void **tuples;
+        struct tuple *t;
+        void **tuples;
 	size_t i;
 
 	tuples = como_calloc(msg->ntuples, sizeof(void *));
@@ -242,11 +244,13 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 	 */
 	free(tuples);
     } else {
+        struct tuple *t;
         debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
         tuples_foreach(t, &msg->tuples) {
 	    mdl_store_rec(mdl, t->data);
         }
     }
+    #endif
 
     debug("handle_ca_ex_process_shm_tuples -- done, sending reply\n");
     ipc_send(peer, EX_CA_TUPLES_PROCESSED, msg, sz);

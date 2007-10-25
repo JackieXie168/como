@@ -64,6 +64,7 @@ typedef void (*pcap_close_fn)(pcap_t *);
 typedef int (*pcap_setnonblock_fn)(pcap_t *, int, char *); 
 typedef int (*pcap_fileno_fn)(pcap_t *); 
 typedef int (*pcap_datalink_fn)(pcap_t *); 
+typedef int (*pcap_stats_fn)(pcap_t *, struct pcap_stat *); 
 
 /*
  * This data structure will be stored in the source_t structure and 
@@ -75,6 +76,7 @@ struct libpcap_me {
     void *		handle;		/* handle to libpcap.so */
     pcap_dispatch_fn	sp_dispatch;	/* ptr to pcap_dispatch function */
     pcap_close_fn	sp_close;	/* ptr to pcap_close function */
+    pcap_stats_fn       sp_stats;       /* ptr to pcap_stat function */
     pcap_t *		pcap;		/* pcap handle */
     enum LINKTYPE	l2type; 	/* link layer type */
     const char *	device;		/* capture device */
@@ -83,6 +85,7 @@ struct libpcap_me {
     int			timeout;	/* capture timeout */
     char		errbuf[PCAP_ERRBUF_SIZE + 1]; /* error buffer */
     int *               dropped_pkts;   /* ptr to pkt drop counter */
+    unsigned int        libpcap_drops;  /* tracks libpcap drops */
     capbuf_t		capbuf;
 };
 
@@ -143,6 +146,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
 
     me->sp_close = (pcap_close_fn) SYMBOL("pcap_close"); 
     me->sp_dispatch = (pcap_dispatch_fn) SYMBOL("pcap_dispatch");
+    me->sp_stats = (pcap_stats_fn) SYMBOL("pcap_stats");
 
     /* create the capture buffer */
     if (capbuf_init(&me->capbuf, args, NULL, LIBPCAP_MIN_BUFSIZE,
@@ -332,6 +336,7 @@ sniffer_next(sniffer_t * s, int max_pkts,
 	     pkt_t * first_ref_pkt, int * dropped_pkts)
 {
     struct libpcap_me *me = (struct libpcap_me *) s;
+    struct pcap_stat st;
     int count, x;
     
     *dropped_pkts = 0;
@@ -339,11 +344,38 @@ sniffer_next(sniffer_t * s, int max_pkts,
     
     capbuf_begin(&me->capbuf, first_ref_pkt);
     
+    /*
+     * process incoming packets
+     */
     for (count = 0, x = 1; x > 0 && count < max_pkts; count += x) {
 	x = me->sp_dispatch(me->pcap, max_pkts, processpkt,
 			   (u_char *) me);
     }
+
+    /*
+     * check if libpcap dropped any pkts 
+     */
+    me->sp_stats(me->pcap, &st);
+    if (me->libpcap_drops != st.ps_drop) {
+        static int suggestion_reported = 0;
+        if (suggestion_reported == 0) {
+            warn("libpcap is dropping packets, libpcap buffers "
+                "should be enlarged\n");
+            #ifdef linux
+            warn("in linux, consider increasing net.core.rmem_max "
+                    "and net.core.rmem_default\n");
+            #endif
+            suggestion_reported = 1;
+        }
+        debug("libpcap reports dropping %d packets\n",
+                st.ps_drop - me->libpcap_drops);
+    }
+    *dropped_pkts += st.ps_drop - me->libpcap_drops;
+    me->libpcap_drops = st.ps_drop;
     
+    /*
+     * done
+     */
     return (x >= 0) ? 0 : -1;
 }
 

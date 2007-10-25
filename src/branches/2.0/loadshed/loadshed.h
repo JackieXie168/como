@@ -40,6 +40,7 @@
 
 typedef struct ls ls_t;
 typedef struct mdl_ls mdl_ls_t;
+typedef struct mdl_pred_hist mdl_pred_hist_t;
 
 struct ls {
     uint64_t pcycles;       /* total predicted cycles */
@@ -52,6 +53,7 @@ struct ls {
     double shed_ewma;       /* EWMA of the shedding phase cycles */
 };
 
+
 struct mdl_ls {
     uint64_t batches;   /* number of batches */
     int obs;            /* number of the current observation */
@@ -63,6 +65,7 @@ struct mdl_ls {
     double tmp_srate;
     double max_srate;
     uhash_t **hash;     /* hash functions used for shedding */
+    double last_pred;   /* last prediction for this module */
 };
 
 #endif /* LOADSHED_H_ */

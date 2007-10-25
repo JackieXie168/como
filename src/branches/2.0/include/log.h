@@ -61,7 +61,7 @@ log_out(LOG_DOMAIN, LOG_LEVEL_NOTICE, args)
 
 #endif
 
-#if defined(LOG_DISABLE) || !defined(DEBUG)
+#if defined(LOG_DISABLE) || !defined(DEBUG) || defined(LOG_DEBUG_DISABLE)
 
 #define debug(args...)  log_last_level = LOG_LEVEL_DEBUG
 
@@ -72,7 +72,7 @@ log_out(LOG_DOMAIN, LOG_LEVEL_DEBUG, args)
 
 #endif
 
-#if defined(LOG_DISABLE) || !defined(DEBUG)
+#if defined(LOG_DISABLE) || !defined(DEBUG) || defined(LOG_DEBUG_DISABLE)
 extern int log_last_level;
 #endif
 

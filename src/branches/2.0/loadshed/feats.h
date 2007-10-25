@@ -34,13 +34,16 @@
 
 #define LS_STRLEN      30
 
-#define NUM_FEATS      54 
-#define NO_BM_FEATS     2   /* number of features that do not need bitmaps
+#define NUM_FEATS      55 
+#define NO_BM_FEATS     3   /* number of features that do not need bitmaps
                                in order to be calculated */
 #define NUM_HASH        5   /* src_ip, dst_ip, ip_proto, src_port, dst_port */
 #define NUM_BITMAPS    13
+#if 0
 #define NUM_KEYS   134190   /* number of keys expected per bitmap.
                                this is equivalent to a size of 2^15 bits */
+#endif
+#define NUM_KEYS 1000
 
 typedef struct feat feat_t;
 typedef struct fextr fextr_t;
