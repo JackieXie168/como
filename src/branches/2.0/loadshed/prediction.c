@@ -31,6 +31,7 @@
 #include "comotypes.h"
 #include "comopriv.h"
 
+#include "lsfunc.h"
 
 /*
  * -- new_vector
@@ -167,7 +168,6 @@ pred_sel(mdl_ls_t *mdl_ls)
     for (i = 0; i < NUM_PREDS; i++) {
         /* Empty the selected predictors array */
         pred->sel[i] = NULL;
-
         /* Calculate the correlation coefficient for the predictor */
         pred->hist[i].corrcoef =
             corrcoef(pred->hist[i].values, pred->resp, NUM_OBS);
@@ -617,13 +617,13 @@ mlr(double **u, double *y, int nsel, int nobs, double *c)
  *
  */
 void
-update_pred_hist(mdl_ls_t *mdl_ls)
+update_pred_hist(mdl_ls_t *mdl_ls, fextr_t *fextr)
 {
     int i;
     prediction_t *pred = &mdl_ls->pred;
 
     for (i = 0; i < NUM_PREDS; i++)
-        pred->hist[i].values[mdl_ls->obs] = mdl_ls->fextr.feats[i].value;
+        pred->hist[i].values[mdl_ls->obs] = fextr->feats[i].value;
 }
 
 
@@ -635,7 +635,7 @@ update_pred_hist(mdl_ls_t *mdl_ls)
  *
  */
 double
-predict(mdl_ls_t *mdl_ls)
+predict(mdl_ls_t *mdl_ls, fextr_t *fextr)
 {
     int i, ii, j, jj;
     prediction_t *pred;
@@ -663,7 +663,7 @@ predict(mdl_ls_t *mdl_ls)
     mlr(m, pred->resp, pred->nsel + 1, NUM_OBS, c);
 
     /* Add new features to the predictor history */
-    update_pred_hist(mdl_ls);
+    update_pred_hist(mdl_ls, fextr);
 
     /* Calculate the prediction */
     pr = c[0];

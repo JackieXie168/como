@@ -30,7 +30,8 @@
 #define _LSFUNC_H
 
 /* feats.c */
-void feat_extr(batch_t *, char *, mdl_t *);
+void feat_extr(batch_t *, fextr_t *, char *, timestamp_t);
+void fextr_init(fextr_t *);
 
 /* loadshed.c */
 void batch_loadshed_pre(batch_t *, como_ca_t *, char *);
@@ -38,12 +39,13 @@ void batch_loadshed_post(batch_t *, como_ca_t *);
 void ls_init_mdl(char *, mdl_ls_t *, char *);
 void ls_init_ca(como_ca_t *);
 void ls_init(void);
-
+void ls_select_start(como_ca_t *);
+void ls_select_end(como_ca_t *);
 
 /* prediction.c */
 void pred_sel(mdl_ls_t *);
-void update_pred_hist(mdl_ls_t *);
-double predict(mdl_ls_t *);
+void update_pred_hist(mdl_ls_t *, fextr_t *);
+double predict(mdl_ls_t *, fextr_t *);
 
 /* ls-profiling.c */
 profiler_t *new_profiler(char *name);

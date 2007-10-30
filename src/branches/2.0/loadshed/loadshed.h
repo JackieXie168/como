@@ -37,27 +37,38 @@
 
 #define PERROR_EWMA_WEIGHT 0.9
 #define SHED_EWMA_WEIGHT   0.9
+#define AVAIL_CYCLES_EWMA  0.9
+
+#define LS_PHASE_LEARNING  1
+#define LS_PHASE_NORMAL    2
 
 typedef struct ls ls_t;
 typedef struct mdl_ls mdl_ls_t;
 typedef struct mdl_pred_hist mdl_pred_hist_t;
+typedef struct ewma_struct ewma_t;
+
+struct ewma_struct {
+    double value;
+    char initialized;
+};
 
 struct ls {
     uint64_t pcycles;       /* total predicted cycles */
     uint64_t rcycles;       /* total real cycles */
     double srate;           /* global shedding rate */
-    double perror_ewma;     /* EWMA of the prediction error */
+    ewma_t perror_ewma;     /* EWMA of the prediction error */
     profiler_t *ca_oh_prof; /* capture process overhead profiler */
     profiler_t *shed_prof;  /* shedding phase profiler */
+    profiler_t *select_prof;/* measures select() calls */
+    uint64_t cumm_sel_cycle;/* sums all cycles from select_prof */
     unsigned int cpufreq;   /* CPU frequency */
-    double shed_ewma;       /* EWMA of the shedding phase cycles */
+    ewma_t shed_ewma;       /* EWMA of the shedding phase cycles */
+    ewma_t avail_cy_ewma;   /* EWMA of the available cycles */
 };
-
 
 struct mdl_ls {
     uint64_t batches;   /* number of batches */
     int obs;            /* number of the current observation */
-    fextr_t fextr;      /* feature extraction info */
     prediction_t pred;  /* prediction info */
     profiler_t *prof;   /* module profiler */
     int shed_method;    /* method desired for load shedding */
@@ -66,6 +77,8 @@ struct mdl_ls {
     double max_srate;
     uhash_t **hash;     /* hash functions used for shedding */
     double last_pred;   /* last prediction for this module */
+
+    int phase;              /* phase of the LS algorithm */
 };
 
 #endif /* LOADSHED_H_ */
