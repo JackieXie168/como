@@ -55,9 +55,7 @@ multiple pattern search
         . Improve the shedding rate calculation by adding an EWMA of the
           prediction error and an EWMA of the cycles consumed by the
           second feature extraction phase
-        . take into account that CoMo may not always run at the highest
-          priority
-        . manage context switches and CPU cycles of the export process.
+        . Count lightweight feature per-module instead of globally when possible
 
 
 * Bugs

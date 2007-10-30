@@ -40,6 +40,8 @@
 #endif
 #include <sched.h>
 
+#define LOG_DEBUG_DISABLE
+#define LOG_DISABLE
 #define LOG_DOMAIN "LS"
 #include "como.h"
 #include "comopriv.h"
@@ -55,13 +57,17 @@
  * data in a time series
  *
  */
-static void
-ewma(double factor, double *last_value, double curr_value)
+static double
+ewma(double factor, ewma_t *e, double curr_value)
 {
-    if (*last_value == 0)
-        *last_value = curr_value;
+    if (e->initialized == 0) {
+        e->value = curr_value;
+        e->initialized = 1;
+    }
     else
-        *last_value = ((1.0 - factor) * (*last_value)) + (factor * curr_value);
+        e->value = (factor * e->value) + ((1 - factor) * curr_value);
+
+    return e->value;
 }
 
 
@@ -80,12 +86,12 @@ compute_srate(uint64_t avail_cycles, uint64_t pred_cycles,
 
     srate = (pred_cycles == 0) ?
         1 : MAX(0, (double)avail_cycles - shed_ewma) /
-            ((double)pred_cycles * (1 + perror_ewma));
+            ((double)pred_cycles * (1 + (perror_ewma-perror_ewma)));
 
     if (srate > 1)
         srate = 1;
-
-    debug("srate = %g\n", srate);
+    else if (srate < 0)
+        srate = 0;
 
     return srate;
 }
@@ -164,17 +170,21 @@ get_avail_cycles(como_ca_t *como_ca)
 {
     int64_t avail_cycles;
     int64_t ca_oh_cycles;
+    int64_t mdl_cycles;
     int i;
 
     end_profiler(como_ca->ls.ca_oh_prof);
 
     ca_oh_cycles = como_ca->ls.ca_oh_prof->tsc_cycles->value;
+    ca_oh_cycles -= como_ca->ls.cumm_sel_cycle;
 
+    mdl_cycles = 0;
     for (i = 0; i < como_ca->mdls->len; i++) {
         mdl_t *mdl = array_at(como_ca->mdls, mdl_t *, i);
         mdl_icapture_t *ic = mdl_get_icapture(mdl);
-        ca_oh_cycles -= ic->ls.prof->tsc_cycles->value;
+        mdl_cycles += ic->ls.prof->tsc_cycles->value;
     }
+    ca_oh_cycles -= mdl_cycles;
 
     avail_cycles = ((double)como_ca->timebin / (double)1000000 *
                    (double)como_ca->ls.cpufreq) - (double)ca_oh_cycles;
@@ -182,8 +192,20 @@ get_avail_cycles(como_ca_t *como_ca)
     if (avail_cycles < 0)
         avail_cycles = 0;
 
+    /*
+     * smooth the avail_cycles
+     */
+    ewma(AVAIL_CYCLES_EWMA, &como_ca->ls.avail_cy_ewma, avail_cycles);
+
+    log_global_ls_values_pre1(como_ca->ls.ca_oh_prof->tsc_cycles->value,
+            como_ca->ls.cumm_sel_cycle, mdl_cycles, como_ca->ls.avail_cy_ewma.value,
+            avail_cycles);
+
+    avail_cycles = como_ca->ls.avail_cy_ewma.value;
+
     debug("avail_cycles = %llu, ca_oh = %llu\n", avail_cycles, ca_oh_cycles);
 
+    como_ca->ls.cumm_sel_cycle = 0;
     reset_profiler(como_ca->ls.ca_oh_prof);
     start_profiler(como_ca->ls.ca_oh_prof);
 
@@ -333,55 +355,53 @@ shed_load(batch_t *batch, char *which, mdl_t *mdl)
 void
 batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
 {
+    static fextr_t fextr;
+    static int fextr_inited = 0;
     array_t *mdls;
     int idx;
     mdl_icapture_t *ic;
     uint64_t avail_cycles;
     char *start_which = which;
-#ifdef DEBUG
-    profiler_t *fextr_prof;
 
-    fextr_prof = new_profiler("fextr");
-    reset_profiler(fextr_prof);
-    start_profiler(fextr_prof);
-#endif
+    if (fextr_inited == 0) {
+        fextr_inited = 1;
+        fextr_init(&fextr);
+    }
 
     como_ca->ls.pcycles = 0;
     mdls = como_ca->mdls;
+
+    feat_extr(batch, &fextr, NULL, TIME2TS(1, 0));
 
     for (idx = 0; idx < mdls->len; idx++) {
 	mdl_t *mdl = array_at(mdls, mdl_t *, idx);
         ic = mdl_get_icapture(mdl);
         double pred;
 
-        feat_extr(batch, which, mdl);
-
-        if (ic->ls.batches < NUM_OBS) {
-            /* Not enough history acquired yet to attempt the prediction */
-            update_pred_hist(&ic->ls);
-            which += batch->count;
-            continue;
+        if (ic->ls.batches < NUM_OBS)
+            pred = 0;
+        else {
+            pred_sel(&ic->ls);
+            pred = predict(&ic->ls, &fextr);
         }
 
-        pred_sel(&ic->ls);
-
-        pred = predict(&ic->ls);
         como_ca->ls.pcycles += pred;
         ic->ls.last_pred = pred;
 
+        update_pred_hist(&ic->ls, &fextr);
+
 	which += batch->count;  /* next module, new list of packets */
     }
-
-#ifdef DEBUG
-    end_profiler(fextr_prof);
-    debug("feature extraction takes %llu cycles\n", fextr_prof->tsc_cycles->value);
-#endif
 
     avail_cycles = get_avail_cycles(como_ca);
 
     como_ca->ls.srate =
         compute_srate(avail_cycles, como_ca->ls.pcycles,
-                      como_ca->ls.perror_ewma, como_ca->ls.shed_ewma);
+                      como_ca->ls.perror_ewma.value, como_ca->ls.shed_ewma.value);
+
+    debug("global srate = %f\n", como_ca->ls.srate);
+
+    log_global_ls_values_pre2(como_ca->ls.srate, como_ca->ls.shed_ewma.value);
 
     start_profiler(como_ca->ls.shed_prof);
 
@@ -394,20 +414,18 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
 	mdl_t *mdl = array_at(mdls, mdl_t *, idx);
         ic = mdl_get_icapture(mdl);
 
-        if (ic->ls.batches < NUM_OBS) {
+        if (ic->ls.batches >= NUM_OBS)
+            ic->ls.phase = LS_PHASE_NORMAL;
+
+        if (ic->ls.phase == LS_PHASE_LEARNING) {
             /* Not enough history acquired yet to try to shed load */
             which += batch->count;
             continue;
         }
 
         nshed = shed_load(batch, which, mdl);
-
-        debug("module %s, %d pkts shed\n", mdl->name, nshed);
-
-        feat_extr(batch, which, mdl);
-
-        update_pred_hist(&ic->ls);
-
+        debug("module %s, %d pkts out of %d shed (srate = %f)\n", mdl->name,
+                nshed, batch->count, ic->ls.srate);
         which += batch->count;  /* next module, new list of packets */
     }
 
@@ -441,19 +459,38 @@ batch_loadshed_post(UNUSED batch_t *batch, como_ca_t *como_ca)
     for (idx = 0; idx < mdls->len; idx++) {
 	mdl_t *mdl = array_at(mdls, mdl_t *, idx);
         ic = mdl_get_icapture(mdl);
-        /* Update response variable history */
-        ic->ls.pred.resp[ic->ls.obs] = ic->ls.prof->tsc_cycles->value;
-        como_ca->ls.rcycles += ic->ls.pred.resp[ic->ls.obs];
-        ic->ls.obs = ((ic->ls.obs + 1) % NUM_OBS);
-        ic->ls.batches++;
+        
+        if (ic->ls.srate > 0) {
+            double final_cycles, scaled_cycles;
+
+            /* Update response variable history */
+            final_cycles = ic->ls.prof->tsc_cycles->value;
+
+            if (ic->ls.phase == LS_PHASE_LEARNING)
+                scaled_cycles = final_cycles;
+            else
+                scaled_cycles = final_cycles / ic->ls.srate;
+
+            ic->ls.pred.resp[ic->ls.obs] = scaled_cycles;
+            warn("%s spent %f (%f cycles, pred %f, srate %f), fed %f\n",
+                    mdl->name, final_cycles / ic->ls.last_pred, final_cycles,
+                    ic->ls.last_pred, ic->ls.srate, scaled_cycles);
+
+            como_ca->ls.rcycles += final_cycles;
+            ic->ls.obs = ((ic->ls.obs + 1) % NUM_OBS);
+            ic->ls.batches++;
+        }
         debug("module %s, %llu batches processed\n", mdl->name,
               ic->ls.batches);
 
         log_prederr_line(batch, ic, idx);
     }
 
-    pred_error = fabs(1 - (double)como_ca->ls.pcycles * como_ca->ls.srate /
-                  (double)como_ca->ls.rcycles);
+    if (como_ca->ls.srate == 0)
+        pred_error = 0;
+    else
+        pred_error = fabs(1 - (double)como_ca->ls.pcycles * como_ca->ls.srate /
+                (double)como_ca->ls.rcycles);
 
     ewma(PERROR_EWMA_WEIGHT, &como_ca->ls.perror_ewma, pred_error);
 
@@ -466,12 +503,27 @@ batch_loadshed_post(UNUSED batch_t *batch, como_ca_t *como_ca)
     debug("shedding phase ewma = %g\n", como_ca->ls.shed_ewma);
 }
 
+/*
+ * -- ls_select_start, ls_select_end
+ *
+ * To be called before and after the call to select() in capture.
+ * If select blocks, it is because it still does not have enough
+ * packets to capture, so we don't count the cycles. If it does
+ * not block, we assume it will take a negligible amount of cycles.
+ *
+ */
+void
+ls_select_start(como_ca_t *como_ca)
+{
+    start_profiler(como_ca->ls.select_prof);
+}
 
-static char * aggr_names[16] = {
-    "pkts", "bytes", "newivl", "sip", "dip", "sip_dip", "snet", "dnet",
-    "snet_dnet", "proto_sport", "proto_dport", "proto_sport_sip",
-    "proto_dport_dip", "proto_sport_dport", "5tuple", "proto"
-};
+void
+ls_select_end(como_ca_t *como_ca)
+{
+    end_profiler(como_ca->ls.select_prof);
+    como_ca->ls.cumm_sel_cycle += como_ca->ls.select_prof->tsc_cycles->value;
+}
 
 
 /*
@@ -484,8 +536,6 @@ void
 ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
 {
     int i;
-    feat_t *feats = mdl_ls->fextr.feats;
-    pred_t *preds = mdl_ls->pred.hist;
 
     /* initialize all to zero */
     bzero(mdl_ls, sizeof(mdl_ls_t));
@@ -509,33 +559,8 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
             mdl_ls->hash[i] = como_malloc(sizeof(uhash_t));
     }
 
-    /* initialize features' and predictors' names */
-    for (i = 0; i < NO_BM_FEATS; i++) {
-        strncpy(feats[i].name, aggr_names[i], LS_STRLEN);
-        strncpy(preds[i].name, aggr_names[i], LS_STRLEN);
-    }
-
-    for (i = NO_BM_FEATS; i < NO_BM_FEATS + NUM_BITMAPS; i++) {
-        strcat(feats[i].name, "u_");
-        strcat(preds[i].name, "u_");
-        strcat(feats[i + NUM_BITMAPS].name, "n_");
-        strcat(preds[i + NUM_BITMAPS].name, "n_");
-        strcat(feats[i + NUM_BITMAPS * 2].name, "br_");
-        strcat(preds[i + NUM_BITMAPS * 2].name, "br_");
-        strcat(feats[i + NUM_BITMAPS * 3].name, "ar_");
-        strcat(preds[i + NUM_BITMAPS * 3].name, "ar_");
-        strncat(feats[i].name, aggr_names[i], LS_STRLEN);
-        strncat(preds[i].name, aggr_names[i], LS_STRLEN);
-        strncat(feats[i + NUM_BITMAPS].name, aggr_names[i], LS_STRLEN);
-        strncat(preds[i + NUM_BITMAPS].name, aggr_names[i], LS_STRLEN);
-        strncat(feats[i + NUM_BITMAPS * 2].name, aggr_names[i], LS_STRLEN);
-        strncat(preds[i + NUM_BITMAPS * 2].name, aggr_names[i], LS_STRLEN);
-        strncat(feats[i + NUM_BITMAPS * 3].name, aggr_names[i], LS_STRLEN);
-        strncat(preds[i + NUM_BITMAPS * 3].name, aggr_names[i], LS_STRLEN);
-    }
-
-    mdl_ls->fextr.bitmaps = NULL;
-    mdl_ls->fextr.hash = NULL;
+    /* set to learning state */
+    mdl_ls->phase = LS_PHASE_LEARNING;
 }
 
 #define CPUINFO_FILE "/proc/cpuinfo"
@@ -658,8 +683,8 @@ ls_init_ca(como_ca_t *como_ca)
     sched_setaffinity(0, sizeof(cpu_set_t), &cs);
 
     /* Initialize some values */
-    como_ca->ls.perror_ewma = 0;
-    como_ca->ls.shed_ewma = 0;
+    como_ca->ls.perror_ewma.initialized = 0;
+    como_ca->ls.shed_ewma.initialized = 0;
 
     /* Increase priority of capture */
     nice(-20);

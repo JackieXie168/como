@@ -41,7 +41,7 @@
 
 #define CAPTURE_SOURCE
 
-#define LOG_DISABLE
+#define LOG_DEBUG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "sniffers.h"
@@ -1714,7 +1714,13 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	if (active_sniff > 0)
 	    event_loop_set_timeout(&como_ca.el, &timeout);
 
+#ifdef LOADSHED
+        ls_select_start(&como_ca);
+#endif
 	n_ready = event_loop_select(&como_ca.el, &r);
+#ifdef LOADSHED
+        ls_select_end(&como_ca);
+#endif
 	if (n_ready < 0)
 	    continue;
 

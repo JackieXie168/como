@@ -30,17 +30,19 @@
 #include "comopriv.h"
 #include "comotypes.h"
 #include "feats.h"
+#include "lsfunc.h"
 
 #include "ls-logging.c"
 
 /*
  * -- feat_extr
  *
- * Extract the traffic features for a module from a batch of packets
+ * Extract the traffic features from a batch of packets to a fextr_t
  *
  */
 void
-feat_extr(batch_t *batch, char *which, mdl_t *mdl)
+feat_extr(batch_t *batch, fextr_t *fextr, UNUSED char *which,
+        timestamp_t flush_ivl)
 {
     static bitmap_t *bitmaps[NUM_BITMAPS]; /* per-batch bitmaps */
     static int initialized = 0;
@@ -48,15 +50,10 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
     pkt_t **pktptr;
     int i, c, l, j;
     timestamp_t curr_ivl;
-    mdl_icapture_t *ic;
-    mdl_ls_t *mdl_ls;
-
-    ic = mdl_get_icapture(mdl);
-    mdl_ls = &ic->ls;
 
     /* initialize feature values */
     for (i = 0; i < NUM_FEATS; i++) {
-        mdl_ls->fextr.feats[i].value = 0;
+        fextr->feats[i].value = 0;
     }
 
     /* initialize bitmaps */
@@ -66,33 +63,34 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
             bitmaps[i] = new_bitmap(NUM_KEYS);
     }
 
-    /* initialize module's bitmaps */
-    if (!mdl_ls->fextr.bitmaps) {
-        mdl_ls->fextr.bitmaps = como_calloc(NUM_BITMAPS, sizeof(bitmap_t *));
+    /* initialize bitmaps */
+    if (!fextr->bitmaps) {
+        fextr->bitmaps = como_calloc(NUM_BITMAPS, sizeof(bitmap_t *));
         for (i = 0; i < NUM_BITMAPS; i++)
-            mdl_ls->fextr.bitmaps[i] = new_bitmap(NUM_KEYS);
+            fextr->bitmaps[i] = new_bitmap(NUM_KEYS);
     }
 
     /* initialize hash functions */
-    if (!mdl_ls->fextr.hash) {
-        mdl_ls->fextr.last_ivl = 0;
-        mdl_ls->fextr.hash = como_calloc(NUM_HASH, sizeof(uhash_t *));
+    if (!fextr->hash) {
+        fextr->last_ivl = 0;
+        fextr->hash = como_calloc(NUM_HASH, sizeof(uhash_t *));
         for (i = 0; i < NUM_HASH; i++)
-            mdl_ls->fextr.hash[i] = como_malloc(sizeof(uhash_t));
+            fextr->hash[i] = como_malloc(sizeof(uhash_t));
     }
 
     /* calculate current interval */
     pktptr = batch->pkts0;
-    curr_ivl = (*pktptr)->ts - ((*pktptr)->ts % mdl->flush_ivl);
+    curr_ivl = (*pktptr)->ts - ((*pktptr)->ts % flush_ivl);
 
-    if (curr_ivl != mdl_ls->fextr.last_ivl) {
+    if (curr_ivl != fextr->last_ivl) {
         /* new capture interval: clean aggregated bitmaps and
          * generate new hash functions */
-        mdl_ls->fextr.last_ivl = curr_ivl;
+        fextr->feats[2].value = 1;
+        fextr->last_ivl = curr_ivl;
         for (i = 0; i < NUM_HASH; i++)
-            uhash_initialize(mdl_ls->fextr.hash[i]);
+            uhash_initialize(fextr->hash[i]);
         for (i = 0; i < NUM_BITMAPS; i++)
-            reset_bitmap(mdl_ls->fextr.bitmaps[i]);
+            reset_bitmap(fextr->bitmaps[i]);
     }
 
     /* 
@@ -101,8 +99,8 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
      * in a batch
      */
     for (i = 0; i < NUM_BITMAPS; i++)
-        mdl_ls->fextr.feats[NO_BM_FEATS + i + NUM_BITMAPS].value =
-            -estimate_unique_keys(mdl_ls->fextr.bitmaps[i]);
+        fextr->feats[NO_BM_FEATS + i + NUM_BITMAPS].value =
+            -estimate_unique_keys(fextr->bitmaps[i]);
 
     /* reset per-batch bitmaps */
     for (i = 0; i < NUM_BITMAPS; i++)
@@ -116,23 +114,27 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
 	for (i = 0; i < l; i++, pktptr++, c++, which++) {
             pkt_t *pkt = *pktptr;
 
+            /*
+             * we do just 1 fextr for all mdls, therefore 
+             * we don't really care about the filters.
+             */
+            #if 0
             if (*which == 0)
                 continue; /* no interest in this packet */
+            #endif
 
-            mdl_ls->fextr.feats[0].value++;
-            mdl_ls->fextr.feats[1].value += pkt->caplen;
-            if (pkt->ts >= ic->ivl_end)
-                mdl_ls->fextr.feats[2].value = 1;
+            fextr->feats[0].value++;
+            fextr->feats[1].value += pkt->caplen;
 
             if (!isIP)
                 continue; /* no need to calculate the remaining features */
 
             /* calculate hashes for src_ip, dst_ip and proto */
-            h0 = uhash(mdl_ls->fextr.hash[0], (uint8_t *)&IP(src_ip), 4,
+            h0 = uhash(fextr->hash[0], (uint8_t *)&IP(src_ip), 4,
                        UHASH_NEW);
-            h1 = uhash(mdl_ls->fextr.hash[1], (uint8_t *)&IP(dst_ip), 4,
+            h1 = uhash(fextr->hash[1], (uint8_t *)&IP(dst_ip), 4,
                        UHASH_NEW);
-            h2 = uhash(mdl_ls->fextr.hash[2], (uint8_t *)&IP(proto), 1,
+            h2 = uhash(fextr->hash[2], (uint8_t *)&IP(proto), 1,
                        UHASH_NEW);
 
             set_bit(bitmaps[0],      h0); /* src_ip */
@@ -140,9 +142,9 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
             set_bit(bitmaps[2], h1 ^ h0); /* src_ip + dst_ip */
 
             /* calculate hashes for src and dst network */
-            h3 = uhash(mdl_ls->fextr.hash[0], (uint8_t *)&IP(src_ip), 3,
+            h3 = uhash(fextr->hash[0], (uint8_t *)&IP(src_ip), 3,
                        UHASH_NEW);
-            h4 = uhash(mdl_ls->fextr.hash[1], (uint8_t *)&IP(dst_ip), 3,
+            h4 = uhash(fextr->hash[1], (uint8_t *)&IP(dst_ip), 3,
                        UHASH_NEW);
 
             set_bit(bitmaps[ 9], h3); /* src_net */
@@ -152,15 +154,15 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
 
             switch(IP(proto)) {
                 case IPPROTO_TCP:
-                    h3 = uhash(mdl_ls->fextr.hash[3],
+                    h3 = uhash(fextr->hash[3],
                                (uint8_t *)&TCP(src_port), 2, UHASH_NEW);
-                    h4 = uhash(mdl_ls->fextr.hash[4],
+                    h4 = uhash(fextr->hash[4],
                                (uint8_t *)&TCP(dst_port), 2, UHASH_NEW);
                     break;
                 case IPPROTO_UDP:
-                    h3 = uhash(mdl_ls->fextr.hash[3],
+                    h3 = uhash(fextr->hash[3],
                                (uint8_t *)&UDP(src_port), 2, UHASH_NEW);
-                    h4 = uhash(mdl_ls->fextr.hash[4],
+                    h4 = uhash(fextr->hash[4],
                                (uint8_t *)&UDP(dst_port), 2, UHASH_NEW);
                     break;
                 default:
@@ -178,26 +180,88 @@ feat_extr(batch_t *batch, char *which, mdl_t *mdl)
 
     /* Update aggregated bitmaps */
     for (j = 0; j < NUM_BITMAPS; j++)
-        or_bitmaps(mdl_ls->fextr.bitmaps[j], bitmaps[j]);
+        or_bitmaps(fextr->bitmaps[j], bitmaps[j]);
 
 #if NUM_FEATS != NO_BM_FEATS + NUM_BITMAPS * 4
 #error NUM_FEATS inconsistent with NUM_BITMAPS, need to fix that
 #endif
 
-    /* Update module's features */
+    /* Update features */
     for (j = 0; j < NUM_BITMAPS; j++) {
-        mdl_ls->fextr.feats[NO_BM_FEATS + j].value =
+        fextr->feats[NO_BM_FEATS + j].value =
             estimate_unique_keys(bitmaps[j]); /* unique */
-        mdl_ls->fextr.feats[NO_BM_FEATS + j + NUM_BITMAPS].value +=
-            estimate_unique_keys(mdl_ls->fextr.bitmaps[j]); /* new */
+        fextr->feats[NO_BM_FEATS + j + NUM_BITMAPS].value +=
+            estimate_unique_keys(fextr->bitmaps[j]); /* new */
         /* batch repeated */
-        mdl_ls->fextr.feats[NO_BM_FEATS + j + 2 * NUM_BITMAPS].value =
-            batch->count - mdl_ls->fextr.feats[NO_BM_FEATS + j].value;
+        fextr->feats[NO_BM_FEATS + j + 2 * NUM_BITMAPS].value =
+            batch->count - fextr->feats[NO_BM_FEATS + j].value;
         /* aggregated repeated */
-        mdl_ls->fextr.feats[NO_BM_FEATS + j + 3 * NUM_BITMAPS].value =
+        fextr->feats[NO_BM_FEATS + j + 3 * NUM_BITMAPS].value =
             batch->count -
-            mdl_ls->fextr.feats[NO_BM_FEATS + j + NUM_BITMAPS].value;
+            fextr->feats[NO_BM_FEATS + j + NUM_BITMAPS].value;
     }
 
-    log_feats(mdl, mdl_ls->fextr.feats);
+    log_feats(fextr->feats);
 }
+
+#if 0 /* this will allow us to run mdls with different ivls */
+/*
+ * -- feat_extr_update
+ *
+ * Write to a fextr_t features that are extracted per module,
+ * without overwriting the other values.
+ *
+ */
+void
+feat_extr_update(batch_t *batch, fextr_t *fextr, UNUSED char *which,
+        mdl_t *mdl)
+{
+    pkt_t *pkt = batch->pkts0[0];
+    mdl_icapture_t *ic = mdl_get_icapture(mdl);
+
+    if (pkt->ts >= ic->ivl_end)
+        fextr->feats[2].value = 1;
+    else
+        fextr->feats[2].value = 0;
+}
+#endif
+
+
+static char * aggr_names[16] = {
+    "pkts", "bytes", "newivl", "sip", "dip", "sip_dip", "snet", "dnet",
+    "snet_dnet", "proto_sport", "proto_dport", "proto_sport_sip",
+    "proto_dport_dip", "proto_sport_dport", "5tuple", "proto"
+};
+
+/*
+ * -- init_fextr
+ *
+ * Initializes a fextr_t.
+ */
+void
+fextr_init(fextr_t *fextr)
+{
+    feat_t *feats = fextr->feats;
+    int i;
+
+    bzero(fextr, sizeof(fextr));
+
+    /* initialize features' and predictors' names */
+    for (i = 0; i < NO_BM_FEATS; i++)
+        strncpy(feats[i].name, aggr_names[i], LS_STRLEN);
+
+    for (i = NO_BM_FEATS; i < NO_BM_FEATS + NUM_BITMAPS; i++) {
+        strcat(feats[i].name, "u_");
+        strcat(feats[i + NUM_BITMAPS].name, "n_");
+        strcat(feats[i + NUM_BITMAPS * 2].name, "br_");
+        strcat(feats[i + NUM_BITMAPS * 3].name, "ar_");
+        strncat(feats[i].name, aggr_names[i], LS_STRLEN);
+        strncat(feats[i + NUM_BITMAPS].name, aggr_names[i], LS_STRLEN);
+        strncat(feats[i + NUM_BITMAPS * 2].name, aggr_names[i], LS_STRLEN);
+        strncat(feats[i + NUM_BITMAPS * 3].name, aggr_names[i], LS_STRLEN);
+    }
+
+    fextr->bitmaps = NULL;
+    fextr->hash = NULL;
+}
+

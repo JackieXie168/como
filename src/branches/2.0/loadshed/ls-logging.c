@@ -36,12 +36,21 @@
 #define log_prederr_start(x)
 #define log_prederr_line(x, y, z)
 #define log_prederr_end()
-#define log_feats(x, y)
+#define log_global_ls_values_pre1(x)
+#define log_global_ls_values_pre2(x)
+#define log_global_ls_values_post(x)
+#define log_feats(x)
 #else
 
 #include <math.h>
 
+#define PREDERR_FILE "/tmp/como_prederr.log"
+#define FEATS_FILE "/tmp/como_feats.log"
+#define GLOBAL_FILE "/tmp/como_lsglobals.log"
+
 static FILE *prederr_f = NULL;
+static FILE *feats_f = NULL;
+static FILE *global_f = NULL;
 
 static void UNUSED
 log_prederr_start(array_t *mdls)
@@ -51,15 +60,16 @@ log_prederr_start(array_t *mdls)
     if (prederr_f != NULL)
         return;
 
-    prederr_f = fopen("/tmp/como.log", "w");
+    prederr_f = fopen(PREDERR_FILE, "w");
     if (prederr_f == NULL)
-        error("cannot open /tmp/como_prederr.log for writing\n");
+        error("cannot open " PREDERR_FILE " for writing\n");
 
     for (j = 0; j < mdls->len; j++) {
         mdl_t *mdl = array_at(mdls, mdl_t *, j);
-        fprintf(prederr_f, "%s%s_pred\t%s_actual\t%s_err\t%s_npkts",
-                j == 0 ? "" : "\t",
-                mdl->name, mdl->name, mdl->name, mdl->name);
+        fprintf(prederr_f, "%s%s_pred\t%s_actual\t%s_actual_scaled"
+                "\t%s_err\t%s_npkts\t%s_srate", j == 0 ? "" : "\t",
+                mdl->name, mdl->name, mdl->name, mdl->name, mdl->name,
+                mdl->name);
     }
     fprintf(prederr_f, "\n");
 }
@@ -69,12 +79,16 @@ log_prederr_line(batch_t *batch, mdl_icapture_t *ic, int idx)
 {
     float err = fabs(1 - (double)ic->ls.last_pred * ic->ls.srate /
               (double) ic->ls.prof->tsc_cycles->value);
+    if (ic->ls.srate == 0)
+        err = 0;
 
-    fprintf(prederr_f, "%s%f\t%llu\t%f\t%d", idx == 0 ? "" : "\t",
+    fprintf(prederr_f, "%s%f\t%llu\t%llu\t%f\t%d\t%f", idx == 0 ? "" : "\t",
             (double)ic->ls.last_pred * ic->ls.srate,
             ic->ls.prof->tsc_cycles->value,
+            (uint64_t)((double)ic->ls.prof->tsc_cycles->value / ic->ls.srate),
             err,
-            batch->count);
+            batch->count,
+            ic->ls.srate);
 }
 
 static void UNUSED
@@ -84,10 +98,53 @@ log_prederr_end(void)
 }
 
 static void UNUSED
-log_feats(mdl_t *mdl, feat_t *feats)
+log_global_ls_values_pre1(uint64_t ca_overhead, uint64_t select_cycles,
+    uint64_t mdl_cycles, uint64_t avail_cycles, uint64_t orig_avail_cycles)
 {
-    mdl = NULL;
-    feats = NULL;
+    if (global_f == NULL) { /* open output file and write header */
+        global_f = fopen(GLOBAL_FILE, "w");
+        if (global_f == NULL)
+            error("cannot open " GLOBAL_FILE " for writing\n");
+
+        fprintf(global_f, "ca_overhead\tselect_cycles\tmdl_cycles"
+                "\tavail_cycles\torig_avail_cycles\tsrate\tshed_ewma\n");
+    }
+
+    fprintf(global_f, "%llu\t%llu\t%llu\t%llu\t%llu", ca_overhead, select_cycles,
+            mdl_cycles, avail_cycles, orig_avail_cycles);
+}
+
+static void UNUSED
+log_global_ls_values_pre2(double srate, double shed_ewma)
+{
+    fprintf(global_f, "\t%f\t%f\n", srate, shed_ewma);
+}
+
+static void UNUSED
+log_global_ls_values_post(void)
+{
+
+}
+
+static void UNUSED
+log_feats(feat_t *feats)
+{
+    int i;
+
+    if (feats_f == NULL) { /* open output file and write header */
+        feats_f = fopen(FEATS_FILE, "w");
+        if (feats_f == NULL)
+            error("cannot open " FEATS_FILE " for writing\n");
+
+        for (i = 0; i < NUM_FEATS; i++)
+            fprintf(feats_f, "%s%s", i == 0 ? "" : "\t", feats[i].name);
+        fprintf(feats_f, "\n");
+    }
+
+    /* log fature values */
+    for (i = 0; i < NUM_FEATS; i++)
+        fprintf(feats_f, "%s%f", i == 0 ? "" : "\t", feats[i].value);
+    fprintf(feats_f, "\n");
 }
 
 #endif

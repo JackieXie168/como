@@ -39,11 +39,9 @@
                                in order to be calculated */
 #define NUM_HASH        5   /* src_ip, dst_ip, ip_proto, src_port, dst_port */
 #define NUM_BITMAPS    13
-#if 0
+
 #define NUM_KEYS   134190   /* number of keys expected per bitmap.
                                this is equivalent to a size of 2^15 bits */
-#endif
-#define NUM_KEYS 1000
 
 typedef struct feat feat_t;
 typedef struct fextr fextr_t;

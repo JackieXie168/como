@@ -73,6 +73,9 @@ ca_init_profilers(como_ca_t *como_ca)
 
     como_ca->ls.shed_prof = new_profiler("fextr");
     reset_profiler(como_ca->ls.shed_prof);
+
+    como_ca->ls.select_prof = new_profiler("select");
+    reset_profiler(como_ca->ls.select_prof);
 }
 
 
