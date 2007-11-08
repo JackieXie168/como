@@ -36,8 +36,8 @@
 #define log_prederr_start(x)
 #define log_prederr_line(x, y, z)
 #define log_prederr_end()
-#define log_global_ls_values_pre1(x)
-#define log_global_ls_values_pre2(x)
+#define log_global_ls_values_pre1(a, b, c, d, e)
+#define log_global_ls_values_pre2(a, b)
 #define log_global_ls_values_post(x)
 #define log_feats(x)
 #else
