@@ -63,6 +63,8 @@ typedef struct serializable {
 #define serialize_int16_t(sbuf,x) serialize_type_value(sbuf, x, int16_t)
 #define serialize_int8_t(sbuf,x)  serialize_type_value(sbuf, x, int8_t)
 
+#define serialize_double(sbuf,x)  serialize_type_value(sbuf, x, double)
+
 #define serialize_timestamp_t serialize_uint64_t
 #define serialize_int serialize_int32_t
 
@@ -91,6 +93,8 @@ typedef struct serializable {
 #define deserialize_int16_t(sbuf,x) deserialize_type_value(sbuf, x, int16_t)
 #define deserialize_int8_t(sbuf,x)  deserialize_type_value(sbuf, x, int8_t)
 
+#define deserialize_double(sbuf,x)  deserialize_type_value(sbuf, x, double)
+
 #define deserialize_timestamp_t deserialize_uint64_t
 #define deserialize_int deserialize_int32_t
 
@@ -117,6 +121,8 @@ typedef struct serializable {
 #define sersize_int32_t(x) sersize_type(int32_t)
 #define sersize_int16_t(x) sersize_type(int16_t)
 #define sersize_int8_t(x)  sersize_type(int8_t)
+
+#define sersize_double(x)  sersize_type(double)
 
 #define sersize_timestamp_t sersize_uint64_t
 #define sersize_int sersize_int32_t

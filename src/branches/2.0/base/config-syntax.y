@@ -79,7 +79,8 @@ report_parse_error(void)
 
 %union {
     char *string;
-    int64_t number;
+    int64_t number;  /* integer value */
+    double fpnumber; /* floating point value */
 }
 
 /* Data types and tokens used by the parser */
@@ -89,9 +90,10 @@ report_parse_error(void)
 %token TOK_SOURCE TOK_OUTPUT TOK_FILTER TOK_HASHSIZE TOK_STREAMSIZE TOK_ARGS
 %token TOK_ARGSFILE TOK_ONDEMAND TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
 %token TOK_STORAGEPATH TOK_ASNFILE TOK_SHEDMETHOD TOK_ALIAS TOK_VIRTUAL_NODE
-%token TOK_SOURCE_MODULE
+%token TOK_SOURCE_MODULE TOK_MINSRATE
 %token <string> TOK_STRING
 %token <number> TOK_NUMBER
+%token <fpnumber> TOK_FPNUMBER
 
 %start config
 
@@ -190,6 +192,16 @@ module_keyword:
                                     mdl.shed_method = $2;
                                     #endif
                                 }
+    | TOK_MINSRATE TOK_NUMBER {
+                                    #ifdef LOADSHED
+                                    mdl.minimum_srate = $2;
+                                    #endif
+                              }
+    | TOK_MINSRATE TOK_FPNUMBER {
+                                    #ifdef LOADSHED
+                                    mdl.minimum_srate = $2;
+                                    #endif
+                              }
     /*| TOK_ARGSFILE TOK_STRING (TODO) */
     | TOK_ONDEMAND { mdl.ondemand = 1; }
     | error TOK_NEWLINE { report_parse_error(); }
