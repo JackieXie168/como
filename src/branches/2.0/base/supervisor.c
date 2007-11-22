@@ -390,6 +390,7 @@ como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
     mdl->description = alc_strdup(alc, def->descr);
 #ifdef LOADSHED
     mdl->shed_method = alc_strdup(alc, def->shed_method);
+    mdl->minimum_srate = def->minimum_srate;
 #endif
 
     if (mdl_load(mdl, PRIV_ISUPERVISOR) < 0) {

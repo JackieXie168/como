@@ -102,7 +102,17 @@ virtual-node    { dbg_return(TOK_VIRTUAL_NODE); }
 source-module   { dbg_return(TOK_SOURCE_MODULE); }
 
 shed-method     { dbg_return(TOK_SHEDMETHOD); }
+min_srate       { dbg_return(TOK_MINSRATE); }
 
+{DIGIT}*"."{DIGIT}+ {
+                        yclval.fpnumber = atof(yytext);
+                        dbg_return(TOK_FPNUMBER);
+                    }
+
+{DIGIT}+"."{DIGIT}* {
+                        yclval.fpnumber = atof(yytext);
+                        dbg_return(TOK_FPNUMBER);
+                    }
 {NUMBER}GB      {
                     yclval.number = atoll(yytext) * 1024 * 1024 * 1024;
                     dbg_return(TOK_NUMBER);

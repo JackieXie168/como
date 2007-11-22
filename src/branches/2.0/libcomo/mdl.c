@@ -88,6 +88,7 @@ mdl_serialize(uint8_t ** sbuf, const mdl_t * mdl)
     serialize_string(sbuf, mdl->description);
 #ifdef LOADSHED
     serialize_string(sbuf, mdl->shed_method);
+    serialize_double(sbuf, mdl->minimum_srate);
 #endif
     serialize_string(sbuf, mdl->filter);
     serialize_string(sbuf, mdl->mdlname);
@@ -108,6 +109,7 @@ mdl_sersize(const mdl_t * mdl)
 	 sersize_string(mdl->description) +
 #ifdef LOADSHED
 	 sersize_string(mdl->shed_method) +
+	 sersize_double(mdl->minimum_srate) +
 #endif
 	 sersize_string(mdl->filter) +
 	 sersize_string(mdl->mdlname) +
@@ -131,6 +133,7 @@ mdl_deserialize(uint8_t ** sbuf, mdl_t ** mdl_out, alc_t * alc,
     deserialize_string(sbuf, &mdl->description, alc);
 #ifdef LOADSHED
     deserialize_string(sbuf, &mdl->shed_method, alc);
+    deserialize_double(sbuf, &mdl->minimum_srate);
 #endif
     deserialize_string(sbuf, &mdl->filter, alc);
     deserialize_string(sbuf, &mdl->mdlname, alc);

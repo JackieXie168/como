@@ -245,6 +245,7 @@ struct mdl {
     void *	    config;
 #ifdef LOADSHED
     char *          shed_method;
+    double          minimum_srate;
 #endif
     /* private state */
     mdl_ibase_t *   priv;
@@ -330,6 +331,7 @@ struct _mdl_def {
     char *      descr;
 #ifdef LOADSHED
     char *      shed_method;
+    double      minimum_srate;
 #endif
 
     hash_t *	args;

@@ -96,29 +96,170 @@ compute_srate(uint64_t avail_cycles, uint64_t pred_cycles,
     return srate;
 }
 
+typedef struct _mmfs mmfs_t;
+
+struct _mmfs{
+    int idx;
+    double srate;    /* sampling rate */
+    int64_t pcycles; /* predicion cycles */
+    int frozen;      /* indicates if the module is frozen */
+};
+
+/*
+ * -- sort_mdls_sratebycycles
+ * 
+ */
+static int
+sort_mdls_sratebycycles(const void *a, const void *b)
+{
+    mmfs_t * mmfs_a = (mmfs_t *) a;
+    mmfs_t * mmfs_b = (mmfs_t *) b;
+    double x,y;
+
+    x = (double)mmfs_a->pcycles * mmfs_a->srate;
+    y = (double)mmfs_b->pcycles * mmfs_b->srate;
+
+    if (x < y)
+        return -1;
+    else if (x > y)
+        return 1;
+    else
+        return 0;
+}
+
+/*
+ * -- sort_mdls_srate
+ * 
+ */
+static int
+sort_mdls_srate(const void *a, const void *b)
+{
+    mmfs_t * mmfs_a = (mmfs_t *) a;
+    mmfs_t * mmfs_b = (mmfs_t *) b;
+
+    if (mmfs_a->frozen && !mmfs_b->frozen)
+        return -1;
+    else if (!mmfs_a->frozen && mmfs_b->frozen)
+        return 1;
+    else if (mmfs_a->srate < mmfs_b->srate)
+        return -1;
+    else if (mmfs_a->srate > mmfs_b->srate)
+        return 1;
+    else
+        return 0;
+}
 
 /*
  * -- assign_srates
  *
- * Assign shedding rates to the modules, according to some optimization
- * algorithm. XXX For now, just assign the same shedding rate to all modules.
- *
+ * Computes the shedding rates that needs to be applied to each module in
+ * order to avoid overload and assigns it
  */
 static void
-assign_srates(array_t *mdls, double srate)
+assign_srates(array_t *mdls, double avail_cycles, int64_t total_pred_cycles)
 {
-    int i;
     mdl_icapture_t *ic;
     mdl_ls_t *mdl_ls;
+    mdl_t * mdl;
+    int mdls_len, i, j, idx, shedding_ok;
+    double min_pred_cycles, sampling_rate;
+    mmfs_t * mmfs_vector;
+    
+    mmfs_vector = (mmfs_t *)como_calloc(mdls->len, sizeof(mmfs_t));
+    mdls_len = mdls->len;
+    min_pred_cycles = 0;
 
-    for (i = 0; i < mdls->len; i++) {
-        mdl_t *mdl = array_at(mdls, mdl_t *, i);
+
+    /*
+     * fill the mmfs vector with the initial data.
+     * also count the min cycles required to run
+     * all the modules.
+     */
+    for (i = 0; i < mdls_len; i++) {
+        mdl = array_at(mdls, mdl_t *, i);
         ic = mdl_get_icapture(mdl);
         mdl_ls = &ic->ls;
-        mdl_ls->srate = srate;
-    }
-}
 
+        mmfs_vector[i].idx = i;
+        mmfs_vector[i].srate = mdl->minimum_srate;
+        mmfs_vector[i].pcycles = mdl_ls->pred.pcycles;
+        mmfs_vector[i].frozen = 0;
+
+        min_pred_cycles += (double)mmfs_vector[i].pcycles *
+                                mmfs_vector[i].srate;
+    }
+    
+    /* sort by srate * cycles */
+    qsort(mmfs_vector, mdls_len, sizeof(mmfs_t), sort_mdls_sratebycycles);
+
+    /* Check if we can satisfy the shedding requirements using the
+     * minimum sampling rate for each module. If there is no way to
+     * satisfy the shedding requirements while respecting the minimum
+     * sampling rates, start freezing modules from the top of the list
+     * until we have enough cycles available to execute the rest
+     */
+    shedding_ok = 0;
+    for (i = mdls_len - 1; i >= 0 && !shedding_ok; i--) {
+        if (min_pred_cycles <= avail_cycles)
+            shedding_ok = 1;
+        else { /* discard the module due to lack of cycles */
+            min_pred_cycles -= mmfs_vector[i].srate *
+                                (double)mmfs_vector[i].pcycles;
+            total_pred_cycles -= mmfs_vector[i].pcycles;
+
+            mmfs_vector[i].srate = 0;
+            mmfs_vector[i].frozen = 1;
+        }
+    }
+
+    if (!shedding_ok) {
+        /* Even with all modules frozen, there are not enough resources.
+         * Nothing more to do here... */
+        free(mmfs_vector);
+        return;
+    }
+    
+    /* sort by srate */
+    qsort(mmfs_vector, mdls_len, sizeof(mmfs_t), sort_mdls_srate);
+
+    /* maximize the minimum sampling rate */
+    shedding_ok = 0;
+    for (i = mdls_len - 1; i >= 0 && !shedding_ok; i--) {
+        if (mmfs_vector[i].frozen) /* we are done, frozen mdls ahead */
+            break;
+
+        sampling_rate = avail_cycles / (double)total_pred_cycles;
+
+        if (mmfs_vector[i].srate <= sampling_rate) {
+            /*
+             * the rest of the modules can be run with
+             * sampling_rate, which is higher than their
+             * minimum srate. Assign the srate and finish.
+             */
+            for (j = i; j >= 0; j--) {
+                if (mmfs_vector[j].frozen)
+                    break;
+                mmfs_vector[j].srate = MIN (1, sampling_rate);
+            }
+            shedding_ok = 1;
+        }
+        else { /* the module will be running with its minimum srate */
+            avail_cycles -= mmfs_vector[i].srate * mmfs_vector[i].pcycles;
+            total_pred_cycles -= mmfs_vector[i].pcycles;
+        }
+    }
+
+    /* assign the computed srates to the modules */
+    for (i = 0; i < mdls_len; i++) {
+        idx = mmfs_vector[i].idx;
+        mdl = array_at(mdls, mdl_t *, idx);
+        ic = mdl_get_icapture(mdl);
+        mdl_ls = &ic->ls;
+        mdl_ls->srate = mmfs_vector[i].srate;
+    }
+
+    free(mmfs_vector);
+}
 
 static __inline__ void
 get_cpuid(int flag, uint32_t *output)
@@ -405,7 +546,7 @@ batch_loadshed_pre(batch_t *batch, como_ca_t *como_ca, char *which)
 
     start_profiler(como_ca->ls.shed_prof);
 
-    assign_srates(mdls, como_ca->ls.srate);
+    assign_srates(mdls, avail_cycles, como_ca->ls.pcycles);
 
     which = start_which;
 
@@ -820,7 +961,7 @@ set_irq_affinity(int irq, int aff_mask)
 
     ret = write(fd, buffer, strlen(buffer));
     if (ret < 0)
-        error("could not write to `%s'\n", file);
+        warn("could not write to `%s'\n", file);
 
     close(fd);
     debug("affinity for irq %d set to %s", irq, buffer);
