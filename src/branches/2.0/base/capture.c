@@ -1832,6 +1832,17 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
 	    ppbuf_end(sniff->ppbuf);
 
+            /*
+             * update the first ref pkt if still null. this ensures
+             * that, after sniffers have returned at least one packet,
+             * this pointer is meaningful. batch_create is in charge
+             * of further updates.
+             */
+            if (como_ca.first_ref_pkts[sniff->priv->id] == NULL && 
+                                    ppbuf_get_count(sniff->ppbuf) > 0)
+                como_ca.first_ref_pkts[sniff->priv->id] =
+                    ppbuf_get(sniff->ppbuf);
+
 	    /* disable the sniffer if a problem occurs */
 
             if (res < 0) /* something went wrong, sniffer is to be closed */
