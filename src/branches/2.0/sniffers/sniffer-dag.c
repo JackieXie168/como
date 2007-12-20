@@ -54,6 +54,7 @@ struct dag_me {
     sniffer_t		sniff;		/* common fields, must be the first */
     const char *	device;		/* capture device */
     const char *	args;		/* arguments */
+    uint8_t *		top;		/* pointer to top of stream mem */
     uint8_t *		bottom;		/* pointer to bottom of stream mem */
     capbuf_t		capbuf;
 };
@@ -163,8 +164,18 @@ sniffer_next(sniffer_t * s, int max_pkts,
     struct dag_me *me = (struct dag_me *) s;
     pkt_t *pkt;                 /* CoMo record structure */
     uint8_t *top;           	/* pointer to top of stream buffer */
-    char *base;                 /* current position in stream */
+    uint8_t *base;              /* current position in stream */
+    uint8_t *bottom;
     int npkts;			/* number of pkts processed */
+
+    /* update base pointer using the first_ref_pkt */
+    if (first_ref_pkt != NULL) {
+        me->bottom = (uint8_t *)(first_ref_pkt->payload -
+                (dag_record_size + 2));
+        bottom = me->bottom;
+    }
+    else
+        me->bottom = me->top;
 
     /* read ERF records from stream 0 */
     top = dag_advance_stream(me->sniff.fd, 0, &me->bottom); 
@@ -172,14 +183,22 @@ sniffer_next(sniffer_t * s, int max_pkts,
         return -1; /* errno is set */
 
     /* check if we read something */
-    if (top == me->bottom)
+    if (top == me->bottom) {
+        me->top = top;
         return 0;
+    }
 
-    *dropped_pkts = 0;
+    if (first_ref_pkt != NULL) {
+        if (top < me->top) /* wrapping */
+            base = me->bottom + ((uint32_t)me->top - (uint32_t)bottom);
+        else
+            base = me->top;
+    } else
+        base = me->bottom;
     
+    *dropped_pkts = 0;
     capbuf_begin(&me->capbuf, first_ref_pkt);
     
-    base = (char *) me->bottom;
     npkts = 0;
     while (npkts < max_pkts) { 
 	dag_record_t *rec;          /* DAG record structure */ 
@@ -187,7 +206,8 @@ sniffer_next(sniffer_t * s, int max_pkts,
         int l2type;
         int left;
         
-        left = ((char *) top) - (base);
+        left = top - base;
+        me->top = base;
 
         /* access to packet record */
         rec = (dag_record_t *) base;
@@ -248,7 +268,7 @@ sniffer_next(sniffer_t * s, int max_pkts,
          * copy the packet payload 
          */
 	COMO(caplen) = len;
-	COMO(payload) = base;
+	COMO(payload) = (char *) base;
 
         /* 
          * update layer2 information and offsets of layer 3 and above. 
@@ -262,7 +282,6 @@ sniffer_next(sniffer_t * s, int max_pkts,
         base += len; 
     }
 
-    me->bottom = (uint8_t *) base; 
     return 0;
 }
 
