@@ -41,6 +41,7 @@
 #include <sys/stat.h>   /* mkdir */
 #include <sys/types.h>  /* mkdir */
 
+#define LOG_DEBUG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "query.h"	// XXX query();
@@ -380,8 +381,14 @@ como_node_listen(como_node_t * node)
 static mdl_t *
 como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
 {
+    static int s_mdl_ids = 0;
+
     mdl_isupervisor_t *is;
     mdl_t *mdl = alc_new0(alc, mdl_t);
+
+    mdl->id = s_mdl_ids++;
+    if (mdl->id > MDL_ID_MAX)
+        error("the system currently supports %d mdls\n", MDL_ID_MAX);
 
     mdl->name = alc_strdup(alc, def->name);
     mdl->mdlname = alc_strdup(alc, def->mdlname);

@@ -44,12 +44,16 @@
 #include <signal.h>
 
 /* #define DISABLE_EXPORT */
-#define LOG_DISABLE
+#define LOG_DEBUG_DISABLE
+#define ENABLE_TIMERS
 #include "como.h"
 #include "comopriv.h"
+#include "comotypes.h"
 #include "storage.h"
 #include "ipc.h"
 #include "query.h"
+
+#include "export-logging.c"
 
 typedef struct _como_ex como_ex_t;
 struct _como_ex {
@@ -101,6 +105,8 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 
     ie = mdl_get_iexport(mdl);
     ie->running_state = EX_MDL_STATE_RUNNING;
+    ie->migrable = FALSE;
+    ie->used_mem = 0;
 
     /*
      * open output file
@@ -152,8 +158,12 @@ handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
     void **tuples;
     mdl_t *mdl;
     size_t i;
+    ctimer_t *mdl_timer;
 
     debug("recv'd %d serialized tuples\n", msg->ntuples);
+
+    mdl_timer = new_timer("");
+    start_tsctimer(mdl_timer);
 
     /*
      * locate the module
@@ -191,6 +201,10 @@ handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
     /*
      * we are done
      */
+    end_tsctimer(mdl_timer);
+    ex_log_module_info(mdl, get_last_sample(mdl_timer), msg->ntuples);
+    destroy_timer(mdl_timer);
+
     debug("handle_ca_ex_process_ser_tuples -- tuples processed\n");
 
     return IPC_OK;
@@ -204,9 +218,13 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 {
     mdl_iexport_t *ie;
     mdl_t *mdl;
+    ctimer_t *mdl_timer;
 
     debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n",
             msg->ntuples);
+
+    mdl_timer = new_timer("");
+    start_tsctimer(mdl_timer);
 
     /*
      * locate the module
@@ -239,6 +257,7 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 	assert(i == msg->ntuples);
 
         ie->export(mdl, tuples, msg->ntuples, msg->ivl_start, ie->state);
+
 	/*
 	 * free allocated mem.
 	 */
@@ -250,6 +269,10 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
 	    mdl_store_rec(mdl, t->data);
         }
     }
+
+    end_tsctimer(mdl_timer);
+    ex_log_module_info(mdl, get_last_sample(mdl_timer), msg->ntuples);
+    destroy_timer(mdl_timer);
     #endif
 
     debug("handle_ca_ex_process_shm_tuples -- done, sending reply\n");
@@ -447,7 +470,6 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
     como_ex.use_shmem = (shmemmap != NULL);
     event_loop_add(&como_ex.el, capture_fd);
 
- 
     /* allocate the timers */
     ex_init_timers();
 
@@ -462,7 +484,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
         int i;
         int ipcr;
 
-	start_tsctimer(como_stats->ex_full_timer); 
+	profiler_start_tsctimer(como_stats->ex_full_timer); 
 
         n_ready = event_loop_select(&como_ex.el, &r);
 	if (n_ready < 0) {
@@ -472,7 +494,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 	    error("error in the select (%s)\n", strerror(errno));
 	}
 
-	start_tsctimer(como_stats->ex_loop_timer); 
+	profiler_start_tsctimer(como_stats->ex_loop_timer); 
 
     	for (i = 0; n_ready > 0 && i < como_ex.el.max_fd; i++) {
 	    if (!FD_ISSET(i, &r))
@@ -492,8 +514,8 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 	    n_ready--;
 	}
 
-	end_tsctimer(como_stats->ex_loop_timer); 
-	end_tsctimer(como_stats->ex_full_timer); 
+	profiler_end_tsctimer(como_stats->ex_loop_timer); 
+	profiler_end_tsctimer(como_stats->ex_full_timer); 
 
 	/* store profiling information */
 	/* ex_print_timers(); */

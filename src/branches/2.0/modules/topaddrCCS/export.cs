@@ -47,28 +47,30 @@ namespace CoMo.Modules.topaddrCCS
             TopaddrRecord x = (TopaddrRecord) _x;
             TopaddrRecord y = (TopaddrRecord) _y;
             if (x.bytes > y.bytes)
-                return 1;
-            if (x.bytes < y.bytes)
                 return -1;
+            if (x.bytes < y.bytes)
+                return 1;
             return 0;
         }
     };
 
     public class Export : CoMo.Mdl, CoMo.IExport
     {
-        ulong current_ivl;
+        ulong current_ivl_sec;
         Hashtable table;
         TopaddrConfig cfg;
+        ulong mem_usage;
 
         protected void reset_state()
         {
             table = new Hashtable();
+            mem_usage = 0;
         }
 
         public void init()
         {
             cfg = (TopaddrConfig) config;
-            current_ivl = 0;
+            current_ivl_sec = 0;
             reset_state();
         }
 
@@ -83,7 +85,7 @@ namespace CoMo.Modules.topaddrCCS
 
             int i = 0;
             foreach (TopaddrRecord r in records) { /* store top-N */
-                if (i > cfg.topn)
+                if (i >= cfg.topn)
                     break;
                 store_rec(r);
                 i++;
@@ -101,6 +103,17 @@ namespace CoMo.Modules.topaddrCCS
                 r.pkts = 0;
                 r.ts = ts;
                 table[t.addr] = r;
+
+                /*
+                 * XXX rough estimate!
+                 *
+                 * addr + bytes + pkts + ts
+                 * plus one hashtable entry which consists
+                 * of at least a ptr to next elem and a ptr
+                 * to the elem itself.
+                 */
+                mem_usage += 4 + 8 + 4 + 8;
+                mem_usage += 4 + 4;
             }
 
             r.bytes += t.bytes; /* update entry */
@@ -109,16 +122,21 @@ namespace CoMo.Modules.topaddrCCS
 
         public void export(object[] tuples, ulong ivl_start)
         {
-            if (current_ivl == 0) /* first tuples */
-                current_ivl = ivl_start;
+            uint ivl_start_sec;
+            ivl_start_sec = TS.sec(ivl_start);
+            ivl_start_sec -= ivl_start_sec % cfg.output_ivl;
 
-            if (ivl_start != current_ivl) { /* change ivl */
+            if (current_ivl_sec == 0) /* first tuples */
+                current_ivl_sec = ivl_start_sec;
+
+            if (ivl_start_sec != current_ivl_sec) { /* change ivl */
                 store_info();
                 reset_state();
+                current_ivl_sec = ivl_start_sec;
             }
 
             foreach(TopaddrTuple t in tuples)
-                process_tuple(t, ivl_start);
+                process_tuple(t, TS.from_time(ivl_start_sec, 0));
         }
     }
 }

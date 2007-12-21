@@ -50,6 +50,7 @@ init(mdl_t * self, hash_t * args)
     config = mdl_alloc_config(self, topaddr_config_t);
     config->use_dst = 1; 
     config->meas_ivl = 5;
+    config->output_ivl = 5;
     config->topn = 20;
     config->mask = ~0;
     /* config->last_export = 0;  */
@@ -59,6 +60,12 @@ init(mdl_t * self, hash_t * args)
      */
     if ((val = hash_lookup_string(args, "interval")))
         config->meas_ivl = atoi(val);
+
+    if ((val = hash_lookup_string(args, "output_interval")))
+        config->output_ivl = atoi(val);
+    else
+        config->output_ivl = config->meas_ivl;
+
     if ((val = hash_lookup_string(args, "topn")))
         config->topn = atoi(val);
     if ((val = hash_lookup_string(args, "mask")))

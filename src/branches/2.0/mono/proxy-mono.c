@@ -3,15 +3,20 @@
 
 #include <mono/jit/jit.h>
 #include <mono/metadata/assembly.h>
+#include <mono/metadata/mono-gc.h>
 /*
 #include <mono/metadata/object.h>
 #include <mono/metadata/environment.h>
 #include <mono/metadata/debug-helpers.h>
 */
 
+#define LOG_DEBUG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "storage.h"
+
+
+static MonoDomain *s_monodom;
 
 /*
  * This file provides the C callbacks the core expects from
@@ -31,6 +36,7 @@ typedef struct proxy_mono_state {
     MonoImage *		image;
     MonoObject *	mdl;
     MonoClass *         klass;
+    guint               gchandle;
 
     to_mono_fn		config_to_mono;
     to_mono_fn		tuple_to_mono;
@@ -40,6 +46,7 @@ typedef struct proxy_mono_state {
     /* only for export */
     MonoMethod *        ex_init;
     MonoMethod *        ex_export;
+    MonoClassField *    ex_mem_usage;
 
     /* only for query */
     MonoMethod *        qu_init;
@@ -61,7 +68,7 @@ mdl_store_mono_rec(mdl_t * mdl, MonoArray * data)
     rec = mono_array_addr(data, uint8_t, 0);
     
     /* the timestamp is the first 64-bit integer of the record */
-#if DEBUG
+#if DEBUG_A_LOT
     timestamp_t ts;
     ts = *((timestamp_t *) rec);
     debug("mdl_store_mono_rec: mdl = `%s' ts = %u\n", mdl->name, TS2SEC(ts));
@@ -96,8 +103,8 @@ MonoString *
 mono_inet_ntoa(int addr)
 {
     char buffer[128];
-
     struct in_addr in;
+
     in.s_addr = addr;
     sprintf(buffer, "%s", inet_ntoa(in));
 
@@ -123,6 +130,74 @@ get_to_mono(shobj_t * shobj, const char * type)
     free(funcname);
     return (to_mono_fn) sym;
 }
+
+#define proxy_mono_mem_usage_begin(x)
+
+static inline void
+proxy_mono_mem_usage_end(mdl_t *mdl)
+{
+    proxy_mono_state_t *s;
+    mdl_iexport_t *ie;
+    uint64_t val;
+
+    if (mdl->priv->type != PRIV_IEXPORT)
+        return;
+
+    ie = mdl_get_iexport(mdl);
+    s = ie->state;
+
+    if (s->ex_mem_usage == NULL)
+        val = 0;
+    else
+        mono_field_get_value(s->mdl, s->ex_mem_usage, &val);
+
+    ie->used_mem = val;
+}
+
+#if 0
+/*
+ * -- proxy_mono_mem_usage_begin, proxy_mono_mem_usage_end
+ *
+ * A pair of functions to track the memory usage of a module in Export.
+ * Calls to these functions cannot be nested nor interleaved with
+ * execution of code from other modules.
+ *
+ * Both functions call the garbage collector just in case that some
+ * mem can be free'd - we don't want to count these as mem used
+ * by the module.
+ */
+static int mem_usage_tracker = -1;
+
+static inline void
+proxy_mono_mem_usage_begin(UNUSED mdl_t *mdl)
+{
+    if (mdl->priv->type != PRIV_IEXPORT)
+        return;
+
+    if (mem_usage_tracker != -1)
+        error("tracking mem usage of a module failed\n");
+
+    mono_gc_collect(mono_gc_max_generation());
+    mem_usage_tracker = -mono_gc_get_used_size();
+}
+
+static inline void
+proxy_mono_mem_usage_end(mdl_t *mdl)
+{
+    if (mdl->priv->type != PRIV_IEXPORT)
+        return;
+
+    mono_gc_collect(mono_gc_max_generation());
+    mem_usage_tracker += mono_gc_get_used_size();
+
+    mdl_get_iexport(mdl)->used_mem += mem_usage_tracker;
+
+    debug("mem usge for module `%s' is now %d\n", mdl->name,
+            mdl_get_iexport(mdl)->used_mem);
+
+    mem_usage_tracker = -1;
+}
+#endif
 
 static proxy_mono_state_t *
 proxy_mono_load(mdl_t * mdl, char *class_name)
@@ -162,13 +237,8 @@ proxy_mono_load(mdl_t * mdl, char *class_name)
         return NULL;
     }
 
-    s->domain = mono_jit_init(mdl->name);
-    if (s->domain == NULL) {
-	warn("mono_jit_init() failed.\n");
-	free(s);
-	return NULL;
-    }
-    
+    s->domain = s_monodom;
+
     mono_add_internal_call("CoMo.Mdl::mdl_store_rec", mdl_store_mono_rec);
     mono_add_internal_call("CoMo.Mdl::mdl_print", mdl_mono_print);
     mono_add_internal_call("CoMo.IP::to_string", mono_inet_ntoa);
@@ -206,6 +276,7 @@ proxy_mono_load(mdl_t * mdl, char *class_name)
 
     /* construct the object */
     s->mdl = mono_object_new(s->domain, s->klass);
+    s->gchandle = mono_gchandle_new(s->mdl, 1);
     mono_runtime_object_init(s->mdl);
     
 /*
@@ -280,6 +351,26 @@ proxy_mono_load_export(mdl_t *mdl)
 
     s->ex_init = mono_class_get_method_from_name(s->klass, "init", -1);
     s->ex_export = mono_class_get_method_from_name(s->klass, "export",-1);
+    s->ex_mem_usage = mono_class_get_field_from_name(s->klass, "mem_usage");
+
+    if (s->ex_mem_usage != NULL) { /* mem_usage field is present */
+        MonoClass *c;
+        MonoObject *o;
+        const char *cname;
+
+        o = mono_field_get_value_object(s->domain, s->ex_mem_usage, s->mdl);
+        c = mono_object_get_class(o);
+        cname = mono_class_get_name(c);
+
+        if (strcmp(cname, "UInt64")) { /* check for correct field type */
+            warn("mdl `%s': mono export's mem_usage field must be of class "
+                "ulong instead of %s\n", mdl->name, cname);
+
+            s->ex_mem_usage = NULL;
+        }
+    }
+    else /* no mem_usage field */
+        warn("mdl `%s': mono export has no mem_usage field\n", mdl->name);
 
     assert(s->ex_init != NULL);
     assert(s->ex_export != NULL);
@@ -311,6 +402,28 @@ proxy_mono_load_query(mdl_t *mdl)
     return 0;
 }
 
+static void
+proxy_mono_handle_exception(MonoObject *exception)
+{
+    if (exception == NULL)
+        return;
+
+    mono_print_unhandled_exception(exception);
+    error("Uncaught exception `%s' running C# code!\n",
+                mono_class_get_name(mono_object_get_class(exception)));
+}
+
+static MonoObject *
+proxy_mono_runtime_invoke(MonoMethod *m, MonoObject *o, void *arg)
+{
+    MonoObject *exc, *ret;
+
+    ret = mono_runtime_invoke(m, o, arg, &exc);
+    proxy_mono_handle_exception(exc);
+
+    return ret;
+}
+
 void *
 proxy_mono_ex_init(mdl_t * mdl)
 {
@@ -318,14 +431,15 @@ proxy_mono_ex_init(mdl_t * mdl)
     MonoClassField *field;
     MonoObject *config;
 
-
     s = mdl_get_iexport(mdl)->state;
+    proxy_mono_mem_usage_begin(mdl);
 
     /* create an object for the module config */
 
     config = s->config_to_mono(s->domain, s->image, mdl->config);
     if (config == NULL) {
 	warn("config_to_mono() failed.\n");
+        proxy_mono_mem_usage_end(mdl);
 	free(s);
 	return NULL;
     }
@@ -335,9 +449,10 @@ proxy_mono_ex_init(mdl_t * mdl)
 
     /* invoke ex_init() */
     debug("module `%s': ex_init()\n", mdl->name);
-    mono_runtime_invoke(s->ex_init, s->mdl, NULL, NULL);
+    proxy_mono_runtime_invoke(s->ex_init, s->mdl, NULL);
     debug("module `%s': ex_inited\n", mdl->name);
-    
+
+    proxy_mono_mem_usage_end(mdl);
     return s;
 }
 
@@ -377,7 +492,7 @@ proxy_mono_qu_init(mdl_t * mdl, int format_id, UNUSED hash_t * mdl_args)
     args[1] = hash;
 
     /* invoke qu_init() */
-    mono_runtime_invoke(s->qu_init, s->mdl, args, NULL);
+    proxy_mono_runtime_invoke(s->qu_init, s->mdl, args);
     
     return s;
 }
@@ -462,7 +577,7 @@ proxy_mono_get_formats(mdl_t *mdl, char **dflt_format)
 }
 
 void
-proxy_mono_export(UNUSED mdl_t * mdl, void ** tuples, size_t ntuples,
+proxy_mono_export(mdl_t * mdl, void ** tuples, size_t ntuples,
 		  timestamp_t ivl_start, void * state)
 {
     proxy_mono_state_t *s;
@@ -470,24 +585,28 @@ proxy_mono_export(UNUSED mdl_t * mdl, void ** tuples, size_t ntuples,
     size_t i;
     void *args[2];
     
+    proxy_mono_mem_usage_begin(mdl);
+
     s = (proxy_mono_state_t *) state;
     tuples_array = mono_array_new(s->domain, mono_get_object_class(), ntuples);
 
     for (i = 0; i < ntuples; i++) {
 	MonoObject *t;
+        
 	t = s->tuple_to_mono(s->domain, s->image, tuples[i]);
 	if (t == NULL)
 	    error("tuple_to_mono() failed.\n");
 	mono_array_set(tuples_array, MonoObject *, i, t);
     }
-    
+
     args[0] = tuples_array;
     args[1] = &ivl_start;
     
     /* invoke export() */
     debug("module `%s': export()ing\n", mdl->name);
-    mono_runtime_invoke(s->ex_export, s->mdl, args, NULL);
+    proxy_mono_runtime_invoke(s->ex_export, s->mdl, args);
     debug("module `%s': export()ed\n", mdl->name);
+    proxy_mono_mem_usage_end(mdl);
 }
 
 void
@@ -502,7 +621,7 @@ proxy_mono_qu_print_rec(mdl_t * mdl, UNUSED int format_id, void * record,
     args[0] = s->format_monostring;
     args[1] = s->record_to_mono(s->domain, s->image, record);
 
-    mono_runtime_invoke(s->qu_print_rec, s->mdl, args, NULL);
+    proxy_mono_runtime_invoke(s->qu_print_rec, s->mdl, args);
 }
 
 void
@@ -514,7 +633,7 @@ proxy_mono_qu_finish(mdl_t * mdl, UNUSED int format_id, UNUSED void * state)
     s = (proxy_mono_state_t *) mdl_get_iquery(mdl)->state;
     args[0] = s->format_monostring;
 
-    mono_runtime_invoke(s->qu_finish, s->mdl, args, NULL);
+    proxy_mono_runtime_invoke(s->qu_finish, s->mdl, args);
 }
 
 /*
@@ -527,7 +646,12 @@ proxy_mono_init(char *mono_path)
 {
     char *np, *p = getenv("MONO_PATH");
 
+    debug("proxy_mono_init()\n");
     np = como_asprintf("%s%s%s", p ? p : "", p ? ":" : "", mono_path);
     setenv("MONO_PATH", np, 1);
+
+    s_monodom = mono_jit_init("como.dll");
+    if (s_monodom == NULL)
+        error("mono_jit_init() failed.\n");
 }
 

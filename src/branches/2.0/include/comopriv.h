@@ -255,14 +255,18 @@ typedef struct { /* EX tells CA it's running a mdl. ex->ca */
 
 typedef struct { /* tuples in shmem. ca->ex, ex->ca */
     char        mdl_name[MDLNAME_MAX];
+    int         mdl_id;
     tuples_t    tuples;
     size_t      ntuples;
+    size_t      tuple_mem;
     timestamp_t	ivl_start;
 } msg_process_shm_tuples_t;
 
 typedef struct { /* serialized tuples. ca->ex */
     char        mdl_name[MDLNAME_MAX];
+    int         mdl_id;
     size_t      ntuples;
+    size_t      tuple_mem;
     uint8_t     data[0];
     timestamp_t	ivl_start;
 } msg_process_ser_tuples_t;
@@ -379,7 +383,7 @@ struct mdl_icapture {
     tuples_t		tuples;
     alc_t		tuple_alc;
     size_t              tuple_count;
-    
+    int32_t             tuple_mem;      /* non-flushed tuple mem used */
     
     treenode_t  *	filter;
     int			status;
@@ -409,6 +413,9 @@ struct mdl_iexport {
     void *              state;
 
     int                 running_state;
+
+    int                 migrable;
+    int                 used_mem;
 };
 
 struct mdl_iquery {

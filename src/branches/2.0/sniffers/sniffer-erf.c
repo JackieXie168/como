@@ -137,6 +137,7 @@ static sniffer_t *
 sniffer_init(const char * device, const char * args, alc_t *alc)
 {
     struct erf_me *me;
+    unsigned int i;
     
     me = alc_new0(alc, struct erf_me);
 
@@ -176,6 +177,15 @@ sniffer_init(const char * device, const char * args, alc_t *alc)
     if (me->files.gl_pathc == 0) { 
 	warn("no files match %s\n", device);
 	goto error;
+    }
+
+    for (i = 0; i < me->files.gl_pathc; i++) {
+        struct stat st;
+
+        if (stat(me->files.gl_pathv[i], &st) < 0)
+            continue; /* we'll catch the error later. */
+
+        me->sniff.filesize =+ st.st_size;
     }
     
     /* create the capture buffer */
@@ -409,6 +419,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	
 	me->mmaps[me->cur].off += rs;
 	me->mmaps[me->cur].nread += rs;
+        s->curr_pos += rs;
     }
 
     return 0;

@@ -122,6 +122,11 @@ struct sniffer_t {
     sniffer_priv_t *		priv;
     metadesc_t *		outmd;/* offered output metadesc list */
 
+    off_t                       filesize; /* to report progress for traces */
+    off_t                       curr_pos;
+    time_t                      last_report;
+    time_t                      first_access;
+
     timestamp_t                 previous_ts; /* ts of packet before current */
     timestamp_t                 max_ts_skew; /* in the event that the sniffer
                                               * does not return monotonically
