@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2007, Universitat Politecnica de Catalunya
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -30,37 +30,27 @@
  * $Id$
  */
 
-/*
- * This module ranks addresses in terms of bytes.
- * The IP addresses can be destination or sources. 
- */
-#include "como.h"
+#include "module.h"
 
-typedef struct topaddr_tuple topaddr_tuple_t;
-typedef struct topaddr_record topaddr_record_t;
-typedef struct topaddr_config topaddr_config_t;
-
-como_tuple struct topaddr_tuple {
-    timestamp_t ts;     /* timestamp */
-    uint32_t addr;  	/* src/dst address */ 
-    uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
-    uint32_t hash;      /* hash of the addr */
+como_tuple struct autofocus_tuple {
+    uint32_t addr;
+    uint64_t bytes;
 };
 
-como_record struct topaddr_record {
-    timestamp_t ts;     /* timestamp */
-    uint32_t addr;  	/* src/dst address */ 
-    uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
+como_record struct autofocus_record {
+    timestamp_t ts;
+    uint32_t addr;
+    uint8_t mask;
+    uint64_t bytes;
 };
 
-como_config struct topaddr_config {
-    int use_dst; 		/* set if we should use destination address */ 
-    int topn;			/* number of top destinations */
-    uint32_t meas_ivl;		/* interval (secs) */
-    uint32_t output_ivl;        /* interval at export (secs) */
-    uint32_t mask; 		/* privacy mask */
-    //uint32_t last_export;	/* last export time */
+como_config struct autofocus_config {
+    uint32_t meas_ivl;   /* measurement ivl (at capture) */
+    uint32_t output_ivl; /* output ivl at export */
+    uint8_t  use_srcs;
 };
+
+typedef struct autofocus_tuple tuple_t;
+typedef struct autofocus_record record_t;
+typedef struct autofocus_config config_t;
 

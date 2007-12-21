@@ -34,7 +34,7 @@
 #include <string.h>
 #include <assert.h>
 
-#define LOG_DISABLE
+#define LOG_DEBUG_DISABLE
 #define LOG_DOMAIN "MDL"
 #include "como.h"
 #include "comopriv.h"
@@ -86,6 +86,7 @@ mdl_serialize(uint8_t ** sbuf, const mdl_t * mdl)
     serialize_timestamp_t(sbuf, mdl->flush_ivl);
     serialize_string(sbuf, mdl->name);
     serialize_string(sbuf, mdl->description);
+    serialize_int(sbuf, mdl->id);
 #ifdef LOADSHED
     serialize_string(sbuf, mdl->shed_method);
     serialize_double(sbuf, mdl->minimum_srate);
@@ -107,6 +108,7 @@ mdl_sersize(const mdl_t * mdl)
     sz = sizeof(mdl->flush_ivl) +
 	 sersize_string(mdl->name) +
 	 sersize_string(mdl->description) +
+         sersize_int(mdl->id) +
 #ifdef LOADSHED
 	 sersize_string(mdl->shed_method) +
 	 sersize_double(mdl->minimum_srate) +
@@ -131,6 +133,7 @@ mdl_deserialize(uint8_t ** sbuf, mdl_t ** mdl_out, alc_t * alc,
     deserialize_timestamp_t(sbuf, &mdl->flush_ivl);
     deserialize_string(sbuf, &mdl->name, alc);
     deserialize_string(sbuf, &mdl->description, alc);
+    deserialize_int(sbuf, &mdl->id);
 #ifdef LOADSHED
     deserialize_string(sbuf, &mdl->shed_method, alc);
     deserialize_double(sbuf, &mdl->minimum_srate);
@@ -372,6 +375,8 @@ mdl_alc(mdl_t * mdl)
 
 /* CAPTURE */
 
+extern stats_t *como_stats;
+
 void *
 mdl__alloc_tuple(mdl_t * mdl, size_t sz)
 {
@@ -380,9 +385,11 @@ mdl__alloc_tuple(mdl_t * mdl, size_t sz)
 
     ic = mdl_get_icapture(mdl);
     ic->tuple_count++;
+    ic->tuple_mem += sz;
 
     /* allocate sz + space for the tuple collection-specific fields */
     t = alc_calloc(&ic->tuple_alc, 1, sz + sizeof(struct tuple));
+    t->size = sz;
 
     tuples_insert_tail(&ic->tuples, t);
 
@@ -396,9 +403,10 @@ mdl_free_tuple(mdl_t *mdl, void *ptr)
     struct tuple *it;
 
     ic = mdl_get_icapture(mdl);
-    ic->tuple_count--;
-
     it = (struct tuple *) (ptr - sizeof(struct tuple));
+
+    ic->tuple_count--;
+    ic->tuple_mem -= it->size;
 
     assert(it->data == ptr);
     assert(! tuples_empty(&ic->tuples));
@@ -407,7 +415,6 @@ mdl_free_tuple(mdl_t *mdl, void *ptr)
     
     alc_free(&ic->tuple_alc, it);
 }
-
 
 /* EXPORT */
 void

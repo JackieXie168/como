@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2007, Universitat Politecnica de Catalunya
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -30,37 +30,67 @@
  * $Id$
  */
 
-/*
- * This module ranks addresses in terms of bytes.
- * The IP addresses can be destination or sources. 
- */
-#include "como.h"
+/* #define EX_LOGGING */
 
-typedef struct topaddr_tuple topaddr_tuple_t;
-typedef struct topaddr_record topaddr_record_t;
-typedef struct topaddr_config topaddr_config_t;
+#ifndef EX_LOGGING
+#define ex_log_module_info(x, y, z)
+#else
 
-como_tuple struct topaddr_tuple {
-    timestamp_t ts;     /* timestamp */
-    uint32_t addr;  	/* src/dst address */ 
-    uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
-    uint32_t hash;      /* hash of the addr */
-};
+#define EX_LOG_TEMPLATE "/tmp/como/como_ex_%s.txt"
 
-como_record struct topaddr_record {
-    timestamp_t ts;     /* timestamp */
-    uint32_t addr;  	/* src/dst address */ 
-    uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
-};
+extern stats_t *como_stats;
 
-como_config struct topaddr_config {
-    int use_dst; 		/* set if we should use destination address */ 
-    int topn;			/* number of top destinations */
-    uint32_t meas_ivl;		/* interval (secs) */
-    uint32_t output_ivl;        /* interval at export (secs) */
-    uint32_t mask; 		/* privacy mask */
-    //uint32_t last_export;	/* last export time */
-};
+static int ex_log_initialized = 0;
+static hash_t *ex_log_mdl_info;
+
+static void
+ex_log_initialize(void)
+{
+    if (ex_log_initialized)
+        return;
+
+    ex_log_mdl_info = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
+    ex_log_initialized = 1;
+}
+
+static FILE *
+ex_log_get_file(mdl_t *mdl)
+{
+    FILE **val;
+    char *file;
+
+    if ((val = hash_lookup_string(ex_log_mdl_info, mdl->name)))
+        return *val; /* found */
+
+    val = como_malloc(sizeof(FILE *)); /* not found, create new entry */
+
+    file = como_asprintf(EX_LOG_TEMPLATE, mdl->name);
+    *val = fopen(file, "w");
+    if (*val == NULL)
+        error("cannot open output file `%s' for export logging\n", file);
+    free(file);
+
+    hash_insert_string(ex_log_mdl_info, mdl->name, val);
+
+    fprintf(*val, "ex_mem\tqueued_mem\tcycles\tntuples\n");
+
+    return *val;
+
+}
+
+static void
+ex_log_module_info(mdl_t *mdl, uint64_t cycles, int ntuples)
+{
+    FILE *f;
+
+    ex_log_initialize();
+    f = ex_log_get_file(mdl);
+
+    fprintf(f, "%d\t%d\t%llu\t%d\n", mdl_get_iexport(mdl)->used_mem,
+                como_stats->mdl_stats[mdl->id].ex_queue_size,
+                cycles, ntuples);
+    fflush(f);
+}
+
+#endif
 

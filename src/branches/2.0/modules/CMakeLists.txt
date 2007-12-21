@@ -20,6 +20,7 @@ SET(MODULES
 #  topaddr
 #  tophwaddr
 #  topports
+  autofocus
   ethtypesCC
   flowcountCC
   protocolCC

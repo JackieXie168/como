@@ -182,6 +182,7 @@ sniffer_init(const char * device, const char * args, alc_t * alc)
 	goto error;
     }
     me->file_size = trace_stat.st_size;
+    me->sniff.filesize = me->file_size;
 
     /* read the pcap file header */    
     sz = sizeof(struct pcap_file_header);
@@ -556,6 +557,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 	}
 	me->mmaps[me->cur].off += sizeof(pcap_hdr_t) + ph->caplen;
 	me->mmaps[me->cur].nread += sizeof(pcap_hdr_t) + ph->caplen;
+        me->sniff.curr_pos += sizeof(pcap_hdr_t) + ph->caplen;
     }
 
     return 0;

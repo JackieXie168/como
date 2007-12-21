@@ -28,6 +28,7 @@ SET(COMO_SRCS
   sniffers.c
   supervisor.c
   util-process.c
+  util-timers.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
   ${COMO_SOURCE_DIR}/lib/bitmap.c
@@ -43,7 +44,6 @@ IF(ENABLE_PROFILING)
   SET(COMO_SRCS
     ${COMO_SRCS}
     profiling.c
-    util-timers.c
   )
 ENDIF(ENABLE_PROFILING)
 

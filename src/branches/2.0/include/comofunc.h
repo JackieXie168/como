@@ -149,8 +149,6 @@ char * strchomp     (char *str);
 /* 
  * util-timers.c
  */
-#ifdef ENABLE_PROFILING 
-
 ctimer_t * new_timer(char *);
 void destroy_timer(ctimer_t *);
 void reset_timer(ctimer_t *);
@@ -164,20 +162,35 @@ uint64_t get_avg_sample(ctimer_t *);
 uint64_t get_max_sample(ctimer_t *);
 uint64_t get_min_sample(ctimer_t *);
 
-#else 
+#ifdef ENABLE_PROFILING
 
-#define new_timer(x)
-#define destroy_timer(x)
-#define reset_timer(x)
-#define start_tsctimer(x)
-#define end_tsctimer(x);
-#define start_timer(x);
-#define end_timer(x);
-#define print_timer(x)
-#define get_last_sample(x)
-#define get_avg_sample(x)
-#define get_max_sample(x)
-#define get_min_sample(x)
+#define profiler_new_timer          new_timer
+#define profiler_destroy_timer      destroy_timer
+#define profiler_reset_timer        reset_timer
+#define profiler_start_tsctimer     start_tsctimer
+#define profiler_end_tsctimer       end_tsctimer
+#define profiler_start_timer        start_timer
+#define profiler_end_timer          end_timer
+#define profiler_print_timer        print_timer
+#define profiler_get_last_sample    get_last_sample
+#define profiler_get_avg_sample     get_avg_sample
+#define profiler_get_max_sample     get_max_sample
+#define profiler_get_min_sample     get_min_sample
+
+#else
+
+#define profiler_new_timer(x)        NULL
+#define profiler_destroy_timer(x)
+#define profiler_reset_timer(x)
+#define profiler_start_tsctimer(x)
+#define profiler_end_tsctimer(x)
+#define profiler_start_timer(x)
+#define profiler_end_timer(x)
+#define profiler_print_timer(x)
+#define profiler_get_last_sample(x)  0
+#define profiler_get_avg_sample(x)   0
+#define profiler_get_max_sample(x)   0
+#define profiler_get_min_sample(x)   0
 
 #endif
 

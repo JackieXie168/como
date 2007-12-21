@@ -56,6 +56,7 @@ struct tuple;
 #include "tuples.h"
 struct tuple {
     tuples_entry_t	entry;
+    size_t              size;
     uint8_t		data[0]; /* variable size */
 };
 
@@ -70,6 +71,7 @@ typedef struct mdl_ibase	mdl_ibase_t;
 
 typedef struct _timer		ctimer_t; 	/* timers */
 typedef struct _statistics	stats_t; 	/* statistic counters */
+typedef struct _permdl_stats    permdl_stats_t; /* per-mdl stats */ 
 
 typedef struct metadesc	metadesc_t;
 typedef struct metatpl	metatpl_t;
@@ -229,10 +231,17 @@ typedef void   (*qu_print_rec_fn) (mdl_t * self, int format_id, void * record,
 typedef void   (*qu_finish_fn) (mdl_t * self, int format_id, void * state);
 
 /*
- * TODO: qu_replay function
+ * TODO: qu_replay function docs
  *
  */
 typedef void   (*qu_replay_fn) (mdl_t *self, void *record, void *state);
+
+/*
+ * XXX this sets a hard limit on the amount of modules that
+ *     the system can currently ever see. should be removed
+ *     in the future.
+ */
+#define MDL_ID_MAX (1024 - 1)
 
 struct mdl {
     /* public fields */
@@ -243,6 +252,8 @@ struct mdl {
     char *	    mdlname;
     uint64_t        streamsize;
     void *	    config;
+    int             id;
+
 #ifdef LOADSHED
     char *          shed_method;
     double          minimum_srate;
@@ -397,6 +408,9 @@ struct _timer {
     u_int64_t total;            /* sum of all values */
 };
 
+struct _permdl_stats {
+    int32_t ex_queue_size;      /* memory in tuples to be processed in EX */
+};
 
 struct _statistics { 
     struct timeval start; 	/* CoMo start time (with gettimeofday)*/
@@ -418,6 +432,8 @@ struct _statistics {
     uint64_t load_1h[60];	/* bytes load in last 1h */
     uint64_t load_6h[360];	/* bytes load in last 6h */
     uint64_t load_1d[1440];	/* bytes load in last 1d */
+
+    permdl_stats_t mdl_stats[MDL_ID_MAX + 1]; /* per-module stats */
 
     /* we define here a set of timers */
     ctimer_t * ca_full_timer; 	/* capture entire mainloop */

@@ -36,6 +36,7 @@
 #include <unistd.h>		/* read, write etc. */
 #include <string.h>		/* bzero */
 #include <errno.h>		/* errno */
+#include <time.h>               /* time */
 #include <signal.h>
 #include <assert.h>
 
@@ -248,6 +249,12 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             ic->flush(mdl, ic->ivl_state);
 
         /*
+         * we're flushing all the tuples, so the memory now is
+         * in the export queue and not in the module.
+         */
+        como_stats->mdl_stats[mdl->id].ex_queue_size += ic->tuple_mem;
+
+        /*
          * Send the tuples to export
          */
         if (ic->use_shmem) { /* send msg with tuples' location */
@@ -256,6 +263,8 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             msg.tuples = ic->tuples;
             msg.ivl_start = ic->ivl_start;
             msg.ntuples = ic->tuple_count;
+            msg.mdl_id = mdl->id;
+            msg.tuple_mem = ic->tuple_mem;
 
             como_stats->table_queue++;
             ipc_send(ic->export, CA_EX_PROCESS_SHM_TUPLES, &msg, sizeof(msg));
@@ -263,6 +272,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             /* prepare a new empty tuple list */
             tuples_init(&ic->tuples);
             ic->tuple_count = 0;
+            ic->tuple_mem = 0;
 
             /*
              * the tuples are still in the shared memory. this memory
@@ -276,6 +286,10 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             size_t sz, ntuples;
             struct tuple *t;
 
+            /*
+             * XXX never tested
+             */
+
             debug("module `%s': flushing - get sersize\n", mdl->name);
             sz = 0;
             ntuples = 0;
@@ -287,7 +301,9 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             msg = como_malloc(sz + sizeof(msg_process_ser_tuples_t));
             strcpy(msg->mdl_name, mdl->name);
             msg->ntuples = ntuples;
+            msg->tuple_mem = ic->tuple_mem;
             msg->ivl_start = ic->ivl_start;
+            msg->mdl_id = mdl->id;
 
             debug("module `%s': flushing - serializing\n", mdl->name);
             sbuf = msg->data;
@@ -301,7 +317,10 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             debug("module `%s': flushing - sent serialized tuples to EX\n", mdl->name);
 
             ic->tuple_count = 0;
+            ic->tuple_mem = 0;
             debug("module `%s': flushing - capture state cleared\n", mdl->name);
+
+            free(msg);
         }
     }
 
@@ -334,10 +353,10 @@ mdl_batch_process(mdl_t * mdl, batch_t * batch, char * fltmap)
 	    pkt_t *pkt = *pktptr;
 
             ts = pkt->ts;
-	    
+
 	    if (ts >= ic->ivl_end) /* change of ivl or 1st batch */
                 mdl_flush(mdl, ts);
-	    
+
 	    if (*fltmap == 0)
 		continue;	/* no interest in this packet */
 
@@ -373,9 +392,9 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
     debug("calling batch_filter with pkts %p, count %d\n",
 	  *batch->pkts0, batch->count);
 
-    start_tsctimer(como_stats->ca_filter_timer);
+    profiler_start_tsctimer(como_stats->ca_filter_timer);
     which = batch_filter(batch, como_ca);
-    end_tsctimer(como_stats->ca_filter_timer);
+    profiler_end_tsctimer(como_stats->ca_filter_timer);
 
 #ifdef LOADSHED
     /* apply load shedding to the batch
@@ -403,7 +422,7 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
 	debug("sending %d packets to module %s for processing\n",
 	      batch->count, mdl->name);
 
-	start_tsctimer(como_stats->ca_module_timer);
+	profiler_start_tsctimer(como_stats->ca_module_timer);
 #ifdef LOADSHED
         start_profiler(ic->ls.prof);
 #endif
@@ -411,7 +430,7 @@ batch_process(batch_t * batch, como_ca_t *como_ca)
 #ifdef LOADSHED
         end_profiler(ic->ls.prof);
 #endif
-	end_tsctimer(como_stats->ca_module_timer);
+	profiler_end_tsctimer(como_stats->ca_module_timer);
 	which += batch->count;	/* next module, new list of packets */
     }
 
@@ -629,6 +648,7 @@ handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer,
     }
 
     como_stats->table_queue--;
+    como_stats->mdl_stats[msg->mdl_id].ex_queue_size -= msg->tuple_mem;
 
     return IPC_OK;
 }
@@ -1634,12 +1654,15 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		 sniff->cb->name, sniff->device, strerror(errno));
 	    continue;
 	}
+
+        sniff->first_access = time(NULL);
 	sniff->priv->state = SNIFFER_ACTIVE;
 
         msg("sniffer %s (%s) started\n", sniff->cb->name, sniff->device);
 
 	sum_max_pkts += sniff->max_pkts;
         max_sniffer_id = MAX(max_sniffer_id, sniff->priv->id);
+
     }
 
     como_ca.first_ref_pkts = como_calloc(sizeof(void *),
@@ -1694,7 +1717,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	int i;
 	int touched;
 
-	start_tsctimer(como_stats->ca_full_timer);
+	profiler_start_tsctimer(como_stats->ca_full_timer);
 
 	/* add sniffers to the select structure as is necessary */
 
@@ -1726,7 +1749,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
 	/* process any IPC messages that have turned up */
 
-	start_tsctimer(como_stats->ca_loop_timer);
+	profiler_start_tsctimer(como_stats->ca_loop_timer);
 
 	for (i = 0; n_ready > 0 && i < como_ca.el.max_fd; i++) {
 
@@ -1823,10 +1846,10 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
 	    /* capture more packets */
 
-	    start_tsctimer(como_stats->ca_sniff_timer);
+	    profiler_start_tsctimer(como_stats->ca_sniff_timer);
 	    res = sniff->cb->next(sniff, max_no, como_ca.min_flush_ivl,
 				  first_ref_pkt, &drops);
-	    end_tsctimer(como_stats->ca_sniff_timer);
+	    profiler_end_tsctimer(como_stats->ca_sniff_timer);
 
 	    /* tell the ppbuf we're done with capture */
 
@@ -1862,6 +1885,23 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	    debug("received %d packets from sniffer %s\n",
 		  sniff->ppbuf->captured,
 		  sniff->cb->name);
+
+            /* inform user of progress when reading from a trace */
+            if ((sniff->flags & SNIFF_FILE) && sniff->filesize != 0 &&
+                                        sniff->last_report + 30 < time(NULL)) {
+                time_t ts = time(NULL);
+                time_t elapsed = ts - sniff->first_access;
+                double completed =  (double) sniff->curr_pos /
+                    (double) sniff->filesize;
+                int etc = completed == 0 ? 0 : elapsed / completed - elapsed;
+
+                if (etc != 0 && sniff->last_report != 0)
+                    msg("sniffer %s(%s): progress %.2f%%, ETC %dm%02ds\n",
+                            sniff->cb->name, sniff->device, completed * 100,
+                            etc / 60, etc % 60);
+
+                sniff->last_report = ts;
+            }
 	}
 
 	/*
@@ -1880,9 +1920,9 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 #endif
 
 	    /* process the batch */
-	    start_tsctimer(como_stats->ca_pkts_timer);
+	    profiler_start_tsctimer(como_stats->ca_pkts_timer);
 	    como_stats->ts = batch_process(batch, &como_ca);
-	    end_tsctimer(como_stats->ca_pkts_timer);
+	    profiler_end_tsctimer(como_stats->ca_pkts_timer);
 
 	    /* update the stats */
 	    como_stats->pkts += batch->count;
@@ -1949,8 +1989,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		}
             }
 	}
-	end_tsctimer(como_stats->ca_loop_timer);
-	end_tsctimer(como_stats->ca_full_timer);
+	profiler_end_tsctimer(como_stats->ca_loop_timer);
+	profiler_end_tsctimer(como_stats->ca_full_timer);
     }
 }
 
