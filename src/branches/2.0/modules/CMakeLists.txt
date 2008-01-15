@@ -20,7 +20,6 @@ SET(MODULES
 #  topaddr
 #  tophwaddr
 #  topports
-  autofocus
   ethtypesCC
   flowcountCC
   protocolCC
@@ -37,6 +36,7 @@ SET(MODULES
 
 IF(MONO_FOUND)
   SET(MODULES ${MODULES}
+    autofocus
     trafficCCS
     topaddrCCS
   )
