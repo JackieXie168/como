@@ -12,6 +12,7 @@ SET(COMOMDL_SRCS
   printpkt.c
   protoname.c
   bitmap.c
+  pattern_search.c
 )
 
 ADD_LIBRARY(comomdl STATIC ${COMOMDL_SRCS})
