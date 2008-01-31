@@ -59,6 +59,7 @@ cstype_conv_t cstypes[] = {
     { sizeof(uint8_t),  "uint8_t",     "byte",   "mono_get_byte_class" },
     { sizeof(int8_t),   "int8_t",      "sbyte",  "mono_get_sbyte_class" },
     { sizeof(int),      "int",         "int",    "mono_get_int32_class" },
+    { sizeof(double),   "double",      "double", "mono_get_double_class" },
 
     /* char pointers will be interpreted as strings */
     { 0,                "char *",      "string", "mono_get_string_class" },

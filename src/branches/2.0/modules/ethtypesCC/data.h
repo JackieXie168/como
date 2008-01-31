@@ -36,8 +36,8 @@
 
 como_tuple struct et_tuple {
     timestamp_t ts;
-    uint64_t bytes[MAX_TYPES];
-    uint32_t pkts[MAX_TYPES];
+    double bytes[MAX_TYPES];
+    double pkts[MAX_TYPES];
 };
 
 typedef struct et_record_entry rentry_t;

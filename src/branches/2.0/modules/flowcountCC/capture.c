@@ -53,6 +53,7 @@ struct ca_state {
     uhash_t hfunc;
     bitmap_t *bm;
     timestamp_t ts;
+    double srate;
 };
 typedef struct ca_state ca_state_t;
 
@@ -70,7 +71,7 @@ ca_init(mdl_t *self, timestamp_t ts)
 }
 
 void
-capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
+capture(mdl_t *self, pkt_t *pkt, ca_state_t *st, double srate)
 {
     config_t *cf = mdl_get_config(self, config_t);
     uint32_t hash;
@@ -99,6 +100,8 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
     }
 
     set_bit(st->bm, hash);  		/* update bitmap */
+
+    st->srate = srate; /* XXX how do we take into account varying srates? */
 }
 
 void
@@ -108,6 +111,6 @@ flush(mdl_t *self, ca_state_t *st)
     record_t *rec = mdl_alloc_tuple(self, record_t);
 
     rec->ts = st->ts;
-    rec->count = (uint32_t) estimate_unique_keys(st->bm);
+    rec->count = (uint32_t) (estimate_unique_keys(st->bm) / st->srate);
 }
 

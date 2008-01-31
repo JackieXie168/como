@@ -150,12 +150,10 @@ typedef void * (*ca_init_fn) (mdl_t * self, timestamp_t ivl_start);
  * Arguments: - self: the instance of mdl_t representing the module.
  *            - pkt: the packet that has been captured.
  *            - state: the current capture state.
- * Return: - COMO_OK: to continue to process packets for the current capture
- *           state.
- *         - COMO_FLUSH: to flush the current capture state with all the
- *           information collected so far.
+ *            - srate: the current sampling rate.
  */
-typedef void   (*ca_capture_fn)(mdl_t * self, pkt_t * pkt, void * state);
+typedef void   (*ca_capture_fn)(mdl_t * self, pkt_t * pkt, void * state,
+        double srate);
 
 /**
  * ca_flush_fn()

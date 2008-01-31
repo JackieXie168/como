@@ -61,8 +61,8 @@ int cmp_entries(const void *a, const void *b)
 void
 store_entries(mdl_t *self, entry_t *entries, tuple_t *t, uint8_t proto, int top)
 {
-    uint64_t *bytes;
-    uint32_t *pkts;
+    double *bytes;
+    double *pkts;
     uint16_t maxport;
     int i, j, idx;
 

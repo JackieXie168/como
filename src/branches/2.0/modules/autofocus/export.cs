@@ -182,7 +182,7 @@ namespace CoMo.Modules.autofocus
             }
 
             foreach(AutofocusTuple t in tuples)
-                update_tree(t.addr, t.bytes);
+                update_tree(t.addr, (ulong) t.bytes);
         }
     }
 }

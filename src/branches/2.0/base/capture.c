@@ -49,6 +49,7 @@
 #include "ipc.h"
 
 #include "ppbuf.c"
+#include "capture-profiling.c"
 
 #ifdef LOADSHED
 #include "lsfunc.h"
@@ -360,7 +361,11 @@ mdl_batch_process(mdl_t * mdl, batch_t * batch, char * fltmap)
 	    if (*fltmap == 0)
 		continue;	/* no interest in this packet */
 
-	    ic->capture(mdl, pkt, ic->ivl_state);
+            #ifdef LOADSHED
+	    ic->capture(mdl, pkt, ic->ivl_state, ic->ls.srate);
+            #else
+	    ic->capture(mdl, pkt, ic->ivl_state, 1.0);
+            #endif
 	}
     }
 
@@ -1717,6 +1722,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	int i;
 	int touched;
 
+        capture_profiler_notify(CP_START_SNIFFERS);
+
 	profiler_start_tsctimer(como_stats->ca_full_timer);
 
 	/* add sniffers to the select structure as is necessary */
@@ -1733,6 +1740,9 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
             }
         }
 
+        capture_profiler_notify(CP_END_SNIFFERS);
+        capture_profiler_notify(CP_START_SELECT);
+
 	/* wait for messages, sniffers or up to the polling interval */
 	if (active_sniff > 0)
 	    event_loop_set_timeout(&como_ca.el, &timeout);
@@ -1744,6 +1754,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 #ifdef LOADSHED
         ls_select_end(&como_ca);
 #endif
+        capture_profiler_notify(CP_END_SELECT);
+
 	if (n_ready < 0)
 	    continue;
 
@@ -1804,6 +1816,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	 * check sniffers for packet reception (both the ones that use 
 	 * select() and the ones that don't)
 	 */
+        capture_profiler_notify(CP_START_SNIFFERS);
 	sniffer_list_foreach(sniff, sniffers) {
 	    pkt_t *first_ref_pkt = NULL;
 
@@ -1903,11 +1916,17 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
                 sniff->last_report = ts;
             }
 	}
+        capture_profiler_notify(CP_END_SNIFFERS);
 
 	/*
          * try to create a batch using the captured packets
          */
-        if ((batch = batch_create(force_batch, &como_ca))) {
+        capture_profiler_notify(CP_START_BATCH_CREATE);
+        batch = batch_create(force_batch, &como_ca);
+        capture_profiler_notify(CP_END_BATCH_CREATE);
+
+        if (batch != NULL) {
+            capture_profiler_notify(CP_START_PROCESS_BATCH);
 	    if (avg_batch_len == 0)
 		avg_batch_len = batch->count;
 	    else
@@ -1934,6 +1953,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		batch->ref_mask &= ~1LL;
 	    else
 		batch_free(batch);
+
+            capture_profiler_notify(CP_END_PROCESS_BATCH);
 	}
 
 	sniffer_list_foreach(sniff, sniffers) {

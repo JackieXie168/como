@@ -79,11 +79,12 @@ ca_init(mdl_t *self, timestamp_t ivl)
 }
 
 void
-capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
+capture(mdl_t *self, pkt_t *pkt, ca_state_t *st, double srate)
 {
     uint32_t hash, src, dst;
     uint16_t sport, dport;
     uint8_t proto;
+    double bytes, pkts;
     record_t *r;
 
     if (!isIP)
@@ -120,16 +121,19 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 	r->last_ts += 
 	    TIME2TS(H32(NF(duration)) / 1000, (H32(NF(duration))%1000)*1000);
 	r->sampling = H16(NF(sampling));
-	r->bytes += H32(NF(pktcount)) * COMO(len);
-	r->pkts += (uint64_t) H32(NF(pktcount));
+        bytes = H32(NF(pktcount)) * COMO(len);
+	pkts = H32(NF(pktcount));
     } else if (COMO(type) == COMOTYPE_SFLOW) {
     	r->sampling = (uint16_t) H32(SFLOW(sampling_rate));
-	r->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
-	r->pkts += (uint64_t) H32(SFLOW(sampling_rate));
+        bytes = COMO(len) * H32(SFLOW(sampling_rate));
+	pkts = H32(SFLOW(sampling_rate));
     } else {
 	r->sampling = 1;
-	r->bytes += H16(IP(len));
-	r->pkts++;
+        bytes = H16(IP(len));
+	pkts = 1;
     } 
+
+    r->bytes += bytes / srate;
+    r->pkts += pkts / srate;
 }
 

@@ -53,10 +53,10 @@ ca_init(mdl_t *self, timestamp_t ivl)
 }
 
 void
-capture(mdl_t * self, pkt_t *pkt, tuple_t *t)
+capture(mdl_t * self, pkt_t *pkt, tuple_t *t, double srate)
 {
-    uint64_t newbytes = H16(IP(len));
-    uint32_t newpkts = 1;
+    double newbytes = H16(IP(len));
+    double newpkts = 1;
     config_t *config = mdl_get_config(self, config_t);
 
     if (COMO(type) == COMOTYPE_NF) {
@@ -66,6 +66,9 @@ capture(mdl_t * self, pkt_t *pkt, tuple_t *t)
 	newbytes = (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
 	newpkts = H32(SFLOW(sampling_rate));
     } 
+
+    newbytes /= srate;
+    newpkts /= srate;
 
     if (isTCP) {
 	uint16_t sport = H16(TCP(src_port));

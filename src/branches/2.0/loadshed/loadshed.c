@@ -41,7 +41,7 @@
 #include <sched.h>
 
 #define LOG_DEBUG_DISABLE
-#define LOG_DISABLE
+//#define LOG_DISABLE
 #define LOG_DOMAIN "LS"
 #include "como.h"
 #include "comopriv.h"
@@ -613,7 +613,7 @@ batch_loadshed_post(UNUSED batch_t *batch, como_ca_t *como_ca)
                 scaled_cycles = final_cycles / ic->ls.srate;
 
             ic->ls.pred.resp[ic->ls.obs] = scaled_cycles;
-            warn("%s spent %f (%f cycles, pred %f, srate %f), fed %f\n",
+            debug("%s spent %f (%f cycles, pred %f, srate %f), fed %f\n",
                     mdl->name, final_cycles / ic->ls.last_pred, final_cycles,
                     ic->ls.last_pred, ic->ls.srate, scaled_cycles);
 

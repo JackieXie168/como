@@ -52,26 +52,35 @@ ca_init(mdl_t * self, timestamp_t ts)
 }
 
 void
-capture(mdl_t * self, pkt_t * pkt, tuple_t * t)
+capture(mdl_t * self, pkt_t * pkt, tuple_t * t, double srate)
 {
     const config_t *cf = mdl_get_config(self, config_t);
+    double bytes[2], pkts[2];
+
+    bytes[0] = bytes[1] = 0;
+    pkts[0] = pkts[1] = 0;
 
     if (COMO(type) == COMOTYPE_NF) {
 	if (cf->iface == -1 || H16(NF(input)) == cf->iface) {
-	    t->bytes[0] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
-	    t->pkts[0] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+	    bytes[0] = H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
+	    pkts[0] = H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
 	} else if (H16(NF(output)) == cf->iface) { 
-	    t->bytes[1] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
-	    t->pkts[1] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+	    bytes[1] = H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
+	    pkts[1] = H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
 	} 
     } else if (COMO(type) == COMOTYPE_SFLOW) {
-	t->bytes[0] += (uint64_t) COMO(len) * 
+	bytes[0] = (uint64_t) COMO(len) * 
 		      (uint64_t) H32(SFLOW(sampling_rate));
-	t->pkts[0] += H32(SFLOW(sampling_rate));
+	pkts[0] = H32(SFLOW(sampling_rate));
     } else {
-	t->bytes[0] += COMO(len);
-        t->pkts[0]++;
+	bytes[0] = COMO(len);
+        pkts[0] = 1;
     }
+
+    t->bytes[0] += bytes[0] / srate;
+    t->bytes[1] += bytes[1] / srate;
+    t->pkts[0] += pkts[0] / srate;
+    t->pkts[1] += pkts[1] / srate;
 }
 
 

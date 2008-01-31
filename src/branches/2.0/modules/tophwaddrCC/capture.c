@@ -79,11 +79,12 @@ ca_init(mdl_t *self, timestamp_t ivl)
 }
 
 void
-capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
+capture(mdl_t *self, pkt_t *pkt, ca_state_t *st, double srate)
 {
     tophwaddr_tuple_t *t;
     uint32_t hash;
     uint8_t *key;
+    double bytes, pkts;
 
     if (!isIP)
         return;
@@ -116,5 +117,8 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 	t->bytes += H16(IP(len));
 	t->pkts++;
     } 
+
+    t->bytes += bytes / srate;
+    t->pkts += pkts / srate;
 }
 

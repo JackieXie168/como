@@ -44,8 +44,8 @@ como_tuple struct topaddr_tuple {
     timestamp_t ts;     /* timestamp */
     uint32_t addr;  	/* src/dst address */ 
     uint64_t bytes;	/* number of bytes */
-    uint32_t pkts;	/* number of packets */
-    uint32_t hash;      /* hash of the addr */
+    double pkts;	/* number of packets */
+    double hash;	/* hash of the addr */
 };
 
 como_record struct topaddr_record {

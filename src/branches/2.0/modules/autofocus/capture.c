@@ -82,12 +82,13 @@ ca_init(mdl_t *self, timestamp_t ivl)
 }
 
 void
-capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
+capture(mdl_t *self, pkt_t *pkt, ca_state_t *st, double srate)
 {
     uint32_t hash, addr;
     uint8_t proto;
     config_t *config;
     tuple_t *r;
+    double bytes;
 
     if (!isIP)
         return;
@@ -114,10 +115,12 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 
     /* update the tuple */
     if (COMO(type) == COMOTYPE_NF)
-	r->bytes += H32(NF(pktcount)) * COMO(len);
+	bytes = H32(NF(pktcount)) * COMO(len);
     else if (COMO(type) == COMOTYPE_SFLOW)
-	r->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
+	bytes = (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
     else
-	r->bytes += H16(IP(len));
+	bytes = H16(IP(len));
+
+    r->bytes += bytes / srate;
 }
 
