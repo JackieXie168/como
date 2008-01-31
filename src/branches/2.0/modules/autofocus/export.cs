@@ -27,7 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: export.cs 1211 2007-09-26 15:01:49Z jsanjuas $
+ * $Id$
  */
 
 namespace CoMo.Modules.autofocus
