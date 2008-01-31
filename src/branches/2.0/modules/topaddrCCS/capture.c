@@ -78,10 +78,11 @@ ca_init(mdl_t *self, timestamp_t ivl)
 }
 
 void
-capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
+capture(mdl_t *self, pkt_t *pkt, ca_state_t *st, double srate)
 {
     topaddr_tuple_t *t;
     uint32_t key, hash;
+    double bytes, pkts;
 
     if (!isIP)
         return;
@@ -105,14 +106,17 @@ capture(mdl_t *self, pkt_t *pkt, ca_state_t *st)
 
     /* update the entry */
     if (COMO(type) == COMOTYPE_NF) { 
-	t->bytes += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
-	t->pkts += H32(NF(pktcount)) * H16(NF(sampling)); 
+	bytes = H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
+	pkts = H32(NF(pktcount)) * H16(NF(sampling)); 
     } else if (COMO(type) == COMOTYPE_SFLOW) {
-	t->bytes += (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
-	t->pkts += H32(SFLOW(sampling_rate));
+	bytes = (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
+	pkts = H32(SFLOW(sampling_rate));
     } else { 
-	t->bytes += H16(IP(len));
-	t->pkts++;
+	bytes = H16(IP(len));
+	pkts = 1;
     } 
+
+    t->bytes += bytes / srate;
+    t->pkts += pkts / srate;
 }
 

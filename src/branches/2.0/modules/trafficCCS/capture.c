@@ -43,33 +43,59 @@
 #include "como.h"
 #include "data.h"
 
-tuple_t *
+typedef struct traffic_state traffic_state_t;
+struct traffic_state {
+    timestamp_t ts;
+    double      bytes[2];
+    double      pkts[2];
+};
+
+traffic_state_t *
 ca_init(mdl_t * self, timestamp_t ts)
 {
-    tuple_t *t = mdl_alloc_tuple(self, tuple_t);
-    t->ts = ts;
-    return t; /* all state we need is the current tuple */
+    traffic_state_t *st = mdl_malloc(self, sizeof(traffic_state_t));
+    st->ts = ts;
+    bzero(st->bytes, sizeof(st->bytes));
+    bzero(st->pkts, sizeof(st->pkts));
+
+    return st;
 }
 
 void
-capture(mdl_t * self, pkt_t * pkt, tuple_t * t)
+capture(mdl_t * self, pkt_t * pkt, traffic_state_t * st, double srate)
 {
     const config_t *cf = mdl_get_config(self, config_t);
 
     if (COMO(type) == COMOTYPE_NF) {
 	if (cf->iface == -1 || H16(NF(input)) == cf->iface) {
-	    t->bytes[0] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
-	    t->pkts[0] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+	    st->bytes[0] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
+	    st->pkts[0] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
 	} else if (H16(NF(output)) == cf->iface) { 
-	    t->bytes[1] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
-	    t->pkts[1] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
+	    st->bytes[1] += H32(NF(pktcount)) * COMO(len) * H16(NF(sampling));
+	    st->pkts[1] += H32(NF(pktcount)) * (uint32_t) H16(NF(sampling));
 	} 
     } else if (COMO(type) == COMOTYPE_SFLOW) {
-	t->bytes[0] += (uint64_t) COMO(len) * 
+	st->bytes[0] += (uint64_t) COMO(len) * 
 		      (uint64_t) H32(SFLOW(sampling_rate));
-	t->pkts[0] += H32(SFLOW(sampling_rate));
+	st->pkts[0] += H32(SFLOW(sampling_rate));
     } else {
-	t->bytes[0] += COMO(len);
-        t->pkts[0]++;
+	st->bytes[0] += COMO(len);
+        st->pkts[0]++;
     }
 }
+
+void
+flush(mdl_t *self, traffic_state_t *st)
+{
+    /*
+     * just convert the state into a tuple (which has integer types)
+     */
+    tuple_t *t = mdl_alloc_tuple(self, tuple_t);
+
+    t->ts = st->ts;
+    t->bytes[0] = st->bytes[0];
+    t->bytes[1] = st->bytes[1];
+    t->pkts[0] = st->pkts[0];
+    t->pkts[1] = st->pkts[1];
+}
+

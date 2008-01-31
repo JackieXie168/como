@@ -464,6 +464,7 @@ proxy_mono_qu_init(mdl_t * mdl, int format_id, UNUSED hash_t * mdl_args)
     MonoObject *config;
     mdl_iquery_t *iq;
     MonoObject *hash;
+    MonoClass *klass;
     void *args[2];
 
     s = (proxy_mono_state_t *) mdl->priv->proc.qu->state;
@@ -485,7 +486,11 @@ proxy_mono_qu_init(mdl_t * mdl, int format_id, UNUSED hash_t * mdl_args)
                                             iq->formats[format_id].name);
     /* prepare argument: args hash */
     warn("TODO: prepare args hash for query\n");
-    hash = NULL;
+
+    klass = mono_class_from_name(mono_get_corlib(),
+            "System.Collections", "Hashtable");
+    hash = mono_object_new(s->domain, klass);
+    mono_runtime_object_init(hash);
 
     /* prepare argument list */
     args[0] = s->format_monostring;

@@ -36,10 +36,10 @@ como_tuple struct _tuple {
     timestamp_t ts;			/* timestamp of first packet */
     uint16_t maxtcpport;		/* max TCP port used */
     uint16_t maxudpport;		/* max UDP port used */
-    uint64_t tcpbytes[65536];		/* TCP bytes per port number */
-    uint32_t tcppkts[65536];		/* TCP pkts per port number */
-    uint64_t udpbytes[65536];		/* UDP bytes per port number */
-    uint32_t udppkts[65536];		/* UDP pkts per port number */
+    double tcpbytes[65536];		/* TCP bytes per port number */
+    double tcppkts[65536];		/* TCP pkts per port number */
+    double udpbytes[65536];		/* UDP bytes per port number */
+    double udppkts[65536];		/* UDP pkts per port number */
 };
 
 como_record struct record {

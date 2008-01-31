@@ -46,9 +46,10 @@ ca_init(mdl_t *self, timestamp_t ts)
 
 
 void
-capture(mdl_t * self, pkt_t *pkt, tuple_t *t)
+capture(mdl_t * self, pkt_t *pkt, tuple_t *st, double srate)
 {
     config_t *config = mdl_get_config(self, config_t);
+    double pkts, bytes;
     int i;
 
     /* config table lookup. if not found, match last entry */
@@ -58,12 +59,19 @@ capture(mdl_t * self, pkt_t *pkt, tuple_t *t)
 
     /* update record */
     if (COMO(type) == COMOTYPE_SFLOW) {
-	t->bytes[i] += (uint64_t) COMO(len) *
-		       (uint64_t) H32(SFLOW(sampling_rate));
-	t->pkts[i] += H32(SFLOW(sampling_rate));
+	bytes = (uint64_t) COMO(len) * (uint64_t) H32(SFLOW(sampling_rate));
+        pkts = H32(SFLOW(sampling_rate));
     } else {
-	t->bytes[i] += COMO(len);
-	t->pkts[i]++;
+        bytes = COMO(len);
+        pkts = 1;
     }
+
+    /* escalate by sampling rate */
+    bytes /= srate;
+    pkts /= srate;
+    
+    /* update the state */
+    st->bytes[i] += bytes;
+    st->pkts[i] += pkts;
 }
 

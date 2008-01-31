@@ -45,8 +45,8 @@ typedef struct tophwaddr_config tophwaddr_config_t;
 como_tuple struct tophwaddr_tuple {
     timestamp_t ts;             /* timestamp */
     uint8_t addr[HW_ADDR_SIZE]; /* src/dst address */ 
-    uint64_t bytes;	        /* number of bytes */
-    uint32_t pkts;	        /* number of packets */
+    double bytes;	        /* number of bytes */
+    double pkts;	        /* number of packets */
     uint32_t hash;              /* hash of the addr */
 };
 

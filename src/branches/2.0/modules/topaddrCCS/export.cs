@@ -117,7 +117,7 @@ namespace CoMo.Modules.topaddrCCS
             }
 
             r.bytes += t.bytes; /* update entry */
-            r.pkts += t.pkts;
+            r.pkts += (uint) t.pkts;
         }
 
         public void export(object[] tuples, ulong ivl_start)

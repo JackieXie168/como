@@ -129,6 +129,15 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
     sprintf(buffer, "module \"%s\" source \"%s\" filter \"%s\"",
             req->module, mdl_code, req->filter_str);
 
+    hash_iter_init(def->args, &it);
+    while (hash_iter_next(&it)) {
+        strcat(buffer, " args \"");
+        strcat(buffer, hash_iter_get_string_key(&it));
+        strcat(buffer, "\" = \"");
+        strcat(buffer, hash_iter_get_value(&it));
+        strcat(buffer, "\"");
+    }
+
     hash_iter_init(req->args, &it);
     while (hash_iter_next(&it)) {
         strcat(buffer, " args \"");
@@ -137,6 +146,7 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
         strcat(buffer, hash_iter_get_value(&it));
         strcat(buffer, "\"");
     }
+
     strcat(buffer, " end");
     my_argv[i++] = buffer;
 

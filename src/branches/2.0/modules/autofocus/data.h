@@ -34,7 +34,7 @@
 
 como_tuple struct autofocus_tuple {
     uint32_t addr;
-    uint64_t bytes;
+    double bytes;
 };
 
 como_record struct autofocus_record {

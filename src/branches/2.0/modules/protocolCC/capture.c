@@ -50,7 +50,7 @@ ca_init(mdl_t *self, timestamp_t ts)
 }
 
 void
-capture(mdl_t *self, pkt_t *pkt, record_t *x)
+capture(mdl_t *self, pkt_t *pkt, record_t *x, double srate)
 {
     if (COMO(type) == COMOTYPE_NF) {
         x->bytes[IP(proto)] += H32(NF(pktcount))*COMO(len)*H16(NF(sampling));

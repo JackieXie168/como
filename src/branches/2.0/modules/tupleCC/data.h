@@ -42,8 +42,8 @@ como_tuple como_record struct record {
     uint8_t proto;
     uint8_t padding;
     uint16_t sampling;
-    uint64_t bytes;
-    uint64_t pkts;
+    double bytes;
+    double pkts;
 };
 
 como_config struct config {

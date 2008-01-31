@@ -50,7 +50,7 @@ ca_init(mdl_t *self, timestamp_t ts)
 }
 
 void
-capture(mdl_t *self, pkt_t *pkt, void *state)
+capture(mdl_t *self, pkt_t *pkt, void *state, double srate)
 {
     config_t *cfg = mdl_get_config(self, config_t);
     record_t *r = mdl_alloc_tuple(self, record_t);
