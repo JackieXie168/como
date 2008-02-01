@@ -96,8 +96,6 @@ ex_init(mdl_t *self)
     return NULL;
 }
 
-/* XXX this module needs explicit store/load! */
-
 void
 export(mdl_t *self, tuple_t **tuples, size_t ntuples, timestamp_t ivl_start,
         void *state)
@@ -120,6 +118,8 @@ export(mdl_t *self, tuple_t **tuples, size_t ntuples, timestamp_t ivl_start,
             r->entry[j].pkts = tuples[i]->pkts[j];
         }
         mdl_store_rec(self, r);
+
+        free(r);
     }
 }
 

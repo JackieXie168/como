@@ -77,25 +77,27 @@ init(mdl_t * self, hash_t *args)
     if ((val = hash_lookup_string(args, "ethtypes"))) {
         char *n;
 
-        /* ethtypes=0x1 asdf,0x2 fdsa, ... */
+        /* "ethtypes" = "a=0x1,b=0x2,... */
         n = strtok(val, ",");
         while (n != NULL && config->types_count < MAX_TYPES - 1) {
-            int num = strtol(val, NULL, 0);
-            char *name = strchr(val, ' ');
-            char *endname = strchr(name, ',');
+            char *endname;
+            int num;
 
-            while (name != NULL && isspace(*name))
-                name++;
-            if (endname != NULL)
-                *endname = '\0';
-            
-            if (name == NULL) {
-                warn("module ethtypes: error parsing `%s'\n", name);
+            endname = strrchr(n, '=');
+
+            if (endname == NULL) {
+                warn("module ethtypes: error parsing definition `%s'\n", n);
                 goto next;
             }
 
+            while (n != NULL && isspace(*n))
+                n++;
+
+            *endname = '\0';
+            num = strtol(endname + 1, NULL, 0);
+
             /* parsing ok, copy values to cfg */
-            addtype(self, config, num, name);
+            addtype(self, config, num, n);
 
         next:
             n = strtok(NULL, ",");

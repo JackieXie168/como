@@ -37,6 +37,7 @@ tuple_t *
 ca_init(mdl_t *self, timestamp_t ts)
 {
     tuple_t *t = mdl_alloc_tuple(self, tuple_t);
+
     t->ts = ts;
     memset(t->bytes, 0, sizeof(t->bytes));
     memset(t->pkts, 0, sizeof(t->pkts));
@@ -69,7 +70,7 @@ capture(mdl_t * self, pkt_t *pkt, tuple_t *st, double srate)
     /* escalate by sampling rate */
     bytes /= srate;
     pkts /= srate;
-    
+
     /* update the state */
     st->bytes[i] += bytes;
     st->pkts[i] += pkts;
