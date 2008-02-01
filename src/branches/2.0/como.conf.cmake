@@ -269,21 +269,22 @@ end
 #		default: IP,IPv6,ARP
 /*
 module "ethtypes"
+  source "ethtypesCC"
   description	"Ethertypes breakdown"
-  args		"interval=60"
-  args		"ethtype IP=0x0800"
-  args		"ethtype IPv6=0x86DD"
-  args		"ethtype ARP=0x0806"
-  args		"ethtype RARP=0x8035"
-  args		"ethtype AppleTalk=0x809b"
-  args		"ethtype AppleTalk ARP=0x80f3"
-  args		"ethtype Novell IPX=0x8137"
-  args		"ethtype Novell=0x8138"
-  args		"ethtype MPLS unicast=0x8847"
-  args		"ethtype MPLS multicast=0x8848"
-  args		"ethtype PPPoE Discovery Stage=0x8863"
-  args		"ethtype PPPoE Session Stage=0x8864"
-  args		"ethtype ATA over Ethernet=0x88A2"
-  args		"ethtype EAP over LAN (IEEE 802.1X)=0x888E"
+  args		"interval" = "60"
+  args		"ethtypes" = "IP=0x0800,
+                              IPv6=0x86DD,
+                              ARP=0x0806,
+                              RARP=0x8035,
+                              AppleTalk=0x809b,
+                              AppleTalk ARP=0x80f3,
+                              Novell IPX=0x8137,
+                              Novell=0x8138,
+                              MPLS unicast=0x8847,
+                              MPLS multicast=0x8848,
+                              PPPoE Discovery Stage=0x8863,
+                              PPPoE Session Stage=0x8864,
+                              ATA over Ethernet=0x88A2,
+                              EAP over LAN (IEEE 802.1X)=0x888E"
 end  
 */

@@ -48,13 +48,15 @@
 enum {
     FORMAT_PLAIN,
     FORMAT_PRETTY,
-    FORMAT_GNUPLOT
+    FORMAT_GNUPLOT,
+    FORMAT_HTML
 };
 
 QUERY_FORMATS_BEGIN 
     { FORMAT_PLAIN,   "plain",   "text/plain" },
     { FORMAT_PRETTY,  "pretty",  "text/plain" },
     { FORMAT_GNUPLOT, "gnuplot", "text/plain" },
+    { FORMAT_HTML,    "html",    "text/html" },
 QUERY_FORMATS_END
 
 DEFAULT_FORMAT = "pretty";
@@ -86,6 +88,35 @@ DEFAULT_FORMAT = "pretty";
     "set format x \"%%H:%%M\";"                                         
     
 #define GNUPLOTFOOTER   "e\n"
+
+#define HTML_HEADER \
+    "<html>\n"                                                              \
+    "<head>\n"                                                              \
+    "  <style type=\"text/css\">\n"                                         \
+    "   body { font-family: \"lucida sans unicode\", verdana, arial;\n"     \
+    "          font-size: 9pt; margin: 0; padding: 0;}\n"                   \
+    "   table, tr, td {background-color: #DDD;\n"                           \
+    "     font-family: \"lucida sans unicode\", verdana, arial;\n"          \
+    "     font-size: 9pt;}\n"                                               \
+    "   a, a:visited { color: #475677; text-decoration: none;}\n"           \
+    "   .netviewbar{ \n"                                                    \
+    "     color :#FFF; width :100%%; padding :2px; text-align:center;}\n"   \
+    "   .netview {\n"                                                       \
+    "     top: 0px; width: 100%%; vertical-align:top;\n"                    \
+    "     margin: 2; padding-left: 5px;\n"                                  \
+    "     padding-right: 5px; text-align:left;}\n"                          \
+    "   .nvtitle {\n"                                                       \
+    "     font-weight: bold; font-size: 9pt; padding-bottom: 3px;\n"        \
+    "     color: #475677;}\n"                                               \
+    "  </style>\n"                                                          \
+    "</head>\n"                                                             \
+    "<body>\n"                                                              \
+    "<table>\n"                                                             \
+
+#define HTML_FOOTER \
+    "</table>\n" \
+    "</body>\n"  \
+    "</html>\n"  \
 
 typedef struct qstate qstate_t;
 struct qstate {
@@ -140,6 +171,17 @@ qu_init(mdl_t *self, int format_id, hash_t *args)
                 mdl_printf(self, " %s Bytes [%%] Pkts [%%]", config->name[n]);
             }
             mdl_printf(self, "\n"); 
+            break;
+
+        case FORMAT_HTML:
+            mdl_printf(self, HTML_HEADER "<tr class=nvtitle><td>date</td>");
+            for (n = 0; n < config->types_count; n++) {
+                mdl_printf(self, "<td>%s - bytes [%%]</td>"
+                            "<td>%s - pkts [%%]</td>",
+                            config->name[n], config->name[n]);
+            }
+            mdl_printf(self, "</tr>\n");
+            break;
     }
 
     return s;
@@ -155,6 +197,7 @@ qu_finish(mdl_t *self, int format_id, qstate_t *s)
 static void print_plain(qstate_t *s, config_t *config);
 static void print_pretty(qstate_t *s, config_t *config);
 static void print_gnuplot(qstate_t *s, config_t *config);
+static void print_html(qstate_t *s, config_t *config);
 
 void
 print_rec(mdl_t *self, int format_id, record_t *rec, qstate_t *s)
@@ -165,8 +208,11 @@ print_rec(mdl_t *self, int format_id, record_t *rec, qstate_t *s)
     s->count = rec->count;
 
     /* aggregate records if needed */
-    if (s->ts == 0)
+    if (s->no_records % s->granularity == 0) {
         s->ts = rec->ts;
+        bzero(s->bytes, sizeof(s->bytes));
+        bzero(s->pkts, sizeof(s->pkts));
+    }
 
     for (i = 0; i < rec->count; i++) { 
 	s->bytes[i] += rec->entry[i].bytes; 
@@ -194,6 +240,9 @@ print_rec(mdl_t *self, int format_id, record_t *rec, qstate_t *s)
             break;
         case FORMAT_GNUPLOT:
             print_gnuplot(s, config);
+            break;
+        case FORMAT_HTML:
+            print_html(s, config);
             break;
     }
 
@@ -251,6 +300,39 @@ print_pretty(qstate_t * qs, config_t * config)
     }
 
     mdl_printf(qs->self, "\n");
+}
+
+static void
+print_html(qstate_t * qs, config_t * config) 
+{
+    time_t ts; 
+    size_t len; 
+    uint64_t bytes_all, pkts_all;
+    float bytes_prct, pkts_prct; 
+    uint32_t i;
+
+    ts = (time_t) TS2SEC(qs->ts);
+    mdl_printf(qs->self, "<tr><td>%s</td>", asctime(localtime(&ts)));
+
+    /* compute the sums of all bytes and packets */
+    bytes_all = pkts_all = 0; 
+    for (i = 0; i < qs->count; i++) { 
+	bytes_all += qs->bytes[i];
+	pkts_all += qs->pkts[i];
+    } 
+
+    if (bytes_all == 0)
+	return; 
+
+    /* compute the sums of all bytes and packets of interest */
+    for (i = 0; i < qs->count; i++) { 
+	bytes_prct = 100.0 * (float) qs->bytes[i] / bytes_all;
+	pkts_prct = 100.0 * (float) qs->pkts[i] / pkts_all;
+	mdl_printf(qs->self, "<td>%.2f</td><td>%.2f</td>",
+		       bytes_prct, pkts_prct);
+    }
+
+    mdl_printf(qs->self, "</tr>\n");
 }
 
 static void
