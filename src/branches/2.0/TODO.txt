@@ -83,3 +83,5 @@ multiple pattern search
 
  - Remove commented code or old structs in include/*.h
 
+* The man page needs updating
+
