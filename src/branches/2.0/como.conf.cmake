@@ -32,12 +32,12 @@ storage-path "@CMAKE_INSTALL_PREFIX@@INST_BINDIR@/como-storage"
 
 #asnfile = "bview.20060901.0000.gz"
 
-# Memory (in MBytes) allocated to the CAPTURE process 
-# to maintain the state used by all modules. The more 
-# modules, the more memory is needed.
-# Default: 64
+# Memory allocated to the CAPTURE process to maintain the
+# state used by all modules. The more modules, the more memory
+# is needed. KB, MB and GB suffixes understood.
+# Default: 64MB
 
-#memsize	64
+#memsize	64MB
 
 # TCP port number the QUERY process uses to accept new 
 # requests from users.
