@@ -60,15 +60,14 @@ static void
 mdl_store_mono_rec(mdl_t * mdl, MonoArray * data)
 {
     mdl_iexport_t *ie;
+    uint8_t *st, *rec;
     size_t sz;
-    uint8_t *st;
-    uint8_t *rec;
     
     sz = mono_array_length(data);
     rec = mono_array_addr(data, uint8_t, 0);
     
     /* the timestamp is the first 64-bit integer of the record */
-#if DEBUG_A_LOT
+#ifdef DEBUG_A_LOT
     timestamp_t ts;
     ts = *((timestamp_t *) rec);
     debug("mdl_store_mono_rec: mdl = `%s' ts = %u\n", mdl->name, TS2SEC(ts));
@@ -86,7 +85,7 @@ mdl_store_mono_rec(mdl_t * mdl, MonoArray * data)
 	error("Can't write to disk for module `%s'\n", mdl->name);
 
     serialize_uint32_t(&st, sz);
-    memcpy(st, rec, sz);
+    memcpy(st, rec, sz - sizeof(size_t));
 
     ie->woff += sz;
     cscommit(ie->cs_writer, ie->woff);
