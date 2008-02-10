@@ -1,7 +1,7 @@
 $Id$
 
 -------------------------------------
----- CoMo v1.1 (TBD) 
+---- CoMo v1.5 (February 11th, 2008) 
 --
 
 . Optimized packet batches from sniffers
@@ -13,19 +13,33 @@ $Id$
   (this is the case when one batch of packets covers many flush
   intervals of the modules). 
 
-. Implemented on-demand sniffer
-
-. Optimized topdest module
-
-  --- still more needs to be done.
+. New modules: 
+   - assoc, to parse IEEE 802.11 frames for association requests
+   - autofocus, to report traffic volumes according to dynamic clustering of 
+     IP address. Based on the paper "Automatically Inferring Patterns of 
+     Resource Consumption in Network Traffic", by Cristian Estan et al.
+   - flow-reassembly, to reassembly TCP packet streams. 
+   - ipssi/macssi, to report received signal strenght for a given IP or MAC
+   - scanner-detector, port scan detection following the algorithm proposed 
+     in "Autograph: Toward Automated, Distributed Worm Signature Detection" 
+     by Hyang-Ak Kim and Brad Karp.
+   - superaddr, detect super sources or destinations as described in 
+     "Detection of Super Sources and Destinations in High-Speed Networks: 
+     Algorithms, Analysis and Evaluation" by Qi Zhao et al.
+   - worm-signature, to automatically generate worm signatures as described
+     in "Autograph: Toward Automated, Distributed Worm Signature Detection" 
+     by Hyang-Ak Kim and Brad Karp.
 
 . Implemented NetFlow sniffer. 
 
-. Minor optimizations and bug fixes
+  It support netflow raw streams. It uses the flow-tools library 
+  to parse the packets.  
 
 . Reduced used of IPC calls. 
 
-. New filter keyword "exporter", "addr" and "host"
+. New filter keywords: 
+   . "exporter" to select a netflow exporter in a stream of netflow data; 
+   . "addr" and "host" that are equivalend to "src or dst"
 
 . Introduced new query syntax:
   http://<como node>/<module name>?<arguments> to query a module
@@ -33,9 +47,11 @@ $Id$
   http://<como node>/services/<service name>?<arguments> to access a service
 
 . Major rewrite of sniffers to provide a ring buffer allocated in shared
-  memory
+  memory.
 
-. Migrated to CMAKE as build system
+. Migrated to CMAKE as build system. It is now possible to run "make install"
+  to create the appropriate system-wide directories (e.g., /usr/local/etc/como, 
+  /usr/local/libexec...) 
 
 . Added syntax to filters for autonomous system numbers as an alternative
   to IP address ranges....  eg  filter "tcp and (addr asn 2529)"
