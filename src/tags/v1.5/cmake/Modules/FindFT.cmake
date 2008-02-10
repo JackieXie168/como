@@ -1,0 +1,48 @@
+# - Find flow-tools
+# Find the native flow-tools includes and library
+#
+#  FTLIB_INCLUDE_DIR - where to find ftlib.h, etc.
+#  FTLIB_LIBRARIES   - List of libraries when using FTLIB.
+#  FTLIB_FOUND       - True if FTLIB found.
+
+IF (FTLIB_INCLUDE_DIR)
+  # Already in cache, be silent
+  SET(FTLIB_FIND_QUIETLY TRUE)
+ENDIF (FTLIB_INCLUDE_DIR)
+
+FIND_PATH(FTLIB_INCLUDE_DIR ftlib.h
+  /usr/local/include
+  /usr/include
+)
+
+SET(FTLIB_NAMES ft)
+FIND_LIBRARY(FTLIB_LIBRARY
+  NAMES ${FTLIB_NAMES}
+  PATHS /usr/lib /usr/local/lib
+)
+
+IF (FTLIB_INCLUDE_DIR AND FTLIB_LIBRARY)
+   SET(FTLIB_FOUND TRUE)
+   SET( FTLIB_LIBRARIES ${FTLIB_LIBRARY})
+ELSE (FTLIB_INCLUDE_DIR AND FTLIB_LIBRARY)
+   SET(FTLIB_FOUND FALSE)
+   SET( FTLIB_LIBRARIES )
+ENDIF (FTLIB_INCLUDE_DIR AND FTLIB_LIBRARY)
+
+IF (FTLIB_FOUND)
+   IF (NOT FTLIB_FIND_QUIETLY)
+      MESSAGE(STATUS "Found FTLIB: ${FTLIB_LIBRARY}")
+   ENDIF (NOT FTLIB_FIND_QUIETLY)
+ELSE (FTLIB_FOUND)
+   IF (FTLIB_FIND_REQUIRED)
+      MESSAGE(STATUS "Looked for flow-tools library named ${FTLIBS_NAMES}.")
+      MESSAGE(FATAL_ERROR "Could NOT find flow-tools library")
+   ENDIF (FTLIB_FIND_REQUIRED)
+ENDIF (FTLIB_FOUND)
+
+MARK_AS_ADVANCED(
+  FTLIB_LIBRARY
+  FTLIB_INCLUDE_DIR
+  )
+
+
