@@ -30,27 +30,56 @@
  * $Id$
  */
 
-/* #define EX_LOGGING */
+#define EX_LOGGING
 
 #ifndef EX_LOGGING
-#define ex_log_module_info(x, y, z)
+#define ex_log_start_measuring()
+#define ex_log_stop_measuring()
+#define ex_log_module_info(a, b, c, d)
 #else
+
+#include <sys/time.h>       /* getrusage */
+#include <sys/resource.h>   /* getrusage */
 
 #define EX_LOG_TEMPLATE "/tmp/como/como_ex_%s.txt"
 
 extern stats_t *como_stats;
 
-static int ex_log_initialized = 0;
-static hash_t *ex_log_mdl_info;
+static ctimer_t *ex_log_timer = NULL;
+static int ex_log_ctxsw_counter;
+
+typedef struct _ex_log_module_info ex_log_module_info_t;
+struct _ex_log_module_info {
+    FILE *file;
+    uint64_t sum_cycles;
+    uint64_t sum_ntuples;
+    size_t tuple_size;
+};
+
+ex_log_module_info_t ex_log_mdl_info[MDL_ID_MAX];
 
 static void
-ex_log_initialize(void)
+ex_log_start_measuring(void)
 {
-    if (ex_log_initialized)
-        return;
+    struct rusage usg;
 
-    ex_log_mdl_info = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
-    ex_log_initialized = 1;
+    if (ex_log_timer == NULL)
+        ex_log_timer = new_timer("");
+
+    start_tsctimer(ex_log_timer);
+    getrusage(RUSAGE_SELF, &usg);
+    ex_log_ctxsw_counter = -usg.ru_nvcsw - usg.ru_nivcsw;
+    
+}
+
+static void
+ex_log_stop_measuring(void)
+{
+    struct rusage usg;
+
+    getrusage(RUSAGE_SELF, &usg);
+    ex_log_ctxsw_counter += usg.ru_nvcsw + usg.ru_nivcsw;
+    end_tsctimer(ex_log_timer);
 }
 
 static FILE *
@@ -59,10 +88,9 @@ ex_log_get_file(mdl_t *mdl)
     FILE **val;
     char *file;
 
-    if ((val = hash_lookup_string(ex_log_mdl_info, mdl->name)))
+    val = &ex_log_mdl_info[mdl->id].file;
+    if (*val != NULL)
         return *val; /* found */
-
-    val = como_malloc(sizeof(FILE *)); /* not found, create new entry */
 
     file = como_asprintf(EX_LOG_TEMPLATE, mdl->name);
     *val = fopen(file, "w");
@@ -70,26 +98,59 @@ ex_log_get_file(mdl_t *mdl)
         error("cannot open output file `%s' for export logging\n", file);
     free(file);
 
-    hash_insert_string(ex_log_mdl_info, mdl->name, val);
-
-    fprintf(*val, "ex_mem\tqueued_mem\tcycles\tntuples\n");
+    fprintf(*val, "localtime\tex_mem\tqueued_mem\tcycles\tctxsw\tntuples"
+            "\tbytes\tcycles_per_tuple\tremaining_work\n");
 
     return *val;
 
 }
 
 static void
-ex_log_module_info(mdl_t *mdl, uint64_t cycles, int ntuples)
+ex_log_module_info(mdl_t *mdl, int ntuples, size_t queue_size,
+        size_t tuple_mem)
 {
+    ex_log_module_info_t *info = &ex_log_mdl_info[mdl->id];
+    uint64_t cycles = get_last_sample(ex_log_timer);
+    double localtime, cpt, remaining_work;
+    struct timeval tv;
     FILE *f;
 
-    ex_log_initialize();
     f = ex_log_get_file(mdl);
 
-    fprintf(f, "%d\t%d\t%llu\t%d\n", mdl_get_iexport(mdl)->used_mem,
-                como_stats->mdl_stats[mdl->id].ex_queue_size,
-                cycles, ntuples);
+    if (gettimeofday(&tv, NULL) < 0)
+        error("could not gettimeofday()\n");
+    localtime = tv.tv_sec + (double)tv.tv_usec / 1000000;
+
+    if (info->sum_ntuples != 0)
+        cpt = (double)info->sum_cycles / (double)info->sum_ntuples;
+    else
+        cpt = 0;
+
+    if (info->tuple_size == 0 && ntuples > 0)
+        info->tuple_size = tuple_mem / ntuples;
+    else if (ntuples > 0)
+        assert(info->tuple_size == tuple_mem / ntuples);
+
+    if (info->tuple_size == 0)
+        remaining_work = 0;
+    else
+        remaining_work = queue_size * cpt / info->tuple_size;
+
+    fprintf(f, "%f\t%d\t%d\t%llu\t%d\t%d\t%d\t%f\t%f\n", localtime,
+                mdl_get_iexport(mdl)->used_mem,
+                queue_size,
+                cycles,
+                ex_log_ctxsw_counter,
+                ntuples,
+                tuple_mem,
+                cpt,
+                remaining_work);
     fflush(f);
+
+    if (ex_log_ctxsw_counter == 0) {
+        info->sum_ntuples += ntuples;
+        info->sum_cycles += cycles;
+    }
 }
 
 #endif

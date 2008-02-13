@@ -259,6 +259,7 @@ typedef struct { /* tuples in shmem. ca->ex, ex->ca */
     tuples_t    tuples;
     size_t      ntuples;
     size_t      tuple_mem;
+    size_t      queue_size;
     timestamp_t	ivl_start;
 } msg_process_shm_tuples_t;
 
@@ -267,8 +268,9 @@ typedef struct { /* serialized tuples. ca->ex */
     int         mdl_id;
     size_t      ntuples;
     size_t      tuple_mem;
-    uint8_t     data[0];
+    size_t      queue_size;
     timestamp_t	ivl_start;
+    uint8_t     data[0];
 } msg_process_ser_tuples_t;
 
 typedef struct {

@@ -266,6 +266,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             msg.ntuples = ic->tuple_count;
             msg.mdl_id = mdl->id;
             msg.tuple_mem = ic->tuple_mem;
+            msg.queue_size = como_stats->mdl_stats[mdl->id].ex_queue_size;
 
             como_stats->table_queue++;
             ipc_send(ic->export, CA_EX_PROCESS_SHM_TUPLES, &msg, sizeof(msg));
@@ -305,6 +306,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             msg->tuple_mem = ic->tuple_mem;
             msg->ivl_start = ic->ivl_start;
             msg->mdl_id = mdl->id;
+            msg->queue_size = como_stats->mdl_stats[mdl->id].ex_queue_size;
 
             debug("module `%s': flushing - serializing\n", mdl->name);
             sbuf = msg->data;
@@ -315,7 +317,8 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
             como_stats->table_queue++;
             ipc_send(ic->export, CA_EX_PROCESS_SER_TUPLES, msg, sz +
 		     sizeof(msg_process_ser_tuples_t));
-            debug("module `%s': flushing - sent serialized tuples to EX\n", mdl->name);
+            debug("module `%s': flushing - sent serialized tuples to EX\n",
+                    mdl->name);
 
             ic->tuple_count = 0;
             ic->tuple_mem = 0;
@@ -558,6 +561,8 @@ handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 
     ipc_send(peer, CA_SU_MODULE_ADDED, NULL, 0);
     msg("adding module %s\n", mdl->name);
+
+    como_stats->modules_active++;
 
     return IPC_OK;
 }
@@ -1575,6 +1580,72 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
     return active;
 }
 
+
+/*
+ * -- delay_batch
+ *
+ * When replaying a trace, we may want to process it as fast
+ * as the live packet stream would have been. If this is the,
+ * case, we have to delay batches that arrive too early.
+ * If TS_AWARE_TRACE_REPLAY is not defined below, this
+ * function is replaced by a macro that does nothing.
+ * This feature is disabled by default.
+ */
+/* #define TS_AWARE_TRACE_REPLAY */
+#ifndef TS_AWARE_TRACE_REPLAY
+#define delay_batch(x)
+#else
+static void
+delay_batch(batch_t *batch)
+{
+    static timestamp_t delay_vs_trace_ts = 0; /* delay at 1st batch */
+    timestamp_t now, current_delay;
+    struct timeval tv;
+    int ret;
+
+    if (gettimeofday(&tv, NULL) != 0)
+        error("gettimeofday() fails\n");
+
+    now = TIME2TS(tv.tv_sec, tv.tv_usec);
+    current_delay = now - batch->last_pkt_ts;
+
+    if (delay_vs_trace_ts == 0) { /* initialize at 1st batch */
+        if (now < batch->last_pkt_ts)
+            error("replaying a trace in the future?\n");
+        delay_vs_trace_ts = current_delay;
+        debug("trace delay = %d.%06d seconds\n", TS2SEC(delay_vs_trace_ts),
+                TS2USEC(delay_vs_trace_ts));
+        warn("simulating real batch arrival rate\n");
+    }
+
+    if (current_delay < delay_vs_trace_ts) {
+        /* this batch has come too early. sleep for some time
+         * to simulate the real batch arrival rate.
+         */
+        timestamp_t sleep_time = delay_vs_trace_ts - current_delay;
+        struct timespec tspec, rem;
+
+        tspec.tv_sec = TS2SEC(sleep_time);
+        tspec.tv_nsec = TS2USEC(sleep_time) * 1000;
+
+    back_to_sleep:
+        #ifdef LOADSHED
+        ls_select_start(&como_ca);
+        #endif
+        ret = nanosleep(&tspec, &rem);
+        #ifdef LOADSHED
+        ls_select_end(&como_ca);
+        #endif
+        if (ret == -1) {
+            tspec.tv_sec = rem.tv_sec;
+            tspec.tv_nsec = rem.tv_nsec;
+            warn("nanosleep interrupted!!\n");
+            goto back_to_sleep; /* nanosleep interrupted, sleep more */
+        }
+    }
+}
+#endif
+
 /*
  * -- capture_main
  *
@@ -1926,6 +1997,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
         capture_profiler_notify(CP_END_BATCH_CREATE);
 
         if (batch != NULL) {
+            delay_batch(batch); /* only delayed if necessary */
+
             capture_profiler_notify(CP_START_PROCESS_BATCH);
 	    if (avg_batch_len == 0)
 		avg_batch_len = batch->count;
