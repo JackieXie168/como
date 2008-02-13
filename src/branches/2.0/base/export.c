@@ -54,6 +54,31 @@
 #include "query.h"
 
 #include "export-logging.c"
+#include "tupleset_queue.h"
+
+typedef struct tupleset tupleset_t;
+
+enum {
+    TUPLES_FROM_SHMEM,
+    TUPLES_FROM_SOCKET,
+};
+
+struct tupleset {
+    tupleset_queue_entry_t list;
+
+    char mdl_name[MDLNAME_MAX];   
+    int mdl_id;
+    tuples_t tuples;
+    size_t ntuples;
+    size_t tuple_mem;
+    size_t queue_size_at_capture;
+    ipc_peer_t *peer;
+    int mechanism;
+
+    msg_process_shm_tuples_t shmem_msg;
+
+    timestamp_t ivl_start;
+};
 
 typedef struct _como_ex como_ex_t;
 struct _como_ex {
@@ -62,6 +87,10 @@ struct _como_ex {
     int use_shmem;
     hash_t *mdls; /* mdl name to mdl */
     ipc_peer_t *supervisor;
+
+    int received_tuples;
+    int queue_len;
+    tupleset_queue_t queue;
 };
 
 enum {
@@ -146,6 +175,7 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     return IPC_OK;
 }
 
+#if 0
 static int
 handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
 				msg_process_ser_tuples_t * msg,
@@ -158,12 +188,8 @@ handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
     void **tuples;
     mdl_t *mdl;
     size_t i;
-    ctimer_t *mdl_timer;
 
     debug("recv'd %d serialized tuples\n", msg->ntuples);
-
-    mdl_timer = new_timer("");
-    start_tsctimer(mdl_timer);
 
     /*
      * locate the module
@@ -171,6 +197,8 @@ handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
     mdl = hash_lookup_string(como_ex->mdls, msg->mdl_name);
     if (mdl == NULL)
         error("capture sent tuples from an unknown module\n");
+
+    ex_log_start_measuring();
 
     debug("handle_ca_ex_process_ser_tuples - tuples for mdl `%s'\n", mdl->name);
 
@@ -201,42 +229,70 @@ handle_ca_ex_process_ser_tuples(UNUSED ipc_peer_t * peer,
     /*
      * we are done
      */
-    end_tsctimer(mdl_timer);
-    ex_log_module_info(mdl, get_last_sample(mdl_timer), msg->ntuples);
-    destroy_timer(mdl_timer);
+    ex_log_stop_measuring();
+    ex_log_module_info(mdl, msg->ntuples, msg->queue_size, msg->tuple_mem);
 
     debug("handle_ca_ex_process_ser_tuples -- tuples processed\n");
 
     return IPC_OK;
 }
+#endif
 
 static int
-handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
+handle_ca_ex_process_shm_tuples(UNUSED ipc_peer_t * peer,
 				msg_process_shm_tuples_t * msg,
 				UNUSED size_t sz, UNUSED int swap,
 				UNUSED como_ex_t * como_ex)
 {
-    mdl_iexport_t *ie;
-    mdl_t *mdl;
-    ctimer_t *mdl_timer;
+    tupleset_t *tset;
 
     debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n",
             msg->ntuples);
+    
+    tset = como_malloc(sizeof(tupleset_t));
 
-    mdl_timer = new_timer("");
-    start_tsctimer(mdl_timer);
+    tset->tuples = msg->tuples;
+    tset->ntuples = msg->ntuples;
+    tset->tuple_mem = msg->tuple_mem;
+    tset->queue_size_at_capture = msg->queue_size;
+    tset->ivl_start = msg->ivl_start;
+    tset->peer = peer;
+    tset->mechanism = TUPLES_FROM_SHMEM;
+
+    strcpy(tset->mdl_name, msg->mdl_name);
+    bcopy(msg, &tset->shmem_msg, sizeof(msg_process_shm_tuples_t));
+
+    tupleset_queue_insert_tail(&como_ex->queue, tset);
+    como_ex->received_tuples++;
+    como_ex->queue_len++;
+
+    return IPC_OK;
+}
+
+
+static void
+process_tuples(como_ex_t *como_ex)
+{
+    mdl_iexport_t *ie;
+    mdl_t *mdl;
+    tupleset_t *tset = tupleset_queue_first(&como_ex->queue);
+
+    if (tset == NULL)
+        return;
 
     /*
      * locate the module
      */
-    mdl = hash_lookup_string(como_ex->mdls, msg->mdl_name);
+    mdl = hash_lookup_string(como_ex->mdls, tset->mdl_name);
     if (mdl == NULL)
         error("capture sent tuples from an unknown module\n");
 
-    debug("handle_ca_ex_process_shm_tuples -- tuples for mdl `%s'\n",
-            mdl->name);
+    debug("processing queued tuples for mdl `%s'\n", mdl->name);
+
+    ex_log_start_measuring();
 
     ie = mdl_get_iexport(mdl);
+
     /*
      * let the module process 'em
      */
@@ -246,17 +302,17 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
         void **tuples;
 	size_t i;
 
-	tuples = como_calloc(msg->ntuples, sizeof(void *));
+	tuples = como_calloc(tset->ntuples, sizeof(void *));
 
 	debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
 	i = 0;
-	tuples_foreach(t, &msg->tuples) {
+	tuples_foreach(t, &tset->tuples) {
 	    tuples[i++] = t->data;
 	}
 
-	assert(i == msg->ntuples);
+	assert(i == tset->ntuples);
 
-        ie->export(mdl, tuples, msg->ntuples, msg->ivl_start, ie->state);
+        ie->export(mdl, tuples, tset->ntuples, tset->ivl_start, ie->state);
 
 	/*
 	 * free allocated mem.
@@ -265,20 +321,25 @@ handle_ca_ex_process_shm_tuples(ipc_peer_t * peer,
     } else {
         struct tuple *t;
         debug("handle_ca_ex_process_shm_tuples -- store the tuples directly\n");
-        tuples_foreach(t, &msg->tuples) {
+        tuples_foreach(t, &tset->tuples) {
 	    mdl_store_rec(mdl, t->data);
         }
     }
 
-    end_tsctimer(mdl_timer);
-    ex_log_module_info(mdl, get_last_sample(mdl_timer), msg->ntuples);
-    destroy_timer(mdl_timer);
+    ex_log_stop_measuring();
+    ex_log_module_info(mdl, tset->ntuples, tset->queue_size_at_capture,
+            tset->tuple_mem);
     #endif
 
     debug("handle_ca_ex_process_shm_tuples -- done, sending reply\n");
-    ipc_send(peer, EX_CA_TUPLES_PROCESSED, msg, sz);
+    if (tset->mechanism == TUPLES_FROM_SHMEM) {
+        msg_process_shm_tuples_t *msg = &tset->shmem_msg;
+        ipc_send(tset->peer, EX_CA_TUPLES_PROCESSED, msg, sizeof(*msg));
+    }
 
-    return IPC_OK;
+    tupleset_queue_remove(&como_ex->queue, tset);
+    como_ex->queue_len--;
+    debug("tupleset queue size is now %d\n", como_ex->queue_len);
 }
 
 /*
@@ -421,6 +482,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
     /* initialize como_ex */
     bzero(&como_ex, sizeof(como_ex));
     como_ex.mdls = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
+    tupleset_queue_init(&como_ex.queue);
 
     env = como_env();
     como_ex.st_dir = como_asprintf("%s/%s", env->dbdir, node->name);
@@ -443,9 +505,13 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
     ipc_set_user_data(&como_ex);
     ipc_register(SU_EX_ADD_MODULE, (ipc_handler_fn) handle_su_ex_add_module);
     ipc_register(SU_ANY_EXIT, (ipc_handler_fn) handle_su_any_exit);
-    ipc_register(CA_EX_PROCESS_SER_TUPLES, (ipc_handler_fn) handle_ca_ex_process_ser_tuples);
-    ipc_register(CA_EX_PROCESS_SHM_TUPLES, (ipc_handler_fn) handle_ca_ex_process_shm_tuples);
     ipc_register(CA_EX_DONE, (ipc_handler_fn) handle_ca_ex_done);
+    #if 0
+    ipc_register(CA_EX_PROCESS_SER_TUPLES,
+                    (ipc_handler_fn) handle_ca_ex_process_ser_tuples);
+    #endif
+    ipc_register(CA_EX_PROCESS_SHM_TUPLES,
+                    (ipc_handler_fn) handle_ca_ex_process_shm_tuples);
     /* ipc_register(IPC_MODULE_DEL, ex_ipc_module_del); */
     /* ipc_register(IPC_EXIT, ex_ipc_exit);*/
 
@@ -483,6 +549,16 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 	int n_ready;
         int i;
         int ipcr;
+        struct timeval tv_zero;
+
+        tv_zero.tv_sec = 0;
+        tv_zero.tv_usec = 0;
+
+        /*
+         * tells if we have received any tuples in
+         * the current iteration of the mainloop.
+         */
+        como_ex.received_tuples = 0;
 
 	profiler_start_tsctimer(como_stats->ex_full_timer); 
 
@@ -513,6 +589,20 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 	    
 	    n_ready--;
 	}
+
+        /*
+         * we want to receive all the messages from capture
+         * before processing the first tuples in the queue.
+         */
+        if (como_ex.received_tuples == 0 && como_ex.queue_len > 0)
+            process_tuples(&como_ex);
+
+        /*
+         * if the tuple queue is not empty, next select
+         * must not lock, because we have work to do
+         */
+        if (como_ex.queue_len > 0)
+            event_loop_set_timeout(&como_ex.el, &tv_zero);
 
 	profiler_end_tsctimer(como_stats->ex_loop_timer); 
 	profiler_end_tsctimer(como_stats->ex_full_timer); 
