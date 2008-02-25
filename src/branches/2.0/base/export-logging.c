@@ -30,7 +30,7 @@
  * $Id$
  */
 
-#define EX_LOGGING
+/* #define EX_LOGGING */
 
 #ifndef EX_LOGGING
 #define ex_log_start_measuring()
