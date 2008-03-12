@@ -223,6 +223,7 @@ log_outv(const char *domain, log_level_t level, const char *format, va_list ap)
     size_t len;
     struct timeval tv;
     log_handler_t *h;
+    va_list aq;
 
     if (!(s_log.level & level))
         return;
@@ -230,7 +231,9 @@ log_outv(const char *domain, log_level_t level, const char *format, va_list ap)
     gettimeofday(&tv, NULL);
     
     /* format the message */
-    len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
+    va_copy(aq, ap);
+    len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, aq);
+    va_end(aq);
     
     /* manage the message buffer */
     if (len > s_log.buf_len) {
