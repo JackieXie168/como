@@ -343,9 +343,9 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     /* XXX conflict with como_env stuff in libcomo/como.c */
     cfg->query_port = 44444;
     set_memsize(B2MB(64), cfg);
-    cfg->db_path = DEFAULT_DBDIR;
+    cfg->db_path = como_strdup(DEFAULT_DBDIR);
     cfg->filesize = 128 * 1024 * 1024;
-    cfg->libdir = DEFAULT_LIBDIR;
+    cfg->libdir = como_strdup(DEFAULT_LIBDIR);
     cfg->query_args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
     cfg->query_alias = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
 
