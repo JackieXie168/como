@@ -45,6 +45,7 @@
 /* global state */
 extern stats_t *como_stats;
 extern como_su_t *s_como_su;
+extern como_config_t *como_config;
 
 /*
  * -- start_timestamp
@@ -58,14 +59,12 @@ get_start_timestamp(mdl_t * mdl)
     size_t rlen;
     timestamp_t ts = 0;
     char *ptr;
-    como_env_t *env;
     char *str;
     int reader;
     
     como_node_t *n = &array_at(s_como_su->nodes, como_node_t, 0);
-    env = como_env();
 
-    str = como_asprintf("%s/%s/%s", env->dbdir, n->name, mdl->name);
+    str = como_asprintf("%s/%s/%s", como_config->db_path, n->name, mdl->name);
     reader = csopen(str, CS_READER_NOBLOCK, (off_t) mdl->streamsize,
             (ipc_peer_t *) COMO_ST);
     

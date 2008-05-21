@@ -1551,7 +1551,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
 
     /* if no sniffers now active then we log this change of state */
 
-    if ((active == 0) && (como_env_runmode() == RUNMODE_NORMAL)) {
+    if ((active == 0) && (! como_config->inline_mode)) {
         array_t *mdls;
         int idx;
 

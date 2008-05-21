@@ -264,7 +264,7 @@ cleanup()
 
     signal(SIGCHLD, SIG_DFL); /* don't handle children anymore */
     
-    workdir = como_env_workdir();
+    workdir = s_como_su->workdir;
  
     msg("--- about to exit... remove work directory %s\n",
         workdir);
@@ -551,7 +551,6 @@ como_su_run(como_su_t * como_su)
     fd_set nodes_fds;
     int i;
     como_node_t *real_node;
-    runmode_t runmode;
     memmap_stats_t *mem_stats;
 
     /* catch some signals */
@@ -595,8 +594,6 @@ como_su_run(como_su_t * como_su)
     /* initialize resource management */
     resource_mgmt_init();
     
-    runmode = como_env_runmode();
-
     for (;;) {
 	struct timeval to = {1, 0};
         int secs, dd, hh, mm, ss;
@@ -633,9 +630,8 @@ como_su_run(como_su_t * como_su)
 	}
 
 	n_ready = event_loop_select(&como_su->el, &r);
-	if (runmode == RUNMODE_NORMAL) {
+	if (! como_config->inline_mode)
 	    fprintf(stderr, "%78s\r", ""); /* clean the line */
-	}
 
 	for (i = 0; n_ready > 0 && i < como_su->el.max_fd; i++) {
 	    
@@ -698,10 +694,10 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 	def = &array_at(sniffer_defs, sniffer_def_t, i);
 	
 	cb = sniffer_cb_lookup(def->name);
-	if (cb == NULL) {
-	    warn("Can't find sniffer `%s`.\n", def->name);
-	    continue;
-	}
+	if (cb == NULL)
+	    error("Can't find sniffer `%s'. Either the sniffer does not exist, "
+	            "it has not been compiled in, or your system does not "
+		    "support it.\n", def->name);
 
 	/* initialize the sniffer */
 	s = cb->init(def->device, def->args, alc);
@@ -792,7 +788,7 @@ como_init_nodes(UNUSED como_su_t *como_su, como_config_t *cfg)
     if (node.type == NULL)
         node.type = como_strdup("Unknown");
 
-    str = como_asprintf("%s/%s", como_su->env->dbdir, node.name);
+    str = como_asprintf("%s/%s", como_config->db_path, node.name);
     if (mkdir(str, 0700) == -1 && errno != EEXIST)
         error("cannot create db dir `%s'\n", str);
     free(str);
@@ -852,30 +848,23 @@ main(int argc, char ** argv)
     como_su->pool = pool;
     como_su->alc = &alc;
     como_su->su_pid = getpid();
+    como_su->workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
     s_como_su = como_su;
    
     como_init("SU", argc, argv);
     
-    /* initialize environment */
-    como_env_init();
-    como_su->env = como_env();
-    como_su->env->libdir = "./modules";
-    como_su->env->dbdir = "/tmp/como-2.0-data";
-
     /*
      * parse command line and configuration files
      */
     copy_args(argc, argv, &s_saved_argc, &s_saved_argv);
     como_config = configure(s_saved_argc, s_saved_argv, &alc, &cfg);
-    como_su->env->libdir = como_config->libdir;
-    como_su->env->dbdir = como_config->db_path;
 
     if (como_config->silent_mode)
         log_set_level(LOG_LEVEL_WARNING); /* disable most UI messages */
 
     if (como_config->inline_mode) { /* use temporary storage */
-        char *template = como_asprintf("%s/XXXXXX", como_su->env->workdir);
-        como_su->env->dbdir = como_config->db_path = mkdtemp(template);
+        char *template = como_asprintf("%s/XXXXXX", como_su->workdir);
+        como_config->db_path = como_config->db_path = mkdtemp(template);
     }
 
     /* initialize nodes */
@@ -884,8 +873,8 @@ main(int argc, char ** argv)
     assert(main_node->kind == COMO_NODE_REAL);
 
     /* create database dir */
-    if (mkdir(como_su->env->dbdir, 0700) == -1 && errno != EEXIST)
-        error("cannot create db dir `%s'\n", como_su->env->dbdir);
+    if (mkdir(como_config->db_path, 0700) == -1 && errno != EEXIST)
+        error("cannot create db dir `%s'\n", como_config->db_path);
 
     /* write welcome message */ 
     msg("----------------------------------------------------\n");
@@ -895,7 +884,7 @@ main(int argc, char ** argv)
     msg("  All rights reserved.\n"); 
     msg("----------------------------------------------------\n");
 
-    notice("... workdir %s\n", como_su->env->workdir);
+    notice("... workdir %s\n", como_su->workdir);
     notice("log level: %s\n", log_level_name(log_get_level())); 
 
     /*
@@ -912,7 +901,7 @@ main(int argc, char ** argv)
     como_stats->first_ts = ~0;
     
     /* initialize IPC */
-    ipc_init(ipc_peer_at(COMO_SU, como_su->env->workdir),
+    ipc_init(ipc_peer_at(COMO_SU, como_su->workdir),
              (ipc_on_connect_fn) su_ipc_onconnect, como_su);
     
     /* prepare the SUPERVISOR socket */
@@ -939,7 +928,7 @@ main(int argc, char ** argv)
 
     /* spawn STORAGE */
     spawn_child(COMO_ST, "storage", como_config->storage_path,
-                como_su->env->workdir, "134217728",
+                como_su->workdir, "134217728",
                 como_config->silent_mode ? "1" : "0", NULL);
 
     /* read ASN file */

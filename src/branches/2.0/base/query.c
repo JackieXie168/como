@@ -534,7 +534,7 @@ query_generic_main(FILE * client_stream, como_node_t * node, qreq_t *qreq)
      */
     storage_fd = ipc_connect(COMO_ST);
 
-    dbname = como_asprintf("%s/%s/%s", como_env_dbdir(), node->name,
+    dbname = como_asprintf("%s/%s/%s", como_config->db_path, node->name,
 			   req.mdl->name);
     debug("opening file for reading (%s)\n", dbname); 
     mode =  req.wait ? CS_READER : CS_READER_NOBLOCK; 

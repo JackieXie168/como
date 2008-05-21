@@ -40,6 +40,8 @@
 #include "comopriv.h"
 #include "storage.h"
 
+extern como_config_t *como_config;
+
 typedef struct strec strec_t;
 
 struct strec {
@@ -256,7 +258,7 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	break;
     }
     
-    libdir = como_env_libdir();
+    libdir = como_config->libdir;
     filename = shobj_build_path(libdir, mdl->mdlname);
     ib->shobj = shobj_open(filename);
     if (ib->shobj == NULL) {

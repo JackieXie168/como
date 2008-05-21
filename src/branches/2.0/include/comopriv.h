@@ -315,22 +315,6 @@ void query_main_plain(ipc_peer_t * parent, memmap_t * shmemmap,
         FILE* client_stream, como_node_t * node);
 
 
-/* como.c */
-
-typedef struct como_env {
-    runmode_t	runmode;	/* mode of operation */
-    char *	workdir;	/* work directory for templates etc. */
-    char *	dbdir; 	    	/* database directory for output files */
-    char *	libdir;		/* base directory for modules */
-} como_env_t;
-
-void         como_env_init();
-como_env_t * como_env();
-runmode_t    como_env_runmode();
-const char * como_env_workdir();
-const char * como_env_dbdir();
-const char * como_env_libdir();
-
 /* mdl.c */
 
 
@@ -452,7 +436,6 @@ mdl_t *mdl_lookup(array_t *mdls, const char *name);
  */
 typedef struct como_su como_su_t;
 struct como_su {
-    como_env_t *	env;
     event_loop_t	el;
     int			accept_fd;
 
@@ -467,6 +450,7 @@ struct como_su {
     memmap_t *		memmap;
     alc_t		shalc;
 
+    char *              workdir;        /* current workdir */
     FILE *		logfile;	/* log file */
     ipc_peer_t *	ca;		/* CAPTURE */
     ipc_peer_t *	ex;		/* EXPORT */

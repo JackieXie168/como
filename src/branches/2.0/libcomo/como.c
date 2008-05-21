@@ -49,8 +49,6 @@
 #include "ipc.h"	// ipc_listen()
 
 
-static como_env_t s_env;
-
 ipc_peer_full_t *COMO_SU;
 ipc_peer_full_t *COMO_CA;
 ipc_peer_full_t *COMO_EX;
@@ -77,54 +75,6 @@ como_init(const char * program, int argc, char ** argv)
     COMO_ST = ipc_peer_new(COMO_ST_CLASS, "st", "STORAGE");
     COMO_QU = ipc_peer_new(COMO_QU_CLASS, "qu", "QUERY");
 }
-
-
-
-void
-como_env_init()
-{
-    s_env.runmode = RUNMODE_NORMAL;
-    s_env.workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
-    s_env.dbdir = strdup(DEFAULT_DBDIR);
-    s_env.libdir = strdup(DEFAULT_LIBDIR);
-}
-
-
-como_env_t *
-como_env()
-{
-    return &s_env;
-}
-
-
-runmode_t
-como_env_runmode()
-{
-    return s_env.runmode;
-}
-
-
-const char *
-como_env_workdir()
-{
-    return s_env.workdir;
-}
-
-
-const char *
-como_env_dbdir()
-{
-    return s_env.dbdir;
-}
-
-
-const char *
-como_env_libdir()
-{
-    return s_env.libdir;
-}
-
-
 
 /**
  * -- como__malloc
