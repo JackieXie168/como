@@ -340,7 +340,6 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     /*
      * set some defaults
      */
-    /* XXX conflict with como_env stuff in libcomo/como.c */
     cfg->query_port = 44444;
     set_memsize(B2MB(64), cfg);
     cfg->db_path = como_strdup(DEFAULT_DBDIR);

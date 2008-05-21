@@ -475,7 +475,6 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 {
     int supervisor_fd, capture_fd, storage_fd;
     como_ex_t como_ex;
-    como_env_t *env;
     
     log_set_program("EX");
 
@@ -484,8 +483,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
     como_ex.mdls = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
     tupleset_queue_init(&como_ex.queue);
 
-    env = como_env();
-    como_ex.st_dir = como_asprintf("%s/%s", env->dbdir, node->name);
+    como_ex.st_dir = como_asprintf("%s/%s", como_config->db_path, node->name);
 
 #ifdef MONO_SUPPORT
     /* initialize mono */
