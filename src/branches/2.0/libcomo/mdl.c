@@ -289,7 +289,7 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
 	ex_impl = shobj_symbol(ib->shobj, "ex_impl", FALSE);
 	switch (*ex_impl) {
 	case EX_IMPL_NONE:
-	break;
+            break;
 	case EX_IMPL_C:
 	    ib->proc.ex->init = shobj_symbol(ib->shobj, "ex_init", TRUE);
 	    ib->proc.ex->export = shobj_symbol(ib->shobj, "export", FALSE);

@@ -15,7 +15,7 @@
 #include "comopriv.h"
 #include "storage.h"
 
-
+extern como_config_t *como_config;
 static MonoDomain *s_monodom;
 
 /*
@@ -202,7 +202,6 @@ static proxy_mono_state_t *
 proxy_mono_load(mdl_t * mdl, char *class_name)
 {
     proxy_mono_state_t *s;
-    const char *libdir;
     char *filename;
     mdl_ibase_t *ib;
     MonoClassField *field;
@@ -242,8 +241,7 @@ proxy_mono_load(mdl_t * mdl, char *class_name)
     mono_add_internal_call("CoMo.Mdl::mdl_print", mdl_mono_print);
     mono_add_internal_call("CoMo.IP::to_string", mono_inet_ntoa);
     
-    libdir = como_env_libdir();
-    filename = como_asprintf("%s/%s.dll", libdir, mdl->mdlname);
+    filename = como_asprintf("%s/%s.dll", como_config->libdir, mdl->mdlname);
     
     s->assembly = mono_domain_assembly_open(s->domain, filename);
     free(filename);

@@ -1706,7 +1706,6 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     ipc_register(CCA_ACK_BATCH, (ipc_handler_fn) ca_ipc_cca_ack_batch);
     ipc_register(EX_CA_ATTACH_MODULE, (ipc_handler_fn) handle_ex_ca_attach_module);
     ipc_register(EX_CA_TUPLES_PROCESSED, (ipc_handler_fn) handle_ex_ca_tuples_processed);
-    /* ipc_register(IPC_FLUSH, (ipc_handler_fn) ca_ipc_flush); */
     /* ipc_register(IPC_FREEZE, ca_ipc_freeze); */
 
     /* alias to the sniffer list */
