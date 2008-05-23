@@ -172,3 +172,18 @@ array_shift_(array_t * array)
     array->len--;
     return x;
 }
+
+void
+array_remove(array_t *array, int position)
+{
+    void *src, *dst;
+    size_t len;
+
+    len = array->element_size * (array->len - position - 1);
+    dst = array->data + (position * array->element_size);
+    src = array->data + ((position + 1) * array->element_size);
+
+    memmove(dst, src, len);
+    array->len--;
+}
+

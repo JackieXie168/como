@@ -452,7 +452,7 @@ como_node_init_mdls(como_node_t * node, array_t * mdl_defs, alc_t * alc)
 static void
 reconfigure(como_su_t *como_su)
 {
-    hash_t *current_modules, *new_modules;
+    hash_t *current_modules, *newcfg_modules, *new_modules, *rem_modules;
     como_config_t new_cfg;
     alc_t *alc = como_su->alc;
     como_node_t *node;
@@ -465,46 +465,81 @@ reconfigure(como_su_t *como_su)
     /* re-run the config routines */
     configure(s_saved_argc, s_saved_argv, s_como_su->alc, &new_cfg);
 
-    /* load module names into a hash */
+    /* load module names from current cfg into a hash */
     current_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-
     for (i = 0; i < como_config->mdl_defs->len; i++) {
         mdl_def_t *def = &array_at(como_config->mdl_defs, mdl_def_t, i);
-        hash_insert_string(current_modules, def->name, (void *)1);
-        msg("current module: %s\n", def->name);
+        hash_insert_string(current_modules, def->name, def);
     }
 
-    new_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-
-    for (i = 0; i < new_cfg.mdl_defs->len; i++) { /* search for new modules */
+    /* load module names from the new cfg info a hash */
+    newcfg_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    for (i = 0; i < new_cfg.mdl_defs->len; i++) {
         mdl_def_t *def = &array_at(new_cfg.mdl_defs, mdl_def_t, i);
-        char *name = def->name;
-
-        if (hash_lookup_string(current_modules, name) == NULL) {
-            mdl_t *mdl;
-
-            msg("loading new module: `%s'\n", name);
-            mdl = como_node_init_mdl(node, def, alc);
-            if (mdl == NULL)
-                continue;
-
-            /* add new modules to the new_modules hash table */
-            msg("insert %s as new module\n", mdl->name);
-            hash_insert_string(new_modules, mdl->name, mdl);
-        }
-        else
-            msg("module %s ain't new\n", name);
+        hash_insert_string(newcfg_modules, def->name, def);
     }
-    hash_destroy(current_modules);
+
+    /* find new modules */
+    new_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    hash_iter_init(newcfg_modules, &it);
+    while(hash_iter_next(&it)) {
+        mdl_def_t *def = hash_iter_get_value(&it);
+        mdl_t *mdl;
+
+        if (hash_lookup_string(current_modules, def->name) != NULL)
+            continue;
+
+        /* new module */
+        mdl = como_node_init_mdl(node, def, alc);
+        if (mdl == NULL)
+            continue;
+
+        /* add new modules to the new_modules hash table */
+        msg("new module: `%s'\n", mdl->name);
+        hash_insert_string(new_modules, mdl->name, mdl);
+        array_add(como_config->mdl_defs, def);
+    }
+
+    /* find modules to be removed */
+    rem_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    hash_iter_init(current_modules, &it);
+    while(hash_iter_next(&it)) {
+        mdl_def_t *def = hash_iter_get_value(&it);
+        mdl_def_t *first_def;
+        int pos;
+
+        if (hash_lookup_string(newcfg_modules, def->name) != NULL) {
+            debug("still have `%s'\n", def->name);
+            continue;
+        }
+
+        /* this module must be removed */
+        msg("removing module: `%s'\n", def->name);
+        hash_insert_string(rem_modules, def->name, def->name);
+
+        /* calculate the position of this module defn in the array */
+        first_def = &array_at(como_config->mdl_defs, mdl_def_t, 0);
+        pos = ((char *)def - (char *)first_def) / sizeof(mdl_def_t);
+        
+        /* remove from the array of configured modules */
+        array_remove(como_config->mdl_defs, pos);
+
+        /* remove from the node */
+        pos = mdl_lookup_position(node->mdls, def->name);
+        array_remove(node->mdls, pos);
+    }
 
     /*
      * XXX this piece of code assumes that CA and EX don't send
      *     messages to SU by themselves, but only as a response
-     *     to messages from SU. If this changed then this code
+     *     to messages from SU. If this changes then this code
      *     needs to be rewritten. Making this assumption greatly
-     *     simplifies the code, as it can be assumed that the
-     *     next message to a new module load request is either
-     *     MODULE_ADDED or MODULE_FAILED.
+     *     simplifies the code, since the next message after a
+     *     SU_XX_ADD_MODULE is either MODULE_ADDED or MODULE_FAILED.
+     */
+
+    /*
+     * adding the new modules
      */
     hash_iter_init(new_modules, &it);
     while(hash_iter_next(&it)) { /* send new modules to CA */
@@ -516,6 +551,8 @@ reconfigure(como_su_t *como_su)
         ipc_receive(como_su->ca, &t, NULL, NULL, NULL, NULL);
         if (t != CA_SU_MODULE_ADDED && t != CA_SU_MODULE_FAILED)
             error("communication protocol violation from CA\n");
+        if (t == CA_SU_MODULE_FAILED)
+            error("capture failed to load a module!\n");
     }
 
     hash_iter_init(new_modules, &it);
@@ -528,10 +565,63 @@ reconfigure(como_su_t *como_su)
         ipc_receive(como_su->ex, &t, NULL, NULL, NULL, NULL);
         if (t != EX_SU_MODULE_ADDED && t != EX_SU_MODULE_FAILED)
             error("communication protocol violation from EX\n");
+        if (t == EX_SU_MODULE_FAILED)
+            error("export failed to load a module!\n");
+    }
+
+    /*
+     * removing the old modules
+     */
+    hash_iter_init(rem_modules, &it);
+    while(hash_iter_next(&it)) { /* tell CA to remove old modules */
+        char *name = hash_iter_get_value(&it);
+        char *buffer, *ptr;
+        size_t sz;
+
+        sz = sersize_string(name);
+        buffer = como_malloc(sz);
+        ptr = buffer;
+
+        serialize_string(&ptr, name);
+        ipc_send(como_su->ca, SU_CA_DEL_MODULE, buffer, sz);
+        free(buffer);
+    }
+
+    for (i = 0; i < hash_size(rem_modules); i++) { /* wait for acks from CA */
+        ipc_receive(como_su->ca, &t, NULL, NULL, NULL, NULL);
+        if (t != CA_SU_MODULE_REMOVED && t != CA_SU_MODULE_FAILED)
+            error("communication protocol violation from CA\n");
+        if (t == CA_SU_MODULE_FAILED)
+            error("capture failed to remove a module!\n");
+    }
+
+    hash_iter_init(rem_modules, &it);
+    while(hash_iter_next(&it)) { /* tell EX to remove old modules */
+        char *name = hash_iter_get_value(&it);
+        char *buffer, *ptr;
+        size_t sz;
+
+        sz = sersize_string(name);
+        buffer = como_malloc(sz);
+        ptr = buffer;
+
+        serialize_string(&ptr, name);
+        ipc_send(como_su->ex, SU_EX_DEL_MODULE, buffer, sz);
+        free(buffer);
+    }
+    for (i = 0; i < hash_size(rem_modules); i++) { /* wait for acks from EX */
+        ipc_receive(como_su->ex, &t, NULL, NULL, NULL, NULL);
+        if (t != EX_SU_MODULE_REMOVED && t != EX_SU_MODULE_FAILED)
+            error("communication protocol violation from CA\n");
+        if (t == EX_SU_MODULE_FAILED)
+            error("export failed to remove a module!\n");
     }
 
     /* free unnecessary data */
+    hash_destroy(current_modules);
+    hash_destroy(newcfg_modules);
     hash_destroy(new_modules);
+    hash_destroy(rem_modules);
     destroy_config(&new_cfg, alc);
 }
 

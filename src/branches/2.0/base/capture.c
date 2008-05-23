@@ -519,12 +519,9 @@ handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 {
     mdl_t *mdl;
     mdl_icapture_t *ic;
-    alc_t *alc;
 
-    alc = como_alc();
-    
     debug("capture adding module - deserialize\n");
-    mdl_deserialize(&sbuf, &mdl, alc, PRIV_ICAPTURE);
+    mdl_deserialize(&sbuf, &mdl, como_alc(), PRIV_ICAPTURE);
     if (mdl == NULL) {
 	/* failed */
 	ipc_send(peer, CA_SU_MODULE_FAILED, NULL, 0);
@@ -553,7 +550,6 @@ handle_su_ca_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     ls_init_mdl(mdl->name, &ic->ls, mdl->shed_method);
 #endif
 
-    /* TODO locate the first empty entry in the array */
     array_add(como_ca->mdls, &mdl);
 
     debug("capture adding module - done, waiting for EX to attach\n");
@@ -573,12 +569,11 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
 			   como_ca_t * como_ca)
 {
     mdl_icapture_t *ic;
-    array_t *mdls = como_ca->mdls;
     mdl_t *mdl;
 
     debug("capture - export attaches to module `%s'\n", msg->mdl_name);
 
-    mdl = mdl_lookup(mdls, msg->mdl_name);
+    mdl = mdl_lookup(como_ca->mdls, msg->mdl_name);
     if (mdl == NULL) {
         warn("export attaches to an unknown module `%s'\n",
             msg->mdl_name);
@@ -606,7 +601,6 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
     return IPC_OK;
 }
 
-#if 0
 /* 
  * -- ca_ipc_module_del 
  * 
@@ -615,32 +609,49 @@ handle_ex_ca_attach_module(UNUSED ipc_peer_t * peer, msg_attach_module_t * msg,
  * 
  */
 static int
-ca_ipc_module_del(UNUSED ipc_peer_t * peer, delmsg_t *msg,
-                UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
+handle_su_ca_ipc_module_del(UNUSED ipc_peer_t * peer, char *sbuf,
+			UNUSED size_t sz, UNUSED int swap, como_ca_t * como_ca)
 {
+    char *name;
     mdl_t *mdl;
+    int pos;
 
-    debug("capture - deleting module `%s'\n", msg->mdl_name);
+    deserialize_string(&sbuf, &name, como_alc());
 
-    /* only the parent process should send this message */
-    //assert(sender == map.parent);
-
-    mdl = mdl_lookup(mdls, msg->mdl_name);
+    mdl = mdl_lookup(como_ca->mdls, name);
     if (mdl == NULL) {
-        warn("deletion of unknown module `%s' requested\n");
-        return IPC_OK; /* XXX what should we do? */
+        warn("deletion of unknown module `%s' requested\n", name);
+        ipc_send(peer, CA_SU_MODULE_FAILED, NULL, 0);
+        free(name);
+        return IPC_OK;
     }
 
-    if (mdl->status == MDL_ACTIVE) {
-        mdl_flush(mdl, 0); /* final flush */
-        s_active_modules--;
+    if (mdl_get_icapture(mdl)->status == MDL_ACTIVE) {
+        struct tuple *t, *next;
+        mdl_icapture_t *ic = mdl_get_icapture(mdl);
+
+        t = tuples_first(&ic->tuples);
+        while (t != NULL) { /* free the associated tuples */
+            next = tuples_next(t);
+            alc_free(&como_ca->shalc, t);
+            t = next;
+        }
+
+        pool_clear(ic->ivl_mem); /* free all the memory of the mdl */
     }
 
-    /* TODO: free its data */
-    shobj_close(mdl->priv->shobj);
-    mdl->status = MDL_UNUSED;
+    /*
+     * forget about the module 
+     */
+    pos = mdl_lookup_position(como_ca->mdls, name);
+    mdl_destroy(mdl, PRIV_ICAPTURE);
+    array_remove(como_ca->mdls, pos);
+    ipc_send(peer, CA_SU_MODULE_REMOVED, NULL, 0);
+
+    msg("capture removes module `%s'\n", name);
+    free(name);
+    return IPC_OK;
 }
-#endif
 
 static int
 handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer,
@@ -649,7 +660,12 @@ handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer,
 			      como_ca_t * como_ca)
 {
     struct tuple *t, *t2;
-    
+
+    /*
+     * we can't use info from como_ca->mdls here, because these tuples
+     * may come from a module that has been recently removed.
+     */
+
     t = tuples_first(&msg->tuples);
     while (t != NULL) {
 	t2 = t;
@@ -1699,7 +1715,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     
     /* register handlers for IPC messages */
     ipc_register(SU_CA_ADD_MODULE, (ipc_handler_fn) handle_su_ca_add_module);
-    /* ipc_register(CA_DEL_MODULE, ca_ipc_module_del); */
+    ipc_register(SU_CA_DEL_MODULE, (ipc_handler_fn)handle_su_ca_ipc_module_del);
     ipc_register(SU_CA_START, (ipc_handler_fn) handle_su_ca_start);
     ipc_register(SU_ANY_EXIT, (ipc_handler_fn) handle_su_any_exit);
     ipc_register(CCA_OPEN, (ipc_handler_fn) ca_ipc_cca_open);

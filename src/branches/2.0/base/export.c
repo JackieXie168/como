@@ -118,24 +118,29 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
 {
     mdl_iexport_t *ie;
     msg_attach_module_t msg;
+    pool_t *pool;
     mdl_t *mdl;
-    alc_t *alc;
     char *str;
     ipc_type t;
+    alc_t alc;
 
-    alc = como_alc();
-    mdl_deserialize(&sbuf, &mdl, alc, PRIV_IEXPORT);
+    pool = pool_create();
+    pool_alc_init(pool, &alc);
+
+    mdl_deserialize(&sbuf, &mdl, &alc, PRIV_IEXPORT);
     if (mdl == NULL) { /* failure */
 	warn("failed to receive + deserialize + load a module\n");
 	ipc_send(peer, EX_SU_MODULE_ADDED, NULL, 0);
 	return IPC_OK;
     }
-    debug("handle_su_ex_add_module -- recv'd & loaded module `%s'\n", mdl->name);
+    debug("handle_su_ex_add_module -- recv'd & loaded module `%s'\n",mdl->name);
 
     ie = mdl_get_iexport(mdl);
     ie->running_state = EX_MDL_STATE_RUNNING;
     ie->migrable = FALSE;
     ie->used_mem = 0;
+    ie->mem = pool;
+    mdl->priv->alc = alc;
 
     /*
      * open output file
@@ -400,60 +405,81 @@ handle_su_any_exit(UNUSED ipc_peer_t * peer,
 }
 
 
-#if 0
 /* 
- * -- ex_ipc_module_del
+ * -- handle_su_ex_del_module
  * 
  * removes a module from the map. it also frees all data 
  * structures related to that module and close the output 
  * file. 
  * 
  */ 
-static void
-ex_ipc_module_del(procname_t sender, __attribute__((__unused__)) int fd,
-                    void * buf, __attribute__((__unused__)) size_t len)
+static int
+handle_su_ex_del_module(UNUSED ipc_peer_t * peer, char * sbuf, UNUSED size_t sz,
+                        UNUSED int swap, como_ex_t * como_ex)
 {
-    module_t * mdl;
-    etable_t * et; 
-    earray_t * ea;
-    uint32_t i, rec_size;
-    int idx;
+    tupleset_t *tset;
+    mdl_iexport_t *ie;
+    char *name;
+    mdl_t *mdl;
 
-    /* only the parent process should send this message */
-    assert(sender == map.parent);
+    deserialize_string(&sbuf, &name, como_alc());
 
-    idx = *(int *)buf;
-    mdl = &map.modules[idx];
-    et = mdl->ex_hashtable;
-    ea = mdl->ex_array;
-    rec_size = sizeof(rec_t) + mdl->callbacks.ex_recordsize;
- 
-    /*
-     * drop export hash table
-     */
-    free(et);
-    mdl->ex_hashtable = NULL;
-
-    /*
-     * drop records
-     */
-    for (i = 0; i < ea->size; i++) {
-        if (ea->record[i]) {
-            free(ea->record[i]);
-            ea->record[i] = NULL;
-        }
+    mdl = hash_lookup_string(como_ex->mdls, name);
+    if (mdl == NULL) {
+        warn("removal of unknown module `%s' requested\n", name);
+        ipc_send(peer, EX_SU_MODULE_FAILED, NULL, 0);
+        free(name);
+        return IPC_OK;
     }
 
-    /*
-     * drop export array
-     */
-    free(ea);
-    mdl->ex_array = NULL;
-    csclose(mdl->file, mdl->offset);
-    remove_module(&map, mdl);
-}
+    ie = mdl_get_iexport(mdl);
 
-#endif
+    /*
+     * remove pending tuples
+     */
+    tset = tupleset_queue_first(&como_ex->queue);
+    while (tset != NULL) {
+    	tupleset_t *next = tupleset_queue_next(tset);
+
+	if (! strcmp(tset->mdl_name, name)) {
+            /*
+             * tell CA it can free the memory used by these tuples
+             */
+            if (tset->mechanism == TUPLES_FROM_SHMEM) {
+                msg_process_shm_tuples_t *msg = &tset->shmem_msg;
+                ipc_send(tset->peer, EX_CA_TUPLES_PROCESSED, msg, sizeof(*msg));
+            }
+            else
+                error("unimplemented\n");
+
+            /*
+             * remove from the queue and free the tupleset
+             */
+            tupleset_queue_remove(&como_ex->queue, tset);
+            free(tset);
+        }
+
+	tset = next;
+    }
+
+    /* TODO free state of the module */
+
+    /*
+     * close output file
+     */
+    csclose(ie->cs_writer, ie->woff);
+
+    mdl_destroy(mdl, PRIV_IEXPORT);
+    ipc_send(peer, EX_SU_MODULE_REMOVED, NULL, 0);
+
+    hash_insert_string(como_ex->mdls, mdl->name, mdl); /* add to mdl index */
+    debug("handle_su_ex_add_module -- module `%s' fully loaded\n", mdl->name);
+
+    msg("export removes module `%s'\n", name);
+    free(name);
+
+    return IPC_OK;
+}
 
 
 /*
@@ -502,6 +528,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 
     ipc_set_user_data(&como_ex);
     ipc_register(SU_EX_ADD_MODULE, (ipc_handler_fn) handle_su_ex_add_module);
+    ipc_register(SU_EX_DEL_MODULE, (ipc_handler_fn) handle_su_ex_del_module);
     ipc_register(SU_ANY_EXIT, (ipc_handler_fn) handle_su_any_exit);
     ipc_register(CA_EX_DONE, (ipc_handler_fn) handle_ca_ex_done);
     #if 0
@@ -510,7 +537,6 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
     #endif
     ipc_register(CA_EX_PROCESS_SHM_TUPLES,
                     (ipc_handler_fn) handle_ca_ex_process_shm_tuples);
-    /* ipc_register(IPC_MODULE_DEL, ex_ipc_module_del); */
     /* ipc_register(IPC_EXIT, ex_ipc_exit);*/
 
     /* listen to the parent */
