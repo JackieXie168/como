@@ -48,6 +48,7 @@ array_t * array_new        (size_t element_size);
 array_t * array_sized_new  (size_t element_size, int reserved_size);
 void **   array_free       (array_t * array, int free_seg);
 void      array_add        (array_t * array, void *data);
+void      array_remove     (array_t * array, int position);
 void      array_sort       (array_t * array, cmp_fn cmFn);
 void      array_clear      (array_t * array, int reserved_size, int zero_seg);
 void *    array_shift_     (array_t * array);

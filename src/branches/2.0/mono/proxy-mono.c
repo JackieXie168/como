@@ -320,6 +320,15 @@ proxy_mono_load(mdl_t * mdl, char *class_name)
     return s;
 }
 
+static void
+proxy_mono_unload(UNUSED mdl_t * mdl, proxy_mono_state_t *s)
+{
+    mono_gchandle_free(s->gchandle);
+    mono_assembly_close(s->assembly);
+    mono_gc_collect(mono_gc_max_generation());
+}
+
+
 static int
 proxy_mono_check_implements(MonoClass *klass, char *wanted_iface)
 {
@@ -397,6 +406,20 @@ proxy_mono_load_query(mdl_t *mdl)
     assert(s->qu_finish != NULL);
 
     return 0;
+}
+
+void
+proxy_mono_unload_export(mdl_t *mdl)
+{
+    proxy_mono_state_t *s = mdl_get_iexport(mdl)->state;
+    proxy_mono_unload(mdl, s);
+}
+
+void
+proxy_mono_unload_query(mdl_t *mdl)
+{
+    proxy_mono_state_t *s = mdl_get_iquery(mdl)->state;
+    proxy_mono_unload(mdl, s);
 }
 
 static void

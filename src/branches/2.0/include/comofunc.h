@@ -267,6 +267,8 @@ const headerinfo_t * headerinfo_lookup_with_type_and_layer(uint32_t type,
 void proxy_mono_init(char *mono_path);
 int proxy_mono_load_export(mdl_t * mdl);
 int proxy_mono_load_query(mdl_t * mdl);
+void proxy_mono_unload_export(mdl_t *mdl);
+void proxy_mono_unload_query(mdl_t *mdl);
 qu_format_t * proxy_mono_get_formats(mdl_t * mdl, char **dflt_format);
 void * proxy_mono_ex_init(mdl_t * mdl);
 void * proxy_mono_qu_init(mdl_t * mdl, int format_id, hash_t * args);

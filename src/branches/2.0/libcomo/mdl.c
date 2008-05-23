@@ -130,22 +130,29 @@ mdl_deserialize(uint8_t ** sbuf, mdl_t ** mdl_out, alc_t * alc,
     mdl_t *mdl;
     serializable_t *config;
     
-    mdl = alc_new0(alc, mdl_t);
+    mdl = alc_new0(como_alc(), mdl_t);
     
     deserialize_timestamp_t(sbuf, &mdl->flush_ivl);
-    deserialize_string(sbuf, &mdl->name, alc);
-    deserialize_string(sbuf, &mdl->description, alc);
+    deserialize_string(sbuf, &mdl->name, como_alc());
+    deserialize_string(sbuf, &mdl->description, como_alc());
     deserialize_int(sbuf, &mdl->id);
 #ifdef LOADSHED
-    deserialize_string(sbuf, &mdl->shed_method, alc);
+    deserialize_string(sbuf, &mdl->shed_method, como_alc());
     deserialize_double(sbuf, &mdl->minimum_srate);
 #endif
-    deserialize_string(sbuf, &mdl->filter, alc);
-    deserialize_string(sbuf, &mdl->mdlname, alc);
+    deserialize_string(sbuf, &mdl->filter, como_alc());
+    deserialize_string(sbuf, &mdl->mdlname, como_alc());
     deserialize_uint64_t(sbuf, &mdl->streamsize);
 
     if (mdl_load(mdl, priv) < 0) {
-	alc_free(alc, mdl);
+        alc_free(como_alc(), mdl->name);
+        alc_free(como_alc(), mdl->description);
+        #ifdef LOADSHED
+        alc_free(como_alc(), mdl->shed_method);
+        #endif
+        alc_free(como_alc(), mdl->filter);
+        alc_free(como_alc(), mdl->mdlname);
+	alc_free(como_alc(), mdl);
 	*mdl_out = NULL;
 	return;
     }
@@ -360,6 +367,51 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
     return 0;
 }
 
+void
+mdl_destroy(mdl_t *mdl, mdl_priv_t priv)
+{
+    mdl_ibase_t *ib = mdl->priv;
+    #ifdef MONO_SUPPORT
+    ex_impl_t *ex_impl;
+    qu_impl_t *qu_impl;
+    #endif
+
+    switch (priv) {
+    case PRIV_ISUPERVISOR:
+	free(ib->proc.su);
+	break;
+    case PRIV_ICAPTURE:
+	free(ib->proc.ca);
+	break;
+    case PRIV_IEXPORT:
+        #ifdef MONO_SUPPORT
+        ex_impl = shobj_symbol(mdl->priv->shobj, "ex_impl", FALSE);
+        if (*ex_impl == EX_IMPL_MONO)
+            proxy_mono_unload_export(mdl);
+        #endif
+	free(ib->proc.ex);
+        break;
+    case PRIV_IQUERY:
+        #ifdef MONO_SUPPORT
+        qu_impl = shobj_symbol(mdl->priv->shobj, "qu_impl", FALSE);
+        if (*qu_impl == QU_IMPL_MONO)
+            proxy_mono_unload_query(mdl);
+        #endif
+	free(ib->proc.qu);
+        break;
+    }
+    shobj_close(mdl->priv->shobj);
+
+    free(mdl->name);
+    free(mdl->description);
+    #ifdef LOADSHED
+    free(mdl->shed_method);
+    #endif
+    free(mdl->filter);
+    free(mdl->mdlname);
+
+    free(mdl);
+}
 
 void *
 mdl__alloc_config(mdl_t * mdl, size_t sz)
@@ -451,18 +503,44 @@ mdl_store_rec(mdl_t * mdl, void * rec)
     cscommit(ie->cs_writer, ie->woff);
 }
 
-mdl_t *
-mdl_lookup(array_t *mdls, const char *name)
+static void
+_mdl_lookup(array_t *mdls, const char *name, mdl_t **out_mdl, int *out_pos)
 {
     mdl_t *mdl;
     int i;
 
     for (i = 0; i < mdls->len; i++) {
         mdl = array_at(mdls, mdl_t *, i);
-        if (! strcmp(mdl->name, name))
-            return mdl;
+        if (! strcmp(mdl->name, name)) {
+            *out_mdl = mdl;
+            *out_pos = i;
+            return;
+        }
     }
-    return NULL;
+
+    *out_mdl = NULL;
+    *out_pos = -1;
+}
+
+
+mdl_t *
+mdl_lookup(array_t *mdls, const char *name)
+{
+    mdl_t *mdl;
+    int p;
+
+    _mdl_lookup(mdls, name, &mdl, &p);
+    return mdl;
+}
+
+int
+mdl_lookup_position(array_t *mdls, const char *name)
+{
+    mdl_t *mdl;
+    int p;
+
+    _mdl_lookup(mdls, name, &mdl, &p);
+    return p;
 }
 
 void

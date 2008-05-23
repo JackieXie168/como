@@ -99,15 +99,15 @@ typedef struct serializable {
 #define deserialize_int deserialize_int32_t
 
 #define deserialize_string(sbuf,val_out,alc) do { \
-    size_t sz;					\
-    char *val = NULL;				\
-    deserialize_uint32_t(sbuf, &sz);		\
-    if (sz > 0) {				\
-	val = alc_malloc(alc, sz);		\
-	memcpy(val, *sbuf, sz);			\
+    size_t _deser_sz;				\
+    char *_deser_val = NULL;			\
+    deserialize_uint32_t(sbuf, &_deser_sz);	\
+    if (_deser_sz > 0) {			\
+	_deser_val = alc_malloc(alc, _deser_sz);\
+	memcpy(_deser_val, *sbuf, _deser_sz);	\
     }						\
-    *val_out = val;				\
-    *sbuf += sz;				\
+    *val_out = _deser_val;			\
+    *sbuf += _deser_sz;				\
 } while(0)
 
 

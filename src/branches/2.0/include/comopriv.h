@@ -100,12 +100,14 @@ enum {
     SU_CA_ADD_MODULE,
     SU_CA_DEL_MODULE,
     CA_SU_MODULE_ADDED,
+    CA_SU_MODULE_REMOVED,
     CA_SU_MODULE_FAILED,
     CA_SU_DONE,
 
     SU_EX_ADD_MODULE,
     SU_EX_DEL_MODULE,
     EX_SU_MODULE_ADDED,
+    EX_SU_MODULE_REMOVED,
     EX_SU_MODULE_FAILED,
     EX_SU_DONE,
 
@@ -402,6 +404,8 @@ struct mdl_iexport {
 
     int                 migrable;
     int                 used_mem;
+    
+    pool_t              *mem;
 };
 
 struct mdl_iquery {
@@ -425,11 +429,13 @@ mdl_iexport_t *     mdl_get_iexport     (mdl_t * h);
 mdl_iquery_t *      mdl_get_iquery      (mdl_t * h);
 
 int mdl_load (mdl_t * h, mdl_priv_t priv);
+void mdl_destroy(mdl_t *mdl, mdl_priv_t priv);
 void   mdl_serialize   (uint8_t ** sbuf, const mdl_t * h);
 size_t mdl_sersize     (const mdl_t * src);
 void   mdl_deserialize (uint8_t ** sbuf, mdl_t ** h_out, alc_t * alc,
 			mdl_priv_t priv);
 mdl_t *mdl_lookup(array_t *mdls, const char *name);
+int mdl_lookup_position(array_t *mdls, const char *name);
 
 /*
  * supervisor.c
