@@ -20,15 +20,15 @@ SET(MODULES
 #  topaddr
 #  tophwaddr
 #  topports
-  ethtypesCC
-  flowcountCC
-  protocolCC
-  traceCC
-  trafficCC
-  topaddrCC
-  tophwaddrCC
-  topportsCC
-  tupleCC
+  ethtypes
+  flowcount
+  protocol
+  trace
+  traffic
+  topaddr
+  tophwaddr
+  topports
+  tuple
 #  hwtm
 #  tuple
 #  unknown-ports
@@ -37,8 +37,8 @@ SET(MODULES
 IF(MONO_FOUND)
   SET(MODULES ${MODULES}
     autofocus
-    trafficCCS
-    topaddrCCS
+    traffic-csharp
+    topaddr-chsarp
   )
 ENDIF(MONO_FOUND)
 
