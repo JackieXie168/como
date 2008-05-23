@@ -30,7 +30,7 @@
  * $Id$
  */
 
-namespace CoMo.Modules.trafficCCS
+namespace CoMo.Modules.traffic_csharp
 {
     using System;
     using System.Collections;

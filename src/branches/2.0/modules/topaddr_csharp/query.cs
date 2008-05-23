@@ -30,7 +30,7 @@
  * $Id$
  */
 
-namespace CoMo.Modules.topaddrCCS
+namespace CoMo.Modules.topaddr_csharp
 {
     using System;
     using System.Collections;

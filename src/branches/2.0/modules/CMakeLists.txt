@@ -37,8 +37,8 @@ SET(MODULES
 IF(MONO_FOUND)
   SET(MODULES ${MODULES}
     autofocus
-    traffic-csharp
-    topaddr-chsarp
+    traffic_csharp
+    topaddr_csharp
   )
 ENDIF(MONO_FOUND)
 
