@@ -101,18 +101,21 @@ SET(REL_INST_LIBDIR libexec/${COMOVERFILE})
 SET(REL_INST_DBDIR  share/${COMOVERFILE})
 SET(REL_INST_MANDIR man/man1)
 SET(REL_INST_ETCDIR etc/como)
+SET(REL_INST_INCDIR include/como)
 
 SET(INST_BINDIR /${REL_INST_BINDIR})
 SET(INST_LIBDIR /${REL_INST_LIBDIR})
 SET(INST_DBDIR  /${REL_INST_DBDIR})
 SET(INST_MANDIR /${REL_INST_MANDIR})
 SET(INST_ETCDIR /${REL_INST_ETCDIR})
+SET(INST_INCDIR /${REL_INST_INCDIR})
 
 SET(ABS_INST_BINDIR ${CMAKE_INSTALL_PREFIX}${INST_BINDIR})
 SET(ABS_INST_LIBDIR ${CMAKE_INSTALL_PREFIX}${INST_LIBDIR})
 SET(ABS_INST_DBDIR  ${CMAKE_INSTALL_PREFIX}${INST_DBDIR})
 SET(ABS_INST_MANDIR ${CMAKE_INSTALL_PREFIX}${INST_MANDIR})
 SET(ABS_INST_ETCDIR ${CMAKE_INSTALL_PREFIX}${INST_ETCDIR})
+SET(ABS_INST_INCDIR ${CMAKE_INSTALL_PREFIX}${INST_INCDIR})
 
 SET(DEFAULT_LIBDIR  ${ABS_INST_LIBDIR})
 SET(DEFAULT_DBDIR   ${ABS_INST_DBDIR})
@@ -127,39 +130,13 @@ INSTALL(FILES ${COMO_BINARY_DIR}/como.conf.example
         DESTINATION ${ABS_INST_ETCDIR})
 
 #
-# Install a README.db into default db directory.
-# The other purpose is to create that directory.
-#
-INSTALL_FILES(${INST_DBDIR} FILES README.db)
-
-#
-# Install an example trace
-#
-INSTALL_FILES(${INST_ETCDIR} FILES example-trace.pcap)
-
-#
 # Dependencies
 #
-
-#
-# Search for bison
-#
 FIND_PACKAGE(BISON REQUIRED)
-
-#
-# Search for flex
-#
 FIND_PACKAGE(FLEX REQUIRED)
-
-#
-# Search for mono
-#
 FIND_PACKAGE(MONO)
-
-#
-# Search for libpcap library
-#
 FIND_PACKAGE(PCAP)
+FIND_PACKAGE(DAG)
 
 #
 # Search for flow-tools library
@@ -177,10 +154,49 @@ IF(FTLIB_FOUND AND FTLIB_LIBRARIES MATCHES "a$")
   ENDIF(ZLIB_FOUND)
 ENDIF(FTLIB_FOUND AND FTLIB_LIBRARIES MATCHES "a$")
 
+
 #
-# Search for dag libray
+# Install a README.db into default db directory.
+# The other purpose is to create that directory.
 #
-FIND_PACKAGE(DAG)
+INSTALL_FILES(${INST_DBDIR} FILES README.db)
+
+#
+# Install an example trace
+#
+INSTALL_FILES(${INST_ETCDIR} FILES example-trace.pcap)
+
+#
+# Install include directories
+#
+FILE(GLOB INCFILES ${COMO_SOURCE_DIR}/include/*.h)
+
+INSTALL(FILES ${INCFILES} ${COMO_BINARY_DIR}/include/como-build.h
+        DESTINATION ${ABS_INST_INCDIR})
+
+#
+# Install template CMakeLists.txt to build modules
+#
+CONFIGURE_FILE(${COMO_SOURCE_DIR}/modules/template-CMakeLists.txt
+               ${COMO_BINARY_DIR}/modules/CMakeLists.txt
+               @ONLY)
+
+INSTALL(FILES ${COMO_BINARY_DIR}/modules/CMakeLists.txt
+        DESTINATION ${ABS_INST_ETCDIR})
+
+#
+# Install script to build modules
+#
+CONFIGURE_FILE(${COMO_SOURCE_DIR}/modules/template-como_module.sh
+               ${COMO_BINARY_DIR}/modules/como_module.sh)
+
+INSTALL(FILES ${COMO_BINARY_DIR}/modules/como_module.sh
+        DESTINATION ${ABS_INST_BINDIR}
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                    GROUP_EXECUTE             GROUP_READ 
+                    WORLD_EXECUTE             WORLD_READ)
+
+
 
 #
 # Output como-build.h and include its directory
@@ -220,15 +236,12 @@ IF(ENABLE_LOADSHED)
 ENDIF(ENABLE_LOADSHED)
 
 ADD_SUBDIRECTORY(misc)
-ADD_SUBDIRECTORY(modules)
 ADD_SUBDIRECTORY(sniffers)
 ADD_SUBDIRECTORY(base)
 ADD_SUBDIRECTORY(services)
 ADD_SUBDIRECTORY(libcomo)
 ADD_SUBDIRECTORY(lib)
 #ADD_SUBDIRECTORY(man)
-
-
 
 #
 # Output configuration messages
