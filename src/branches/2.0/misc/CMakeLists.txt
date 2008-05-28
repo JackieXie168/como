@@ -57,4 +57,5 @@ SET_SOURCE_FILES_PROPERTIES(lexer.c COMPILE_FLAGS "-Wno-sign-compare -Wno-unused
 SET_SOURCE_FILES_PROPERTIES(grammar.c COMPILE_FLAGS "-Wno-sign-compare -Wno-unused")
 
 ADD_EXECUTABLE(structmagic ${STRUCTMAGIC_SRC})
+INSTALL_TARGETS(${INST_LIBDIR} structmagic)
 
