@@ -46,6 +46,8 @@ QUERY_FORMATS_BEGIN
     { FORMAT_GNUPLOT, "gnuplot", "text/plain" },
 QUERY_FORMATS_END
 
+DEFAULT_FORMAT = "pretty";
+
 struct qstate {
     uint64_t aggr_pkts[CLASSES_MAX];
     uint64_t aggr_bytes[CLASSES_MAX];

@@ -42,7 +42,7 @@
 #include <err.h>
 #include <errno.h>      /* errno */
 
-#define LOG_DISABLE
+#define LOG_DEBUG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "storage.h"
