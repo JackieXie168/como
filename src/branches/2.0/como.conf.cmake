@@ -250,6 +250,11 @@ module "tuple"
     source "tupleCC"
 end
 
+module "apps"
+    args "classes" = "web=tcp 80,tcp 443
+                      dns=udp 53,tcp 53"
+end
+
 
 # The ethtypes module computes the number of packets and bytes divided by
 # ethertype. Each individual ethertype has to be specified in the
