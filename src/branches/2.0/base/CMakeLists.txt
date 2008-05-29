@@ -219,7 +219,7 @@ TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
 TARGET_LINK_LIBRARIES(como m)
 
 TARGET_LINK_LIBRARIES(como comolib)
-#TARGET_LINK_LIBRARIES(como comomdl)
+TARGET_LINK_LIBRARIES(como comomdl)
 
 TARGET_LINK_LIBRARIES(como-storage comolib)
 
