@@ -46,11 +46,15 @@
 #define dbg_return(x) return x
 #endif
 
+#define MAX_INCLUDE_DEPTH 10
+YY_BUFFER_STATE include_stack[MAX_INCLUDE_DEPTH];
+int include_stack_ptr;
 int ycline;
 
 void config_lexic_init(void)
 {
     ycline = 1;
+    include_stack_ptr = 0;
 }
 
 %}
@@ -62,6 +66,7 @@ NUMBER          {DIGIT}+
 %option nounput
 
 %s comment 
+%s import
 
 %%
 
@@ -70,6 +75,28 @@ NUMBER          {DIGIT}+
 <comment>"*"+[^*/\n]*   /* eat up '*'s not followed by '/'s */
 <comment>\n             ycline++; /* and newlines */
 <comment>"*"+"/"        BEGIN(INITIAL);
+
+import              BEGIN(import);
+<import>\"[^"]*\"   {
+                        char *str;
+
+                        if (include_stack_ptr >= MAX_INCLUDE_DEPTH)
+                            error("reading cfg: imports nested too deeply\n");
+
+                        str = como_strdup(yytext + 1); /* remove "s */
+                        str[strlen(str) - 1] = '\0';
+
+                        include_stack[include_stack_ptr++] = YY_CURRENT_BUFFER;
+                        yyin = fopen(str, "r" );
+                        if (yyin == NULL)
+                            error("reading cfg: cannot open imported " \
+                                    "file `%s' for reading\n", str);
+
+                        yy_switch_to_buffer(yy_create_buffer(yyin,YY_BUF_SIZE));
+
+                        BEGIN(INITIAL);
+                    }
+<import>[ \t]*      /* skip spaces */
 
 db-path         { dbg_return(TOK_DBPATH); }
 librarydir      { dbg_return(TOK_LIBDIR); }
@@ -91,7 +118,6 @@ filter          { dbg_return(TOK_FILTER); }
 hashsize        { dbg_return(TOK_HASHSIZE); }
 streamsize      { dbg_return(TOK_STREAMSIZE); }
 args            { dbg_return(TOK_ARGS); }
-args-file       { dbg_return(TOK_ARGSFILE); }
 on-demand       { dbg_return(TOK_ONDEMAND); }
 end             { dbg_return(TOK_END); }
 =               { dbg_return(TOK_EQUALS); }
@@ -103,6 +129,8 @@ source-module   { dbg_return(TOK_SOURCE_MODULE); }
 
 shed-method     { dbg_return(TOK_SHEDMETHOD); }
 min_srate       { dbg_return(TOK_MINSRATE); }
+
+"<-"            { dbg_return(TOK_LEFTARROW); }
 
 {DIGIT}*"."{DIGIT}+ {
                         yclval.fpnumber = atof(yytext);
@@ -152,6 +180,16 @@ min_srate       { dbg_return(TOK_MINSRATE); }
                 }
 .               {
                     warn("line %d: junk `%s' found\n", ycline, yctext);
+                }
+
+<<EOF>>         {
+                    include_stack_ptr--;
+                    if (include_stack_ptr < 0)
+                        yyterminate();
+                    else {
+                        yy_delete_buffer(YY_CURRENT_BUFFER);
+                        yy_switch_to_buffer(include_stack[include_stack_ptr]);
+                    }
                 }
 
 %%
