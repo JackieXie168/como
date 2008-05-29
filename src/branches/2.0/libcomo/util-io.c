@@ -34,7 +34,7 @@
 /*
  * -- como_read
  * 
- * keeps writing until complete.
+ * keeps reading until complete.
  */
 ssize_t
 como_read(int fd, void * buf, size_t count)

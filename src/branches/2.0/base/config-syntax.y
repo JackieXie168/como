@@ -38,7 +38,11 @@
 #define YYDEBUG 1
 #define YYFPRINTF fwarn
 
-#include <strings.h> /* bzero */
+#include <strings.h>   /* bzero */
+#include <sys/types.h> /* stat, open */
+#include <sys/stat.h>  /* stat, open */
+#include <unistd.h>    /* stat */
+#include <fcntl.h>     /* open */
 
 #define LOG_DOMAIN "CONFIG"
 #include "como.h"
@@ -58,6 +62,7 @@ enum {
 int mode;
 char *what;
 
+static char *get_file_contents();
 void config_lexic_init();
 
 /* global variables */
@@ -88,9 +93,9 @@ report_parse_error(void)
 %token TOK_DBPATH TOK_LIBDIR TOK_MEMSIZE TOK_QUERY_PORT TOK_NAME TOK_LOCATION
 %token TOK_TYPE TOK_COMMENT TOK_SNIFFER TOK_FILESIZE TOK_MODULE TOK_DESCRIPTION
 %token TOK_SOURCE TOK_OUTPUT TOK_FILTER TOK_HASHSIZE TOK_STREAMSIZE TOK_ARGS
-%token TOK_ARGSFILE TOK_ONDEMAND TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
+%token TOK_ONDEMAND TOK_END TOK_NEWLINE TOK_EQUALS TOK_COMMA
 %token TOK_STORAGEPATH TOK_ASNFILE TOK_SHEDMETHOD TOK_ALIAS TOK_VIRTUAL_NODE
-%token TOK_SOURCE_MODULE TOK_MINSRATE
+%token TOK_SOURCE_MODULE TOK_MINSRATE TOK_LEFTARROW
 %token <string> TOK_STRING
 %token <number> TOK_NUMBER
 %token <fpnumber> TOK_FPNUMBER
@@ -188,21 +193,20 @@ module_keyword:
     | TOK_HASHSIZE TOK_NUMBER { mdl.hashsize = $2; }
     | TOK_STREAMSIZE TOK_NUMBER { mdl.streamsize = $2; }
     | TOK_SHEDMETHOD TOK_STRING {
-                                    #ifdef LOADSHED
-                                    mdl.shed_method = $2;
-                                    #endif
-                                }
+        #ifdef LOADSHED
+        mdl.shed_method = $2;
+        #endif
+    }
     | TOK_MINSRATE TOK_NUMBER {
-                                    #ifdef LOADSHED
-                                    mdl.minimum_srate = $2;
-                                    #endif
-                              }
+        #ifdef LOADSHED
+        mdl.minimum_srate = $2;
+        #endif
+    }
     | TOK_MINSRATE TOK_FPNUMBER {
-                                    #ifdef LOADSHED
-                                    mdl.minimum_srate = $2;
-                                    #endif
-                              }
-    /*| TOK_ARGSFILE TOK_STRING (TODO) */
+        #ifdef LOADSHED
+        mdl.minimum_srate = $2;
+        #endif
+    }
     | TOK_ONDEMAND { mdl.ondemand = 1; }
     | error TOK_NEWLINE { report_parse_error(); }
 ;
@@ -210,12 +214,59 @@ module_keyword:
 args_list: args_list TOK_COMMA arg | arg
 ;
 
-arg: TOK_STRING TOK_EQUALS TOK_STRING { hash_insert_string(mdl.args, $1, $3); }
+arg:
+    TOK_STRING TOK_EQUALS TOK_STRING {
+        hash_insert_string(mdl.args, $1, $3);
+    }
+    | TOK_STRING TOK_LEFTARROW TOK_STRING {
+        hash_insert_string(mdl.args, $1, get_file_contents($3));
+        free($3);
+    }
 ;
 
 %%
 
 #include "config-lexic.c"
+
+static char *
+get_file_contents(char *path)
+{
+    struct stat st;
+    char *buffer;
+    int r, fd;
+
+    #define GFC_ERROR_STR \
+        "could not read file `%s' (referenced by configuration file " \
+        "or command line)\n"
+
+    r = stat(path, &st);
+    if (r != 0) {
+        warn(GFC_ERROR_STR, path);
+        return como_strdup("");
+    }
+
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        warn(GFC_ERROR_STR, path);
+        return como_strdup("");
+    }
+
+    buffer = como_malloc(st.st_size);
+    r = como_read(fd, buffer, st.st_size);
+    if (r != st.st_size) {
+        free(buffer);
+        warn(GFC_ERROR_STR, path);
+        return como_strdup("");
+    }
+
+    r = close(fd);
+    if (r < 0) {
+        free(buffer);
+        warn(GFC_ERROR_STR, path);
+        return como_strdup("");
+    }
+    return buffer;
+}
 
 void ycerror(char *fmt, ...)
 { 
