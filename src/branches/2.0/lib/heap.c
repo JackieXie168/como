@@ -35,7 +35,9 @@
 #include <inttypes.h>   /* uintN_t */
 #include <errno.h>	/* error values */
 
-#include "corlib.h"
+#include "como.h"
+#include "comopriv.h"
+#include "heap.h"
 
 /* 
  * this is defined here to hide it from other files.
@@ -61,11 +63,11 @@ heap_init(heap_compare cmp, uint32_t size)
         return NULL;
     }
     
-    h = (heap_t*) lib_malloc(sizeof(heap_t));
+    h = (heap_t*) como_malloc(sizeof(heap_t));
     h->cmp = cmp;
     h->size = size;
     h->maxsize = 0; 		/* dynamic heap. no max size set */
-    h->array = lib_malloc(h->size * sizeof(void*));
+    h->array = como_malloc(h->size * sizeof(void*));
     h->first_free = 0; /* the heap is empty */
     
     return h;
@@ -81,6 +83,7 @@ heap_init(heap_compare cmp, uint32_t size)
 #define HEAP_FATHER(x)		(((x) - 1) >> 1)
 #define HEAP_SWAP(h,a,b,tmp)	_HEAP_SWAP(h->array[(a)],h->array[(b)],tmp)
 #define HEAP_A_GT_B(h,a,b)	(h->cmp(h->array[(a)], h->array[(b)]))
+
 
 /* 
  * -- heap_insert 
@@ -103,7 +106,7 @@ heap_insert(heap_t *h, void *elem)
 	if (h->maxsize == 0) { 
 	    /* dynamic heap. double its size */
 	    h->size <<= 1;
-	    h->array = lib_realloc(h->array, h->size * sizeof(void*));
+	    h->array = como_realloc(h->array, h->size * sizeof(void*));
 	} else { 
 	    /* return an error and let the caller decide */
 	    errno = ENOSPC; 
@@ -183,7 +186,7 @@ void
 heap_setsize(heap_t *h, int size) 
 { 
     h->maxsize = h->size = size; 
-    h->array = lib_realloc(h->array, h->size * sizeof(void*));
+    h->array = realloc(h->array, h->size * sizeof(void*));
 }
 
 void

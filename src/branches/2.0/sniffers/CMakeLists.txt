@@ -31,14 +31,14 @@ IF(UNIX)
   ENDIF(PCAP_FOUND)
   
 # flow-tools support
-#  IF(FTLIB_FOUND)
-#    SET(SNIFFERS
-#      ${SNIFFERS}
-#      flowtools
-#      netflow
-#    )
-#    INCLUDE_DIRECTORIES(${FTLIB_INCLUDE_DIR})
-#  ENDIF(FTLIB_FOUND)
+IF(FTLIB_FOUND)
+  SET(SNIFFERS
+    ${SNIFFERS}
+    flowtools
+    netflow
+  )
+  INCLUDE_DIRECTORIES(${FTLIB_INCLUDE_DIR})
+ENDIF(FTLIB_FOUND)
 
 # DAG support
   IF(DAG_FOUND)

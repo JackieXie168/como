@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, Intel Corporation
+ * Copyright (c) 2006-2008, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -47,7 +47,7 @@
 #include "comoendian.h"
 #include "comotypes.h"
 #include "comopriv.h"
-#include "corlib.h"
+#include "heap.h"
 
 #include "capbuf.c"
 
@@ -177,7 +177,7 @@ update_flowvalues(pkt_t * pkt, struct _flowinfo * flow, timestamp_t timescale)
 	    else 
 	        pkts--; 
 	} else if (flow->pkts_left * COMO(len) > flow->bytes_left) { 
-	    panicx("incorrect flow - pkts: %d, len: %d, bytes: %d < %d", 
+	    error("incorrect flow - pkts: %d, len: %d, bytes: %d < %d", 
 		flow->pkts_left, COMO(len), flow->bytes_left, 
 		flow->pkts_left * COMO(len)); 
 	} 
@@ -314,13 +314,13 @@ process_record(struct fts3rec_v5 * fr, struct netflow_me * me,
      * check that the information in the flow record is valid 
      */ 
     if (fr->dPkts == 0 || fr->dOctets == 0) { 
-	logmsg(V_LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
+	warn("invalid flow record (pkts: %d, bytes: %d)\n", 
 	       fr->dPkts, fr->dOctets); 
 	return netflow2ts(fr, fr->Last);
     }
 
     /* build a new flow record */
-    flow = safe_calloc(1, sizeof(struct _flowinfo));
+    flow = como_calloc(1, sizeof(struct _flowinfo));
     flow->pkts_left = fr->dPkts; 
     flow->bytes_left = fr->dOctets; 
     flow->increment = netflow2ts(fr, fr->Last) - netflow2ts(fr, fr->First);
@@ -363,7 +363,7 @@ ftche_new()
 {
     ftche_t *ftche;
     
-    ftche = safe_calloc(1, sizeof(ftche_t));
+    ftche = como_calloc(1, sizeof(ftche_t));
     ftche->heap = heap_init(flow_cmp, 32);
     ftche->min_ts = ~0;
     ftche->max_ts = 0;
@@ -401,21 +401,19 @@ process_ftpdu(struct netflow_me * me, ftche_t ** ftche_out)
 			   MSG_DONTWAIT,
 			   (struct sockaddr *) &agent, &addr_len);
     if (ftpdu.bused <= 0) {
-    	if (errno != EAGAIN) {
-	    logmsg(LOGWARN, "sniffer-netflow: recvfrom: %s\n",
-		   strerror(errno));
-    	}
+    	if (errno != EAGAIN)
+	    warn("sniffer-netflow: recvfrom: %s\n", strerror(errno));
 	return -1;
     }
 
     /* verify integrity, get version */
     if (ftpdu_verify(&ftpdu) < 0) {
-	logmsg(LOGWARN, "sniffer-netflow: PDU corrupted\n");
+	warn("sniffer-netflow: PDU corrupted\n");
 	return 0;
     }
     
     if (ftpdu.ftv.d_version != 5) {
-    	logmsg(LOGWARN, "sniffer-netflow: NetFlow V5 required!\n");
+    	warn("sniffer-netflow: NetFlow V5 required!\n");
 	return 0;
     }
 
@@ -433,7 +431,7 @@ process_ftpdu(struct netflow_me * me, ftche_t ** ftche_out)
 
     /* verify sequence number */
     if (ftpdu_check_seq(&ftpdu, &ftche->ftseq) < 0) {
-	logmsg(LOGSNIFFER, "sniffer-netflow: PDU with wrong sequence number:"
+	warn("sniffer-netflow: PDU with wrong sequence number. "
 	       "expected: %lu got: %lu lost %lu\n",
 	       ftche->ftseq.seq_exp, ftche->ftseq.seq_rcv,
 	       ftche->ftseq.seq_lost);
@@ -464,11 +462,11 @@ process_ftpdu(struct netflow_me * me, ftche_t ** ftche_out)
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, UNUSED alc_t *alc)
 {
     struct netflow_me *me;
 
-    me = safe_calloc(1, sizeof(struct netflow_me));
+    me = como_calloc(1, sizeof(struct netflow_me));
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;
@@ -552,15 +550,15 @@ error:
 }
 
 
-static void
-sniffer_setup_metadesc(sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(sniffer_t * s, alc_t *alc)
 {
     struct netflow_me *me = (struct netflow_me *) s;
     metadesc_t *outmd;
     pkt_t *pkt;
 
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(s, 0);
+    outmd = metadesc_new(NULL, alc, 0);
     //outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
     
     outmd->ts_resolution = TIME2TS(me->timescale, 0);
@@ -598,6 +596,8 @@ sniffer_setup_metadesc(sniffer_t * s)
     N32(IP(dst_ip)) = 0xffffffff;
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
+
+    return outmd;
 }
 
 
@@ -619,8 +619,7 @@ sniffer_start(sniffer_t * s)
     /* create a socket */
     me->sniff.fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (me->sniff.fd < 0) {
-	logmsg(LOGWARN, "sniffer-netflow: can't create socket: %s\n",
-	       strerror(errno));
+	warn("sniffer-netflow: can't create socket: %s\n", strerror(errno));
 	goto error;
     }
 
@@ -635,8 +634,7 @@ sniffer_start(sniffer_t * s)
 	if (bindinfo) {
 	    loc_addr.sin_addr = *((struct in_addr *) bindinfo->h_addr);
 	} else {
-	    logmsg(LOGWARN,
-		   "sniffer-netflow: unresolved ip address %s: %s\n",
+	    warn("sniffer-netflow: unresolved ip address %s: %s\n",
 		   me->device, strerror(h_errno));
 	    goto error;
 	}
@@ -645,13 +643,12 @@ sniffer_start(sniffer_t * s)
     /* unicast bind -- no multicast support */
     if (bind(me->sniff.fd, (struct sockaddr *) &loc_addr,
 	sizeof(loc_addr)) < 0) {
-	logmsg(LOGWARN, "sniffer-netflow: can't bind socket: %s\n",
-	       strerror(errno));
+	warn("sniffer-netflow: can't bind socket: %s\n", strerror(errno));
 	goto error;
     }
     
     /* initialize the hash table for demuxing exporters */
-    me->ftch = hash_new_full(allocator_safe(), HASHKEYS_ULONG, NULL, NULL,
+    me->ftch = hash_new_full(como_alc(), HASHKEYS_ULONG, NULL, NULL,
 			     NULL, (destroy_notify_fn) ftche_destroy);
 
     return 0;
@@ -731,7 +728,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
 	update_pkt(flow, me, ftche);
 	
-	ppbuf_capture(me->sniff.ppbuf, pkt);
+	ppbuf_capture(me->sniff.ppbuf, pkt, &me->sniff);
 
 	/* update the minimum timestamp from the root of the heap */
 	flow = heap_root(ftche->heap);
@@ -791,7 +788,7 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, UNUSED alc_t *alc)
 {
     struct netflow_me *me = (struct netflow_me *) s;
 

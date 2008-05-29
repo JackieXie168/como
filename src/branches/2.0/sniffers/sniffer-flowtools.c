@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006, Intel Corporation
+ * Copyright (c) 2004-2008, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -40,6 +40,7 @@
 
 #include "sniffers.h"
 #include "como.h"
+#include "comopriv.h"
 #include "comotypes.h"
 #include "heap.h"
 
@@ -175,7 +176,7 @@ update_flowvalues(pkt_t * pkt, struct _flowinfo * flow, timestamp_t timescale)
 	    else 
 	        pkts--; 
 	} else if (flow->pkts_left * COMO(len) > flow->bytes_left) { 
-	    panicx("incorrect flow - pkts: %d, len: %d, bytes: %d < %d", 
+	    error("incorrect flow - pkts: %d, len: %d, bytes: %d < %d", 
 		flow->pkts_left, COMO(len), flow->bytes_left, 
 		flow->pkts_left * COMO(len)); 
 	} 
@@ -311,17 +312,17 @@ flowtools_next(struct flowtools_me * me)
 	/* TODO: GLOB_APPEND ? */
 	ret = glob(me->device, GLOB_ERR | GLOB_TILDE, NULL, &me->in);
 	if (ret != 0) {
-	    logmsg(LOGWARN, "sniffer-flowtools: error matching %s: %s\n",
+	    warn("sniffer-flowtools: error matching %s: %s\n",
 		   me->device, strerror(errno));
 	}
 	
 	return -1;           /* no files to process */
     }
 
-    logmsg(LOGSNIFFER, "opening file %s\n", me->in.gl_pathv[me->curfile]);
+    msg("opening file %s\n", me->in.gl_pathv[me->curfile]);
     me->fd = open(me->in.gl_pathv[me->curfile], O_RDONLY);
     if (me->fd < 0) {
-	logmsg(LOGWARN, "sniffer-flowtools: opening %s: %s\n",
+	warn("sniffer-flowtools: opening %s: %s\n",
 	       me->in.gl_pathv[me->curfile], strerror(errno));
         return -1;
     }
@@ -329,7 +330,7 @@ flowtools_next(struct flowtools_me * me)
     /* init flowtools library */
     ret = ftio_init(&me->ftio, me->fd, FT_IO_FLAG_READ);
     if (ret < 0) {
-	logmsg(LOGWARN, "sniffer-flowtools: initializing %s: %s\n",
+	warn("sniffer-flowtools: initializing %s: %s\n",
 	       me->in.gl_pathv[me->curfile], strerror(errno));
         return -1;
     }
@@ -364,7 +365,7 @@ flowtools_read(struct flowtools_me * me)
 	    me->sniff.fd = me->fd;
 	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
 	    if (fr == NULL) {
-		logmsg(LOGWARN, "error reading flowtools file: %s\n"
+		warn("error reading flowtools file: %s\n"
 		       "moving to next file in the directory\n",
 		       strerror(errno));
 	    }
@@ -394,7 +395,7 @@ flowtools_read(struct flowtools_me * me)
 	 * check that the information in the flow record is valid 
 	 */ 
 	if (fr->dPkts == 0 || fr->dOctets == 0) { 
-	    logmsg(LOGSNIFFER, "invalid flow record (pkts: %d, bytes: %d)\n", 
+	    msg("invalid flow record (pkts: %d, bytes: %d)\n", 
 		   fr->dPkts, fr->dOctets);
 	    /* read next record and try again */ 
 	    fr = (struct fts3rec_v5 *) ftio_read(&me->ftio);  
@@ -406,7 +407,7 @@ flowtools_read(struct flowtools_me * me)
     }
     
     /* build a new flow record */
-    flow = safe_calloc(1, sizeof(struct _flowinfo));
+    flow = como_calloc(1, sizeof(struct _flowinfo));
     flow->pkts_left = fr->dPkts; 
     flow->bytes_left = fr->dOctets; 
     flow->increment = netflow2ts(fr, fr->Last) - netflow2ts(fr, fr->First);
@@ -450,11 +451,11 @@ flow_cmp(const void * fa, const void * fb)
  * 
  */
 static sniffer_t *
-sniffer_init(const char * device, const char * args)
+sniffer_init(const char * device, const char * args, alc_t * alc)
 {
     struct flowtools_me *me;
 
-    me = safe_calloc(1, sizeof(struct flowtools_me));
+    me = alc_new0(alc, struct flowtools_me);
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_FILE | SNIFF_SELECT | SNIFF_SHBUF;
@@ -544,15 +545,15 @@ error:
 }
 
 
-static void
-sniffer_setup_metadesc(sniffer_t * s)
+static metadesc_t *
+sniffer_setup_metadesc(sniffer_t * s, alc_t *alc)
 {
     struct flowtools_me *me = (struct flowtools_me *) s;
     metadesc_t *outmd;
     pkt_t *pkt;
 
     /* setup output descriptor */
-    outmd = metadesc_define_sniffer_out(s, 0);
+    outmd = metadesc_new(NULL, alc, 0);
     //outmd = metadesc_define_sniffer_out(src, 1, "sampling_rate");
     
     outmd->ts_resolution = TIME2TS(me->timescale, 0);
@@ -590,6 +591,8 @@ sniffer_setup_metadesc(sniffer_t * s)
     N32(IP(dst_ip)) = 0xffffffff;
     N16(UDP(src_port)) = 0xffff;
     N16(UDP(dst_port)) = 0xffff;
+
+    return outmd;
 }
 
 
@@ -613,13 +616,13 @@ sniffer_start(sniffer_t * s)
      */
     ret = glob(me->device, GLOB_ERR | GLOB_TILDE, NULL, &me->in); 
     if (ret != 0) {
-	logmsg(LOGWARN, "sniffer-flowtools: error matching %s: %s\n",
+	warn("sniffer-flowtools: error matching %s: %s\n",
 	       me->device, strerror(errno)); 
 	return -1; 
     } 
 	
     if (me->in.gl_pathc == 0) { 
-	logmsg(LOGWARN, "sniffer-flowtools: no files match %s\n", me->device); 
+	warn("sniffer-flowtools: no files match %s\n", me->device); 
 	return -1; 
     } 
 	
@@ -686,8 +689,12 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
  	 * of flows in the heap. 
 	 */ 
 	while (me->max_ts - me->min_ts < me->window) {
+            /*
 	    if (me->sniff.flags & (SNIFF_INACTIVE | SNIFF_COMPLETE)) 
 		break; 
+            */
+            if (s->priv->state == SNIFFER_COMPLETED)
+                break;
 
 	    if (!flowtools_read(me)) { 
 		/* 
@@ -701,22 +708,25 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 		    /* we don't have files to process anymore. write a 
 		     * message and sleep for 10 mins. 
 		     */
-		    logmsg(LOGSNIFFER, "sniffing from %s\n"
+		    msg("sniffing from %s\n"
 			   "   no more files to read, but want more\n"
 			   "   going to sleep for 10minutes\n",
 			   me->device);
 		    me->sniff.polling = TIME2TS(600, 0);
-		    me->sniff.flags = SNIFF_TOUCHED | SNIFF_FILE | SNIFF_POLL;
+                    s->priv->state = SNIFFER_COMPLETED;
+                    s->priv->touched = 1;
 		    return 0;
 		}
-		me->sniff.flags = SNIFF_TOUCHED | SNIFF_FILE | SNIFF_COMPLETE;
+                s->priv->touched = 1;
+                s->priv->state = SNIFFER_COMPLETED;
 		break;
 	    } else if (me->sniff.flags & SNIFF_POLL) { 
 		/* 
 		 * we have a new file but still in polling mode. 
 		 * switch to select() mode to run faster. 
 		 */
-	        me->sniff.flags = SNIFF_TOUCHED | SNIFF_FILE | SNIFF_SELECT; 
+	        me->sniff.flags = SNIFF_FILE | SNIFF_SELECT; 
+                s->priv->touched = 1;
 	    } 
 	}
 
@@ -739,7 +749,7 @@ sniffer_next(sniffer_t * s, int max_pkts, timestamp_t max_ivl,
 
 	update_pkt(flow, me);
 
-	ppbuf_capture(me->sniff.ppbuf, pkt);
+	ppbuf_capture(me->sniff.ppbuf, pkt, &me->sniff);
 
 	/* update the minimum timestamp from the root of the heap */
 	flow = heap_root(me->heap);
@@ -804,7 +814,7 @@ sniffer_stop(sniffer_t * s)
 
 
 static void
-sniffer_finish(sniffer_t * s)
+sniffer_finish(sniffer_t * s, UNUSED alc_t *alc)
 {
     struct flowtools_me *me = (struct flowtools_me *) s;
 

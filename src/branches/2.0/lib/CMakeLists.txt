@@ -13,6 +13,7 @@ SET(COMOMDL_SRCS
   protoname.c
   bitmap.c
   pattern_search.c
+  heap.c
 )
 
 ADD_LIBRARY(comomdl STATIC ${COMOMDL_SRCS})
