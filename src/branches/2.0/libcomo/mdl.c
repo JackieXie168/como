@@ -328,10 +328,10 @@ mdl_load(mdl_t * mdl, mdl_priv_t priv)
             break;
 	case QU_IMPL_C: {
             char **strptr;
-	    ib->proc.qu->init = shobj_symbol(ib->shobj, "qu_init", TRUE);
-	    ib->proc.qu->finish = shobj_symbol(ib->shobj, "qu_finish", FALSE);
-	    ib->proc.qu->print_rec = shobj_symbol(ib->shobj, "print_rec", TRUE);
-	    ib->proc.qu->formats = shobj_symbol(ib->shobj, "qu_formats", TRUE);
+	    ib->proc.qu->init = shobj_symbol(ib->shobj, "qu_init", FALSE);
+	    ib->proc.qu->finish = shobj_symbol(ib->shobj, "qu_finish", TRUE);
+	    ib->proc.qu->print_rec = shobj_symbol(ib->shobj, "print_rec", FALSE);
+	    ib->proc.qu->formats = shobj_symbol(ib->shobj, "qu_formats", FALSE);
 	    ib->proc.qu->replay = shobj_symbol(ib->shobj, "replay", TRUE);
 
             strptr = shobj_symbol(ib->shobj, "qu_dflt_fmt", TRUE);

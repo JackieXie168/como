@@ -49,6 +49,7 @@ extern struct_t *structs[];
  * information about types
  */
 cstype_conv_t cstypes[] = {
+    /* size of type     c name         mono name function to get mono class */
     { sizeof(uint64_t), "timestamp_t", "ulong",  "mono_get_uint64_class" },
     { sizeof(uint64_t), "uint64_t",    "ulong",  "mono_get_uint64_class" },
     { sizeof(uint32_t), "uint32_t",    "uint",   "mono_get_uint32_class" },

@@ -4,7 +4,7 @@
 # passed as the first argument. CoMo must be already installed in the system.
 #
 
-MODULES="autofocus ethtypes flowcount protocol topaddr topaddr_csharp tophwaddr topports trace traffic traffic_csharp tuple"
+MODULES="apps autofocus ethtypes flowcount protocol topaddr topaddr_csharp tophwaddr topports trace traffic traffic_csharp tuple"
 
 if [ $# != 2 ]
 then

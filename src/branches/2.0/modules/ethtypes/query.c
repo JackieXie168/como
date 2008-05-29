@@ -219,6 +219,8 @@ print_rec(mdl_t *self, int format_id, record_t *rec, qstate_t *s)
 	s->pkts[i] += rec->entry[i].pkts;
     }
 
+    s->no_records++;
+
     /* if need more aggregation, stop here */
     if (s->no_records % s->granularity != 0)
         return;
