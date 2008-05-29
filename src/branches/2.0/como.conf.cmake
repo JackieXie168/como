@@ -199,61 +199,61 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #		default: unused
 
 module "traffic"
-  source        "trafficCC"             # implemented by trafficCC.so
+  source        "traffic"             # implemented by traffic.so
   description	"Packet/Bytes counter"
   args		"interval" = "1"
 # args		"interface=1"
 end
 
 module "flowcount"
-    source "flowcountCC"
+    source "flowcount"
     description "Flow counter"
     # aggregate flows using the 5-tuple
     args "flowdef" = "src_ip|dst_ip|proto|src_port|dst_port"
 end
 
 module "protocol"
-    source "protocolCC"
+    source "protocol"
     description "Protocol breakdown"
 end
 
 module "topaddr"
-    source "topaddrCC"
+    source "topaddr"
     description "Popular destination IP Addresses"
     args "use-dst" = "1"
     on-demand
 end
 
 #module "tophwaddr"
-#    source "tophwaddrCC"
+#    source "tophwaddr"
 #    description "Popular destination HW Addresses"
 #    args "use-dst"
 #end
 
 module "topports"
-    source      "topportsCC"
+    source      "topports"
     description "Top destination port numbers in bytes"
     args        "interval" = "5", "topn" = "10"
 end
 
 module "trace"
-    source      "traceCC"
+    source      "trace"
     description "Packet trace"
     streamsize  1GB
 end
 
-#module "trafficCCS"
-#    source "trafficCCS"
-#end
-
 module "tuple"
-    source "tupleCC"
+    source "tuple"
 end
 
 module "apps"
     args "classes" = "web=tcp 80,tcp 443
                       dns=udp 53,tcp 53"
 end
+
+#module "pattern_search"
+#    args "pattern" = "GET /"
+#end
 
 
 # The ethtypes module computes the number of packets and bytes divided by
@@ -274,7 +274,7 @@ end
 #		default: IP,IPv6,ARP
 /*
 module "ethtypes"
-  source "ethtypesCC"
+  source "ethtypes"
   description	"Ethertypes breakdown"
   args		"interval" = "60"
   args		"ethtypes" = "IP=0x0800,

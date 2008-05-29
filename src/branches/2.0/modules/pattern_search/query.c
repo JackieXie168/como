@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2007, Intel Corporation
+ * Copyright (c) 2004-2008, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or
@@ -27,7 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id: query.c 1211 2007-09-26 15:01:49Z jsanjuas $
  */
 
 #include <sys/types.h>
