@@ -6,6 +6,9 @@
 # /* and */ as delimiters.
 # Long lines can be split with a \ at the end of the line.
 
+# Configuration files can be nested:
+#import "filename.conf"
+
 # Directory where the output data of all modules reside.
 # Default: @DEFAULT_DBDIR@
 
@@ -139,7 +142,7 @@ sniffer		"pcap" "@EXAMPLE_TRACE@"
 #   memsize	1024		# private memory in bytes (default: 0)
 #   streamsize  10GB		# stream size on disk (default: 256MB)
 #   args	"name" = "value"# arguments to be passed to the module. 
-#   args-file	"path/to/file"	# specify a file from where to read arguments.
+#   args        "name" <- "file"# load the argument from a file.
 #   running	"on-demand"	# specify running mode (default: normal)
 #   shed-method "pkt"           # specify the load shedding method
 #                               #   (default: pkt, options: pkt/flow)
@@ -252,7 +255,7 @@ module "apps"
 end
 
 #module "pattern_search"
-#    args "pattern" = "GET /"
+#    args "pattern" <- "/path/to/file/pattern.txt"
 #end
 
 
