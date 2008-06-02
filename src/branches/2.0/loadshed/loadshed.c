@@ -697,7 +697,7 @@ ls_init_mdl(char *name, mdl_ls_t *mdl_ls, char *shed_method)
     if (!mdl_ls->hash) {
         mdl_ls->hash = como_calloc(NUM_HASH, sizeof(uhash_t *));
         for (i = 0; i < NUM_HASH; i++)
-            mdl_ls->hash[i] = como_malloc(sizeof(uhash_t));
+            mdl_ls->hash[i] = safe_malloc(sizeof(uhash_t));
     }
 
     /* set to learning state */

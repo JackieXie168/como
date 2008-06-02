@@ -145,7 +145,7 @@ handle_su_ex_add_module(ipc_peer_t * peer, uint8_t * sbuf, UNUSED size_t sz,
     /*
      * open output file
      */
-    str = como_asprintf("%s/%s", como_ex->st_dir, mdl->name);
+    str = safe_asprintf("%s/%s", como_ex->st_dir, mdl->name);
     ie->cs_writer = csopen(str, CS_WRITER, (off_t) mdl->streamsize,
 			 (ipc_peer_t *) COMO_ST);
     if (ie->cs_writer < 0) {
@@ -254,7 +254,7 @@ handle_ca_ex_process_shm_tuples(UNUSED ipc_peer_t * peer,
     debug("handle_ca_ex_process_shm_tuples -- recv'd %d tuples in shared mem\n",
             msg->ntuples);
     
-    tset = como_malloc(sizeof(tupleset_t));
+    tset = safe_malloc(sizeof(tupleset_t));
 
     tset->tuples = msg->tuples;
     tset->ntuples = msg->ntuples;
@@ -307,7 +307,7 @@ process_tuples(como_ex_t *como_ex)
         void **tuples;
 	size_t i;
 
-	tuples = como_calloc(tset->ntuples, sizeof(void *));
+	tuples = safe_calloc(tset->ntuples, sizeof(void *));
 
 	debug("handle_ca_ex_process_shm_tuples -- building tuple array\n");
 	i = 0;
@@ -509,7 +509,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
     como_ex.mdls = hash_new(como_alc(), HASHKEYS_STRING, NULL, NULL);
     tupleset_queue_init(&como_ex.queue);
 
-    como_ex.st_dir = como_asprintf("%s/%s", como_config->db_path, node->name);
+    como_ex.st_dir = safe_asprintf("%s/%s", como_config->db_path, node->name);
 
 #ifdef MONO_SUPPORT
     /* initialize mono */

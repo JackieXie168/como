@@ -147,7 +147,7 @@ sniffer_start(sniffer_t * s)
 
     /* receives the HTTP response if present */
     http_res_sz = 32;
-    http_res = como_malloc(http_res_sz);
+    http_res = safe_malloc(http_res_sz);
     ret = como_read(me->sniff.fd, http_res, http_res_sz);
     if (ret < 0) {
 	warn("sniffer-como: read error: %s\n", strerror(errno));
@@ -165,7 +165,7 @@ sniffer_start(sniffer_t * s)
 		break;
 	    }
 	    http_res_sz = http_res_sz * 2;
-	    http_res = como_realloc(http_res, http_res_sz);
+	    http_res = safe_realloc(http_res, http_res_sz);
 	    ret = como_read(me->sniff.fd, http_res + rdn, http_res_sz - rdn);
 	    if (ret < 0) {
 		warn("sniffer-como: read error: %s\n", strerror(errno));

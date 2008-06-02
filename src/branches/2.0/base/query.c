@@ -166,7 +166,7 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
         req->source = node->source; /* from the virtual node's source */
 
         if (req->filter_str)
-            req->filter_str = como_asprintf("(%s) and (%s)", req->filter_str,
+            req->filter_str = safe_asprintf("(%s) and (%s)", req->filter_str,
                 node->filter);
         else
             req->filter_str = node->filter;
@@ -206,9 +206,9 @@ query_validate(qreq_t * req, como_node_t * node, int *errcode)
      * if necessary first get the default format
      */
     if (req->format == NULL)
-        req->format = como_strdup(iq->dflt_format);
+        req->format = safe_strdup(iq->dflt_format);
     if (req->format == NULL) /* mdl has no default */
-        req->format = como_strdup("plain");
+        req->format = safe_strdup("plain");
     
     /*
      * set the qu_format
@@ -478,7 +478,7 @@ query_generic_main(FILE * client_stream, como_node_t * node, qreq_t *qreq)
     uint8_t *sbuf;
     void *mdlrec;
     qreq_t req = *qreq;
-    int client_fd = como_fileno(client_stream);
+    int client_fd = safe_fileno(client_stream);
 
     if (req.mode == QMODE_SERVICE) {
 	service_fn service = service_lookup(req.service);
@@ -534,7 +534,7 @@ query_generic_main(FILE * client_stream, como_node_t * node, qreq_t *qreq)
      */
     storage_fd = ipc_connect(COMO_ST);
 
-    dbname = como_asprintf("%s/%s/%s", como_config->db_path, node->name,
+    dbname = safe_asprintf("%s/%s/%s", como_config->db_path, node->name,
 			   req.mdl->name);
     debug("opening file for reading (%s)\n", dbname); 
     mode =  req.wait ? CS_READER : CS_READER_NOBLOCK; 
@@ -700,7 +700,7 @@ query_main_http(ipc_peer_t * parent,
     int supervisor_fd, ret, errcode;
     qreq_t req;
     char *errstr, *httpstr;
-    int client_fd = como_fileno(client_stream);
+    int client_fd = safe_fileno(client_stream);
     
     query_initialize(parent, &supervisor_fd);
     ret = query_recv(&req, client_fd, como_stats->ts); 
@@ -742,7 +742,7 @@ query_main_http(ipc_peer_t * parent,
      */
     if (req.mode == QMODE_MODULE) {
         httpstr = NULL;
-        httpstr = como_asprintf("HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n",
+        httpstr = safe_asprintf("HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n",
                                 req.qu_format->content_type);
         if (como_write(client_fd, httpstr, strlen(httpstr)) < 0)
             error("sending data to the client");
@@ -763,11 +763,11 @@ query_main_plain(ipc_peer_t * parent, UNUSED memmap_t * shmemmap,
     int supervisor_fd, errcode;
     char *errstr, *to_http;
     qreq_t req;
-    int client_fd = como_fileno(client_stream);
+    int client_fd = safe_fileno(client_stream);
 
     query_initialize(parent, &supervisor_fd);
 
-    to_http = como_asprintf("GET /%s HTTP/1.0\r\n\r\n",
+    to_http = safe_asprintf("GET /%s HTTP/1.0\r\n\r\n",
             como_config->inline_module);
 
     /*

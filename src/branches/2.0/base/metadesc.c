@@ -168,7 +168,7 @@ parse_protos(const char *protos, struct parsed_protos_t *pp)
     const headerinfo_t *hi;
     layer_t l;
     const char d[] = ":";
-    char *protos_copy = como_strdup(protos);
+    char *protos_copy = safe_strdup(protos);
     char *t, *s;
     t = s = protos_copy;
 
@@ -475,7 +475,7 @@ metadesc_try_match(metadesc_t * out, metadesc_t * in,
 	for (outit = out; outit != NULL; outit = outit->_next) {
 	    affinity = metadesc_try_match_pair(outit, init);
 	    if (affinity > 0) {
-		res = como_realloc(res, (matches_count + 1) *
+		res = safe_realloc(res, (matches_count + 1) *
 				   sizeof(metadesc_match_t));
 		
 		res[matches_count].in = init;
@@ -483,7 +483,7 @@ metadesc_try_match(metadesc_t * out, metadesc_t * in,
 		res[matches_count].affinity = affinity;
 		matches_count++;
 	    } else {
-		incomps = como_realloc(incomps, (incomps_count + 1) *
+		incomps = safe_realloc(incomps, (incomps_count + 1) *
 				       sizeof(metadesc_incompatibility_t));
 		incomps[incomps_count].in = init;
 		incomps[incomps_count].out = outit;
@@ -562,7 +562,7 @@ metadesc_determine_filter(metadesc_t * md)
     layers[L2] = NULL;
     
     for (l = L3; l <= L4; l++)
-	layers[l] = como_calloc(md->_tpl_count, sizeof(int));
+	layers[l] = safe_calloc(md->_tpl_count, sizeof(int));
     
     /*
      * Iterate over the template list and keep the information of used

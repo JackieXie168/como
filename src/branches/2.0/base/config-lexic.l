@@ -83,7 +83,7 @@ import              BEGIN(import);
                         if (include_stack_ptr >= MAX_INCLUDE_DEPTH)
                             error("reading cfg: imports nested too deeply\n");
 
-                        str = como_strdup(yytext + 1); /* remove "s */
+                        str = safe_strdup(yytext + 1); /* remove "s */
                         str[strlen(str) - 1] = '\0';
 
                         include_stack[include_stack_ptr++] = YY_CURRENT_BUFFER;
@@ -164,7 +164,7 @@ min_srate       { dbg_return(TOK_MINSRATE); }
                 }
 
 \"[^"]*\"       {   /* string literal */
-                    yclval.string = como_strdup(yytext + 1);
+                    yclval.string = safe_strdup(yytext + 1);
                     yclval.string[strlen(yclval.string) - 1] = '\0';
                     dbg_return(TOK_STRING);
                 }

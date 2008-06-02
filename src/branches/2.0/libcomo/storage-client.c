@@ -81,7 +81,9 @@ four methods, and provides an mmap-like interface.
  *
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>

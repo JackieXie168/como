@@ -68,7 +68,7 @@ escape_quotes(char *input)
         if (input[i] == '\\' || input[i] == '"')
             final_len++;
 
-    output = como_malloc(final_len + 1);
+    output = safe_malloc(final_len + 1);
 
     for (i = j = 0; i < s; i++) {
         if (input[i] == '\\' || input[i] == '"')
@@ -125,7 +125,7 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
     if (req->filter_str == NULL)
         req->filter_str = "all";
 
-    buffer = como_malloc(10 * 1024);
+    buffer = safe_malloc(10 * 1024);
     sprintf(buffer, "module \"%s\" source \"%s\" filter \"%s\"",
             req->module, mdl_code, req->filter_str);
 
@@ -152,7 +152,7 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
 
     my_argv[i++] = "-i"; /* do an inline execution of the mdl */
 
-    buffer = como_malloc(8 * 1024);
+    buffer = safe_malloc(8 * 1024);
     sprintf(buffer, "%s?format=%s", req->module, req->format);
 
     hash_iter_init(req->args, &it);
@@ -165,7 +165,7 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
     my_argv[i++] = buffer;
 
     my_argv[i++] = "-s"; /* with the appropriate input sniffer */
-    my_argv[i++] = como_asprintf("como,http://localhost:%d/%s"
+    my_argv[i++] = safe_asprintf("como,http://localhost:%d/%s"
                                     "?format=como&start=%d&end=%d&wait=%s",
                                     como_config->query_port,
                                     req->source,

@@ -196,16 +196,16 @@ log_set_handler(const char * domain, log_fn user_fn, void * user_data)
     if (h == NULL) {
 	s_log.handlers_count++;
 	if (s_log.handlers != &s_initial_handler) {
-	    s_log.handlers = como_realloc(s_log.handlers, s_log.handlers_count *
+	    s_log.handlers = safe_realloc(s_log.handlers, s_log.handlers_count *
 					sizeof(log_handler_t));
 	} else {
-	    s_log.handlers = como_malloc(s_log.handlers_count *
+	    s_log.handlers = safe_malloc(s_log.handlers_count *
 					sizeof(log_handler_t));
 	    s_log.handlers[0] = s_initial_handler;
 	}
 	h = &s_log.handlers[s_log.handlers_count - 1];
     }
-    h->domain = como_strdup(domain);
+    h->domain = safe_strdup(domain);
     h->user_fn = user_fn;
     h->user_data = user_data; 
 }
@@ -245,7 +245,7 @@ log_outv(const char *domain, log_level_t level, const char *format, va_list ap)
 		s_log.buf_len += 4 - s_log.buf_len % 4;
 	    }
     	}
-    	s_log.buf = como_realloc(s_log.buf, s_log.buf_len);
+    	s_log.buf = safe_realloc(s_log.buf, s_log.buf_len);
 	len = 1 + vsnprintf(s_log.buf, s_log.buf_len, format, ap);
     }
     

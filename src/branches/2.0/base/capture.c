@@ -179,7 +179,7 @@ batch_filter(batch_t * batch, como_ca_t * como_ca)
 
     if (size < i) {
 	size = i;
-	which = como_realloc(which, i);
+	which = safe_realloc(which, i);
     }
 
     bzero(which, i);
@@ -300,7 +300,7 @@ mdl_flush(mdl_t *mdl, timestamp_t next_ts)
                 ntuples++;
             }
 
-            msg = como_malloc(sz + sizeof(msg_process_ser_tuples_t));
+            msg = safe_malloc(sz + sizeof(msg_process_ser_tuples_t));
             strcpy(msg->mdl_name, mdl->name);
             msg->ntuples = ntuples;
             msg->tuple_mem = ic->tuple_mem;
@@ -909,7 +909,7 @@ ca_ipc_cca_open(ipc_peer_t * peer, UNUSED void * buf, UNUSED size_t len,
     cl = como_new0(cabuf_cl_t);
     cl->peer = peer;
     cl->ref_mask = (1LL << (uint64_t) (id + 1));	/* id 0 -> mask 2 */
-    cl->sniff_usage = como_calloc(como_ca->sniffers_count , sizeof(float));
+    cl->sniff_usage = safe_calloc(como_ca->sniffers_count , sizeof(float));
     cl->sampling = alc_new0(&como_ca->shalc, int); /* sampling rate is kept
 						      into shared memory */
 
@@ -1756,7 +1756,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
     }
 
-    como_ca.first_ref_pkts = como_calloc(sizeof(void *),
+    como_ca.first_ref_pkts = safe_calloc(sizeof(void *),
             (max_sniffer_id + 1));
 
     /* initialize the capture buffer */

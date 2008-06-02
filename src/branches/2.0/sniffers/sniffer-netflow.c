@@ -320,7 +320,7 @@ process_record(struct fts3rec_v5 * fr, struct netflow_me * me,
     }
 
     /* build a new flow record */
-    flow = como_calloc(1, sizeof(struct _flowinfo));
+    flow = safe_calloc(1, sizeof(struct _flowinfo));
     flow->pkts_left = fr->dPkts; 
     flow->bytes_left = fr->dOctets; 
     flow->increment = netflow2ts(fr, fr->Last) - netflow2ts(fr, fr->First);
@@ -363,7 +363,7 @@ ftche_new()
 {
     ftche_t *ftche;
     
-    ftche = como_calloc(1, sizeof(ftche_t));
+    ftche = safe_calloc(1, sizeof(ftche_t));
     ftche->heap = heap_init(flow_cmp, 32);
     ftche->min_ts = ~0;
     ftche->max_ts = 0;
@@ -466,7 +466,7 @@ sniffer_init(const char * device, const char * args, UNUSED alc_t *alc)
 {
     struct netflow_me *me;
 
-    me = como_calloc(1, sizeof(struct netflow_me));
+    me = safe_calloc(1, sizeof(struct netflow_me));
 
     me->sniff.max_pkts = 8192;
     me->sniff.flags = SNIFF_SELECT | SNIFF_SHBUF;

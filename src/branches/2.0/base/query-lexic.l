@@ -56,7 +56,7 @@ GET             { return TOK_GET; }
 =               { return TOK_EQUALS; }
 " "             { return TOK_SPACE; }
 
-{URICHAR}+      { yqlval.string = como_strdup(yytext); return TOK_STRING; }
+{URICHAR}+      { yqlval.string = safe_strdup(yytext); return TOK_STRING; }
 
 .|\n
 

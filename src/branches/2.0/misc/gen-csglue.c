@@ -36,7 +36,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h> /* asprintf */
 
 #include "structmagic.h"

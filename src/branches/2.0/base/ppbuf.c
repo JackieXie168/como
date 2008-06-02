@@ -65,7 +65,7 @@ ppbuf_new(int size, sniffer_t *sniff)
     
     ppbuf = como_new0(ppbuf_t);
     ppbuf->size = size;
-    ppbuf->pp = como_calloc(size, sizeof(pkt_t *));
+    ppbuf->pp = safe_calloc(size, sizeof(pkt_t *));
     ppbuf->id = sniff->priv->id;
     ppbuf->sniffer = sniff;
     

@@ -100,17 +100,17 @@ blanks: blanks TOK_SPACE | TOK_SPACE;
 
 fullpath:
     slashes relpath {
-            $$ = como_asprintf("/%s", $2);
+            $$ = safe_asprintf("/%s", $2);
             free($2);
         }
     | slashes {
-            $$ = como_asprintf("/");
+            $$ = safe_asprintf("/");
         }
     ;
 
 relpath:
     relpath slashes TOK_STRING {
-            $$ = como_asprintf("%s/%s", $1, $3);
+            $$ = safe_asprintf("%s/%s", $1, $3);
             free($1);
             free($3);
         }
@@ -143,12 +143,12 @@ keyvalue:
         }
     | TOK_STRING TOK_EQUALS { /* value is not there */
             ast.keyvals[ast.nkeyvals].key = $1;
-            ast.keyvals[ast.nkeyvals].val = como_strdup("");
+            ast.keyvals[ast.nkeyvals].val = safe_strdup("");
             ast.nkeyvals++;
         }
     | TOK_STRING {
             ast.keyvals[ast.nkeyvals].key = $1;
-            ast.keyvals[ast.nkeyvals].val = como_strdup("");
+            ast.keyvals[ast.nkeyvals].val = safe_strdup("");
             ast.nkeyvals++;
         }
     | { /* tolerate missing key=val */ }
@@ -159,7 +159,7 @@ value:
             $$ = $1;
         }
     | value TOK_EQUALS TOK_STRING {
-            $$ = como_asprintf("%s=%s", $1, $3);
+            $$ = safe_asprintf("%s=%s", $1, $3);
             free($1);
             free($3);
         }

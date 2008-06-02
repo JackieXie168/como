@@ -63,11 +63,11 @@ heap_init(heap_compare cmp, uint32_t size)
         return NULL;
     }
     
-    h = (heap_t*) como_malloc(sizeof(heap_t));
+    h = (heap_t*) safe_malloc(sizeof(heap_t));
     h->cmp = cmp;
     h->size = size;
     h->maxsize = 0; 		/* dynamic heap. no max size set */
-    h->array = como_malloc(h->size * sizeof(void*));
+    h->array = safe_malloc(h->size * sizeof(void*));
     h->first_free = 0; /* the heap is empty */
     
     return h;
@@ -106,7 +106,7 @@ heap_insert(heap_t *h, void *elem)
 	if (h->maxsize == 0) { 
 	    /* dynamic heap. double its size */
 	    h->size <<= 1;
-	    h->array = como_realloc(h->array, h->size * sizeof(void*));
+	    h->array = safe_realloc(h->array, h->size * sizeof(void*));
 	} else { 
 	    /* return an error and let the caller decide */
 	    errno = ENOSPC; 
