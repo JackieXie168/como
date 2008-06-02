@@ -89,26 +89,25 @@ pkt_t * cca_next_pkt (cca_t * cca);
  */
 void define_sniffer(char *name, char *device, char *args, como_config_t *cfg);
 void define_module(mdl_def_t *mdl, como_config_t *cfg);
-void define_virtual_node(virtual_node_def_t *vnode, como_config_t *cfg,
-                            alc_t *alc);
-void initialize_module_def(mdl_def_t *mdl, alc_t *alc);
-void initialize_virtual_node_def(virtual_node_def_t *vnode, alc_t *alc);
+void define_virtual_node(virtual_node_def_t *vnode, como_config_t *cfg);
+void initialize_module_def(mdl_def_t *mdl);
+void initialize_virtual_node_def(virtual_node_def_t *vnode);
 void set_filesize(int64_t size, como_config_t *cfg);
 void set_memsize(int64_t size, como_config_t *cfg);
 void set_queryport(int64_t port, como_config_t *cfg);
 
-como_config_t *configure(int argc, char **argv, alc_t *alc, como_config_t *cfg);
+como_config_t *configure(int argc, char **argv, como_config_t *cfg);
 mdl_def_t * config_get_module_def_by_name(como_config_t *cfg, char *name);
 char *config_resolve_alias(como_config_t *cfg, char *name);
 
-void destroy_config(como_config_t *cfg, alc_t *alc);
-void destroy_virtual_node_def(virtual_node_def_t *cfg, alc_t *alc);
+void destroy_config(como_config_t *cfg);
+void destroy_virtual_node_def(virtual_node_def_t *cfg);
 
 /*
  * config-syntax.y
  */
-como_config_t * parse_config_file(char *file, alc_t *alc, como_config_t *cfg);
-como_config_t * parse_config_string(char *str, alc_t *alc, como_config_t *cfg);
+como_config_t * parse_config_file(char *file, como_config_t *cfg);
+como_config_t * parse_config_string(char *str, como_config_t *cfg);
 
 /* 
  * filter-syntax.c

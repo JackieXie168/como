@@ -64,35 +64,34 @@ define_sniffer(char *name, char *device, char *args, como_config_t *cfg)
  * values.
  */
 void
-initialize_module_def(mdl_def_t *mdl, alc_t *alc)
+initialize_module_def(mdl_def_t *mdl)
 {
     bzero(mdl, sizeof(mdl_def_t));
-    mdl->args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    mdl->args = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
     mdl->streamsize = 128 * 1024 * 1024;
-    mdl->filter = como_strdup("all");
+    mdl->filter = safe_strdup("all");
 #ifdef LOADSHED
     mdl->minimum_srate = 0;
 #endif
 }
 
 static void
-destroy_sniffer_def(sniffer_def_t *d, alc_t *alc)
+destroy_sniffer_def(sniffer_def_t *d)
 {
-    alc_free(alc, d->name);
-    alc_free(alc, d->device);
+    free(d->name);
+    free(d->device);
     if (d->args)
-        alc_free(alc, d->args);
+        free(d->args);
 }
 
 void
-initialize_virtual_node_def(virtual_node_def_t *vnode, UNUSED alc_t *alc)
+initialize_virtual_node_def(virtual_node_def_t *vnode)
 {
     bzero(vnode, sizeof(virtual_node_def_t));
 }
 
 void
-define_virtual_node(virtual_node_def_t *vnode, UNUSED como_config_t *cfg,
-                    alc_t *alc)
+define_virtual_node(virtual_node_def_t *vnode, UNUSED como_config_t *cfg)
 {
     int ok = 1;
 
@@ -125,7 +124,7 @@ define_virtual_node(virtual_node_def_t *vnode, UNUSED como_config_t *cfg,
     /* if not ok, output error notice and return */
     if (ok == 0) {
         warn("(ignoring virtual node definition)\n");
-        destroy_virtual_node_def(vnode, alc);
+        destroy_virtual_node_def(vnode);
         return;
     }
 
@@ -134,41 +133,41 @@ define_virtual_node(virtual_node_def_t *vnode, UNUSED como_config_t *cfg,
 }
 
 void
-destroy_virtual_node_def(virtual_node_def_t *vnode, alc_t *alc)
+destroy_virtual_node_def(virtual_node_def_t *vnode)
 {
-    alc_free(alc, vnode->name);
-    alc_free(alc, vnode->location);
-    alc_free(alc, vnode->type);
-    alc_free(alc, vnode->filter);
-    alc_free(alc, vnode->source);
+    free(vnode->name);
+    free(vnode->location);
+    free(vnode->type);
+    free(vnode->filter);
+    free(vnode->source);
 }
 
 static void
-free_hash_entries(hash_t *h, alc_t *alc)
+free_hash_entries(hash_t *h)
 {
     hash_iter_t it;
 
     hash_iter_init(h, &it); /* destroy the args */
     while(hash_iter_next(&it)) {
-        alc_free(alc, (void *)hash_iter_get_string_key(&it));
-        alc_free(alc, (void *)hash_iter_get_value(&it));
+        free((void *)hash_iter_get_string_key(&it));
+        free((void *)hash_iter_get_value(&it));
         hash_iter_remove_entry(&it);
     }
 }
 
 static void
-destroy_module_def(mdl_def_t *d, alc_t *alc)
+destroy_module_def(mdl_def_t *d)
 {
-    free_hash_entries(d->args, alc);
+    free_hash_entries(d->args);
     hash_destroy(d->args);
     
-    alc_free(alc, d->name);
-    alc_free(alc, d->mdlname);
-    alc_free(alc, d->output);
-    alc_free(alc, d->filter);
-    alc_free(alc, d->descr);
+    free(d->name);
+    free(d->mdlname);
+    free(d->output);
+    free(d->filter);
+    free(d->descr);
     #ifdef LOADSHED
-    alc_free(alc, d->shed_method);
+    free(d->shed_method);
     #endif
 }
 
@@ -181,14 +180,14 @@ void
 define_module(mdl_def_t *mdl, como_config_t *cfg)
 {
     if (mdl->output == NULL)
-        mdl->output = como_strdup(mdl->name);
+        mdl->output = safe_strdup(mdl->name);
     if (mdl->mdlname == NULL)
-        mdl->mdlname = como_strdup(mdl->name);
+        mdl->mdlname = safe_strdup(mdl->name);
     if (mdl->descr == NULL)
-        mdl->descr = como_strdup("");
+        mdl->descr = safe_strdup("");
 #ifdef LOADSHED
     if (mdl->shed_method == NULL)
-        mdl->shed_method = como_strdup("");
+        mdl->shed_method = safe_strdup("");
 #endif
 
     array_add(cfg->mdl_defs, mdl);
@@ -323,7 +322,7 @@ struct cfg_item {
  * Parse the command line and config files.
  */
 como_config_t *
-configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
+configure(int argc, char **argv, como_config_t *cfg)
 {
     static const char *opts = "hi:St:q:c:C:D:L:p:m:vx:s:e";
     int i, c, cfg_item_count = 0;
@@ -335,18 +334,18 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     cfg->sniffer_defs = array_new(sizeof(sniffer_def_t));
     cfg->vnode_defs = array_new(sizeof(virtual_node_def_t));
 
-    cfg->como_executable_full_path = como_strdup(argv[0]);
+    cfg->como_executable_full_path = safe_strdup(argv[0]);
 
     /*
      * set some defaults
      */
     cfg->query_port = 44444;
     set_memsize(B2MB(64), cfg);
-    cfg->db_path = como_strdup(DEFAULT_DBDIR);
+    cfg->db_path = safe_strdup(DEFAULT_DBDIR);
     cfg->filesize = 128 * 1024 * 1024;
-    cfg->libdir = como_strdup(DEFAULT_LIBDIR);
-    cfg->query_args = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
-    cfg->query_alias = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    cfg->libdir = safe_strdup(DEFAULT_LIBDIR);
+    cfg->query_args = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
+    cfg->query_alias = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
 
     optind = 1; /* force getopt to start from 1st arg */
 
@@ -377,11 +376,11 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
             break; 
 
 	case 'D':	/* db-path */
-	    cfg->db_path = como_strdup(optarg);
+	    cfg->db_path = safe_strdup(optarg);
 	    break;
 
 	case 'L':	/* libdir */
-	    cfg->libdir = como_strdup(optarg);
+	    cfg->libdir = safe_strdup(optarg);
 	    break;
 
 	case 'p':
@@ -392,9 +391,9 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         {
             char *name, *device, *args;
 
-            name = como_strdup(strtok(optarg, ","));
-            device = como_strdup(strtok(NULL, ","));
-            args = como_strdup(strtok(NULL, ""));
+            name = safe_strdup(strtok(optarg, ","));
+            device = safe_strdup(strtok(NULL, ","));
+            args = safe_strdup(strtok(NULL, ""));
 
             if (name && device)
                 define_sniffer(name, device, args, cfg);
@@ -419,7 +418,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 
         case 'i': /* run inline: also silent & exit when done */
             cfg->inline_mode = 1;
-            cfg->inline_module = como_strdup(optarg);
+            cfg->inline_module = safe_strdup(optarg);
             cfg->silent_mode = 1;
             cfg->exit_when_done = 1;
             break;
@@ -430,7 +429,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 
         case 'q': { /* query args for inline mode */
             char *str, *strbak;
-            strbak = str = como_strdup(optarg);
+            strbak = str = safe_strdup(optarg);
 
             while (str != NULL) {
                 char *k, *v;
@@ -451,8 +450,8 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
                     str = s2 + 1;
                 }
 
-                hash_insert_string(cfg->query_args, como_strdup(k),
-                    como_strdup(v));
+                hash_insert_string(cfg->query_args, safe_strdup(k),
+                    safe_strdup(v));
             }
 
             free(strbak);
@@ -460,7 +459,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
         }
 
         case 't':   /* path to storage */
-            cfg->storage_path = como_strdup(optarg);
+            cfg->storage_path = safe_strdup(optarg);
             break;
 
         case '?':   /* unknown */
@@ -489,10 +488,10 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
     for (i = 0; i < cfg_item_count; i++) { /* parse config items here */
         switch (cfg_items[i].type) {
             case CFG_ITEM_FILE:
-                parse_config_file(cfg_items[i].info, alc, cfg);
+                parse_config_file(cfg_items[i].info, cfg);
                 break;
             case CFG_ITEM_STRING:
-                parse_config_string(cfg_items[i].info, alc, cfg);
+                parse_config_string(cfg_items[i].info, cfg);
                 break;
         }
     }
@@ -503,7 +502,7 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
 
         bzero(&mdl, sizeof(mdl));
 
-        buf = como_strdup(argv[optind]);
+        buf = safe_strdup(argv[optind]);
 
         s = strchr(buf, ':');
         if (s != NULL) {
@@ -511,8 +510,8 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
             args = s + 1;
         }
 
-        initialize_module_def(&mdl, alc);
-        mdl.name = como_strdup(buf);
+        initialize_module_def(&mdl);
+        mdl.name = safe_strdup(buf);
 
         while (args != NULL) { /* parse the arguments */
             char *s1, *s2;
@@ -529,8 +528,8 @@ configure(int argc, char **argv, alc_t *alc, como_config_t *cfg)
             if (s2 != NULL)
                 *s2 = '\0'; /* null-terminate value */
 
-            hash_insert_string(mdl.args, como_strdup(args),
-                                como_strdup(s1 + 1));
+            hash_insert_string(mdl.args, safe_strdup(args),
+                                safe_strdup(s1 + 1));
 	
 	    if (s2)	
 	    	args = s2 + 1;
@@ -635,24 +634,24 @@ config_get_module_def_by_name(como_config_t *cfg, char *name)
  * Free a configuration.
  */
 void
-destroy_config(como_config_t *cfg, alc_t *alc)
+destroy_config(como_config_t *cfg)
 {
     int i;
 
     for (i = 0; i < cfg->sniffer_defs->len; i++) { /* free sniff defs */
         sniffer_def_t *def = &array_at(cfg->sniffer_defs, sniffer_def_t, i);
-        destroy_sniffer_def(def, alc);
+        destroy_sniffer_def(def);
     }
 
     for (i = 0; i < cfg->mdl_defs->len; i++) { /* free mdl defs */
         mdl_def_t *def = &array_at(cfg->mdl_defs, mdl_def_t, i);
-        destroy_module_def(def, alc);
+        destroy_module_def(def);
     }
 
     for (i = 0; i < cfg->vnode_defs->len; i++) { /* free vnode defs */
         virtual_node_def_t *def = &array_at(cfg->vnode_defs,
                 virtual_node_def_t, i);
-        destroy_virtual_node_def(def, alc);
+        destroy_virtual_node_def(def);
     }
 
     array_free(cfg->sniffer_defs, 1); /* free the arrays themselves */
@@ -672,9 +671,9 @@ destroy_config(como_config_t *cfg, alc_t *alc)
 
     free(cfg->inline_module);
 
-    free_hash_entries(cfg->query_args, alc);
+    free_hash_entries(cfg->query_args);
     hash_destroy(cfg->query_args);
-    free_hash_entries(cfg->query_alias, alc);
+    free_hash_entries(cfg->query_alias);
     hash_destroy(cfg->query_alias);
 }
 

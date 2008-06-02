@@ -320,37 +320,33 @@ memmap_free(void * p, UNUSED const char * file, UNUSED int line, memmap_t * m)
  * 
  */
 memmap_t *
-memmap_create(shmem_t * shmem, uint32_t entries)
+memmap_create(void * baseaddr, size_t size, uint32_t entries)
 {
-    void *x;
     memmap_state_t *mem;
     memmap_t *map;
     memblock_t *m;
     size_t ctrl;
-    size_t size;
 
     /*
      * we put the memmap state structure at the beginning of the
      * chunk, followed by the memory block that contains the actual
      * allocated space.
      */    
-    x = shmem_baseaddr(shmem);
-    size = shmem_size(shmem);
     
     /* size of control structures */
     ctrl = sizeof(memmap_state_t) + (sizeof(memmap_t) * (1 + entries));
     
-    memset(x, 0, ctrl);
+    memset(baseaddr, 0, ctrl);
 
-    mem = (memmap_state_t *) x;
-    x += sizeof(memmap_state_t);
+    mem = (memmap_state_t *) baseaddr;
+    baseaddr += sizeof(memmap_state_t);
     
     map = &mem->map[0];
     
-    x += sizeof(memmap_t) * (1 + entries);
+    baseaddr += sizeof(memmap_t) * (1 + entries);
     
     /* initially the map has only a big block */
-    m = (memblock_t *) x;
+    m = (memblock_t *) baseaddr;
     m->size = size - ctrl - sizeof(memblock_t);
     m->_magic = MY_MAGIC;
     m->next = NULL;

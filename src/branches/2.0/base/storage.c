@@ -30,7 +30,9 @@
  * $Id$
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -1405,7 +1407,7 @@ region_write(ipc_peer_t * sender, csmsg_t * in, csclient_t *cl)
         }
 
         /* finally, prepare to extend the file */
-        buf = como_calloc(1, ext);
+        buf = safe_calloc(1, ext);
         if (write(bs->wfd, buf, ext) < 0) {
 	    free(buf);
             warn("id: %d,%s; write to extend file failed: %s\n",
@@ -1817,7 +1819,7 @@ main(int argc, char ** argv)
 	exit(EXIT_FAILURE);
     }
 
-    location = como_strdup(argv[1]);
+    location = safe_strdup(argv[1]);
     como_init("ST", argc, argv);
 
     if (atoi(argv[3])) /* inline mode */

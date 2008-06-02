@@ -360,19 +360,19 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
         switch (*name) {
             case 'm':
                 if_have_kw("module") {
-                    q->module = como_strdup(value);
+                    q->module = safe_strdup(value);
                     insert_arg = FALSE;
                 }
                 break;
             case 'f':
                 if_have_kw("filter") {
                     char *v = value[0] != '\0' ? value : "all";
-                    q->filter_str = como_strdup(v);
+                    q->filter_str = safe_strdup(v);
                     parse_filter(v, NULL, &(q->filter_cmp));
                     insert_arg = FALSE;
                 }
                 else if_have_kw("format") {
-                    q->format = como_strdup(value);
+                    q->format = safe_strdup(value);
                     insert_arg = FALSE;
                 }
                 break;
@@ -381,7 +381,7 @@ query_parse(qreq_t * q, char * buf, timestamp_t now)
                     q->start = atoi(value);
                     insert_arg = FALSE;
                 } else if_have_kw("source") {
-                    q->source = como_strdup(value);
+                    q->source = safe_strdup(value);
                     insert_arg = FALSE;
                 } else if_have_kw("status") {
                     q->mode = QMODE_SERVICE;

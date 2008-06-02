@@ -70,7 +70,7 @@ new_timer(char * name)
     ctimer_t * t; 
 
     t = como_new0(ctimer_t);
-    t->name = como_strdup(name); 
+    t->name = safe_strdup(name); 
     t->min = ~0; 
     return t;
 }

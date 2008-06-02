@@ -40,7 +40,7 @@ profiler_t *
 new_profiler(char *name)
 {
     profiler_t *profiler = como_calloc(1, sizeof(profiler_t));
-    profiler->name = como_strdup(name);
+    profiler->name = safe_strdup(name);
     profiler->ctx_switches = new_timer("ctxsw");
     profiler->tsc_cycles = new_timer("tsc");
     return profiler;

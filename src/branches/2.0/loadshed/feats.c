@@ -75,7 +75,7 @@ feat_extr(batch_t *batch, fextr_t *fextr, UNUSED char *which,
         fextr->last_ivl = 0;
         fextr->hash = como_calloc(NUM_HASH, sizeof(uhash_t *));
         for (i = 0; i < NUM_HASH; i++)
-            fextr->hash[i] = como_malloc(sizeof(uhash_t));
+            fextr->hash[i] = safe_malloc(sizeof(uhash_t));
     }
 
     /* calculate current interval */

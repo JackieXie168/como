@@ -123,7 +123,7 @@ get_to_mono(shobj_t * shobj, const char * type)
     }
     structname = *((char **) sym);
     
-    funcname = como_asprintf("to_mono_%s", structname);
+    funcname = safe_asprintf("to_mono_%s", structname);
 
     sym = shobj_symbol(shobj, funcname, FALSE);
     free(funcname);
@@ -241,7 +241,7 @@ proxy_mono_load(mdl_t * mdl, char *class_name)
     mono_add_internal_call("CoMo.Mdl::mdl_print", mdl_mono_print);
     mono_add_internal_call("CoMo.IP::to_string", mono_inet_ntoa);
     
-    filename = como_asprintf("%s/%s.dll", como_config->libdir, mdl->mdlname);
+    filename = safe_asprintf("%s/%s.dll", como_config->libdir, mdl->mdlname);
     
     s->assembly = mono_domain_assembly_open(s->domain, filename);
     free(filename);
@@ -260,7 +260,7 @@ proxy_mono_load(mdl_t * mdl, char *class_name)
     }
     debug("loaded mdl image\n");
 
-    s->ns = como_asprintf("CoMo.Modules.%s", mdl->mdlname);
+    s->ns = safe_asprintf("CoMo.Modules.%s", mdl->mdlname);
     
     s->klass = mono_class_from_name(s->image, s->ns, class_name);
     if (s->klass == NULL) {
@@ -563,7 +563,7 @@ proxy_mono_get_formats(mdl_t *mdl, char **dflt_format)
                 mdl->name);
         debug("formats array len is %d\n", l);
 
-        formats = como_calloc(l + 1, sizeof(qu_format_t));
+        formats = safe_calloc(l + 1, sizeof(qu_format_t));
         for (i = 0; i < l; i++) {
             MonoObject *o;
             MonoClass *c;
@@ -672,7 +672,7 @@ proxy_mono_init(char *mono_path)
     char *np, *p = getenv("MONO_PATH");
 
     debug("proxy_mono_init()\n");
-    np = como_asprintf("%s%s%s", p ? p : "", p ? ":" : "", mono_path);
+    np = safe_asprintf("%s%s%s", p ? p : "", p ? ":" : "", mono_path);
     setenv("MONO_PATH", np, 1);
 
     s_monodom = mono_jit_init("como.dll");

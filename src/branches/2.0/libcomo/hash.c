@@ -89,6 +89,7 @@
 #include <assert.h>
 
 #include "como.h"
+#include "comopriv.h"
 
 /*
  * When there are this many entries per bucket, on average, rebuild
@@ -230,7 +231,9 @@ hash_new_full(alc_t * alc, int keyType, hash_key_fn hashKeyFn,
 {
     hash_t *tablePtr;
 
-    assert(alc != NULL);
+    if (alc == NULL)
+        alc = como_alc();
+        
     tablePtr = alc_new0(alc, hash_t);
 
 #if (SMALL_HASH_TABLE != 4)

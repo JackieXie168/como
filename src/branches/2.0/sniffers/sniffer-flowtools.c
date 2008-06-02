@@ -407,7 +407,7 @@ flowtools_read(struct flowtools_me * me)
     }
     
     /* build a new flow record */
-    flow = como_calloc(1, sizeof(struct _flowinfo));
+    flow = safe_calloc(1, sizeof(struct _flowinfo));
     flow->pkts_left = fr->dPkts; 
     flow->bytes_left = fr->dOctets; 
     flow->increment = netflow2ts(fr, fr->Last) - netflow2ts(fr, fr->First);

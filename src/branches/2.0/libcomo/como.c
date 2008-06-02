@@ -30,7 +30,9 @@
  * $Id:como.c 1032 2006-11-14 13:29:01Z m_canini $
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -77,9 +79,9 @@ como_init(const char * program, int argc, char ** argv)
 }
 
 /**
- * -- como__malloc
+ * -- safe__malloc
  *
- * Not to be called directly, but through como_malloc()
+ * Not to be called directly, but through safe_malloc()
  *
  * simple wrapper to malloc that handles errors
  * and returns only if the malloc call succeded. it
@@ -87,7 +89,7 @@ como_init(const char * program, int argc, char ** argv)
  *
  */
 void *
-como__malloc(size_t sz, const char * file, int line)
+safe__malloc(size_t sz, const char * file, int line)
 {
     void * v;
 
@@ -102,9 +104,9 @@ como__malloc(size_t sz, const char * file, int line)
 
 
 /**
- * -- como__calloc
+ * -- safe__calloc
  * 
- * Not to be called directly, but through como_calloc()
+ * Not to be called directly, but through safe_calloc()
  *
  * simple interface to calloc that handles errors
  * and returns only if the calloc call succeded. it
@@ -112,7 +114,7 @@ como__malloc(size_t sz, const char * file, int line)
  *
  */
 void *
-como__calloc(size_t n, size_t sz, const char * file, int line)
+safe__calloc(size_t n, size_t sz, const char * file, int line)
 {
     void * v;
 
@@ -127,9 +129,9 @@ como__calloc(size_t n, size_t sz, const char * file, int line)
 
 
 /**          
- * -- como__realloc
+ * -- safe__realloc
  *
- * Not to be called directly, but through como_realloc()
+ * Not to be called directly, but through safe_realloc()
  *
  * simple interface to realloc that handles errors
  * and returns only if the realloc call succeded. it
@@ -137,7 +139,7 @@ como__calloc(size_t n, size_t sz, const char * file, int line)
  *   
  */ 
 void *
-como__realloc(void * ptr, size_t sz, const char * file, const int line)
+safe__realloc(void * ptr, size_t sz, const char * file, const int line)
 {
     void * v;
         
@@ -152,9 +154,9 @@ como__realloc(void * ptr, size_t sz, const char * file, const int line)
 
 
 /**
- * -- como__strdup
+ * -- safe__strdup
  * 
- * Not to be called directly, but through como_strdup()
+ * Not to be called directly, but through safe_strdup()
  *
  * simple interface to strdup() that handles errors
  * and returns only if the call succeded. it
@@ -162,7 +164,7 @@ como__realloc(void * ptr, size_t sz, const char * file, const int line)
  *
  */
 char *
-como__strdup(const char * str, const char * file, const int line)
+safe__strdup(const char * str, const char * file, const int line)
 {
     char * v; 
 
@@ -180,25 +182,25 @@ como__strdup(const char * str, const char * file, const int line)
 
 
 /*
- * -- como__dup 
+ * -- safe__freedup 
  * 
- * Not to be called directly, but through como_dup()
+ * Not to be called directly, but through safe_freedup()
  *
  * Makes a malloc'ed copy of src into *dst, 
  * freeing the previous one if any
  */
 char *
-como__dup(char **dst, char *src, const char * file, const int line)
+safe__freedup(char **dst, char *src, const char * file, const int line)
 {
     if (*dst)
         free(*dst);
-    *dst = como__strdup(src, file, line);
+    *dst = safe__strdup(src, file, line);
     return *dst;
 }
 
 
 int
-como__fileno(FILE *stream, const char *file, const int line)
+safe__fileno(FILE *stream, const char *file, const int line)
 {
     int i = fileno(stream);
     if (i < 1)
@@ -212,14 +214,14 @@ como__fileno(FILE *stream, const char *file, const int line)
 
 
 char *
-como__asprintf(const char * file, const int line, char *fmt, ...)
+safe__asprintf(const char * file, const int line, char *fmt, ...)
 {
     char *str;
     va_list ap;
     va_start(ap, fmt);
     vasprintf(&str, fmt, ap);
     if (str == NULL) {
-	error("asprintf failed (%s:%d): %s\n",
+	error("vasprintf failed (%s:%d): %s\n",
 	      file, line, strerror(errno));
     }
     va_end(ap);
@@ -237,8 +239,8 @@ alc_t *
 como_alc()
 {
     static alc_t alc = {
-	malloc: (alc_malloc_fn) como__malloc,
-	calloc: (alc_calloc_fn) como__calloc,
+	malloc: (alc_malloc_fn) safe__malloc,
+	calloc: (alc_calloc_fn) safe__calloc,
 	free: (alc_free_fn) free,
 	data: NULL
     };

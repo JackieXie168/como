@@ -48,7 +48,9 @@
  * in the s_handlers. 
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <string.h>     /* strlen */
 #include <errno.h>
@@ -154,7 +156,7 @@ ipc_peer_at(const ipc_peer_full_t * p, const char * at)
     p2 = como_new(ipc_peer_full_t);
     *p2 = *p;
     p2->fd = -1;
-    p2->at = como_strdup(at);
+    p2->at = safe_strdup(at);
     p2->swap = 0;
     memset(&p2->next, 0, sizeof(p2->next));
     return p2;
@@ -202,7 +204,7 @@ ipc_peer_child(const ipc_peer_full_t * kind, uint16_t id)
     *p = *kind;
     p->parent_class = s_me->class;
     p->id = id;
-    p->at = como_strdup(s_me->at);
+    p->at = safe_strdup(s_me->at);
     p->fd = -1;
     memset(&p->next, 0, sizeof(p->next));
     return p;
@@ -350,7 +352,7 @@ ipc_connect(ipc_peer_full_t * dst)
     int r;
 
     if (dst->at == NULL) {
-	dst->at = como_strdup(s_me->at);
+	dst->at = safe_strdup(s_me->at);
     }
 
     dst->fd = ipc_create_socket(dst, FALSE);

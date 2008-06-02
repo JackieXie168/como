@@ -97,7 +97,7 @@ send_module(ipc_peer_t * peer, int msg_id, mdl_t *mdl)
     size_t sz;
 
     sz = mdl_sersize(mdl);
-    buf = sbuf = como_malloc(sz);
+    buf = sbuf = safe_malloc(sz);
 
     mdl_serialize(&sbuf, mdl);
 
@@ -379,24 +379,24 @@ como_node_listen(como_node_t * node)
  * the array of working modules.
  */
 static mdl_t *
-como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
+como_node_init_mdl(como_node_t * node, mdl_def_t * def)
 {
     static int s_mdl_ids = 0;
 
     mdl_isupervisor_t *is;
-    mdl_t *mdl = alc_new0(alc, mdl_t);
+    mdl_t *mdl = safe_malloc(sizeof(mdl_t));
 
     mdl->id = s_mdl_ids++;
     if (mdl->id > MDL_ID_MAX)
         error("the system currently supports %d mdls\n", MDL_ID_MAX);
 
-    mdl->name = alc_strdup(alc, def->name);
-    mdl->mdlname = alc_strdup(alc, def->mdlname);
+    mdl->name = safe_strdup(def->name);
+    mdl->mdlname = safe_strdup(def->mdlname);
     mdl->streamsize = def->streamsize;
-    mdl->filter = alc_strdup(alc, def->filter);
-    mdl->description = alc_strdup(alc, def->descr);
+    mdl->filter = safe_strdup(def->filter);
+    mdl->description = safe_strdup(def->descr);
 #ifdef LOADSHED
-    mdl->shed_method = alc_strdup(alc, def->shed_method);
+    mdl->shed_method = safe_strdup(def->shed_method);
     mdl->minimum_srate = def->minimum_srate;
 #endif
 
@@ -428,12 +428,12 @@ como_node_init_mdl(como_node_t * node, mdl_def_t * def, alc_t * alc)
  * array of definitions.
  */
 static void
-como_node_init_mdls(como_node_t * node, array_t * mdl_defs, alc_t * alc)
+como_node_init_mdls(como_node_t * node, array_t * mdl_defs)
 {
     int i;
     for (i = 0; i < mdl_defs->len; i++) {
 	mdl_def_t *def = &array_at(mdl_defs, mdl_def_t, i);
-        como_node_init_mdl(node, def, alc);
+        como_node_init_mdl(node, def);
     }
 }
 
@@ -454,7 +454,6 @@ reconfigure(como_su_t *como_su)
 {
     hash_t *current_modules, *newcfg_modules, *new_modules, *rem_modules;
     como_config_t new_cfg;
-    alc_t *alc = como_su->alc;
     como_node_t *node;
     hash_iter_t it;
     ipc_type t;
@@ -463,24 +462,24 @@ reconfigure(como_su_t *como_su)
     node = &array_at(como_su->nodes, como_node_t, 0);
 
     /* re-run the config routines */
-    configure(s_saved_argc, s_saved_argv, s_como_su->alc, &new_cfg);
+    configure(s_saved_argc, s_saved_argv, &new_cfg);
 
     /* load module names from current cfg into a hash */
-    current_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    current_modules = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
     for (i = 0; i < como_config->mdl_defs->len; i++) {
         mdl_def_t *def = &array_at(como_config->mdl_defs, mdl_def_t, i);
         hash_insert_string(current_modules, def->name, def);
     }
 
     /* load module names from the new cfg info a hash */
-    newcfg_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    newcfg_modules = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
     for (i = 0; i < new_cfg.mdl_defs->len; i++) {
         mdl_def_t *def = &array_at(new_cfg.mdl_defs, mdl_def_t, i);
         hash_insert_string(newcfg_modules, def->name, def);
     }
 
     /* find new modules */
-    new_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    new_modules = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
     hash_iter_init(newcfg_modules, &it);
     while(hash_iter_next(&it)) {
         mdl_def_t *def = hash_iter_get_value(&it);
@@ -490,7 +489,7 @@ reconfigure(como_su_t *como_su)
             continue;
 
         /* new module */
-        mdl = como_node_init_mdl(node, def, alc);
+        mdl = como_node_init_mdl(node, def);
         if (mdl == NULL)
             continue;
 
@@ -501,7 +500,7 @@ reconfigure(como_su_t *como_su)
     }
 
     /* find modules to be removed */
-    rem_modules = hash_new(alc, HASHKEYS_STRING, NULL, NULL);
+    rem_modules = hash_new(NULL, HASHKEYS_STRING, NULL, NULL);
     hash_iter_init(current_modules, &it);
     while(hash_iter_next(&it)) {
         mdl_def_t *def = hash_iter_get_value(&it);
@@ -579,7 +578,7 @@ reconfigure(como_su_t *como_su)
         size_t sz;
 
         sz = sersize_string(name);
-        buffer = como_malloc(sz);
+        buffer = safe_malloc(sz);
         ptr = buffer;
 
         serialize_string(&ptr, name);
@@ -602,7 +601,7 @@ reconfigure(como_su_t *como_su)
         size_t sz;
 
         sz = sersize_string(name);
-        buffer = como_malloc(sz);
+        buffer = safe_malloc(sz);
         ptr = buffer;
 
         serialize_string(&ptr, name);
@@ -622,7 +621,7 @@ reconfigure(como_su_t *como_su)
     hash_destroy(newcfg_modules);
     hash_destroy(new_modules);
     hash_destroy(rem_modules);
-    destroy_config(&new_cfg, alc);
+    destroy_config(&new_cfg);
 }
 
 
@@ -798,7 +797,7 @@ como_node_init_sniffers(como_node_t * node, array_t * sniffer_defs,
 	}
 	
 	s->cb = cb;
-        s->device = como_strdup(def->device);
+        s->device = safe_strdup(def->device);
 
 	/* check that the sniffer is consistent with the sniffers already
 	 * configured */
@@ -839,9 +838,9 @@ copy_args(int argc, char **argv, int *out_argc, char ***out_argv)
     char **argv2;
     int i;
 
-    argv2 = como_calloc(argc + 1, sizeof(char *));
+    argv2 = safe_calloc(argc + 1, sizeof(char *));
     for (i = 0; i <= argc; i++) /* <= is correct, must copy final NULL */
-        argv2[i] = como_strdup(argv[i]);
+        argv2[i] = safe_strdup(argv[i]);
 
     *out_argc = argc;
     *out_argv = argv2;
@@ -867,18 +866,18 @@ como_init_nodes(UNUSED como_su_t *como_su, como_config_t *cfg)
     node.kind = COMO_NODE_REAL;
     node.id = 0;
 
-    node.name = como_strdup("CoMo Node");
-    node.location = como_strdup(cfg->location);
-    node.type = como_strdup(cfg->type);
+    node.name = safe_strdup("CoMo Node");
+    node.location = safe_strdup(cfg->location);
+    node.type = safe_strdup(cfg->type);
     node.query_port = cfg->query_port;
     node.mdls = array_new(sizeof(mdl_t *));
 
     if (node.location == NULL)
-        node.location = como_strdup("Unknown");
+        node.location = safe_strdup("Unknown");
     if (node.type == NULL)
-        node.type = como_strdup("Unknown");
+        node.type = safe_strdup("Unknown");
 
-    str = como_asprintf("%s/%s", como_config->db_path, node.name);
+    str = safe_asprintf("%s/%s", como_config->db_path, node.name);
     if (mkdir(str, 0700) == -1 && errno != EEXIST)
         error("cannot create db dir `%s'\n", str);
     free(str);
@@ -896,17 +895,17 @@ como_init_nodes(UNUSED como_su_t *como_su, como_config_t *cfg)
         node.real_node_id = 0;
         node.id = i + 1;
 
-        node.name = como_strdup(def->name);
-        node.location = como_strdup(def->location);
-        node.type = como_strdup(def->type);
+        node.name = safe_strdup(def->name);
+        node.location = safe_strdup(def->location);
+        node.type = safe_strdup(def->type);
         node.query_port = def->query_port;
-        node.source = como_strdup(def->source);
-        node.filter = como_strdup(def->filter);
+        node.source = safe_strdup(def->source);
+        node.filter = safe_strdup(def->filter);
 
         if (node.location == NULL)
-            node.location = como_strdup("Unknown");
+            node.location = safe_strdup("Unknown");
         if (node.type == NULL)
-            node.type = como_strdup("Unknown");
+            node.type = safe_strdup("Unknown");
 
         array_add(como_su->nodes, &node);
     }
@@ -926,17 +925,10 @@ main(int argc, char ** argv)
 {
     static como_config_t cfg;
     como_su_t *como_su;
-    alc_t alc;
     como_node_t *main_node;
     int i;
     
-    /* create a global pool */
-    pool_t *pool = pool_create();
-    
-    pool_alc_init(pool, &alc);
-    como_su = alc_new0(&alc, como_su_t);
-    como_su->pool = pool;
-    como_su->alc = &alc;
+    como_su = safe_malloc(sizeof(como_su_t));
     como_su->su_pid = getpid();
     como_su->workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
     s_como_su = como_su;
@@ -947,13 +939,13 @@ main(int argc, char ** argv)
      * parse command line and configuration files
      */
     copy_args(argc, argv, &s_saved_argc, &s_saved_argv);
-    como_config = configure(s_saved_argc, s_saved_argv, &alc, &cfg);
+    como_config = configure(s_saved_argc, s_saved_argv, &cfg);
 
     if (como_config->silent_mode)
         log_set_level(LOG_LEVEL_WARNING); /* disable most UI messages */
 
     if (como_config->inline_mode) { /* use temporary storage */
-        char *template = como_asprintf("%s/XXXXXX", como_su->workdir);
+        char *template = safe_asprintf("%s/XXXXXX", como_su->workdir);
         como_config->db_path = como_config->db_path = mkdtemp(template);
     }
 
@@ -982,7 +974,8 @@ main(int argc, char ** argv)
      * CAPTURE and QUERY processes will be able to see it.
      */
     como_su->shmem = shmem_create(como_config->shmem_size, NULL);
-    como_su->memmap = memmap_create(como_su->shmem, 2048);
+    como_su->memmap = memmap_create(shmem_baseaddr(como_su->shmem),
+                                    shmem_size(como_su->shmem), 2048);
     memmap_alc_init(como_su->memmap, &como_su->shalc);
     
     /* allocate statistics into shared memory */
@@ -1003,7 +996,7 @@ main(int argc, char ** argv)
         if (n->kind != COMO_NODE_REAL)
             continue;
         como_node_init_sniffers(n, como_config->sniffer_defs, &como_su->shalc);
-        como_node_init_mdls(n, como_config->mdl_defs, como_su->alc);
+        como_node_init_mdls(n, como_config->mdl_defs);
     }
 
     if (como_config->inline_mode && main_node->mdls->len == 0) {

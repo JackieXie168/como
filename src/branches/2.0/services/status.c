@@ -64,7 +64,7 @@ get_start_timestamp(mdl_t * mdl)
     
     como_node_t *n = &array_at(s_como_su->nodes, como_node_t, 0);
 
-    str = como_asprintf("%s/%s/%s", como_config->db_path, n->name, mdl->name);
+    str = safe_asprintf("%s/%s/%s", como_config->db_path, n->name, mdl->name);
     reader = csopen(str, CS_READER_NOBLOCK, (off_t) mdl->streamsize,
             (ipc_peer_t *) COMO_ST);
     

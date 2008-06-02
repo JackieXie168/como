@@ -120,7 +120,7 @@ shmem_create(size_t reqsize, const char * filename)
 	key_t shmkey;
 
 	new_m->realsize = reqsize;
-	new_m->filename = como_strdup(filename);
+	new_m->filename = safe_strdup(filename);
 
 	fd = open(filename, O_WRONLY | O_CREAT | O_EXCL, 0600);
 	if (fd < 0) {
@@ -277,7 +277,7 @@ shmem_attach(const char * filename, void *base_addr)
 	goto error;
     }
 
-    new_m->filename = como_strdup(filename);
+    new_m->filename = safe_strdup(filename);
     shmkey = ftok(filename, 1);
     if (shmkey == (key_t)-1) {
 	goto error;

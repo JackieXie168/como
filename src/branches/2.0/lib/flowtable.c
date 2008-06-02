@@ -602,7 +602,7 @@ flowtable_dbg_stats(flowtable_t *ftable)
      * Print out the histogram and a few other pieces of information.
      */
 
-    result = (char *) como_malloc((NUM_COUNTERS * 60) + 300);
+    result = (char *) safe_malloc((NUM_COUNTERS * 60) + 300);
     sprintf(result, "%d entries in table, %d buckets\n",
 	    ftable->numEntries, ftable->numBuckets);
     p = result + strlen(result);

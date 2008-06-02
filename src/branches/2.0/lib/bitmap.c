@@ -117,9 +117,9 @@ new_bitmap(size_t max_elements)
 {
     bitmap_t *bm;
 
-    bm = como_malloc(sizeof(bitmap_t));
+    bm = safe_malloc(sizeof(bitmap_t));
     _initialize_bitmap(bm, max_elements);
-    bm->map = como_malloc(bm->bytes); /* no need to bzero */
+    bm->map = safe_malloc(bm->bytes); /* no need to bzero */
     return bm;
 }
 

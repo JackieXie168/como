@@ -29,7 +29,9 @@
  *
  * $Id$
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 
 #include <string.h>
@@ -75,7 +77,7 @@ shobj_open(const char * filename)
     }
     
     shobj = como_new(shobj_t);
-    shobj->name = como_strdup(como_basename(filename));
+    shobj->name = safe_strdup(como_basename(filename));
     shobj->handle = handle;
     
     return shobj;

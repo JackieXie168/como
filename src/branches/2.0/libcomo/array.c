@@ -86,7 +86,7 @@ array_grow(array_t * array, int length)
     }
 
     array->size = MAX(array->size, 16);
-    array->base = como_realloc(array->base, array->size * array->element_size);
+    array->base = safe_realloc(array->base, array->size * array->element_size);
     array->data = array->base + off;
 }
 

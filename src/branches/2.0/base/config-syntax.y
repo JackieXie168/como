@@ -66,7 +66,6 @@ static char *get_file_contents();
 void config_lexic_init();
 
 /* global variables */
-alc_t *alc;
 static mdl_def_t mdl;
 static virtual_node_def_t vnode;
 static como_config_t *cfg; /* result */
@@ -139,11 +138,11 @@ keyword: /* a global keyword */
 virtual_node_def:
     TOK_VIRTUAL_NODE TOK_STRING
             {
-                initialize_virtual_node_def(&vnode, alc);
+                initialize_virtual_node_def(&vnode);
                 vnode.name = $2;
             }
     virtual_node_keywords
-    TOK_END { define_virtual_node(&vnode, cfg, alc); }
+    TOK_END { define_virtual_node(&vnode, cfg); }
 ;
 
 virtual_node_keywords:
@@ -171,7 +170,7 @@ sniffer_def: /* the definition of a sniffer */
 ;
 
 module_def: /* beware: actions in mid-rule */
-    TOK_MODULE { initialize_module_def(&mdl, alc); }
+    TOK_MODULE { initialize_module_def(&mdl); }
     TOK_STRING { mdl.name = $3; }
     optional_module_keywords
     TOK_END { define_module(&mdl, cfg); }
@@ -242,28 +241,28 @@ get_file_contents(char *path)
     r = stat(path, &st);
     if (r != 0) {
         warn(GFC_ERROR_STR, path);
-        return como_strdup("");
+        return safe_strdup("");
     }
 
     fd = open(path, O_RDONLY);
     if (fd < 0) {
         warn(GFC_ERROR_STR, path);
-        return como_strdup("");
+        return safe_strdup("");
     }
 
-    buffer = como_malloc(st.st_size);
+    buffer = safe_malloc(st.st_size);
     r = como_read(fd, buffer, st.st_size);
     if (r != st.st_size) {
         free(buffer);
         warn(GFC_ERROR_STR, path);
-        return como_strdup("");
+        return safe_strdup("");
     }
 
     r = close(fd);
     if (r < 0) {
         free(buffer);
         warn(GFC_ERROR_STR, path);
-        return como_strdup("");
+        return safe_strdup("");
     }
     return buffer;
 }
@@ -282,7 +281,7 @@ void ycerror(char *fmt, ...)
 }
 
 como_config_t *
-parse_config_file(char *f, alc_t *my_alc, como_config_t *my_cfg)
+parse_config_file(char *f, como_config_t *my_cfg)
 {
     mode = PARSING_FILE;
     what = f;
@@ -290,7 +289,6 @@ parse_config_file(char *f, alc_t *my_alc, como_config_t *my_cfg)
     config_lexic_init();
 
     cfg = my_cfg;
-    alc = my_alc;
 
     ycin = fopen(f, "r");
     if (ycin == NULL)
@@ -301,7 +299,7 @@ parse_config_file(char *f, alc_t *my_alc, como_config_t *my_cfg)
 }
 
 como_config_t *
-parse_config_string(char *str, alc_t *my_alc, como_config_t *my_cfg)
+parse_config_string(char *str, como_config_t *my_cfg)
 {
     void *buffer;
 
@@ -311,7 +309,6 @@ parse_config_string(char *str, alc_t *my_alc, como_config_t *my_cfg)
     config_lexic_init();
 
     cfg = my_cfg;
-    alc = my_alc;
 
     buffer = yc_scan_string(str);
     ycparse();

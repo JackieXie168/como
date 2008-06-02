@@ -73,7 +73,7 @@ create_socket(const char * path, int is_server)
 	path += 7;
     }
     
-    cp = como_strdup(path);
+    cp = safe_strdup(path);
 
     if (is_tcp) {
 	/* TCP socket */

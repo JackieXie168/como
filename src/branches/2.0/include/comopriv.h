@@ -45,32 +45,32 @@
  */
 void como_init(const char * progname, int argc, char ** argv);
 
-#define como_malloc(sz) \
-como__malloc(sz, __FILE__, __LINE__)
+#define safe_malloc(sz) \
+safe__malloc(sz, __FILE__, __LINE__)
 
-#define como_calloc(n,sz) \
-como__calloc(n, sz, __FILE__, __LINE__)
+#define safe_calloc(n,sz) \
+safe__calloc(n, sz, __FILE__, __LINE__)
 
-#define como_realloc(ptr,sz) \
-como__realloc(ptr, sz, __FILE__, __LINE__)
+#define safe_realloc(ptr,sz) \
+safe__realloc(ptr, sz, __FILE__, __LINE__)
 
-#define como_strdup(str) \
-como__strdup(str, __FILE__, __LINE__)
+#define safe_strdup(str) \
+safe__strdup(str, __FILE__, __LINE__)
 
-#define como_dup(dst,src) \
-como__dup(dst, src, __FILE__, __LINE__)
+#define safe_dup(dst,src) \
+safe__dup(dst, src, __FILE__, __LINE__)
 
-#define como_fileno(stream) \
-como__fileno(stream, __FILE__, __LINE__)
+#define safe_fileno(stream) \
+safe__fileno(stream, __FILE__, __LINE__)
 
-#define como_asprintf(fmt...) \
-como__asprintf(__FILE__, __LINE__, fmt)
+#define safe_asprintf(fmt...) \
+safe__asprintf(__FILE__, __LINE__, fmt)
 
 #define como_new(type) \
-((type *) como_malloc(sizeof(type)))
+((type *) safe_malloc(sizeof(type)))
 
 #define como_new0(type) \
-((type *) como_calloc(1, sizeof(type)))
+((type *) safe_calloc(1, sizeof(type)))
 
 char * como_basename (const char * path);
 
@@ -128,14 +128,14 @@ enum {
     CCA_ACK_BATCH,
 };
 
-void * como__malloc (size_t sz, const char * file, int line);
-void * como__calloc (size_t n, size_t sz, const char * file, int line);
-void * como__realloc (void * ptr, size_t sz, const char * file,
+void * safe__malloc (size_t sz, const char * file, int line);
+void * safe__calloc (size_t n, size_t sz, const char * file, int line);
+void * safe__realloc (void * ptr, size_t sz, const char * file,
 		      const int line);
-char * como__strdup (const char * str, const char * file, const int line);
-char * como__dup (char **dst, char *src, const char * file, const int line);
-int    como__fileno (FILE* stream, const char * file, const int line);
-char * como__asprintf (const char * file, const int line, char *fmt, ...);
+char * safe__strdup (const char * str, const char * file, const int line);
+char * safe__dup (char **dst, char *src, const char * file, const int line);
+int    safe__fileno (FILE* stream, const char * file, const int line);
+char * safe__asprintf (const char * file, const int line, char *fmt, ...);
 
 /*
  * memory.c
@@ -147,7 +147,8 @@ typedef struct memmap_stats {
     size_t	peak;	/* peak usage */
 } memmap_stats_t;
 
-memmap_t *       memmap_create         (shmem_t * shmem, uint32_t entries);
+memmap_t *       memmap_create         (void * baseaddr, size_t size,
+                                            uint32_t entries);
 void             memmap_alc_init       (memmap_t * m, alc_t * alc);
 memmap_stats_t * memmap_stats_location (memmap_t * m);
 size_t           memmap_usage          (memmap_t * m);
@@ -447,10 +448,6 @@ struct como_su {
 
     array_t *		nodes;		/* node information */
     
-    pool_t *		pool;		/* the pool used to allocate this
-					   structure */
-    alc_t *		alc;		/* the pool's allocator */
-
     shmem_t *		shmem;		/* main shared memory used to store
 					   capture data structures, stats */
     memmap_t *		memmap;
