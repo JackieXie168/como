@@ -203,7 +203,9 @@ flowtable_new(alc_t * alc, int size,
     flowtable_t *ftable;
     int numBuckets;
 
-    assert(alc != NULL);
+    if (alc == NULL)
+        alc = como_alc();
+
     ftable = alc_calloc(alc, 1, sizeof(flowtable_t));
 
     ftable->alc = alc;

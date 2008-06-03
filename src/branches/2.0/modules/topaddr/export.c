@@ -69,7 +69,7 @@ static void
 reinitialize_state(mdl_t *self, ex_state_t *st)
 {
     st->nrec = 0;
-    st->table = flowtable_new(mdl_alc(self), 2048, NULL, (flow_match_fn)
+    st->table = flowtable_new(MDL_MEM, 2048, NULL, (flow_match_fn)
                                 tuple_matches_record, NULL);
 }
 
@@ -79,7 +79,6 @@ reinitialize_state(mdl_t *self, ex_state_t *st)
 ex_state_t *
 ex_init(mdl_t *self)
 {
-    alc_t *alc = mdl_alc(self);
     ex_state_t *st = mdl_malloc(self, sizeof(ex_state_t));
     st->current_ivl = 0;
     uhash_initialize(&st->hfunc);

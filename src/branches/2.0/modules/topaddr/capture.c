@@ -62,14 +62,13 @@ BY_DST_pkt_belongs_to_record(pkt_t *pkt, topaddr_tuple_t *t)
 ca_state_t *
 ca_init(mdl_t *self, timestamp_t ivl)
 {
-    alc_t *alc = mdl_alc(self);
     topaddr_config_t *cfg = mdl_get_config(self, topaddr_config_t);
     ca_state_t *st = mdl_malloc(self, sizeof(ca_state_t));
 
     uhash_initialize(&st->hfunc);
 
     st->use_dst = cfg->use_dst;
-    st->table = flowtable_new(alc, 2048, NULL,
+    st->table = flowtable_new(MDL_MEM, 2048, NULL,
         cfg->use_dst ?
             (flow_match_fn) BY_DST_pkt_belongs_to_record :
             (flow_match_fn) BY_SRC_pkt_belongs_to_record,
