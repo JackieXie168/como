@@ -29,7 +29,6 @@
  *
  * $Id$
  */
-
 #ifndef _COMO_COMO_H
 #define _COMO_COMO_H
 
@@ -79,6 +78,7 @@
 #include "eventloop.h"
 #include "pool.h"
 #include "shmem.h"
+#include "module.h"
 
 void setproctitle_init(int argc, char **argv);
 void setproctitle(const char *format, ...);

@@ -67,12 +67,11 @@ pkt_belongs_to_record(pkt_t *pkt, record_t *r)
 ca_state_t *
 ca_init(mdl_t *self, timestamp_t ivl)
 {
-    alc_t *alc = mdl_alc(self);
     config_t *config = mdl_get_config(self, config_t);
     ca_state_t *st = mdl_malloc(self, sizeof(ca_state_t));
 
     uhash_initialize(&st->hfunc);
-    st->table = flowtable_new(alc, 2048, NULL,
+    st->table = flowtable_new(MDL_MEM, 2048, NULL,
                                 (flow_match_fn) pkt_belongs_to_record, NULL);
 
     return st;
