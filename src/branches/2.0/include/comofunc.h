@@ -280,4 +280,16 @@ void proxy_mono_export(mdl_t * mdl, void ** tuples, size_t ntuples,
 #define assert_not_reached()	\
     error("%s:%d should not be reached.\n", __FILE__, __LINE__)
 
+/*
+ * eventloop.c
+ */
+typedef struct event_loop event_loop_t;
+
+event_loop_t * event_loop_new(void);
+int  event_loop_add(event_loop_t * el, int i);
+int  event_loop_del(event_loop_t * el, int i);
+void event_loop_set_timeout(event_loop_t * el, struct timeval * timeout);
+int  event_loop_select(event_loop_t * el, fd_set * ready, int * max_fd);
+void event_loop_destroy(event_loop_t * el);
+
 #endif /* _COMO_FUNC_H */

@@ -82,7 +82,7 @@ struct tupleset {
 
 typedef struct _como_ex como_ex_t;
 struct _como_ex {
-    event_loop_t el;
+    event_loop_t * el;
     char * st_dir;
     int use_shmem;
     hash_t *mdls; /* mdl name to mdl */
@@ -462,7 +462,9 @@ handle_su_ex_del_module(UNUSED ipc_peer_t * peer, char * sbuf, UNUSED size_t sz,
 	tset = next;
     }
 
-    /* TODO free state of the module */
+    /* free state of the module */
+    pool_clear(ie->mem);
+    pool_destroy(ie->mem);
 
     /*
      * close output file
@@ -540,10 +542,10 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
     /* ipc_register(IPC_EXIT, ex_ipc_exit);*/
 
     /* listen to the parent */
-    event_loop_init(&como_ex.el);
+    como_ex.el = event_loop_new();
     
     supervisor_fd = ipc_peer_get_fd(parent);
-    event_loop_add(&como_ex.el, supervisor_fd);
+    event_loop_add(como_ex.el, supervisor_fd);
 
     /* 
      * wait for the debugger to attach
@@ -552,13 +554,13 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 
     storage_fd = ipc_connect(COMO_ST); 
     debug("storage_fd = %d\n", storage_fd);
-    event_loop_add(&como_ex.el, storage_fd);
+    event_loop_add(como_ex.el, storage_fd);
 
     capture_fd = ipc_connect(COMO_CA);
 
     /* save whether we're using shmem */
     como_ex.use_shmem = (shmemmap != NULL);
-    event_loop_add(&como_ex.el, capture_fd);
+    event_loop_add(como_ex.el, capture_fd);
 
     /* allocate the timers */
     ex_init_timers();
@@ -569,11 +571,9 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
      * tables to see if any action is required.
      */
     for (;;) {
-	fd_set r;
-	int n_ready;
-        int i;
-        int ipcr;
+	int n_ready, i, ipcr, max_fd;
         struct timeval tv_zero;
+	fd_set r;
 
         tv_zero.tv_sec = 0;
         tv_zero.tv_usec = 0;
@@ -586,7 +586,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 
 	profiler_start_tsctimer(como_stats->ex_full_timer); 
 
-        n_ready = event_loop_select(&como_ex.el, &r);
+        n_ready = event_loop_select(como_ex.el, &r, &max_fd);
 	if (n_ready < 0) {
 	    if (errno == EINTR) {
 		continue;
@@ -596,7 +596,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 
 	profiler_start_tsctimer(como_stats->ex_loop_timer); 
 
-    	for (i = 0; n_ready > 0 && i < como_ex.el.max_fd; i++) {
+    	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 	    if (!FD_ISSET(i, &r))
 		continue;
 	    
@@ -604,7 +604,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
             if (ipcr == IPC_EOF) {
                 /* EOF reading from a socket. */
                 debug("EOF from fd %d\n", i);
-                event_loop_del(&como_ex.el, i);
+                event_loop_del(como_ex.el, i);
             } else if (ipcr != IPC_OK) {
 		/* an error. close the socket */
 		warn("error on IPC handle from %d (%d)\n", i, ipcr);
@@ -626,7 +626,7 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
          * must not lock, because we have work to do
          */
         if (como_ex.queue_len > 0)
-            event_loop_set_timeout(&como_ex.el, &tv_zero);
+            event_loop_set_timeout(como_ex.el, &tv_zero);
 
 	profiler_end_tsctimer(como_stats->ex_loop_timer); 
 	profiler_end_tsctimer(como_stats->ex_full_timer); 

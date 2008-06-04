@@ -75,7 +75,6 @@
 #include "ipc.h"
 #include "comofunc.h"
 #include "log.h"
-#include "eventloop.h"
 #include "pool.h"
 #include "shmem.h"
 #include "module.h"

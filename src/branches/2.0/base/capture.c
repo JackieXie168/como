@@ -807,7 +807,7 @@ cabuf_cl_destroy(int id, cabuf_cl_t * cl, como_ca_t * como_ca)
     s_cabuf.clients[id] = NULL;
     s_cabuf.clients_count--;
     fd = ipc_peer_get_fd(cl->peer);
-    event_loop_del(&como_ca->el, fd);
+    event_loop_del(como_ca->el, fd);
     FD_CLR(fd, &s_cabuf.clients_fds);
 
     close(fd);
@@ -1527,7 +1527,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
 	 * del_fd() deals with invalid fd. 
 	 */
 	if (sniff->priv->fd != -1)
-	    event_loop_del(&como_ca->el, sniff->priv->fd);
+	    event_loop_del(como_ca->el, sniff->priv->fd);
 
 	/* inactive and frozen sniffers can be ignored */
 
@@ -1556,7 +1556,7 @@ setup_sniffers(struct timeval *tout, sniffer_list_t * sniffers,
 
 	if (sniff->flags & SNIFF_SELECT) {
 	    sniff->priv->fd = sniff->fd;
-	    event_loop_add(&como_ca->el, sniff->priv->fd);
+	    event_loop_add(como_ca->el, sniff->priv->fd);
 	}
     }
 
@@ -1772,15 +1772,15 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     }
 
     /* initialize select()able file descriptors */
-    event_loop_init(&como_ca.el);
+    como_ca.el = event_loop_new();
     FD_ZERO(&ipc_fds);
 
     /* ensure we handle messages from SUPERVISOR */
-    event_loop_add(&como_ca.el, supervisor_fd);
+    event_loop_add(como_ca.el, supervisor_fd);
     FD_SET(supervisor_fd, &ipc_fds);
 
     /* accept connections from EXPORT process(es) and CAPTURE CLIENTS */
-    event_loop_add(&como_ca.el, como_ca.accept_fd);
+    event_loop_add(como_ca.el, como_ca.accept_fd);
 
     /* initialize the timers */
     ca_init_timers();
@@ -1801,7 +1801,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
     for (;;) {
 	fd_set r;
-	int n_ready;
+	int n_ready, max_fd;
 
 	batch_t *batch;
 	int active_sniff;
@@ -1831,12 +1831,12 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
 	/* wait for messages, sniffers or up to the polling interval */
 	if (active_sniff > 0)
-	    event_loop_set_timeout(&como_ca.el, &timeout);
+	    event_loop_set_timeout(como_ca.el, &timeout);
 
 #ifdef LOADSHED
         ls_select_start(&como_ca);
 #endif
-	n_ready = event_loop_select(&como_ca.el, &r);
+	n_ready = event_loop_select(como_ca.el, &r, &max_fd);
 #ifdef LOADSHED
         ls_select_end(&como_ca);
 #endif
@@ -1849,7 +1849,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
 	profiler_start_tsctimer(como_stats->ca_loop_timer);
 
-	for (i = 0; n_ready > 0 && i < como_ca.el.max_fd; i++) {
+	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 
 	    if (!FD_ISSET(i, &r))
 		continue;
@@ -1859,7 +1859,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		if (x < 0) {
 		    warn("Failed on accept(): %s\n", strerror(errno));
 		} else {
- 		    event_loop_add(&como_ca.el, x);
+ 		    event_loop_add(como_ca.el, x);
 		    FD_SET(x, &ipc_fds);
 		}
 

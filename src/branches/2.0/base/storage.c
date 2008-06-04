@@ -216,7 +216,7 @@ struct como_st {
     off_t		maxfilesize;
     int			supervisor_fd;
     int			accept_fd;
-    event_loop_t	el;
+    event_loop_t *	el;
 };
 
 /* 
@@ -1711,42 +1711,38 @@ como_st_run()
     ipc_register(S_SEEK, (ipc_handler_fn) handle_seek);
     ipc_register(S_INFORM, (ipc_handler_fn) handle_inform);
 
-    event_loop_add(&s_como_st.el, s_como_st.accept_fd);
+    event_loop_add(s_como_st.el, s_como_st.accept_fd);
     
     ipc_register(SU_ANY_EXIT, handle_shutdown);
     
 
     /* listen to SUPERVISOR */
-    event_loop_add(&s_como_st.el, s_como_st.supervisor_fd);
+    event_loop_add(s_como_st.el, s_como_st.supervisor_fd);
 
     /*
      * The real main loop.
      */
     for (;;) {
-        fd_set r;
+        int n_ready, i, ipcr, max_fd;
 	struct timeval last; 
-
 	timestamp_t elapsed; 
-        int n_ready;
-	int i;
-	int ipcr;
+        fd_set r;
 
 	/*
 	 * use a timeout if we have files open. this way the 
 	 * scheduler starts when clients are idle too.
 	 */
         if (s_como_st.client_count > 0) {
-	    event_loop_set_timeout(&s_como_st.el, &to);
+	    event_loop_set_timeout(s_como_st.el, &to);
         }
 
 	gettimeofday(&last, 0);
 	
-	n_ready = event_loop_select(&s_como_st.el, &r);
-	if (n_ready < 0) {
-		continue;
-	}
+	n_ready = event_loop_select(s_como_st.el, &r, &max_fd);
+	if (n_ready < 0)
+            continue;
 
-	for (i = 0; n_ready > 0 && i < s_como_st.el.max_fd; i++) {
+	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 
 	    if (!FD_ISSET(i, &r))
 		continue;
@@ -1755,11 +1751,10 @@ como_st_run()
 
 	    if (i == s_como_st.accept_fd) {
 		int x = accept(i, NULL, NULL);
-		if (x < 0) {
+		if (x < 0)
 		    warn("Failed on accept(): %s\n", strerror(errno));
-		} else {
- 		    event_loop_add(&s_como_st.el, x);
-		}
+		else
+ 		    event_loop_add(s_como_st.el, x);
 		continue;
 	    }
 	    
@@ -1771,7 +1766,7 @@ como_st_run()
 	    case IPC_EOF:
 	    case IPC_CLOSE:
 		close(i);
-		event_loop_del(&s_como_st.el, i);
+		event_loop_del(s_como_st.el, i);
 		break;
 	    }
         }       
