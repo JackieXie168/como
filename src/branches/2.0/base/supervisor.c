@@ -926,6 +926,8 @@ main(int argc, char ** argv)
     static como_config_t cfg;
     como_su_t *como_su;
     como_node_t *main_node;
+    ipc_peer_full_t *ca, *st;
+    pid_t pid;
     int i;
     
     como_su = safe_malloc(sizeof(como_su_t));
@@ -1010,17 +1012,13 @@ main(int argc, char ** argv)
 #endif
 
     /* spawn STORAGE */
-    spawn_child(COMO_ST, "storage", como_config->storage_path,
-                como_su->workdir, "134217728",
-                como_config->silent_mode ? "1" : "0", NULL);
+    st = ipc_peer_child(COMO_ST, 0);
+    pid = start_child(st, storage_main, como_su->memmap, NULL, main_node);
 
     /* read ASN file */
     asn_readfile(como_config->asn_file);
 
     if (main_node->sniffers_count > 0) {
-	ipc_peer_full_t *ca;
-	pid_t pid;
-	
         /* start the CAPTURE process */
 	ca = ipc_peer_child(COMO_CA, 0);
 	pid = start_child(ca, capture_main, como_su->memmap, NULL, main_node);

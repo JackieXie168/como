@@ -7,26 +7,39 @@ IF(ENABLE_LOADSHED)
   INCLUDE_DIRECTORIES(${COMO_SOURCE_DIR}/loadshed)
 ENDIF(ENABLE_LOADSHED)
 
-SET(STORAGE_SRCS
-  storage.c
-)
-
 SET(COMO_SRCS
+  alc.c
+  array.c
   asn.c
   capture.c
+  como.c
   config.c
+  eventloop.c
   export.c
+  hash.c
   headerinfo.c
   ieee80211frames.c
+  ipc.c
+  log.c
+  mdl.c
+  memory.c
   metadesc.c
   pktmeta.c
-  query.c
+  pool.c
   query-comms.c
   query-ondemand.c
+  query.c
   radio.c
   services.c
+  setproctitle.c
+  shmem.c
+  shobj.c
   sniffers.c
+  socket.c
+  storage-client.c
+  storage.c
   supervisor.c
+  util-io.c
   util-process.c
   util-timers.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
@@ -182,8 +195,6 @@ INCLUDE_DIRECTORIES(${COMO_BINARY_DIR}/base)
 #
 ADD_EXECUTABLE(como ${COMO_SRCS})
 
-ADD_EXECUTABLE(como-storage ${STORAGE_SRCS})
-
 #
 # Make sure modules can see como's symbols
 #
@@ -218,10 +229,7 @@ TARGET_LINK_LIBRARIES(como ${COMO_BINARY_DIR}/services/libservices.a)
 
 TARGET_LINK_LIBRARIES(como m)
 
-TARGET_LINK_LIBRARIES(como comolib)
 TARGET_LINK_LIBRARIES(como comomdl)
-
-TARGET_LINK_LIBRARIES(como-storage comolib)
 
 IF(LINUX)
   TARGET_LINK_LIBRARIES(como dl)
@@ -250,4 +258,4 @@ TARGET_LINK_LIBRARIES(como ${APR_LIBS})
 # Installation
 #
 INSTALL_TARGETS(${INST_BINDIR} como)
-INSTALL_TARGETS(${INST_BINDIR} como-storage)
+

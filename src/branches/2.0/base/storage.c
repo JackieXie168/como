@@ -51,12 +51,13 @@
 #include <sys/socket.h>
 #include <sys/un.h>	/* AF_UNIX sockets */
 
-#define LOG_DISABLE
+#define LOG_DEBUG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 
 #include "storagepriv.h"
 
+extern como_config_t *como_config;
 
 /*
  * STORAGE
@@ -214,7 +215,7 @@ struct como_st {
     int			client_count;	/* how many in use */
     csclient_t *	clients[CS_MAXCLIENTS];
     off_t		maxfilesize;
-    int			supervisor_fd;
+    ipc_peer_t *	supervisor;
     int			accept_fd;
     event_loop_t *	el;
 };
@@ -523,7 +524,7 @@ senderr(ipc_peer_t * s, int id, int code)
 	error("sending error message: %s\n", strerror(errno));
     }
 
-    msg("out: ERROR - id: %d; code: %d;\n", id, code);
+    debug("out: ERROR - id: %d; code: %d;\n", id, code);
 }
 
 
@@ -755,7 +756,7 @@ handle_open(ipc_peer_t * sender, csmsg_t * in,
      */ 
     for (bs = s_como_st.bs; bs; bs = bs->next) {
 	if (strcmp(bs->name, in->name) == 0) { 	/* found it */
-	    msg("file [%s] found, clients %d, wfd %d\n", 
+	    debug("file [%s] found, clients %d, wfd %d\n", 
 		   in->name, bs->client_count, bs->wfd); 
 	    break;
         } 
@@ -787,7 +788,7 @@ handle_open(ipc_peer_t * sender, csmsg_t * in,
      * The id for the new client is generated in new_csclient();
      */
     cl = new_csclient(bs, in->arg);
-    msg("new client for [%s], id %d\n", in->name, cl->id);
+    debug("new client for [%s], id %d\n", in->name, cl->id);
 
     /* 
      * if this is a writer, link it to the bytestream, 
@@ -946,7 +947,7 @@ handle_close(UNUSED ipc_peer_t * sender, csmsg_t * in,
 	    close(bs->wfd);
 	} 
 
-	msg("writer removed (bytestream: %x %s)", bs, bs->name);
+	debug("writer removed (bytestream: %x %s)", bs, bs->name);
 	bs->wfd = -1;
 	bs->the_writer = NULL;
 	free(cl);
@@ -996,7 +997,7 @@ block_client(csclient_t *cl, csmsg_t *in, ipc_peer_t * s)
     p->next = bs->blocked; 
     bs->blocked = p;
    
-    msg("client %d blocked on ofs: %12lld, sz: %8d\n", 
+    debug("client %d blocked on ofs: %12lld, sz: %8d\n", 
 	in->id, in->ofs, in->size); 
 }
 
@@ -1076,7 +1077,7 @@ handle_seek(ipc_peer_t * sender, csmsg_t * in,
 
     if (cf == NULL) { 
 	/* we have gone beyond the bytestream size */
-	msg("id: %d,%s; seek reached the end of file\n", 
+	debug("id: %d,%s; seek reached the end of file\n", 
 	    in->id, cl->bs->name); 
 	senderr(sender, in->id, ENODATA);
 	return IPC_OK;
@@ -1150,7 +1151,7 @@ region_read(ipc_peer_t * sender, csmsg_t * in, csclient_t *cl)
      */
     if (in->ofs < bs->file_first->bs_offset) {
 	/* before first byte */
-	msg("id: %d, %s no data available\n", in->id, bs->name);
+	debug("id: %d, %s no data available\n", in->id, bs->name);
 	senderr(sender, in->id, ENODATA); 
 	return IPC_OK; 
     } else if (in->ofs >= bs->file_first->bs_offset + bs->size) { 
@@ -1703,21 +1704,22 @@ como_st_run()
 {
     struct timeval to = { 5, 200000 };	// XXX just to put something?
 
-
     /* register handlers for IPC messages */
+    ipc_set_user_data(&s_como_st);
     ipc_register(S_CLOSE, (ipc_handler_fn) handle_close);
     ipc_register(S_OPEN, (ipc_handler_fn) handle_open);
     ipc_register(S_REGION, (ipc_handler_fn) handle_region);
     ipc_register(S_SEEK, (ipc_handler_fn) handle_seek);
     ipc_register(S_INFORM, (ipc_handler_fn) handle_inform);
 
+    s_como_st.el = event_loop_new();
     event_loop_add(s_como_st.el, s_como_st.accept_fd);
     
     ipc_register(SU_ANY_EXIT, handle_shutdown);
     
 
     /* listen to SUPERVISOR */
-    event_loop_add(s_como_st.el, s_como_st.supervisor_fd);
+    event_loop_add(s_como_st.el, ipc_peer_get_fd(s_como_st.supervisor));
 
     /*
      * The real main loop.
@@ -1792,47 +1794,31 @@ como_st_run()
  * 
  *
  */
-int
-main(int argc, char ** argv)
+void
+storage_main(ipc_peer_t * parent, UNUSED memmap_t * shmemmap, UNUSED FILE * f,
+            UNUSED como_node_t * node)
 {
-    char *location;
-    uint64_t maxfilesize;
+    log_set_program("ST");
 
-    if (argc != 4) {
-        fprintf(stderr, "usage: %s su_location maxfilesize running_inline\n",
-            argv[0]);
-	exit(EXIT_FAILURE);
-    }
-    if (argv[1][0] != '/') {
-        fprintf(stderr, "invalid su_location `%s'\n", argv[1]);
-	exit(EXIT_FAILURE);
-    }
+    /* register handlers for signals */
+    signal(SIGPIPE, exit);
+    signal(SIGINT, exit);
+    signal(SIGTERM, exit);
+    signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */
 
-    maxfilesize = strtoll(argv[2], NULL, 0);
-    if (maxfilesize == 0) {
-        fprintf(stderr, "invalid maxfilesize `%lld'\n", maxfilesize);
-	exit(EXIT_FAILURE);
-    }
-
-    location = safe_strdup(argv[1]);
-    como_init("ST", argc, argv);
-
-    if (atoi(argv[3])) /* inline mode */
+    if (como_config->inline_mode)
         log_set_level(LOG_LEVEL_ERROR); /* be silent */
-
-    setproctitle("STORAGE");
 
     /* init data structures */
     memset(&s_como_st, 0, sizeof(s_como_st));
     s_como_st.accept_fd = -1;
-    s_como_st.maxfilesize = maxfilesize;
+    s_como_st.maxfilesize = 134217728;
     
     /* initialize IPC */
-    ipc_init(ipc_peer_at(COMO_ST, location), NULL, &s_como_st);
     s_como_st.accept_fd = ipc_listen();
 
     /* connect to SU - we are ready to handle connections */
-    s_como_st.supervisor_fd = ipc_connect(COMO_SU);
+    s_como_st.supervisor = parent;
 
     /* if needed, wait for debugger */
     DEBUGGER_WAIT_ATTACH("st");
@@ -1841,8 +1827,7 @@ main(int argc, char ** argv)
     signal(SIGPIPE, exit); 
     signal(SIGINT, exit);
     signal(SIGTERM, exit);
-    /* ignore SIGHUP */ 
-    signal(SIGHUP, SIG_IGN); 
+    signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */ 
 
     /* run */
     como_st_run();
