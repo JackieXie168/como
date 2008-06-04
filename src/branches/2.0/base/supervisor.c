@@ -654,10 +654,10 @@ como_su_run(como_su_t * como_su)
     /* register handlers for IPC */
     ipc_register(QU_SU_DONE, (ipc_handler_fn) qu_su_ipc_done);
 
-    event_loop_init(&como_su->el);
+    como_su->el = event_loop_new();
 
     /* accept connections from other processes */
-    event_loop_add(&como_su->el, como_su->accept_fd);
+    event_loop_add(como_su->el, como_su->accept_fd);
 
     FD_ZERO(&nodes_fds);
 
@@ -670,7 +670,7 @@ como_su_run(como_su_t * como_su)
 	node = &array_at(como_su->nodes, como_node_t, i);
 
 	if (!como_config->inline_mode && como_node_listen(node) != -1) {
-	    event_loop_add(&como_su->el, node->query_fd);
+	    event_loop_add(como_su->el, node->query_fd);
 	    FD_SET(node->query_fd, &nodes_fds);
 	}
     }
@@ -687,11 +687,11 @@ como_su_run(como_su_t * como_su)
 	struct timeval to = {1, 0};
         int secs, dd, hh, mm, ss;
 	struct timeval now;
-	int n_ready;
+	int n_ready, max_fd;
 	
 	fd_set r;
 	
-	event_loop_set_timeout(&como_su->el, &to);
+	event_loop_set_timeout(como_su->el, &to);
 
 	/* 
          * user interface. just one line... 
@@ -718,11 +718,11 @@ como_su_run(como_su_t * como_su)
 		    real_node->mdls->len);
 	}
 
-	n_ready = event_loop_select(&como_su->el, &r);
+	n_ready = event_loop_select(como_su->el, &r, &max_fd);
 	if (! como_config->inline_mode)
 	    fprintf(stderr, "%78s\r", ""); /* clean the line */
 
-	for (i = 0; n_ready > 0 && i < como_su->el.max_fd; i++) {
+	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 	    
 	    if (!FD_ISSET(i, &r))
 		continue;
@@ -733,7 +733,7 @@ como_su_run(como_su_t * como_su)
 		if (x < 0) {
 		    warn("accept() failed: %s\n", strerror(errno));
 		} else {
-		    event_loop_add(&como_su->el, x);
+		    event_loop_add(como_su->el, x);
 		}
 	    } else if (FD_ISSET(i, &nodes_fds)) {
 		como_node_t *node = como_node_lookup_by_fd(como_su->nodes, i);
@@ -748,7 +748,7 @@ como_su_run(como_su_t * como_su)
 		    warn("error on IPC handle from %d\n", i);
 		case IPC_CLOSE:
 		case IPC_EOF:
-		    event_loop_del(&como_su->el, i);
+		    event_loop_del(como_su->el, i);
 		    break;
 		}
 	    }

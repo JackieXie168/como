@@ -36,12 +36,25 @@
 #include <errno.h>
 
 #include "como.h"
+#include "comopriv.h"
 
-void
-event_loop_init(event_loop_t * el)
+struct event_loop {
+    fd_set		fds;
+    int			max_fd;
+    struct timeval	*timeoutptr;
+    struct timeval	timeout;
+};
+
+
+event_loop_t *
+event_loop_new()
 {
+    event_loop_t *el = safe_malloc(sizeof(event_loop_t));
+
     memset(el, 0, sizeof(event_loop_t));
     FD_ZERO(&el->fds);
+
+    return el;
 }
 
 
@@ -100,7 +113,7 @@ event_loop_set_timeout(event_loop_t * el, struct timeval * timeout)
 
 
 int
-event_loop_select(event_loop_t * el, fd_set * ready)
+event_loop_select(event_loop_t * el, fd_set * ready, int * max_fd)
 {
     int n;
 
@@ -110,6 +123,7 @@ event_loop_select(event_loop_t * el, fd_set * ready)
 	error("Failed on select(): %s\n", strerror(errno));
     }
     el->timeoutptr = NULL;
+    *max_fd = el->max_fd;
     
     return n;
 }

@@ -287,7 +287,7 @@ typedef struct como_ca {
     int			sniffers_count;
 
     // capbuf
-    event_loop_t	el;
+    event_loop_t *	el;
     int			ready;
     timestamp_t		min_flush_ivl;
     memmap_t *		shmemmap;
@@ -443,7 +443,7 @@ int mdl_lookup_position(array_t *mdls, const char *name);
  */
 typedef struct como_su como_su_t;
 struct como_su {
-    event_loop_t	el;
+    event_loop_t *	el;
     int			accept_fd;
 
     array_t *		nodes;		/* node information */
