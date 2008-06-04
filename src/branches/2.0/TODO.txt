@@ -21,7 +21,6 @@ sniffer-wpcap.c
 
 * Modules:
 
-autofocus
 supersources
 multiple pattern search
 
@@ -29,8 +28,6 @@ multiple pattern search
 * Configuration
 
  - Do more error checking.
- - Fix example.conf
- - argsfile keyword
  - specify that a module has to run ondemand
 
 * Features
