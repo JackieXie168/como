@@ -19,11 +19,6 @@
 
 #librarydir	"/where/are/modules"
 
-# Path to como-storage
-
-storage-path "@CMAKE_INSTALL_PREFIX@@INST_BINDIR@/como-storage"
-
-
 # File in MRT format (see draft-ietf-grow-mrt-03.txt) that
 # gives the IP address ranges announced by each autonomous
 # system (AS) [eg a global routing table]. See the RIS

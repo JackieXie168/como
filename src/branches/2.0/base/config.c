@@ -458,10 +458,6 @@ configure(int argc, char **argv, como_config_t *cfg)
             break;
         }
 
-        case 't':   /* path to storage */
-            cfg->storage_path = safe_strdup(optarg);
-            break;
-
         case '?':   /* unknown */
             error("unrecognized cmdline option (%s)\n\n" USAGE "\n",
                     argv[optind], argv[0]);
@@ -659,7 +655,6 @@ destroy_config(como_config_t *cfg)
     array_free(cfg->vnode_defs, 1);
 
     free(cfg->como_executable_full_path); /* free strings */
-    free(cfg->storage_path);
     free(cfg->mono_path);
     free(cfg->db_path);
     free(cfg->libdir);

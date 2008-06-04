@@ -117,8 +117,6 @@ query_ondemand(UNUSED int fd, qreq_t * req, UNUSED int node_id)
     my_argv[i++] = como_config->db_path;
     my_argv[i++] = "-L";
     my_argv[i++] = como_config->libdir;
-    my_argv[i++] = "-t";
-    my_argv[i++] = como_config->storage_path;
 
     my_argv[i++] = "-C"; /* add the definition for the ondemand mdl */
     

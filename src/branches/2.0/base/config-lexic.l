@@ -100,7 +100,6 @@ import              BEGIN(import);
 
 db-path         { dbg_return(TOK_DBPATH); }
 librarydir      { dbg_return(TOK_LIBDIR); }
-storage-path	{ dbg_return(TOK_STORAGEPATH); }
 memsize         { dbg_return(TOK_MEMSIZE); }
 query-port      { dbg_return(TOK_QUERY_PORT); }
 

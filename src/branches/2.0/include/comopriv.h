@@ -317,6 +317,8 @@ void query_main_http(ipc_peer_t * parent, memmap_t * shmemmap,
 void query_main_plain(ipc_peer_t * parent, memmap_t * shmemmap,
         FILE* client_stream, como_node_t * node);
 
+void storage_main  (ipc_peer_t * parent, memmap_t * shmemmap,
+        FILE* client_stream, como_node_t * node);
 
 /* mdl.c */
 
