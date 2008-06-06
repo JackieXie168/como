@@ -222,4 +222,14 @@ handle_children()
     return 1; 
 }
 
+/*
+ * -- sighdlr_exit
+ *
+ * Signal handler that just calls exit.
+ */
+void
+sighdlr_exit(UNUSED int i)
+{
+    exit(0);
+}
 

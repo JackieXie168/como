@@ -1801,9 +1801,9 @@ storage_main(ipc_peer_t * parent, UNUSED memmap_t * shmemmap, UNUSED FILE * f,
     log_set_program("ST");
 
     /* register handlers for signals */
-    signal(SIGPIPE, exit);
-    signal(SIGINT, exit);
-    signal(SIGTERM, exit);
+    signal(SIGPIPE, sighdlr_exit);
+    signal(SIGINT, sighdlr_exit);
+    signal(SIGTERM, sighdlr_exit);
     signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */
 
     if (como_config->inline_mode)
@@ -1823,12 +1823,6 @@ storage_main(ipc_peer_t * parent, UNUSED memmap_t * shmemmap, UNUSED FILE * f,
     /* if needed, wait for debugger */
     DEBUGGER_WAIT_ATTACH("st");
     
-    /* register handlers for signals */ 
-    signal(SIGPIPE, exit); 
-    signal(SIGINT, exit);
-    signal(SIGTERM, exit);
-    signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */ 
-
     /* run */
     como_st_run();
     
