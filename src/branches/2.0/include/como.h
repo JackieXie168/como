@@ -76,7 +76,6 @@
 #include "comofunc.h"
 #include "log.h"
 #include "pool.h"
-#include "shmem.h"
 #include "module.h"
 
 void setproctitle_init(int argc, char **argv);
