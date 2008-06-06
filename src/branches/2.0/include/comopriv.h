@@ -399,8 +399,6 @@ struct mdl_iexport {
     ex_init_fn		init;
     ex_export_fn	export;
 
-    shmem_t *		shmem;
-
     void *              state;
 
     int                 running_state;
@@ -450,8 +448,10 @@ struct como_su {
 
     array_t *		nodes;		/* node information */
     
-    shmem_t *		shmem;		/* main shared memory used to store
+    void *		shmem;		/* main shared memory used to store
 					   capture data structures, stats */
+    size_t              shmem_size;
+
     memmap_t *		memmap;
     alc_t		shalc;
 

@@ -32,7 +32,6 @@ SET(COMO_SRCS
   radio.c
   services.c
   setproctitle.c
-  shmem.c
   shobj.c
   sniffers.c
   socket.c

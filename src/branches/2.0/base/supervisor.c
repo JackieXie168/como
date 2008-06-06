@@ -40,6 +40,8 @@
 #include <assert.h>
 #include <sys/stat.h>   /* mkdir */
 #include <sys/types.h>  /* mkdir */
+#include <sys/mman.h>   /* mmap */
+
 
 #define LOG_DEBUG_DISABLE
 #include "como.h"
@@ -710,7 +712,7 @@ como_su_run(como_su_t * como_su)
 		dd, hh, mm, ss,
 		    (unsigned int)mem_stats->usage/(1024*1024), 
 		    (unsigned int)mem_stats->peak/(1024*1024), 
-		    shmem_size(como_su->shmem)/(1024*1024),
+		    como_su->shmem_size / (1024 * 1024),
 		    como_stats->table_queue,
 		    como_stats->pkts,
 		    como_stats->drops,
@@ -911,6 +913,37 @@ como_init_nodes(UNUSED como_su_t *como_su, como_config_t *cfg)
     }
 }
 
+#ifndef MAP_NOSYNC
+#define MAP_NOSYNC 0
+#endif
+/* Not all systems seem to have MAP_FAILED defined, but it should always
+ * just be (void *)-1. */
+#ifndef MAP_FAILED
+#define MAP_FAILED ((void *)-1)
+#endif
+
+/*
+ * -- shmem_create
+ *
+ * Creates a shared memory region
+ *
+ */
+void *
+shmem_create(size_t size)
+{
+    void *mem;
+
+    mem = mmap(NULL, size, PROT_READ|PROT_WRITE,
+                MAP_ANON|MAP_NOSYNC|MAP_SHARED, -1, 0);
+
+    if (mem == (void *)MAP_FAILED)
+        error("shmem_create(): %s\n", strerror(errno));
+    else
+        notice("allocated %lu of mapped memory\n", size);
+
+    return mem;
+}
+
 /*
  * -- main
  *
@@ -975,9 +1008,9 @@ main(int argc, char ** argv)
      * Initialize the shared memory region.
      * CAPTURE and QUERY processes will be able to see it.
      */
-    como_su->shmem = shmem_create(como_config->shmem_size, NULL);
-    como_su->memmap = memmap_create(shmem_baseaddr(como_su->shmem),
-                                    shmem_size(como_su->shmem), 2048);
+    como_su->shmem_size = como_config->shmem_size;
+    como_su->shmem = shmem_create(como_config->shmem_size);
+    como_su->memmap = memmap_create(como_su->shmem, como_su->shmem_size, 2048);
     memmap_alc_init(como_su->memmap, &como_su->shalc);
     
     /* allocate statistics into shared memory */
