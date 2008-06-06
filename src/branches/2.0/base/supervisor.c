@@ -61,6 +61,12 @@ como_config_t *como_config;
 int s_saved_argc;
 char **s_saved_argv;
 
+ipc_peer_full_t *COMO_SU;
+ipc_peer_full_t *COMO_CA;
+ipc_peer_full_t *COMO_EX;
+ipc_peer_full_t *COMO_ST;
+ipc_peer_full_t *COMO_QU;
+
 /*
  * -- launch_inline_query
  *
@@ -963,12 +969,25 @@ main(int argc, char ** argv)
     pid_t pid;
     int i;
     
+    log_set_program("SU");
+    if (!isatty(fileno(stderr)))
+        log_set_use_color(FALSE);
+
+#if defined(linux) || defined(__APPLE__)
+    /* linux/Mac OS X does not support setproctitle. we have our own. */
+    setproctitle_init(argc, argv);
+#endif
+
+    COMO_SU = ipc_peer_new(COMO_SU_CLASS, "su", "SUPERVISOR");
+    COMO_CA = ipc_peer_new(COMO_CA_CLASS, "ca", "CAPTURE");
+    COMO_EX = ipc_peer_new(COMO_EX_CLASS, "ex", "EXPORT");
+    COMO_ST = ipc_peer_new(COMO_ST_CLASS, "st", "STORAGE");
+    COMO_QU = ipc_peer_new(COMO_QU_CLASS, "qu", "QUERY");
+
     como_su = safe_malloc(sizeof(como_su_t));
     como_su->su_pid = getpid();
     como_su->workdir = mkdtemp(strdup("/tmp/comoXXXXXX"));
     s_como_su = como_su;
-   
-    como_init("SU", argc, argv);
     
     /*
      * parse command line and configuration files
