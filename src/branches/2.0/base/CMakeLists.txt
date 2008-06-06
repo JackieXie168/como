@@ -12,7 +12,6 @@ SET(COMO_SRCS
   array.c
   asn.c
   capture.c
-  como.c
   config.c
   eventloop.c
   export.c
@@ -40,6 +39,7 @@ SET(COMO_SRCS
   supervisor.c
   util-io.c
   util-process.c
+  util-safe.c
   util-timers.c
   ${COMO_SOURCE_DIR}/lib/uhash.c
   ${COMO_SOURCE_DIR}/lib/flowtable.c
