@@ -483,7 +483,6 @@ handle_su_ex_del_module(UNUSED ipc_peer_t * peer, char * sbuf, UNUSED size_t sz,
     return IPC_OK;
 }
 
-
 /*
  * -- export_main
  *
@@ -519,9 +518,9 @@ export_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE * f,
 #endif
     
     /* register handlers for signals */ 
-    signal(SIGPIPE, exit); 
-    signal(SIGINT, exit);
-    signal(SIGTERM, exit);
+    signal(SIGPIPE, sighdlr_exit); 
+    signal(SIGINT, sighdlr_exit);
+    signal(SIGTERM, sighdlr_exit);
     signal(SIGHUP, SIG_IGN); /* ignore SIGHUP */
 
     /* register handlers for IPC messages */ 

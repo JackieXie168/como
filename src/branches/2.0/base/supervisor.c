@@ -651,8 +651,8 @@ como_su_run(como_su_t * como_su)
     memmap_stats_t *mem_stats;
 
     /* catch some signals */
-    signal(SIGINT, exit);               /* catch SIGINT to clean up */
-    signal(SIGTERM, exit);              /* catch SIGTERM to clean up */
+    signal(SIGINT, sighdlr_exit);       /* catch SIGINT to clean up */
+    signal(SIGTERM, sighdlr_exit);      /* catch SIGTERM to clean up */
     signal(SIGCHLD, defchld);		/* catch SIGCHLD (defunct children) */
     signal(SIGHUP, set_reconfigure_flag); /* catch SIGHUP to update cfg */
 

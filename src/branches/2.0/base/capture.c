@@ -1701,8 +1701,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     /* register handlers for signals */
 
     signal(SIGPIPE, SIG_IGN);
-    signal(SIGINT, exit);
-    signal(SIGTERM, exit);
+    signal(SIGINT, sighdlr_exit);
+    signal(SIGTERM, sighdlr_exit);
     signal(SIGHUP, SIG_IGN);
     atexit(cleanup);
 

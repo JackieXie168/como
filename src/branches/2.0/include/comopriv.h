@@ -199,8 +199,7 @@ typedef void (*mainloop_fn) (ipc_peer_t * parent,
 pid_t start_child (ipc_peer_full_t * child, mainloop_fn mainloop,
 		  memmap_t * shmemmap, FILE *client_stream, como_node_t * node);
 int handle_children ();
-pid_t spawn_child (ipc_peer_full_t * child, const char *descr,
-                    const char * path, ...);
+void sighdlr_exit(int);
 
 
 #define	GR_LOSTSYNC	((void *) -1)
