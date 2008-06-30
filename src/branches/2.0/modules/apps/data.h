@@ -36,14 +36,14 @@
 #define PORT_MAX 65536
 
 como_tuple struct apps_tuple {
-    double bytes[PORT_MAX];
-    double pkts[PORT_MAX];
+    double bytes[CLASSES_MAX];
+    double pkts[CLASSES_MAX];
 };
 
 como_record struct apps_record {
     timestamp_t ts;
-    uint32_t bytes[PORT_MAX];
-    uint64_t pkts[PORT_MAX];
+    uint32_t bytes[CLASSES_MAX];
+    uint64_t pkts[CLASSES_MAX];
 };
 
 como_config struct apps_config {
