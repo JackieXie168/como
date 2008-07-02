@@ -665,7 +665,6 @@ handle_ex_ca_tuples_processed(UNUSED ipc_peer_t * peer,
      * we can't use info from como_ca->mdls here, because these tuples
      * may come from a module that has been recently removed.
      */
-
     t = tuples_first(&msg->tuples);
     while (t != NULL) {
 	t2 = t;
@@ -1686,6 +1685,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     int max_sniffer_id;
     sniffer_t *sniff;
     sniffer_list_t *sniffers;
+    int messages_recvd = 0;
 
     log_set_program("CA");
 
@@ -1804,9 +1804,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 	int n_ready, max_fd;
 
 	batch_t *batch;
-	int active_sniff;
-	int i;
-	int touched;
+	int active_sniff, i, touched;
 
         capture_profiler_notify(CP_START_SNIFFERS);
 
@@ -1829,9 +1827,13 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
         capture_profiler_notify(CP_END_SNIFFERS);
         capture_profiler_notify(CP_START_SELECT);
 
-	/* wait for messages, sniffers or up to the polling interval */
-	if (active_sniff > 0)
-	    event_loop_set_timeout(como_ca.el, &timeout);
+	/*
+         * wait for messages, sniffers or up to the polling interval.
+         * if we just received some messages, don't sleep as we want
+         * to immediately check if we have more of them.
+         */
+	if (active_sniff > 0 && ! messages_recvd)
+            event_loop_set_timeout(como_ca.el, &timeout);
 
 #ifdef LOADSHED
         ls_select_start(&como_ca);
@@ -1849,6 +1851,8 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 
 	profiler_start_tsctimer(como_stats->ca_loop_timer);
 
+        messages_recvd = 0;
+
 	for (i = 0; n_ready > 0 && i < max_fd; i++) {
 
 	    if (!FD_ISSET(i, &r))
@@ -1864,6 +1868,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		}
 
 		n_ready--;
+                messages_recvd = 1;
 	    }
 
 	    if (FD_ISSET(i, &ipc_fds)) {
@@ -1882,11 +1887,15 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
 		}
 
 		n_ready--;
+                messages_recvd = 1;
 	    }
 	}
 
         if (como_ca.ready != TRUE)
             continue; /* don't go any further until ready */
+
+        if (messages_recvd)
+            continue; /* try to get more messages before advancing */
 
 	/* check resources usage occupied by capture clients */
 	if (s_cabuf.clients_count > 0) {
