@@ -1686,6 +1686,7 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
     sniffer_t *sniff;
     sniffer_list_t *sniffers;
     int messages_recvd = 0;
+    struct timeval tv_zero = { 0, 0 };
 
     log_set_program("CA");
 
@@ -1832,7 +1833,9 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
          * if we just received some messages, don't sleep as we want
          * to immediately check if we have more of them.
          */
-	if (active_sniff > 0 && ! messages_recvd)
+        if (messages_recvd)
+            event_loop_set_timeout(como_ca.el, &tv_zero);
+	else if (active_sniff > 0)
             event_loop_set_timeout(como_ca.el, &timeout);
 
 #ifdef LOADSHED
