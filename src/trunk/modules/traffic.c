@@ -153,11 +153,6 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 #define PRETTYHDR		\
     "Date                     Timestamp          Input      Output\n"
 
-#define PRETTYFMT	"%.24s %12d.%06d %8llu %8u\n"
-#define PLAINFMT	"%12ld %16llu %12llu %12u\n"
-
-#define GNUPLOTFMT 	"%ld %u %u\n"
-
 #define GNUPLOTHDR						\
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
     "set grid;"								\
@@ -173,6 +168,10 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
     "     \"-\" using 1:3 with filledcurve x1 lw 5\n"
 
 #define GNUPLOTFOOTER	"e\n"
+
+static char prettyfmt[] = "%.24s %12d.%06d %8llu %8u\n";
+static char plainfmt[] = "%12ld %16llu %12llu %12u\n";
+static char gnuplotfmt[] = "%ld %u %u\n";
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -192,15 +191,15 @@ print(void * self, char *buf, size_t *len, char * const args[])
     if (buf == NULL && args != NULL) { 
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);  
-	fmt = PRETTYFMT; 
+	fmt = prettyfmt; 
 
 	/* first call of print, process the arguments and return */
 	for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
-		fmt = PLAINFMT;
+		fmt = plainfmt;
 	    } else if (!strcmp(args[n], "format=gnuplot")) {
-		fmt = GNUPLOTFMT;
+		fmt = gnuplotfmt;
 	    } else if (!strcmp(args[n], "use-bytes")) { 
 		use_bytes = 1;
 	    } else if (!strncmp(args[n], "granularity=", 10)) {
@@ -213,7 +212,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	    }
 	} 
 
-	if (fmt == GNUPLOTFMT) { 
+	if (fmt == gnuplotfmt) { 
 	    *len = sprintf(s, GNUPLOTHDR, use_bytes? "Mbps" : "packets/sec"); 
 	} 
 
@@ -222,7 +221,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
     if (buf == NULL && args == NULL) { 
 	*len = 0;
-	if (fmt == GNUPLOTFMT) 
+	if (fmt == gnuplotfmt) 
 	    *len = sprintf(s, GNUPLOTFOOTER);
 	return s; 
     } 
@@ -244,10 +243,10 @@ print(void * self, char *buf, size_t *len, char * const args[])
     count[1] /= granularity;
 
     /* print according to the requested format */
-    if (fmt == PRETTYFMT) {  
+    if (fmt == prettyfmt) {  
 	*len = sprintf(s, fmt, asctime(localtime(&t)), 
 		       TS2SEC(ts), TS2USEC(ts), count[0], count[1]);
-    } else if (fmt == GNUPLOTFMT) {  
+    } else if (fmt == gnuplotfmt) {  
 	if (use_bytes) { 
 	    float mbps_in = 8.0 * (float) count[0] / 1000000.0; 
 	    float mbps_out = 8.0 * (float) count[1] / 1000000.0; 

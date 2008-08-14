@@ -503,12 +503,6 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 #define PRETTY_HDR_DSTS                                                     \
     "\tTimestamp\t\t\t\tDestination IP\t\t\t\tTraffic\n"
 
-#define PRETTY_FMT                                                          \
-    "\t%u\t\t\t\t%s/%d\t\t\t\t%llu\n"
-
-#define PLAIN_FMT                                                           \
-    "\t%u\t\t\t\t%s/%d\t\t\t\t%llu\n"
-
 #define HTML_HDR							    \
 "<html>\n"							            \
 "<head>\n"                                                                  \
@@ -546,10 +540,6 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 "</table>\n"						                    \
 "</body></html>\n"
 
-#define HTML_FMT						            \
-"<tr><td>%d</td>"                                                           \
-"<td>%s/%d</td>"                                                            \
-"<td>%llu</td></tr>\n"
 
 #define HTML_FMT2						            \
 "<tr><tr><td><br></td></tr>"                                                \
@@ -565,6 +555,9 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 "    <td>Traffic (bytes)</td>\n"				            \
 "  </tr>\n"							
 
+static char prettyfmt[] = "\t%u\t\t\t\t%s/%d\t\t\t\t%llu\n"; 
+static char plainfmt[] = "\t%u\t\t\t\t%s/%d\t\t\t\t%llu\n";
+static char htmlfmt[] = "<tr><td>%d</td><td>%s/%d</td><td>%llu</td></tr>\n";
     
 /*
  * -- print
@@ -603,22 +596,22 @@ print(void *self, char *buf, size_t *len, char * const args[])
         else
             *len = sprintf(s, PRETTY_HDR_SRCS); 
 
-        fmt = PRETTY_FMT; 
+        fmt = prettyfmt; 
 
         /* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=plain")) {
                 *len = 0; 
-                fmt = PLAIN_FMT;
+                fmt = plainfmt;
             } else if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTML_HDR); 
                 *len += sprintf(s + *len, HTML_TITLE, what[config->use_dst]);
-                fmt = HTML_FMT;
+                fmt = htmlfmt;
             } else if (!strcmp(args[n], "format=sidebox")) {
                 *len = sprintf(s, HTML_HDR); 
                 *len += sprintf(s + *len, SIDEBOX_TITLE,
                                     what[config->use_dst]);
-                fmt = HTML_FMT;
+                fmt = htmlfmt;
             }
         } 
         count = 0; 	/* reset count */ 
@@ -628,7 +621,7 @@ print(void *self, char *buf, size_t *len, char * const args[])
     /* last call of print */
     if (buf == NULL && args == NULL) { 
         *len = 0;
-        if (fmt == HTML_FMT) 
+        if (fmt == htmlfmt) 
             *len = sprintf(s, HTML_FOOTER);
         count = 0;      /* reset count */
         last_ts = 0; 	/* reset timestamp */ 
@@ -654,11 +647,11 @@ print(void *self, char *buf, size_t *len, char * const args[])
         bytes = NTOHLL(record->bytes);
 
         /* fill up each type of output */
-        if (fmt == PLAIN_FMT)
+        if (fmt == plainfmt)
             *len += sprintf(s + *len, fmt, ts, inet_ntoa(addr), mask, bytes);
-        else if (fmt == PRETTY_FMT)
+        else if (fmt == prettyfmt)
             *len += sprintf(s + *len, fmt, ts, inet_ntoa(addr), mask, bytes);
-        else if (fmt == HTML_FMT) { 
+        else if (fmt == htmlfmt) { 
             if (count == 1)
                 *len += sprintf(s + *len, HTML_FMT2, count, inet_ntoa(addr),
                         mask, bytes);

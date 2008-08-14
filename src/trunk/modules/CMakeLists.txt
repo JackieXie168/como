@@ -16,6 +16,7 @@ SET(MODULES
   pattern-search
   protocol
   scanner-detector
+  sessions
   ssid
   superaddr
   topaddr

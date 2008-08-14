@@ -327,10 +327,6 @@ load(void * self, char *buf, size_t len, timestamp_t *ts)
 #define PRETTYHDR	\
     "Date                      Port     Name       Bytes       Packets   \n"
 
-#define PRETTYFMT 	"%.24s %5u/%s %s %10llu %8u\n"
-
-#define PLAINFMT	"%u %u %s %s %llu %u\n"
-
 #define HTMLHDR                                                 \
     "<html>\n"                                                  \
     "<head>\n"                                                  \
@@ -375,8 +371,10 @@ load(void * self, char *buf, size_t len, timestamp_t *ts)
     "</table>\n"						\
     "</body></html>\n"						
 
-#define HTMLFMT							\
-    "<tr><td>%d</td><td>%5u/%s</td><td>%s</td><td>%.2f</td></tr>\n"
+static char prettyfmt[] = "%.24s %5u/%s %s %10llu %8u\n";
+static char plainfmt[] = "%u %u %s %s %llu %u\n";
+static char htmlfmt[] = 
+	"<tr><td>%d</td><td>%5u/%s</td><td>%s</td><td>%.2f</td></tr>\n";
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -397,22 +395,22 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
         /* by default, pretty print */
         *len = sprintf(s, PRETTYHDR);  
-        fmt = PRETTYFMT; 
+        fmt = prettyfmt; 
         pn = 1;
 
         /* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=plain")) {
                 *len = 0; 
-                fmt = PLAINFMT;
+                fmt = plainfmt;
             } else if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTMLHDR); 
                 *len += sprintf(s + *len, HTMLTITLE, config->topn); 
-                fmt = HTMLFMT;
+                fmt = htmlfmt;
             } else if (!strcmp(args[n], "format=sidebox")) {
                 *len = sprintf(s, HTMLHDR); 
                 *len += sprintf(s + *len, SIDEBOXHDR); 
-                fmt = HTMLFMT;
+                fmt = htmlfmt;
 	    }
         } 
 
@@ -421,7 +419,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
     if (buf == NULL && args == NULL) { 
 	*len = 0; 
-	if (fmt == HTMLFMT) 
+	if (fmt == htmlfmt) 
 	    *len = sprintf(s, HTMLFOOTER);  
   	return s; 
     } 
@@ -439,10 +437,10 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	name = "Unknown"; 
 
     /* read each field of the record */
-    if (fmt == PRETTYFMT) { 
+    if (fmt == prettyfmt) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), 
 		   port, getprotoname(proto), name, bytes, pkts); 
-    } else if (fmt == HTMLFMT) { 
+    } else if (fmt == htmlfmt) { 
 	float mbps = ((float) bytes * 8 / (float) config->meas_ivl) / 1000000;
 	*len = sprintf(s, fmt, pn, port, getprotoname(proto), name, mbps); 
 	pn++;

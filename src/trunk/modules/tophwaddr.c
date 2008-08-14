@@ -261,10 +261,6 @@ load(void * self, char *buf, size_t len, timestamp_t *ts)
 #define PRETTYHDR	\
     "Date                     %-15s Bytes      Packets   \n"
 
-#define PRETTYFMT 	"%.24s %d %15s %10llu %8u\n"
-
-#define PLAINFMT	"%12u %d %15s %10llu %8u\n"
-
 #define HTMLHDR							\
     "<html>\n"							\
     "<head>\n"                                                  \
@@ -303,10 +299,6 @@ load(void * self, char *buf, size_t len, timestamp_t *ts)
     "</table>\n"						\
     "</body></html>\n"						
 
-#define HTMLFMT							\
-    "<tr><td>%d</td><td><a href=%s target=_new>%15s</a></td>"	\
-    "<td>%.2f%c</td><td>%.2f%c</td></tr>\n"
-
 #define SIDEBOXTITLE 						\
     "<table class=netview>\n"					\
     "  <tr class=nvtitle>\n"					\
@@ -315,6 +307,13 @@ load(void * self, char *buf, size_t len, timestamp_t *ts)
     "    <td>bps</td>\n"					\
     "    <td>pps</td>\n"					\
     "  </tr>\n"							
+
+static char prettyfmt[] = "%.24s %d %15s %10llu %8u\n";
+static char plainfmt[] = "%12u %d %15s %10llu %8u\n";
+static char htmlfmt[] = 
+    "<tr><td>%d</td><td><a href=%s target=_new>%15s</a></td>"	
+    "<td>%.2f%c</td><td>%.2f%c</td></tr>\n";
+
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -337,22 +336,22 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
         /* by default, pretty print */
         *len = sprintf(s, PRETTYHDR, what[config->use_dst]); 
-        fmt = PRETTYFMT; 
+        fmt = prettyfmt; 
 
         /* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=plain")) {
                 *len = 0; 
-                fmt = PLAINFMT;
+                fmt = plainfmt;
             } else if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTMLHDR); 
 		*len += sprintf(s + *len, HTMLTITLE, config->topn, 
 			        what[config->use_dst]); 
-                fmt = HTMLFMT;
+                fmt = htmlfmt;
             } else if (!strcmp(args[n], "format=sidebox")) {
                 *len = sprintf(s, HTMLHDR); 
                 *len += sprintf(s + *len, SIDEBOXTITLE); 
-                fmt = HTMLFMT;
+                fmt = htmlfmt;
             } else if (!strncmp(args[n], "url=", 4)) {
 		url = args[n] + 4; 
 	    } else if (!strncmp(args[n], "urlargs=", 8)) {
@@ -376,7 +375,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
     if (buf == NULL && args == NULL) { 
 	*len = 0; 
-	if (fmt == HTMLFMT) 
+	if (fmt == htmlfmt) 
 	    *len = sprintf(s, HTMLFOOTER);  
 	count = 0; 	/* reset count */ 
         last_ts = 0; 	/* reset timestamp */ 
@@ -392,11 +391,11 @@ print(void * self, char *buf, size_t *len, char * const args[])
     last_ts = ts; 
     count++; 
 
-    if (fmt == PRETTYFMT) { 
+    if (fmt == prettyfmt) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts)), count,
 		       ether_ntoa((struct ether_addr *) &x->addr),
 		       NTOHLL(x->bytes), ntohl(x->pkts));
-    } else if (fmt == HTMLFMT) { 
+    } else if (fmt == htmlfmt) { 
         float bps, pps; 
         char bunit = ' '; 
         char punit = ' '; 
