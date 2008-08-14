@@ -277,8 +277,9 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 #define PRETTYHDR		\
     "Date                     Mode           AP                      pkts_down \
 Client                    pkts_up\n"
-#define PRETTYFMT	"%.24s %14s %s %9u %s %9u\n"
-#define PLAINFMT	"%d %s %s %u %s %u\n" 
+
+static char prettyfmt[] = "%.24s %14s %s %9u %s %9u\n";
+static char plainfmt[] = "%d %s %s %u %s %u\n";
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -298,13 +299,13 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0;
-		fmt = PLAINFMT;
+		fmt = plainfmt;
 		return s;
 	    }
 	}
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);
-	fmt = PRETTYFMT;
+	fmt = prettyfmt;
 	return s;
     }
 
@@ -319,11 +320,11 @@ print(void * self, char *buf, size_t *len, char * const args[])
     pkts_ul = ntohl(x->pkts_upload);
     pkts_dl = ntohl(x->pkts_download);
 
-    pretty_mac(x->ap, buff1, sizeof(buff1), fmt == PRETTYFMT);
-    pretty_mac(x->client, buff2, sizeof(buff2), fmt == PRETTYFMT);
+    pretty_mac(x->ap, buff1, sizeof(buff1), fmt == prettyfmt);
+    pretty_mac(x->client, buff2, sizeof(buff2), fmt == prettyfmt);
     
     /* print according to the requested format */
-    if (fmt == PRETTYFMT) {
+    if (fmt == prettyfmt) {
 	*len = sprintf(s, fmt, asctime(localtime(&t)), \
                     x->adhoc ? "Ad-Hoc" : "Infrastructure",
 		    buff1, pkts_dl, buff2, pkts_ul);

@@ -141,9 +141,6 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
     "ctrl (frames, bytes)       "	\
     "data (frames, bytes)\n"
 
-#define GNUPLOTFMT  "%ld %llu %llu %llu %llu %llu %llu %llu %llu %llu\n"
-#define PRETTYFMT 		\
-    "%.24s %12d.%06d %-5llu %-20llu %-5llu %-20llu %-5llu %-20llu\n"
 
 #define GNUPLOTHDR						\
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"	\
@@ -162,6 +159,10 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 
 #define GNUPLOTFOOTER	"e\n"
 
+static char gnuplotfmt[] = "%ld %llu %llu %llu %llu %llu %llu %llu %llu %llu\n";
+static char prettyfmt[] = 
+	"%.24s %12d.%06d %-5llu %-20llu %-5llu %-20llu %-5llu %-20llu\n";
+
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
 {
@@ -176,13 +177,13 @@ print(void * self, char *buf, size_t *len, char * const args[])
     if (buf == NULL && args != NULL) { 
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);  
-	fmt = PRETTYFMT; 
+	fmt = prettyfmt; 
 
 	/* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=gnuplot")) {
                 *len = sprintf(s, GNUPLOTHDR);
-                fmt = GNUPLOTFMT;
+                fmt = gnuplotfmt;
             } else if (!strncmp(args[n], "granularity=", 10)) {
                 char * val = index(args[n], '=') + 1;
 
@@ -197,7 +198,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
     if (buf == NULL && args == NULL) { 
 	*len = 0;
-	if (fmt == GNUPLOTFMT) 
+	if (fmt == gnuplotfmt) 
 	    *len = sprintf(s, GNUPLOTFOOTER);
 	return s; 
     } 
@@ -207,12 +208,12 @@ print(void * self, char *buf, size_t *len, char * const args[])
     t = (time_t) TS2SEC(ts); 
 
     /* print according to the requested format */
-    if (fmt == PRETTYFMT) {
+    if (fmt == prettyfmt) {
 	*len = sprintf(s, fmt, asctime(localtime(&t)), TS2SEC(ts), TS2USEC(ts),
 		NTOHLL(x->mgmtpkts), NTOHLL(x->mgmtbytes), NTOHLL(x->ctrlpkts),
 		NTOHLL(x->ctrlbytes), NTOHLL(x->datapkts), 
 		NTOHLL(x->databytes)); 
-    } else if (fmt == GNUPLOTFMT) {
+    } else if (fmt == gnuplotfmt) {
 	*len = sprintf(s, fmt, (long int)t, NTOHLL(x->mgmtpkts), 
 		NTOHLL(x->ctrlpkts), NTOHLL(x->datapkts), NTOHLL(x->mgmtbytes), 
 		NTOHLL(x->ctrlbytes), NTOHLL(x->databytes)); 

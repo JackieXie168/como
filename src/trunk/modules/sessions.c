@@ -27,16 +27,17 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
+ * $Id: tuple.c 976 2006-10-30 19:01:52Z jsanjuas $
  */
 
 /*
- * 5-tuple flow classifier
+ * Session tracker.
  *
- * This module computes 5-tuple flows. Every capture period it 
- * stores the 5-tuple that have been active (together with the 
- * bytes they have sent).  
- *
+ * This module tracks all sessions (defined by the usual 5 tuple). 
+ * It uses a timeout approach to decide when to terminate a session. 
+ * Any packet can start a session. Sessions are reported ordered by
+ * last packet timestamp.
+ * 
  */
 
 #include <stdio.h>
@@ -45,9 +46,22 @@
 #include "module.h"
 
 #define FLOWDESC    struct _tuple_stat
-#define EFLOWDESC   FLOWDESC
-
 FLOWDESC {
+    timestamp_t start_ts; 
+    timestamp_t last_ts; 
+    n32_t src_ip;
+    n32_t dst_ip;
+    n16_t src_port;
+    n16_t dst_port;
+    uint8_t proto;
+    char padding;
+    uint16_t sampling;
+    uint64_t bytes;
+    uint64_t pkts;
+};
+
+#define EFLOWDESC   struct _session
+EFLOWDESC {
     timestamp_t start_ts; 
     timestamp_t last_ts; 
     n32_t src_ip;
@@ -70,8 +84,7 @@ CONFIGDESC {
      */    
     int compact;
     uint32_t mask;
-    uint32_t last_export;
-    uint32_t meas_ivl;
+    uint32_t timeout;
 };
 
 static timestamp_t
@@ -85,8 +98,7 @@ init(void * self, char *args[])
     config = mem_mdl_malloc(self, sizeof(CONFIGDESC)); 
     config->compact = 0;
     config->mask = ~0;
-    config->last_export = 0;
-    config->meas_ivl = 1;
+    config->timeout = 60; 
     
     /*
      * process input arguments
@@ -94,15 +106,15 @@ init(void * self, char *args[])
     for (i = 0; args && args[i]; i++) {
 	char * x; 
 
-	if (strstr(args[i], "interval")) {
-	    x = index(args[i], '=') + 1; 
-            config->meas_ivl = atoi(x);
-	} else if (strstr(args[i], "compact")) {
+	if (strstr(args[i], "compact")) {
 	    config->compact = 1;
 	} else if (strstr(args[i], "mask")) { 
 	    x = index(args[i], '=') + 1; 
 	    config->mask <<= atoi(x);
-	}
+	} else if (strstr(args[i], "timeout")) { 
+	    x = index(args[i], '=') + 1; 
+	    config->timeout = atoi(x); 
+	} 
     }
 
     /*
@@ -113,7 +125,6 @@ init(void * self, char *args[])
     
     /* setup indesc */
     inmd = metadesc_define_in(self, 0);
-    inmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     
     pkt = metadesc_tpl_add(inmd, "none:none:~ip:none");
     IP(proto) = 0xff;
@@ -139,7 +150,6 @@ init(void * self, char *args[])
     
     /* setup outdesc */
     outmd = metadesc_define_out(self, 0);
-    outmd->ts_resolution = TIME2TS(config->meas_ivl, 0);
     outmd->flags = META_PKT_LENS_ARE_AVERAGED;
     
     pkt = metadesc_tpl_add(outmd, "~nf:none:~ip:none");
@@ -174,7 +184,7 @@ init(void * self, char *args[])
     N16(UDP(dst_port)) = 0xffff;
     
     CONFIG(self) = config; 
-    return TIME2TS(config->meas_ivl, 0);
+    return TIME2TS(1, 0);
 }
 
 
@@ -267,13 +277,22 @@ update(void * self, pkt_t *pkt, void *fh, int isnew)
 static int
 compare(const void *efh1, const void *efh2)
 {
-    return CMPEF(efh1)->start_ts < CMPEF(efh2)->start_ts ? -1 : 1;
+    return CMPEF(efh1)->last_ts < CMPEF(efh2)->last_ts ? -1 : 1;
 }
 
 static int
 ematch(void *self, void *efh, void *fh)
 {
-    return 0;
+    FLOWDESC *x = F(fh);
+    EFLOWDESC *ex = EF(efh);
+
+    return (
+	N32(x->src_ip) == N32(ex->src_ip) && 
+	N32(x->dst_ip) == N32(ex->dst_ip) && 
+	N16(x->src_port) == N16(ex->src_port) && 
+	N16(x->dst_port) == N16(ex->dst_port) && 
+	x->proto == ex->proto
+    ); 
 }
 
 static int
@@ -282,7 +301,14 @@ export(void * self, void *efh, void *fh, int isnew)
     FLOWDESC *x = F(fh);
     EFLOWDESC *ex = EF(efh);
 
-    bcopy(x, ex, sizeof(EFLOWDESC));
+    if (isnew) { 
+	bcopy(x, ex, sizeof(EFLOWDESC));
+    } else { 
+	ex->pkts += x->pkts; 
+	ex->bytes += x->bytes; 
+	ex->last_ts = x->last_ts; 
+    } 
+    
     return 0;
 }
 
@@ -291,23 +317,20 @@ action(void *self, void *efh, timestamp_t ivl,
         timestamp_t current_time, int count)
 {
     CONFIGDESC * config = CONFIG(self);
+    EFLOWDESC *ex = EF(efh);
 
-    if (efh == NULL) {
-        /* 
-         * this is the action for the entire table. 
-         * check if it is time to export the table. 
-         * if not stop. 
-         */
-        if (TS2SEC(current_time) < config->last_export + config->meas_ivl)
-            return ACT_STOP;            /* too early */
+    if (efh == NULL)
+	return ACT_GO; 		/* always process all records */
 
-        config->last_export = TS2SEC(ivl);
-        return ACT_GO;          /* dump the records */
-    }
+    /* 
+     * if the flow has not seen any packets in the last 
+     * config->timeout seconds, store it and discard the record
+     */ 
+    if (TS2SEC(current_time - ex->last_ts) > config->timeout) 
+	return (ACT_STORE | ACT_DISCARD); 
 
-    return (ACT_STORE | ACT_DISCARD); /* Always store the records */
+    return ACT_GO; 
 }
-
 
 static ssize_t
 store(void * self, void *efh, char *buf)

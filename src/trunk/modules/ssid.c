@@ -211,8 +211,9 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 #define PRETTYHDR		\
     "Date                     Signal (dbm)    Noise (dbm)     Channel \
    Samples    WEP   MAC               SSID\n"
-#define PRETTYFMT	"%.24s %-15d %-15d %-10d %-10d %-5s %s %-32s\n"
-#define PLAINFMT	"%12ld %1d %2d %2d %2d %2d\n" 
+
+static char prettyfmt[] = "%.24s %-15d %-15d %-10d %-10d %-5s %s %-32s\n";
+static char plainfmt[] = "%12ld %1d %2d %2d %2d %2d\n";
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -232,13 +233,13 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
-		fmt = PLAINFMT;
+		fmt = plainfmt;
 		return s; 
 	    } 
 	} 
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);  
-	fmt = PRETTYFMT; 
+	fmt = prettyfmt; 
 	return s; 
     } 
 
@@ -255,7 +256,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     noise = (int32_t)ntohl(x->noise) / x->samples; 
     
     /* print according to the requested format */
-    if (fmt == PRETTYFMT) {
+    if (fmt == prettyfmt) {
 	char * wepmode = x->wepmode? "Y": "N"; 
         char bssid[64];
 

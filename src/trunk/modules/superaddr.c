@@ -372,11 +372,6 @@ load(void *self, char * buf, size_t len, timestamp_t * ts)
 #define PRETTY_HDR_DST_SRCS                                                 \
     "\tTimestamp\t\t\t\tDestination IP\t\t\t\t#Sources\n"
 
-#define PRETTY_FMT                                                          \
-    "\t%u\t\t\t\t%s\t\t\t\t%u\n"
-
-#define PLAIN_FMT                                                           \
-    "\t%u\t\t\t\t%s\t\t\t\t%u\n"
 
 #define HTML_HDR							    \
     "<html>\n"							            \
@@ -415,11 +410,6 @@ load(void *self, char * buf, size_t len, timestamp_t * ts)
     "</table>\n"						            \
 "</body></html>\n"
 
-#define HTML_FMT						            \
-    "<tr><td>%d</td>"                                                       \
-"<td>%s</td>"                               	                            \
-"<td>%u</td></tr>\n"
-
 #define HTML_FMT2						            \
     "<tr><tr><td><br></td></tr>"                                            \
 "<td>%d</td>"                               	                            \
@@ -439,8 +429,6 @@ load(void *self, char * buf, size_t len, timestamp_t * ts)
 "set format x \"%%H:%%M\";"                                                 \
 "plot \"-\" using 1:2 with lines lt 4\n" 
 
-#define GNUPLOT_FMT     "%u %u\n"
-
 #define GNUPLOT_FOOTER "e\n"
 
 #define SIDEBOX_TITLE 						            \
@@ -451,6 +439,10 @@ load(void *self, char * buf, size_t len, timestamp_t * ts)
 "    <td>%s</td>\n"					                    \
 "  </tr>\n"							
 
+static char prettyfmt[] = "\t%u\t\t\t\t%s\t\t\t\t%u\n";
+static char plainfmt[] = "\t%u\t\t\t\t%s\t\t\t\t%u\n";
+static char gnuplotfmt[] = "%u %u\n"; 
+static char htmlfmt[] = "<tr><td>%d</td><td>%s</td><td>%u</td></tr>\n";
 
 /*
  * -- print
@@ -488,28 +480,28 @@ print(void *self, char *buf, size_t *len, char * const args[])
         else
             *len = sprintf(s, PRETTY_HDR_SRC_DSTS); 
 
-        fmt = PRETTY_FMT; 
+        fmt = prettyfmt; 
 
         /* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=plain")) {
                 *len = 0; 
-                fmt = PLAIN_FMT;
+                fmt = plainfmt;
             } else if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTML_HDR); 
                 *len += sprintf(s + *len, HTML_TITLE, what1[config->use_dst],
                         what2[config->use_dst],
                         what3[config->use_dst]);
-                fmt = HTML_FMT;
+                fmt = htmlfmt;
             } else if (!strcmp(args[n], "format=gnuplot")) {
                 *len = sprintf(s, GNUPLOT_HDR, what3[config->use_dst]);
-                fmt = GNUPLOT_FMT;
+                fmt = gnuplotfmt;
             } else if (!strcmp(args[n], "format=sidebox")) {
                 *len = sprintf(s, HTML_HDR); 
                 *len += sprintf(s + *len, SIDEBOX_TITLE, 
                         what2[config->use_dst],
                         what3[config->use_dst]);
-                fmt = HTML_FMT;
+                fmt = htmlfmt;
             }
         } 
         count = 0; 	/* reset count */ 
@@ -519,9 +511,9 @@ print(void *self, char *buf, size_t *len, char * const args[])
     /* last call of print */
     if (buf == NULL && args == NULL) { 
         *len = 0;
-        if (fmt == HTML_FMT) 
+        if (fmt == htmlfmt) 
             *len = sprintf(s, HTML_FOOTER);
-        if (fmt == GNUPLOT_FMT)
+        if (fmt == gnuplotfmt)
             *len = sprintf(s, GNUPLOT_FOOTER);
         count = 0;      /* reset count */
         last_ts = 0; 	/* reset timestamp */ 
@@ -549,11 +541,11 @@ print(void *self, char *buf, size_t *len, char * const args[])
         count++; 
         super_addrs++;
 
-        if (fmt == PLAIN_FMT)
+        if (fmt == plainfmt)
             *len = sprintf(s, fmt, ts, inet_ntoa(addr), meter);
-        else if (fmt == PRETTY_FMT)
+        else if (fmt == prettyfmt)
             *len = sprintf(s, fmt, ts, inet_ntoa(addr), meter);
-        else if (fmt == HTML_FMT) { 
+        else if (fmt == htmlfmt) { 
             if (count == 1)
                 *len = sprintf(s, HTML_FMT2, count, inet_ntoa(addr), meter);
             else

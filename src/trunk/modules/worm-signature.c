@@ -557,7 +557,7 @@ CONFIGDESC
     int stored;
     
     /* format for print callback */
-    char * format;
+    int format;
     
     /* total signatures */
     int total_sig;
@@ -1370,10 +1370,10 @@ static size_t load(void * self, char * buf, size_t len, timestamp_t * ts)
 
 /* Print MACROS */
 
-#define DATAHEX "0"
-#define DATABIN "1"
-#define DATASNORT "2"
-#define GNUPLOTFMT "3"
+#define DATAHEX 0
+#define DATABIN 1
+#define DATASNORT 2
+#define GNUPLOTFMT 3
 
 #define GNUPLOTHDR                                                      \
     "set terminal postscript eps color solid lw 1 \"Helvetica\" 14;"    \

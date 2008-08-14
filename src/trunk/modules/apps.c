@@ -299,9 +299,9 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 
 #define GNUPLOTFOOTER	"e\n"
 
-#define PRETTYFMT	"%.24s "	/* 24 char to skip \n in asctime() */
-#define GNUPLOTFMT	"%ld "
-#define PLAINFMT	"%12ld "	
+static char prettyfmt[] = "%.24s "; /* 24 char to skip \n in asctime() */
+static char gnuplotfmt[] = "%ld ";
+static char plainfmt[] = "%12ld ";
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -321,16 +321,16 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	int n, j; 
 
 	/* default is pretty printing */
-	fmt = PRETTYFMT;
+	fmt = prettyfmt;
 
         /* first call of print, process the arguments and return */
         for (n = 0; args[n]; n++) {
             if (!strcmp(args[n], "format=plain")) {
-                fmt = PLAINFMT;
+                fmt = plainfmt;
             } else if (!strcmp(args[n], "format=pretty")) {
-		fmt = PRETTYFMT;
+		fmt = prettyfmt;
             } else if (!strcmp(args[n], "format=gnuplot")) {
-                fmt = GNUPLOTFMT;
+                fmt = gnuplotfmt;
 		isrelative = 0; 
             } else if (!strcmp(args[n], "isrelative")) { 
 		isrelative = 1; 
@@ -344,24 +344,24 @@ print(void * self, char *buf, size_t *len, char * const args[])
             } 
         } 
 
-        if (fmt == PRETTYFMT) { 
+        if (fmt == prettyfmt) { 
 	    *len = sprintf(s, "%-24s", "Date");
 	    for (j = 0; j < cf->classes; j++) 
 		*len += sprintf(s + *len, "%-10s ", cf->names[j]);   
 	    *len += sprintf(s + *len, "\n"); 
-	} else if (fmt == GNUPLOTFMT && isrelative) { 
+	} else if (fmt == gnuplotfmt && isrelative) { 
 	    *len = sprintf(s, GNUPLOTHDR, "Percentage", "100", 
 			   2 * cf->classes, cf->names[cf->classes-1]);  
 	    for (j = cf->classes - 1; j > 0; j--) 
 		*len += sprintf(s + *len, GNUPLOTLINE, 2*j, cf->names[j-1]); 
 	    *len += sprintf(s + *len, "\n"); 
-	} else if (fmt == GNUPLOTFMT) {
+	} else if (fmt == gnuplotfmt) {
 	    *len = sprintf(s, GNUPLOTHDR, "Mbps", "*", 
 				2 * cf->classes, cf->names[cf->classes - 1]);  
 	    for (j = cf->classes - 1; j > 0; j--) 
 		*len += sprintf(s + *len, GNUPLOTLINE, 2*j, cf->names[j-1]); 
 	    *len += sprintf(s + *len, "\n"); 
-        } else if (fmt == PLAINFMT) { 
+        } else if (fmt == plainfmt) { 
 	    *len = 0; 
         } 
 
@@ -374,7 +374,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     if (buf == NULL && args == NULL) {
 	/* no footer */
 	*len = 0; 
-        if (fmt == GNUPLOTFMT) 
+        if (fmt == gnuplotfmt) 
             *len = sprintf(s, GNUPLOTFOOTER);
 	return s; 
     } 
@@ -399,17 +399,17 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	values[i].pkts /= granularity;
     }
 
-    if (fmt == PRETTYFMT) { 
+    if (fmt == prettyfmt) { 
 	*len = sprintf(s, fmt, asctime(localtime(&ts))); 
 	for (i = 0; i < cf->classes; i++) 
 	    *len += sprintf(s + *len, "%8llu %8u ", 
 			    values[i].bytes, values[i].pkts);
-    } else if (fmt == PLAINFMT) {  
+    } else if (fmt == plainfmt) {  
 	*len = sprintf(s, fmt, ts) ; 
 	for (i = 0; i < cf->classes; i++) 
 	    *len += sprintf(s + *len, "%8llu %8u ", 
 			    values[i].bytes, values[i].pkts);
-    } else if (fmt == GNUPLOTFMT  && isrelative) { 
+    } else if (fmt == gnuplotfmt  && isrelative) { 
 	/* 
 	 * we plot the percentage of traffic that we can 
 	 * map to each application.
@@ -437,7 +437,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
 	/* for the last value to be 100 */
 	*len += sprintf(s + *len, "%u %u ", 100, 100); 
-    } else if (fmt == GNUPLOTFMT && !isrelative) { 
+    } else if (fmt == gnuplotfmt && !isrelative) { 
 	/* 
 	 * we do not need relative values but the absolute 
 	 * contribution of each application 

@@ -269,8 +269,6 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 
 
 #define PRETTYHDR	"Date                     Packets Bytes Connx\n"
-#define PRETTYFMT	"%.24s %d.%1u %d.%1u %d.%1u\n"
-#define PLAINFMT	"%12ld %d.%1u %d.%1u %d.%1u\n"
 
 #define HTMLHDR                                                 \
     "<html>\n"							\
@@ -312,17 +310,17 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
     "    <td><b>Connx</b></td>\n" 				\
     "  </tr>\n"                                         
 
-#define HTMLFMT							\
-    "<tr><td><a href=%s target=_top>%s</a></td>"		\
-    "<td>%d.%1u</td>"						\
-    "<td>%d.%1u</td>"						\
-    "<td>%d.%1u</td></tr>\n"
 
 #define HTMLFOOTER_ALERTS                                       \
     "</table>\n"                                                
 
 #define HTMLFOOTER                                              \
     "</body></html>\n"                                          
+
+static char prettyfmt[] = "%.24s %d.%1u %d.%1u %d.%1u\n";
+static char plainfmt[] = "%12ld %d.%1u %d.%1u %d.%1u\n";
+static char htmlfmt[] = "<tr><td><a href=%s target=_top>%s</a></td>"  \
+		        "<td>%d.%1u</td><td>%d.%1u</td><td>%d.%1u</td></tr>\n";
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -342,20 +340,20 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);  
-	fmt = PRETTYFMT; 
+	fmt = prettyfmt; 
 
 	/* first call of print, process the arguments and return */
 	for (n = 0; args[n]; n++) {
 	    if (!strcmp(args[n], "format=plain")) {
 		*len = 0; 
-		fmt = PLAINFMT;
+		fmt = plainfmt;
 	    } else if (!strcmp(args[n], "format=html")) {
                 *len = sprintf(s, HTMLHDR); 
                 *len += sprintf(s + *len, HTMLTITLE); 
-                fmt = HTMLFMT;
+                fmt = htmlfmt;
 	    } else if (!strcmp(args[n], "format=sidebox")) {
                 *len = sprintf(s, HTMLHDR); 
-                fmt = HTMLFMT;
+                fmt = htmlfmt;
             } else if (!strncmp(args[n], "url=", 4)) {
                 url = args[n] + 4;
             } else if (!strncmp(args[n], "urlargs=", 8)) {
@@ -378,7 +376,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
 
     if (buf == NULL && args == NULL) {  
 	*len = alerts > 0 ? 0 : sprintf(s, STR_NOALERTS);  
-	if (fmt == HTMLFMT) {
+	if (fmt == htmlfmt) {
 	    if (alerts > 0) {
 		*len += sprintf(s + *len, HTMLFOOTER_ALERTS);
 	    }
@@ -391,7 +389,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     *len = 0; 
 
     if (alerts == 0) { 
-	if (fmt == HTMLFMT) 
+	if (fmt == htmlfmt) 
 	    *len = sprintf(s, HTML_ALERTS); 
 	alerts = 1;
     } 
@@ -403,10 +401,10 @@ print(void * self, char *buf, size_t *len, char * const args[])
 	((int32_t) (ntohl(c) >> 8)), ((uint8_t) (ntohl(c) & 0xff))
 
     /* print according to the requested format */
-    if (fmt == PRETTYFMT) {
+    if (fmt == prettyfmt) {
 	*len = sprintf(s, fmt, asctime(gmtime(&ts)), print_ch(x->ch_pkts), 
 		       print_ch(x->ch_bytes), print_ch(x->ch_connx));
-    } else if (fmt == HTMLFMT) {
+    } else if (fmt == htmlfmt) {
 	char timestr[30]; 
         char tmp[2048] = "#";
 

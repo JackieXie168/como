@@ -244,7 +244,8 @@ load(void * self, char * buf, size_t len, timestamp_t * ts)
 
 #define PRETTYHDR \
   "Date                       Timestamp            Client IP      MAC Address\n"
-#define PRETTYFMT	"%.24s %12d.%06d %15s %19s\n"
+
+static char prettyfmt[] = "%.24s %12d.%06d %15s %19s\n";
 
 static char *
 print(void * self, char *buf, size_t *len, char * const args[])
@@ -260,7 +261,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     if (buf == NULL && args != NULL) { 
 	/* by default, pretty print */
 	*len = sprintf(s, PRETTYHDR);  
-	fmt = PRETTYFMT; 
+	fmt = prettyfmt; 
 
 	return s; 
     } 
@@ -285,7 +286,7 @@ print(void * self, char *buf, size_t *len, char * const args[])
     }
     
     /* print according to the requested format */
-    if (fmt == PRETTYFMT) {
+    if (fmt == prettyfmt) {
 	*len = sprintf(s, fmt, 
 	               asctime(localtime(&t)), TS2SEC(ts), TS2USEC(ts), 
 		       inet_ntoa(yiaddr), mac);
