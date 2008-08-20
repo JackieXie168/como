@@ -188,8 +188,8 @@ print_rec(mdl_t *self, int format_id, record_t *rec, void *state)
 		    getprotoname(rec->proto), 
 		    src, (uint) ntohs(rec->src_port), 
 		    dst, (uint) ntohs(rec->dst_port), 
-		    rec->bytes * rec->sampling, 
-		    rec->pkts * rec->sampling);
+		    (uint64_t) rec->bytes * rec->sampling, 
+		    (uint64_t) rec->pkts * rec->sampling);
         }
     } 
 }
