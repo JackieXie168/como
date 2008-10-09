@@ -179,6 +179,40 @@ set_bit(bitmap_t *bm, uint32_t key)
 }
 
 /*
+ * -- clear_bit
+ *
+ * Clear a bit in the bitmap, and maintain the counter of zeros.
+ */
+void
+clear_bit(bitmap_t *bm, uint32_t key)
+{
+    int bit = key & (bm->nbits - 1);
+    int where = which_byte(bit);
+    int what = which_bit(bit);
+
+#ifndef BUILD_FOR_ARM
+    int old;
+
+    /*
+     * x86 asm test and clear operation
+     */
+    asm volatile("btrl %2, %1\n\tsbbl %0, %0\n\t"
+            : "=r" (old), "=m" (bm->map[where])
+            : "r" (what));
+
+    if (old)
+        bm->zeros++;
+#else
+    XXX untested
+    if (1 == (map[where] & (1 << what))) {
+        bm->zeros++;
+        map[where] &= ~(1 << what);
+    }
+#endif
+}
+
+
+/*
  * -- get_bit
  *
  * Get a bit of the bitmap.
