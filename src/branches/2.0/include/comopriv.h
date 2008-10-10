@@ -198,7 +198,7 @@ typedef void (*mainloop_fn) (ipc_peer_t * parent,
 
 pid_t start_child (ipc_peer_full_t * child, mainloop_fn mainloop,
 		  memmap_t * shmemmap, FILE *client_stream, como_node_t * node);
-int handle_children ();
+int handle_children (pid_t *pid);
 void sighdlr_exit(int);
 
 
@@ -460,6 +460,8 @@ struct como_su {
     ipc_peer_t *	ex;		/* EXPORT */
     ipc_peer_t *	st;		/* STORAGE */
     ipc_peer_t *	qu;		/* QUERY, for use only in inline mode */
+    pid_t               ca_pid;
+    pid_t               ex_pid;
     
     pid_t		su_pid;
 

@@ -206,12 +206,12 @@ su_ipc_onconnect(ipc_peer_t * peer, como_su_t * como_su)
 
     if (ca_done && st_done && !ex_started) { /* CA && ST done, can go for EX */
 	ipc_peer_full_t *ex;
-	pid_t pid;
         debug("CA and ST initialized, starting export\n");
 
 	ex = ipc_peer_child(COMO_EX, 0);
-	pid = start_child(ex, export_main, como_su->memmap, NULL, node0);
-	if (pid < 0) {
+	como_su->ex_pid = start_child(ex, export_main, como_su->memmap,
+                                        NULL, node0);
+	if (como_su->ex_pid < 0) {
 	    warn("Can't start EXPORT\n");
 	}
         ex_started = 1;
@@ -294,7 +294,32 @@ cleanup()
 static void
 defchld(UNUSED int si_code)
 {
-    handle_children();
+    pid_t pid;
+    int ret;
+
+    /*
+     * we need to collect as many children as
+     * possible, since only one signal may be
+     * received for many defuncts.
+     */
+    for(;;) {
+        ret = handle_children(&pid);
+        if (ret == -1)
+            break;
+
+        /* if CA and EX have exited, we are done, we may want to exit */
+        if (pid == s_como_su->ca_pid)
+            s_como_su->ca_pid = 0;
+        if (pid == s_como_su->ex_pid)
+            s_como_su->ex_pid = 0;
+
+        if (como_config->exit_when_done == 1 &&
+                s_como_su->ca_pid == 0 && 
+                s_como_su->ex_pid == 0) {
+            msg("Done, exiting..\n");
+            exit(0);
+        }
+    }
 }
 
 /*
@@ -1073,8 +1098,9 @@ main(int argc, char ** argv)
     if (main_node->sniffers_count > 0) {
         /* start the CAPTURE process */
 	ca = ipc_peer_child(COMO_CA, 0);
-	pid = start_child(ca, capture_main, como_su->memmap, NULL, main_node);
-	if (pid < 0)
+	como_su->ca_pid = start_child(ca, capture_main, como_su->memmap,
+                                        NULL, main_node);
+	if (como_su->ca_pid < 0)
 	    error("Can't start CAPTURE\n");
     }
 

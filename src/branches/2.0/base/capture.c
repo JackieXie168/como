@@ -1822,7 +1822,10 @@ capture_main(ipc_peer_t * parent, memmap_t * shmemmap, UNUSED FILE* f,
                 mdl_t *mdl = array_at(como_ca.mdls, mdl_t *, idx);
                 mdl_icapture_t *ic = mdl_get_icapture(mdl);
                 ipc_send(ic->export, CA_EX_DONE, NULL, 0);
+                break; /* for now there is only 1 export */
             }
+
+            exit(0);
         }
 
         capture_profiler_notify(CP_END_SNIFFERS);

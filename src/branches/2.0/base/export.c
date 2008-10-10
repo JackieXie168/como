@@ -383,6 +383,9 @@ handle_ca_ex_done(UNUSED ipc_peer_t * peer,
 
         ie->running_state = EX_MDL_STATE_FLUSHED;
     }
+
+    ipc_finish(1);
+    exit(0);
     
     /*
      * we are done

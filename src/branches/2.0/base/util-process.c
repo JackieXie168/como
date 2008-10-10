@@ -37,6 +37,7 @@
 #include <sys/types.h>  /* fork */
 #include <sys/wait.h>	/* wait3() */
 
+#define LOG_DEBUG_DISABLE
 #include "como.h"
 #include "comopriv.h"
 #include "ipc.h"
@@ -155,10 +156,11 @@ start_child(ipc_peer_full_t * child, mainloop_fn mainloop,
  * 
  * Waits for children that have terminate and reports on the 
  * exit status with logmsg and returning 1 if the process didn't
- * terminate with an EXIT_SUCCESS and 0 otherwise. 
+ * terminate with an EXIT_SUCCESS and 0 otherwise. If there was
+ * nothing to do, returns -1.
  */
 int
-handle_children()
+handle_children(pid_t *ret_pid)
 {
     int j;
     ipc_peer_t * who = NULL;
@@ -166,9 +168,11 @@ handle_children()
     int statbuf;
 
     pid = wait3(&statbuf, WNOHANG, NULL);
+    *ret_pid = pid;
+
     if (pid <= 0) {
         debug("handle_children -- nothing to do\n", pid);
-	return 0;
+	return -1;
     } 
     debug("handle_children (pid=%d)\n", pid);
 

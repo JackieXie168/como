@@ -60,6 +60,7 @@
 #include <sys/types.h>
 #include <sys/select.h>
 
+#define LOG_DEBUG_DISABLE
 #define LOG_DOMAIN	"IPC"
 
 #include "como.h"
@@ -303,7 +304,7 @@ ipc_listen()
     assert(s_me->fd == -1);
     s_me->fd = ipc_create_socket(s_me, TRUE);
     if (s_me->fd != -1) {
-	notice("Listening connections on %s@%s.\n", s_me->name, s_me->at);
+	debug("Listening connections on %s@%s.\n", s_me->name, s_me->at);
     }
     return s_me->fd;
 }
@@ -369,7 +370,7 @@ ipc_connect(ipc_peer_full_t * dst)
 
     dst->connected = 1;
 
-    notice("Connected to peer %s@%s.\n", dst->name, dst->at);
+    debug("Connected to peer %s@%s.\n", dst->name, dst->at);
     /* add to existing list of destinations */
     ipc_peer_list_insert_head(&s_peers, dst);
 
@@ -532,14 +533,14 @@ ipc_handle(int fd)
         if (s_on_connect != NULL) {
             ic = s_on_connect((ipc_peer_t *) x, s_user_data);
             if (ic == IPC_CLOSE || ic == IPC_ERR) {
-                notice("Connection from peer %s on fd %d refused by "
+                debug("Connection from peer %s on fd %d refused by "
                        "on_connect handler.\n", x->name, fd);
                 ipc_peer_destroy(x); /* calls close */
                 return ic;
             }
         }
 	ipc_peer_list_insert_head(&s_peers, x);
-	notice("New connection from peer %s on fd %d\n", x->name, fd);
+	debug("New connection from peer %s on fd %d\n", x->name, fd);
 	return IPC_OK;
     }
     
@@ -554,7 +555,7 @@ ipc_handle(int fd)
 	ic = s_handlers[msg.type]((ipc_peer_t *) x, buf, msg.len, swap,
 				  s_user_data);
 	if (ic == IPC_CLOSE || ic == IPC_ERR) {
-	    notice("Closing connection to peer %s on fd %d\n", x->name, fd);
+	    debug("Closing connection to peer %s on fd %d\n", x->name, fd);
 	    ipc_peer_list_remove(&s_peers, x);
 	    ipc_peer_destroy(x); /* calls close */
 	}
@@ -564,7 +565,7 @@ ipc_handle(int fd)
 	//free(buf);
 	return ic;
     } else {
-	notice("Unhandled IPC message type %hd.\n", msg.type);
+	debug("Unhandled IPC message type %hd.\n", msg.type);
 
 	//free(buf);
 	return IPC_OK;
