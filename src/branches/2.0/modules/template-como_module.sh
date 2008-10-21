@@ -74,7 +74,7 @@ cmake -D MODULE=$MODULE $FULL_MODULE_DIR
 echo Building module
 
 
-if [ "$ACTION" == "build" ]
+if [ "$ACTION" != "install" ]
 then
     make
 else
