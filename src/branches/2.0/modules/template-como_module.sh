@@ -70,7 +70,8 @@ cp $CMAKELISTS .
 
 echo "Entering build dir"
 cd $FULL_BUILD_DIR
-cmake -D MODULE=$MODULE $FULL_MODULE_DIR
+cmake -D MODULE=$MODULE $FULL_MODULE_DIR || \
+    { echo Skipping $MODULE: build dependencies not met; exit; }
 echo Building module
 
 
